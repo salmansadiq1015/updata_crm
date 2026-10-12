@@ -85,6 +85,27 @@ describe('locationService.resolveLocation', () => {
     expect(geocodeMock).toHaveBeenCalledWith('Zürich', { countryCode: null });
   });
 
+  test('maps Nominatim city and town component types before admin-level fallbacks', async () => {
+    const { service } = await loadService();
+    geocodeMock.mockResolvedValue({
+      result: {
+        formatted_address: 'Bouznika, Morocco',
+        geometry: { location: { lat: 33.79, lng: -7.16 } },
+        address_components: [
+          { long_name: 'Bouznika', short_name: 'Bouznika', types: ['town'] },
+          { long_name: 'Benslimane', short_name: 'Benslimane', types: ['administrative_area_level_2'] },
+          { long_name: 'Morocco', short_name: 'MA', types: ['country'] },
+        ],
+      },
+      results: [],
+    });
+
+    await expect(service.resolveLocation('Bouznika')).resolves.toMatchObject({
+      city: 'Bouznika',
+      countryCode: 'MA',
+    });
+  });
+
   test('caches: a second call for the same (normalized) query does not re-hit the provider', async () => {
     const { service, cacheManager } = await loadService();
     geocodeMock.mockResolvedValue({

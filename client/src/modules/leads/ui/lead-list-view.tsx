@@ -121,8 +121,6 @@ export function LeadListView() {
   const currentUserId = useAuthStore((state: AuthSlice) => state.user?._id ?? state.user?.id ?? null);
   const usersQuery = useWorkspaceUsers();
   const users: LeadUser[] = usersQuery.data ?? NO_USERS;
-  const filterOptionsQuery = useLeadFilterOptions();
-
   // ── Store: filters, sort, selection ────────────────────────────────────────
   const { filters, sort, setFilters, clearFilters, setSort } = useLeadsFilters();
   const rowSelection = useLeadsRowSelection();
@@ -163,6 +161,34 @@ export function LeadListView() {
     [pageSize, sort.sortBy, sort.sortOrder, filters, currentUserId, searchTerm],
   );
   const paramsKey = JSON.stringify(params);
+  const filterOptionParams = useMemo(() => {
+    const {
+      limit: _limit, sortBy: _sortBy, sortOrder: _sortOrder, areaId: _areaId, ...facetFilters
+    } = params;
+    return facetFilters;
+  }, [params]);
+  const filterOptionsQuery = useLeadFilterOptions(filterOptionParams);
+
+  // Revalidate persisted selections against the canonical hierarchy. This also
+  // repairs stale Zustand state after a migration/import removes or reparents a
+  // location; parent changes already clear children immediately in the UI.
+  useEffect(() => {
+    const options = filterOptionsQuery.data;
+    if (!options) return;
+    if (filters.country !== FILTER_ALL && !options.countries.some((option) => option.id === filters.country)) {
+      setFilters({ country: FILTER_ALL, city: FILTER_ALL, area: FILTER_ALL });
+      return;
+    }
+    if (filters.city !== FILTER_ALL && !options.cities.some((option) =>
+      option.id === filters.city && (filters.country === FILTER_ALL || option.countryId === filters.country))) {
+      setFilters({ city: FILTER_ALL, area: FILTER_ALL });
+      return;
+    }
+    if (filters.area !== FILTER_ALL && !options.areas.some((option) =>
+      option.id === filters.area && (filters.city === FILTER_ALL || option.cityId === filters.city))) {
+      setFilters({ area: FILTER_ALL });
+    }
+  }, [filterOptionsQuery.data, filters.area, filters.city, filters.country, setFilters]);
 
   const query = useLeads(params);
   const pages = query.data?.pages;

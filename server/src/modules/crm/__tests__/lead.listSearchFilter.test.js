@@ -73,24 +73,31 @@ describe('leadRepository.getFilterOptions', () => {
 
     const { countries, cities, areas } = await leadRepository.getFilterOptions();
 
-    expect(countries).toEqual([
-      { value: 'CH', count: 2 },
-      { value: 'FR', count: 1 },
-      { value: 'PK', count: 2 },
-    ]);
-    expect(cities).toEqual(expect.arrayContaining([
-      { value: 'Lahore', country: 'PK', count: 2 },
-      { value: 'Paris', country: 'FR', count: 1 },
-      { value: 'Lausanne', country: 'CH', count: 1 },
+    expect(countries.map(({ code, count }) => ({ code, count }))).toEqual(expect.arrayContaining([
+      { code: 'CH', count: 2 },
+      { code: 'FR', count: 1 },
+      { code: 'PK', count: 2 },
     ]));
+    const lahore = cities.find((option) => option.value === 'Lahore');
+    const paris = cities.find((option) => option.value === 'Paris');
+    const lausanne = cities.find((option) => option.value === 'Lausanne');
+    expect(lahore).toMatchObject({ countryCode: 'PK', countryId: 'country:PK', count: 2 });
+    expect(paris).toMatchObject({ countryCode: 'FR', countryId: 'country:FR', count: 1 });
+    expect(lausanne).toMatchObject({ countryCode: 'CH', countryId: 'country:CH', count: 1 });
     expect(cities.some((option) => option.value === '8001')).toBe(false);
     // The same area label in two cities stays as two scoped options.
-    expect(areas).toEqual(expect.arrayContaining([
-      { value: 'Centre', city: 'Paris', country: 'FR', count: 1 },
-      { value: 'Centre', city: 'Lausanne', country: 'CH', count: 1 },
-      { value: 'Gulberg', city: 'Lahore', country: 'PK', count: 2 },
+    expect(areas.find((option) => option.value === 'Gulberg')).toMatchObject({
+      cityId: lahore.id, countryId: 'country:PK', count: 2,
+    });
+    expect(areas.filter((option) => option.value === 'Centre')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cityId: paris.id, countryId: 'country:FR', count: 1 }),
+      expect.objectContaining({ cityId: lausanne.id, countryId: 'country:CH', count: 1 }),
     ]));
     expect(areas.some((option) => option.value === '8001')).toBe(false);
+
+    const pakistanOnly = await leadRepository.getFilterOptions({ filters: { countryId: 'country:PK' } });
+    expect(pakistanOnly.cities.map((option) => option.value)).toEqual(['Lahore']);
+    expect(pakistanOnly.areas.map((option) => option.value)).toEqual(['Gulberg']);
   });
 
   it('returns distinct business categories with counts, separate from the business/private type facet', async () => {

@@ -110,6 +110,9 @@ export class NominatimProvider extends PlacesProvider {
       format: 'jsonv2',
       addressdetails: 1,
       limit: 5,
+      // Stable English locality/country labels make canonical matching
+      // deterministic while the original provider response remains available.
+      'accept-language': 'en',
     };
     if (/^[A-Z]{2}$/.test(countryCode ?? '')) params.countrycodes = countryCode.toLowerCase();
     const data = await this._execute('/search', params);

@@ -6,6 +6,8 @@ import { LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE } from './lead.model.js';
 const LEAD_TYPES = Object.values(LEAD_TYPE);
 const LEAD_STATUSES = Object.values(LEAD_STATUS);
 const LEAD_SOURCES = Object.values(LEAD_SOURCE);
+const canonicalLocationId = Joi.string().trim().max(80)
+  .pattern(/^(country:[A-Z]{2}|(?:city|area):[a-f0-9]{24})$/);
 
 const swissPostalCode = Joi.string().trim().max(20)
   .pattern(SWISS_POSTAL_CODE_PATTERN)
@@ -46,7 +48,9 @@ const addressSchema = Joi.object({
   canton: canton.allow('', null),
   // Non-Swiss state/province; the Swiss sub-national admin stays in `canton`.
   region: Joi.string().trim().max(120).allow('', null),
-  country: Joi.string().trim().uppercase().max(2).default('CH'),
+  // Never invent a country. Manual forms may preselect CH in the UI, but an
+  // absent/ambiguous import remains unresolved until reliable context exists.
+  country: Joi.string().trim().uppercase().max(2).allow('', null),
   // Swiss leads keep the strict 4-digit rule; foreign leads accept any code so a
   // non-Swiss lead is no longer rejected for a non-Swiss postal format.
   postalCode: Joi.when('country', {
@@ -204,6 +208,9 @@ export const listLeads = {
     country: Joi.string().trim().length(2).uppercase(),
     city: Joi.string().trim().max(120),
     area: Joi.string().trim().max(120),
+    countryId: canonicalLocationId,
+    cityId: canonicalLocationId,
+    areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
     sortBy: Joi.string().valid('createdAt', 'name', 'status').default('createdAt'),
@@ -221,9 +228,27 @@ export const mapLeads = {
     country: Joi.string().trim().length(2).uppercase(),
     city: Joi.string().trim().max(120),
     area: Joi.string().trim().max(120),
+    countryId: canonicalLocationId,
+    cityId: canonicalLocationId,
+    areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
     limit: Joi.number().integer().min(1).max(5000),
+  }),
+};
+
+// Facet counts follow the active non-geographic filters; parent selections also
+// scope City and Area options. No pagination controls are accepted here.
+export const leadFilterOptions = {
+  query: Joi.object({
+    status: Joi.string().valid(...LEAD_STATUSES),
+    assignedTo: objectId,
+    source: Joi.string().valid(...LEAD_SOURCES),
+    type: Joi.string().valid(...LEAD_TYPES),
+    countryId: canonicalLocationId,
+    cityId: canonicalLocationId,
+    businessType: Joi.string().trim().max(120),
+    q: Joi.string().trim().max(100).allow(''),
   }),
 };
 

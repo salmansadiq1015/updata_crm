@@ -5,6 +5,7 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
+import { canonicalizeLeadAddress } from './leadGeography.js';
 
 // Build a regex where each letter also matches its accented variants, e.g.
 // "mull" → "[mM][uüùûú][lL][lL]" so it matches "Müller". With $options:'i'
@@ -40,17 +41,14 @@ function cleanFacetText(value) {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
 }
 
-function isBarePostal(value) {
-  return /^[\d\s-]{3,}$/.test(cleanFacetText(value));
-}
-
 function displayTextScore(value) {
   const text = cleanFacetText(value);
   if (!text || !/\p{L}/u.test(text)) return 0;
   const lower = text.toLocaleLowerCase('en');
   const upper = text.toLocaleUpperCase('en');
-  if (text === lower || text === upper) return 1;
-  return 2;
+  const accentBonus = text.normalize('NFD') !== text.normalize('NFD').replace(/\p{M}+/gu, '') ? 1 : 0;
+  if (text === lower || text === upper) return 1 + accentBonus;
+  return 3 + accentBonus;
 }
 
 function preferredDisplayText(current, candidate) {
@@ -130,6 +128,11 @@ class LeadRepository {
     return Lead.findById(id).select('_id providerMeta').lean();
   }
 
+  /** Minimal snapshot used to safely canonicalize a partial address PATCH. */
+  async getAddressSnapshot(id) {
+    return Lead.findById(id).select('_id address source').lean();
+  }
+
   /**
    * Build the shared lead query from the list/map filters: createdBy scope (when
    * given — leads are company-wide so the service passes none), the whitelisted
@@ -145,16 +148,23 @@ class LeadRepository {
     // client keys can never reach MongoDB. Geography maps exactly to the three
     // fields displayed in the Leads table — no discovery-location fallback.
     const {
-      country, city, area, businessType, ...flatFilters
+      countryId, cityId, areaId, country, city, area, businessType, ...flatFilters
     } = filters;
 
     const baseFilter = {
       ...(createdBy ? { createdBy } : {}),
       ...buildFilter(flatFilters, ALLOWED_FILTERS),
     };
-    const countryFilter = normalizedExactTextFilter('address.country', country);
-    const cityFilter = normalizedExactTextFilter('address.city', city);
-    const areaFilter = normalizedExactTextFilter('address.area', area);
+    // Rolling-deployment compatibility for former label-based clients: resolve
+    // those labels through the same canonicalizer before comparing to the now
+    // normalized visible fields. New clients always use the IDs below.
+    const normalizedLegacy = canonicalizeLeadAddress({ country, city, area }, { source: 'filter' });
+    const countryFilter = normalizedExactTextFilter('address.country', normalizedLegacy.country ?? country);
+    const cityFilter = normalizedExactTextFilter('address.city', normalizedLegacy.city ?? city);
+    const areaFilter = normalizedExactTextFilter('address.area', normalizedLegacy.area ?? area);
+    const canonicalCountryFilter = countryId ? { 'address.geography.countryId': countryId } : {};
+    const canonicalCityFilter = cityId ? { 'address.geography.cityId': cityId } : {};
+    const canonicalAreaFilter = areaId ? { 'address.geography.areaId': areaId } : {};
     // Business category (e.g. "Chinese restaurant") lives on sourceMetadata, not
     // the lead `type` (business/private). Exact match on the stored value the
     // filter-options facet surfaced.
@@ -199,6 +209,9 @@ class LeadRepository {
       countryFilter,
       cityFilter,
       areaFilter,
+      canonicalCountryFilter,
+      canonicalCityFilter,
+      canonicalAreaFilter,
       businessTypeFilter,
       searchFilter,
     );
@@ -300,42 +313,78 @@ class LeadRepository {
    * country, and area options retain city+country, so the client can cascade
    * Country → City → Area without mixing identically named places.
    */
-  async getFilterOptions() {
+  async getFilterOptions({ filters = {}, search, searchUserIds = [] } = {}) {
+    const {
+      countryId, cityId, areaId: _areaId, ...nonGeographicFilters
+    } = filters;
+    const base = combineFilters(
+      { isDeleted: false },
+      this.buildListFilter({
+        filters: nonGeographicFilters,
+        search,
+        searchUserIds,
+      }),
+    );
+    const cityContext = combineFilters(
+      base,
+      countryId ? { 'address.geography.countryId': countryId } : {},
+    );
+    const areaContext = combineFilters(
+      cityContext,
+      cityId ? { 'address.geography.cityId': cityId } : {},
+    );
+
     const [facets] = await Lead.aggregate([
-      { $match: { isDeleted: false } },
       {
         $facet: {
           countries: [
-            { $match: { 'address.country': { $type: 'string', $ne: '' } } },
-            { $group: { _id: '$address.country', count: { $sum: 1 } } },
+            { $match: combineFilters(base, { 'address.geography.countryId': { $type: 'string', $ne: '' } }) },
+            {
+              $group: {
+                _id: '$address.geography.countryId',
+                count: { $sum: 1 },
+                codes: { $addToSet: '$address.geography.countryCode' },
+                names: { $addToSet: '$address.geography.countryName' },
+              },
+            },
           ],
           cities: [
+            { $match: combineFilters(cityContext, { 'address.geography.cityId': { $type: 'string', $ne: '' } }) },
             {
-              $project: {
-                value: '$address.city',
-                country: '$address.country',
+              $group: {
+                _id: '$address.geography.cityId',
+                count: { $sum: 1 },
+                names: { $addToSet: '$address.geography.cityName' },
+                countryIds: { $addToSet: '$address.geography.countryId' },
+                countryCodes: { $addToSet: '$address.geography.countryCode' },
+                countryNames: { $addToSet: '$address.geography.countryName' },
               },
             },
-            { $match: { value: { $type: 'string', $ne: '' } } },
-            { $group: { _id: { value: '$value', country: '$country' }, count: { $sum: 1 } } },
           ],
           areas: [
+            { $match: combineFilters(areaContext, { 'address.geography.areaId': { $type: 'string', $ne: '' } }) },
             {
-              $project: {
-                value: '$address.area',
-                city: '$address.city',
-                country: '$address.country',
+              $group: {
+                _id: '$address.geography.areaId',
+                count: { $sum: 1 },
+                names: { $addToSet: '$address.geography.areaName' },
+                types: { $addToSet: '$address.geography.locationType' },
+                cityIds: { $addToSet: '$address.geography.cityId' },
+                cityNames: { $addToSet: '$address.geography.cityName' },
+                countryIds: { $addToSet: '$address.geography.countryId' },
+                countryCodes: { $addToSet: '$address.geography.countryCode' },
+                countryNames: { $addToSet: '$address.geography.countryName' },
               },
             },
-            { $match: { value: { $type: 'string', $ne: '' } } },
-            { $group: { _id: { value: '$value', city: '$city', country: '$country' }, count: { $sum: 1 } } },
           ],
           types: [
+            { $match: base },
             { $match: { type: { $in: ['business', 'private'] } } },
             { $group: { _id: '$type', count: { $sum: 1 } } },
             { $sort: { _id: 1 } },
           ],
           businessTypes: [
+            { $match: base },
             { $match: { 'sourceMetadata.businessType': { $type: 'string', $ne: '' } } },
             { $group: { _id: '$sourceMetadata.businessType', count: { $sum: 1 } } },
             { $sort: { count: -1, _id: 1 } },
@@ -344,35 +393,47 @@ class LeadRepository {
       },
     ]);
 
-    const mergeOptions = (rows, scopeFields = []) => {
-      const byKey = new Map();
-      for (const row of rows ?? []) {
-        const raw = row?._id && typeof row._id === 'object' ? row._id : { value: row?._id };
-        const value = cleanFacetText(raw.value);
-        if (!value || isBarePostal(value)) continue;
-        const scopes = Object.fromEntries(scopeFields.map((field) => [field, cleanFacetText(raw[field]) || null]));
-        const key = [value, ...scopeFields.map((field) => scopes[field] ?? '')]
-          .map((item) => item.toLocaleLowerCase('en'))
-          .join('|');
-        const existing = byKey.get(key);
-        if (existing) {
-          existing.count += row.count;
-          existing.value = preferredDisplayText(existing.value, value);
-          for (const field of scopeFields) {
-            existing[field] = preferredDisplayText(existing[field], scopes[field]) || existing[field];
-          }
-        } else byKey.set(key, { value, ...scopes, count: row.count });
-      }
-      return [...byKey.values()].sort((a, b) => a.value.localeCompare(b.value));
-    };
+    const preferred = (values = []) => values
+      .map(cleanFacetText)
+      .filter(Boolean)
+      .reduce((current, candidate) => preferredDisplayText(current, candidate), '');
+    const first = (values = []) => values.find((value) => cleanFacetText(value)) ?? null;
 
-    const countries = mergeOptions(facets?.countries)
-      .map((option) => ({ ...option, value: option.value.length === 2 ? option.value.toUpperCase() : option.value }));
+    const countries = (facets?.countries ?? []).map((row) => ({
+      id: row._id,
+      value: preferred(row.names) || first(row.codes),
+      code: first(row.codes),
+      count: row.count,
+    })).filter((option) => option.id && option.value)
+      .sort((a, b) => a.value.localeCompare(b.value));
+
+    const cities = (facets?.cities ?? []).map((row) => ({
+      id: row._id,
+      value: preferred(row.names),
+      countryId: first(row.countryIds),
+      country: preferred(row.countryNames),
+      countryCode: first(row.countryCodes),
+      count: row.count,
+    })).filter((option) => option.id && option.value && option.countryId)
+      .sort((a, b) => a.value.localeCompare(b.value));
+
+    const areas = (facets?.areas ?? []).map((row) => ({
+      id: row._id,
+      value: preferred(row.names),
+      type: first(row.types),
+      cityId: first(row.cityIds),
+      city: preferred(row.cityNames),
+      countryId: first(row.countryIds),
+      country: preferred(row.countryNames),
+      countryCode: first(row.countryCodes),
+      count: row.count,
+    })).filter((option) => option.id && option.value && option.cityId && option.countryId)
+      .sort((a, b) => a.value.localeCompare(b.value));
 
     return {
       countries,
-      cities: mergeOptions(facets?.cities, ['country']),
-      areas: mergeOptions(facets?.areas, ['city', 'country']),
+      cities,
+      areas,
       types: (facets?.types ?? []).map((type) => ({ value: type._id, count: type.count })),
       businessTypes: (facets?.businessTypes ?? []).map((bt) => ({ value: bt._id, count: bt.count })),
     };

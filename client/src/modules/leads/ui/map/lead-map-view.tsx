@@ -62,8 +62,6 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
   const selectable = canWrite || canDelete || canEmail || canWhatsApp || canEnrich;
 
   const { filters, setFilters, clearFilters } = useLeadsFilters();
-  const filterOptionsQuery = useLeadFilterOptions();
-
   // ── Query (same params as the list; deferred until the map is open) ─────────
   const debouncedSearch = useDebounce(filters.search, 300);
   const searchTerm = debouncedSearch.trim().slice(0, 100);
@@ -72,6 +70,28 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
     [filters, currentUserId, searchTerm],
   );
   const paramsKey = JSON.stringify(params);
+  const filterOptionParams = useMemo(() => {
+    const { limit: _limit, areaId: _areaId, ...facetFilters } = params;
+    return facetFilters;
+  }, [params]);
+  const filterOptionsQuery = useLeadFilterOptions(filterOptionParams);
+  useEffect(() => {
+    const options = filterOptionsQuery.data;
+    if (!options) return;
+    if (filters.country !== FILTER_ALL && !options.countries.some((option) => option.id === filters.country)) {
+      setFilters({ country: FILTER_ALL, city: FILTER_ALL, area: FILTER_ALL });
+      return;
+    }
+    if (filters.city !== FILTER_ALL && !options.cities.some((option) =>
+      option.id === filters.city && (filters.country === FILTER_ALL || option.countryId === filters.country))) {
+      setFilters({ city: FILTER_ALL, area: FILTER_ALL });
+      return;
+    }
+    if (filters.area !== FILTER_ALL && !options.areas.some((option) =>
+      option.id === filters.area && (filters.city === FILTER_ALL || option.cityId === filters.city))) {
+      setFilters({ area: FILTER_ALL });
+    }
+  }, [filterOptionsQuery.data, filters.area, filters.city, filters.country, setFilters]);
   const query = useLeadMap(params, { enabled: open });
 
   const data = query.data;

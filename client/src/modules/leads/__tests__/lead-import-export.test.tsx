@@ -209,9 +209,9 @@ describe('LeadExportMenu', () => {
         status: 'qualified',
         source: 'manual',
         type: 'business',
-        country: 'CH',
-        city: 'Zürich',
-        area: 'Altstadt',
+        country: 'country:CH',
+        city: 'city:222222222222222222222222',
+        area: 'area:333333333333333333333333',
         businessType: 'bakery',
         search: 'bakery',
       });
@@ -226,9 +226,12 @@ describe('LeadExportMenu', () => {
       expect(url.searchParams.get('status')).toBe('qualified');
       expect(url.searchParams.get('source')).toBe('manual');
       expect(url.searchParams.get('type')).toBe('business');
-      expect(url.searchParams.get('country')).toBe('CH');
-      expect(url.searchParams.get('city')).toBe('Zürich');
-      expect(url.searchParams.get('area')).toBe('Altstadt');
+      expect(url.searchParams.get('countryId')).toBe('country:CH');
+      expect(url.searchParams.get('cityId')).toBe('city:222222222222222222222222');
+      expect(url.searchParams.get('areaId')).toBe('area:333333333333333333333333');
+      expect(url.searchParams.has('country')).toBe(false);
+      expect(url.searchParams.has('city')).toBe(false);
+      expect(url.searchParams.has('area')).toBe(false);
       expect(url.searchParams.get('businessType')).toBe('bakery');
       expect(url.searchParams.get('q')).toBe('bakery');
 

@@ -20,9 +20,10 @@ class LeadController {
     } catch (err) { next(err); }
   }
 
-  async filterOptions(_req, res, next) {
+  async filterOptions(req, res, next) {
     try {
-      const data = await leadService.getFilterOptions();
+      const query = req._validatedQuery || req.query;
+      const data = await leadService.getFilterOptions(query);
       return res.success({ data });
     } catch (err) { next(err); }
   }

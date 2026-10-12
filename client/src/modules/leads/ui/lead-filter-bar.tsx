@@ -100,22 +100,6 @@ function CountBadge({ count }: { count: number | undefined }) {
   );
 }
 
-function samePlacePart(left: string | null | undefined, right: string): boolean {
-  return (left ?? '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('en')
-    === right.replace(/\s+/g, ' ').trim().toLocaleLowerCase('en');
-}
-
-function mergeOptions(options: Array<{ value: string; count: number }>): Array<{ value: string; count: number }> {
-  const merged = new Map<string, { value: string; count: number }>();
-  for (const option of options) {
-    const key = option.value.replace(/\s+/g, ' ').trim().toLocaleLowerCase('en');
-    const existing = merged.get(key);
-    if (existing) existing.count += option.count;
-    else merged.set(key, { value: option.value, count: option.count });
-  }
-  return [...merged.values()].sort((a, b) => a.value.localeCompare(b.value));
-}
-
 /**
  * Premium two-tier filter workspace. Every control is server-backed; in
  * particular Country, City and Area are populated from the corresponding lead
@@ -148,11 +132,11 @@ export function LeadFilterBar({
 }: LeadFilterBarProps) {
   const { t } = useLanguage();
   const typeCounts = new Map(filterOptions?.types.map((option) => [option.value, option.count]) ?? []);
-  const cityOptions = mergeOptions((filterOptions?.cities ?? []).filter((option) =>
-    country === FILTER_ALL || samePlacePart(option.country, country)));
-  const areaOptions = mergeOptions((filterOptions?.areas ?? []).filter((option) =>
-    (country === FILTER_ALL || samePlacePart(option.country, country))
-    && (city === FILTER_ALL || samePlacePart(option.city, city))));
+  const cityOptions = (filterOptions?.cities ?? []).filter((option) =>
+    country === FILTER_ALL || option.countryId === country);
+  const areaOptions = (filterOptions?.areas ?? []).filter((option) =>
+    (country === FILTER_ALL || option.countryId === country)
+    && (city === FILTER_ALL || option.cityId === city));
   const activeFilterCount = [
     search.trim(),
     status !== FILTER_ALL,
@@ -381,10 +365,10 @@ export function LeadFilterBar({
                   </span>
                 </SelectItem>
                 {filterOptions?.countries.map((option) => (
-                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                  <SelectItem key={option.id} value={option.id} textValue={option.value}>
                     <span className="flex w-full min-w-36 items-center gap-2">
                       <Globe2 className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
-                      <span className="truncate uppercase">{option.value}</span>
+                      <span className="truncate">{option.value}</span>
                       <CountBadge count={option.count} />
                     </span>
                   </SelectItem>
@@ -414,7 +398,7 @@ export function LeadFilterBar({
                   </span>
                 </SelectItem>
                 {cityOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                  <SelectItem key={option.id} value={option.id} textValue={option.value}>
                     <span className="flex w-full min-w-40 items-center gap-2">
                       <MapPin className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
                       <span className="truncate">{option.value}</span>
@@ -447,7 +431,7 @@ export function LeadFilterBar({
                   </span>
                 </SelectItem>
                 {areaOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                  <SelectItem key={option.id} value={option.id} textValue={option.value}>
                     <span className="flex w-full min-w-40 items-center gap-2">
                       <MapIcon className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
                       <span className="truncate">{option.value}</span>

@@ -18,6 +18,7 @@ import type {
   LeadEnrichResult,
   LeadEnrichSummary,
   LeadFilterOptions,
+  LeadFilters,
   LeadGeocodeReason,
   LeadGeocodeResult,
   LeadMapParams,
@@ -72,9 +73,9 @@ export type LeadExportFilters = {
   source?: string;
   assignedTo?: string;
   type?: string;
-  country?: string;
-  city?: string;
-  area?: string;
+  countryId?: string;
+  cityId?: string;
+  areaId?: string;
   businessType?: string;
   q?: string;
 };
@@ -293,8 +294,8 @@ export const leadApi = {
     };
   },
 
-  async getFilterOptions(): Promise<LeadFilterOptions> {
-    const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.FILTER_OPTIONS));
+  async getFilterOptions(params: Omit<LeadFilters, 'areaId'> = {}): Promise<LeadFilterOptions> {
+    const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.FILTER_OPTIONS, { params }));
     const data = isRecord(response.data) ? response.data : {};
     const countries = Array.isArray(data.countries) ? data.countries : [];
     // During a rolling deployment, accept the former `places` payload as city
@@ -309,25 +310,41 @@ export const leadApi = {
     const businessTypes = Array.isArray(data.businessTypes) ? data.businessTypes : [];
     return {
       countries: countries.flatMap((value) => {
-        if (!isRecord(value) || typeof value.value !== 'string' || !value.value.trim()) return [];
-        return [{ value: value.value, count: toNumber(value.count) }];
+        if (!isRecord(value) || typeof value.id !== 'string' || typeof value.value !== 'string' || !value.value.trim()) return [];
+        return [{
+          id: value.id,
+          value: value.value,
+          code: typeof value.code === 'string' ? value.code : null,
+          count: toNumber(value.count),
+        }];
       }),
       cities: cities.flatMap((value) => {
         if (!isRecord(value)) return [];
         const city = typeof value.value === 'string' ? value.value : value.city;
-        if (typeof city !== 'string' || !city.trim()) return [];
+        if (typeof value.id !== 'string' || typeof value.countryId !== 'string' || typeof city !== 'string' || !city.trim()) return [];
         return [{
+          id: value.id,
           value: city,
+          code: null,
+          countryId: value.countryId,
           country: typeof value.country === 'string' && value.country.trim() ? value.country : null,
+          countryCode: typeof value.countryCode === 'string' ? value.countryCode : null,
           count: toNumber(value.count),
         }];
       }),
       areas: areas.flatMap((value) => {
-        if (!isRecord(value) || typeof value.value !== 'string' || !value.value.trim()) return [];
+        if (!isRecord(value) || typeof value.id !== 'string' || typeof value.cityId !== 'string'
+          || typeof value.countryId !== 'string' || typeof value.value !== 'string' || !value.value.trim()) return [];
         return [{
+          id: value.id,
           value: value.value,
+          code: null,
+          type: typeof value.type === 'string' ? value.type : null,
+          cityId: value.cityId,
           city: typeof value.city === 'string' && value.city.trim() ? value.city : null,
+          countryId: value.countryId,
           country: typeof value.country === 'string' && value.country.trim() ? value.country : null,
+          countryCode: typeof value.countryCode === 'string' ? value.countryCode : null,
           count: toNumber(value.count),
         }];
       }),

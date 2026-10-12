@@ -422,6 +422,7 @@ class ImportService {
       fallbackCity: location.city,
       fallbackCountry: location.countryCode || location.country,
       fallbackLocation: location.formattedAddress || location.name,
+      source: 'business_discovery',
     });
   }
 

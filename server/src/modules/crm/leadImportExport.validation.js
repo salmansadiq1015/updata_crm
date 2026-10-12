@@ -13,6 +13,8 @@ import { LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE } from './lead.model.js';
 const LEAD_TYPES = Object.values(LEAD_TYPE);
 const LEAD_STATUSES = Object.values(LEAD_STATUS);
 const LEAD_SOURCES = Object.values(LEAD_SOURCE);
+const canonicalLocationId = Joi.string().trim().max(80)
+  .pattern(/^(country:[A-Z]{2}|(?:city|area):[a-f0-9]{24})$/);
 
 // Accepted import modes — mirrored by the controller's own `mode` check.
 export const IMPORT_MODES = Object.freeze(['new', 'skip', 'update']);
@@ -27,6 +29,9 @@ export const exportLeads = {
     country: Joi.string().trim().length(2).uppercase(),
     city: Joi.string().trim().max(120),
     area: Joi.string().trim().max(120),
+    countryId: canonicalLocationId,
+    cityId: canonicalLocationId,
+    areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
   }),

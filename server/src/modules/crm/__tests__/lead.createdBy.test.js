@@ -247,20 +247,22 @@ describe('leadRepository — createdBy is populated', () => {
     expect(discoveryMetadataOnly.data).toEqual([]);
 
     const options = await leadRepository.getFilterOptions();
-    expect(options.countries).toEqual([
-      { value: 'CH', count: 3 },
-      { value: 'FR', count: 1 },
-    ]);
-    expect(options.cities).toEqual([
-      { value: 'Basel', country: 'CH', count: 1 },
-      { value: 'Boulogne-Billancourt', country: 'FR', count: 1 },
-      { value: 'Zürich', country: 'CH', count: 2 },
-    ]);
-    expect(options.areas).toEqual([
-      { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 2 },
-      { value: 'Billancourt', city: 'Boulogne-Billancourt', country: 'FR', count: 1 },
-      { value: 'Kleinbasel', city: 'Basel', country: 'CH', count: 1 },
-    ]);
+    expect(options.countries.map(({ code, count }) => ({ code, count }))).toEqual(expect.arrayContaining([
+      { code: 'CH', count: 3 },
+      { code: 'FR', count: 1 },
+    ]));
+    expect(options.cities.map(({ value, countryCode, count }) => ({ value, countryCode, count })))
+      .toEqual(expect.arrayContaining([
+        { value: 'Basel', countryCode: 'CH', count: 1 },
+        { value: 'Boulogne-Billancourt', countryCode: 'FR', count: 1 },
+        { value: 'Zürich', countryCode: 'CH', count: 2 },
+      ]));
+    expect(options.areas.map(({ value, city, countryCode, count }) => ({ value, city, countryCode, count })))
+      .toEqual(expect.arrayContaining([
+        { value: 'Altstadt', city: 'Zürich', countryCode: 'CH', count: 2 },
+        { value: 'Billancourt', city: 'Boulogne-Billancourt', countryCode: 'FR', count: 1 },
+        { value: 'Kleinbasel', city: 'Basel', countryCode: 'CH', count: 1 },
+      ]));
     expect(options.types).toEqual([
       { value: 'business', count: 3 },
       { value: 'private', count: 1 },

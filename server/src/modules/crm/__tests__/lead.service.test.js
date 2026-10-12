@@ -12,6 +12,7 @@ const mockLeadFindDuplicates = jest.fn();
 const mockLeadBulkCreate = jest.fn();
 const mockLeadList = jest.fn();
 const mockLeadListForMap = jest.fn();
+const mockGetAddressSnapshot = jest.fn();
 
 jest.unstable_mockModule('../lead.repository.js', () => ({
   default: {
@@ -23,6 +24,7 @@ jest.unstable_mockModule('../lead.repository.js', () => ({
     bulkCreate: mockLeadBulkCreate,
     list: mockLeadList,
     listForMap: mockLeadListForMap,
+    getAddressSnapshot: mockGetAddressSnapshot,
     findByPlaceIds: jest.fn(),
   },
 }));
@@ -168,6 +170,27 @@ describe('leadService.create', () => {
 
     expect(result.leadNumber).toBe('L-00044');
     expect(result.duplicateWarning).toBe(false);
+  });
+});
+
+describe('leadService.update', () => {
+  it('merges a partial address edit and regenerates the canonical hierarchy', async () => {
+    mockGetAddressSnapshot.mockResolvedValue({
+      source: 'manual',
+      address: { city: 'Paris', area: 'Paris 10e', country: 'FR', postalCode: '75010' },
+    });
+    mockLeadUpdate.mockImplementation(async (_id, payload) => ({ _id: 'lead-1', ...payload }));
+
+    const updated = await leadService.update('lead-1', { address: { street: '1 Rue Exemple' } });
+
+    expect(updated.address).toMatchObject({
+      street: '1 Rue Exemple', city: 'Paris', area: '10th Arrondissement', country: 'FR', postalCode: '75010',
+      geography: expect.objectContaining({
+        countryId: 'country:FR', locationType: 'arrondissement', reviewRequired: false,
+      }),
+    });
+    expect(updated.address.geography.cityId).toMatch(/^city:[a-f0-9]{24}$/);
+    expect(updated.address.geography.areaId).toMatch(/^area:[a-f0-9]{24}$/);
   });
 });
 

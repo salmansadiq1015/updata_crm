@@ -167,15 +167,18 @@ beforeEach(() => {
   server.use(
     http.get(L, () => HttpResponse.json(okPage(LEADS))),
     http.get(`${L}/filter-options`, () => HttpResponse.json(ok({
-      countries: [{ value: 'CH', count: 2 }, { value: 'FR', count: 1 }],
+      countries: [
+        { id: 'country:CH', value: 'Switzerland', code: 'CH', count: 2 },
+        { id: 'country:FR', value: 'France', code: 'FR', count: 1 },
+      ],
       cities: [
-        { value: 'Basel', country: 'CH', count: 1 },
-        { value: 'Zürich', country: 'CH', count: 1 },
-        { value: 'Paris', country: 'FR', count: 1 },
+        { id: 'city:111111111111111111111111', value: 'Basel', countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 1 },
+        { id: 'city:222222222222222222222222', value: 'Zürich', countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 1 },
+        { id: 'city:444444444444444444444444', value: 'Paris', countryId: 'country:FR', country: 'France', countryCode: 'FR', count: 1 },
       ],
       areas: [
-        { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 1 },
-        { value: 'Bercy', city: 'Paris', country: 'FR', count: 1 },
+        { id: 'area:333333333333333333333333', value: 'Altstadt', type: 'neighborhood', cityId: 'city:222222222222222222222222', city: 'Zürich', countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 1 },
+        { id: 'area:555555555555555555555555', value: 'Bercy', type: 'neighborhood', cityId: 'city:444444444444444444444444', city: 'Paris', countryId: 'country:FR', country: 'France', countryCode: 'FR', count: 1 },
       ],
       types: [
         { value: 'business', count: 3 },
@@ -287,7 +290,7 @@ describe('LeadListView', () => {
     await screen.findByText('Alpine Bakery AG');
 
     await user.click(screen.getByRole('combobox', { name: 'Country' }));
-    await user.click(await screen.findByRole('option', { name: /CH/ }));
+    await user.click(await screen.findByRole('option', { name: /Switzerland/ }));
 
     await user.click(screen.getByRole('combobox', { name: 'City' }));
     expect(await screen.findByRole('option', { name: /Zürich/ })).toBeInTheDocument();
@@ -305,11 +308,40 @@ describe('LeadListView', () => {
     await waitFor(() => {
       const last = requests[requests.length - 1];
       expect(last.searchParams.get('type')).toBe('private');
-      expect(last.searchParams.get('country')).toBe('CH');
-      expect(last.searchParams.get('city')).toBe('Zürich');
-      expect(last.searchParams.get('area')).toBe('Altstadt');
+      expect(last.searchParams.get('countryId')).toBe('country:CH');
+      expect(last.searchParams.get('cityId')).toBe('city:222222222222222222222222');
+      expect(last.searchParams.get('areaId')).toBe('area:333333333333333333333333');
     });
-  });
+  }, 10_000);
+
+  it('clears an incompatible city and area when the country changes', async () => {
+    const requests: URL[] = [];
+    server.use(http.get(L, ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json(okPage(LEADS));
+    }));
+    const { user } = renderLeadList();
+    await screen.findByText('Alpine Bakery AG');
+
+    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await user.click(await screen.findByRole('option', { name: /Switzerland/ }));
+    await user.click(screen.getByRole('combobox', { name: 'City' }));
+    await user.click(await screen.findByRole('option', { name: /Zürich/ }));
+    await user.click(screen.getByRole('combobox', { name: 'Area' }));
+    await user.click(await screen.findByRole('option', { name: /Altstadt/ }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await user.click(await screen.findByRole('option', { name: /France/ }));
+
+    await waitFor(() => {
+      const last = requests[requests.length - 1];
+      expect(last.searchParams.get('countryId')).toBe('country:FR');
+      expect(last.searchParams.has('cityId')).toBe(false);
+      expect(last.searchParams.has('areaId')).toBe(false);
+    });
+    expect(screen.getByRole('combobox', { name: 'City' })).toHaveTextContent('All cities');
+    expect(screen.getByRole('combobox', { name: 'Area' })).toHaveTextContent('All areas');
+  }, 10_000);
 
   it('pages forward with the cursor the API returned', async () => {
     const requests: URL[] = [];

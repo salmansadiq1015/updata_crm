@@ -172,6 +172,7 @@ function parseGoogleAddress(components, formatted) {
   const out = {
     formatted: formatted || null,
     street: null,
+    area: null,
     city: null,
     region: null,
     postalCode: null,
@@ -183,6 +184,7 @@ function parseGoogleAddress(components, formatted) {
   let route = null;
   let streetNumber = null;
   let regionCode = null;
+  let districtFallback = null;
   for (const comp of components) {
     const types = Array.isArray(comp?.types) ? comp.types : [];
     const longText = comp?.longText ?? comp?.long_name ?? null;
@@ -190,6 +192,11 @@ function parseGoogleAddress(components, formatted) {
     if (types.includes('route')) route = longText;
     else if (types.includes('street_number')) streetNumber = longText;
     else if (types.includes('locality') || types.includes('postal_town')) out.city = longText;
+    else if (types.includes('neighborhood')
+      || types.includes('sublocality_level_1')
+      || types.includes('sublocality_level_2')
+      || types.includes('sublocality')) out.area = out.area || longText;
+    else if (types.includes('administrative_area_level_2')) districtFallback = longText;
     else if (types.includes('administrative_area_level_1')) {
       out.region = longText;
       regionCode = shortText;
@@ -199,6 +206,7 @@ function parseGoogleAddress(components, formatted) {
   // Swiss street convention: name then number ("Bahnhofstrasse 12").
   const street = [route, streetNumber].filter(Boolean).join(' ').trim();
   out.street = street || null;
+  out.area = out.area || districtFallback || null;
   // Canton: the admin-area short code when it is a recognised Swiss canton.
   out.canton = regionCode && SWISS_CANTONS.includes(regionCode) ? regionCode : null;
   return out;
@@ -207,12 +215,13 @@ function parseGoogleAddress(components, formatted) {
 /** Use an already-structured address object (generic input), defensively. */
 function parseGenericAddress(address) {
   if (!address || typeof address !== 'object') {
-    return { formatted: null, street: null, city: null, region: null, postalCode: null, country: null, canton: null };
+    return { formatted: null, street: null, area: null, city: null, region: null, postalCode: null, country: null, canton: null };
   }
   const regionCode = address.canton ?? address.regionCode ?? null;
   return {
     formatted: pick(address.formatted, address.formattedAddress) ?? null,
     street: pick(address.street) ?? null,
+    area: pick(address.area, address.neighborhood, address.neighbourhood, address.suburb, address.district, address.borough) ?? null,
     city: pick(address.city) ?? null,
     region: pick(address.region, address.state) ?? null,
     postalCode: pick(address.postalCode, address.postal_code, address.zip) ?? null,
@@ -287,7 +296,7 @@ export function normalizeBusiness(raw) {
       website: null,
       websiteDomain: null,
       email: null,
-      address: { formatted: null, street: null, city: null, region: null, postalCode: null, country: null, canton: null },
+      address: { formatted: null, street: null, area: null, city: null, region: null, postalCode: null, country: null, canton: null },
       location: null,
       rating: null,
       reviewCount: null,

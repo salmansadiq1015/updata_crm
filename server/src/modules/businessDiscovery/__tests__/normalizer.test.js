@@ -111,6 +111,7 @@ describe('normalizeBusiness', () => {
       { longText: '1', shortText: '1', types: ['street_number'] },
       { longText: 'Bahnhofstrasse', shortText: 'Bahnhofstrasse', types: ['route'] },
       { longText: 'Zürich', shortText: 'Zürich', types: ['locality'] },
+      { longText: 'Altstadt', shortText: 'Altstadt', types: ['sublocality_level_1'] },
       { longText: 'Zürich', shortText: 'ZH', types: ['administrative_area_level_1'] },
       { longText: '8001', shortText: '8001', types: ['postal_code'] },
       { longText: 'Switzerland', shortText: 'CH', types: ['country'] },
@@ -138,6 +139,7 @@ describe('normalizeBusiness', () => {
     expect(b.address).toEqual({
       formatted: 'Bahnhofstrasse 1, 8001 Zürich, Switzerland',
       street: 'Bahnhofstrasse 1',
+      area: 'Altstadt',
       city: 'Zürich',
       region: 'Zürich',
       postalCode: '8001',

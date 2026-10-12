@@ -52,7 +52,13 @@ function toLocationDto(result) {
     types.some((type) => Array.isArray(entry?.types) && entry.types.includes(type)));
   const country = component('country');
   const region = component('administrative_area_level_1');
-  const city = component('locality', 'postal_town', 'administrative_area_level_2');
+  // Google uses locality/postal_town; Nominatim exposes the original OSM keys.
+  // Treat administrative_area_level_2 as a last resort only after actual city
+  // types, otherwise a county can be mistaken for the selected city.
+  const city = component(
+    'locality', 'postal_town', 'city', 'town', 'village', 'municipality',
+    'administrative_area_level_2',
+  );
   return {
     name: result.formatted_address ?? null,
     center: { lat, lng },

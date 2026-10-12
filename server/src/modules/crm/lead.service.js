@@ -11,6 +11,7 @@ import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 import { LEAD_STATUS, LEAD_TYPE } from './lead.model.js';
+import { canonicalizeLeadAddress } from './leadGeography.js';
 
 /**
  * Lead service (§4.3 / §9 / §72 of LEAD_GENERATION_DESIGN.md).
@@ -79,6 +80,9 @@ class LeadService {
    */
   async create(data, createdBy, meta = {}) {
     const dedupKeys = deriveDedupKeys(data);
+    const address = canonicalizeLeadAddress(data.address ?? {}, {
+      source: data.source || 'manual',
+    });
 
     // Non-blocking global duplicate warning (§8). A dedup failure must never
     // prevent lead creation.
@@ -103,6 +107,7 @@ class LeadService {
     const saved = await leadRepository.create({
       ...data,
       ...dedupKeys,
+      address,
       ...(data.location ? { location: toGeoJsonLocation(data.location) } : {}),
       leadNumber,
       createdBy,
@@ -185,8 +190,11 @@ class LeadService {
   }
 
   /** Distinct, live values used by the leads list filter controls. */
-  async getFilterOptions() {
-    return leadRepository.getFilterOptions();
+  async getFilterOptions(queryParams = {}) {
+    const { q, search, ...filters } = queryParams;
+    const term = search ?? q;
+    const searchUserIds = await this.resolveSearchUserIds(term);
+    return leadRepository.getFilterOptions({ filters, search: term, searchUserIds });
   }
 
   /** Company-wide get (shared). Throws when the lead does not exist. */
@@ -198,9 +206,23 @@ class LeadService {
 
   /** Company-wide update (shared). Recomputes dedup keys for changed fields. */
   async update(id, data, meta = {}) {
+    let address;
+    if (data.address !== undefined) {
+      // Address PATCHes are partial. Merge with the persisted address before
+      // resolving its hierarchy so changing a street cannot erase a valid
+      // country/city or leave stale canonical identifiers behind.
+      const current = await leadRepository.getAddressSnapshot(id);
+      if (!current) throw new NotFoundError('Lead', id);
+      address = canonicalizeLeadAddress({
+        ...(current.address ?? {}),
+        ...(data.address ?? {}),
+        geography: undefined,
+      }, { source: current.source || 'manual' });
+    }
     const payload = {
       ...data,
       ...deriveDedupKeys(data),
+      ...(address ? { address } : {}),
       ...(data.location ? { location: toGeoJsonLocation(data.location) } : {}),
     };
     const updated = await leadRepository.update(id, payload);
@@ -316,7 +338,11 @@ class LeadService {
    * unique partial googlePlaceId index surfacing duplicate-key write errors.
    */
   async bulkCreate(leadDocs = []) {
-    const docs = leadDocs.map((doc) => ({ ...doc, ...deriveDedupKeys(doc) }));
+    const docs = leadDocs.map((doc) => ({
+      ...doc,
+      ...deriveDedupKeys(doc),
+      address: canonicalizeLeadAddress(doc.address ?? {}, { source: doc.source || 'import' }),
+    }));
     return leadRepository.bulkCreate(docs);
   }
 

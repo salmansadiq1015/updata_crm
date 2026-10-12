@@ -29,13 +29,13 @@ afterAll(() => server.close());
 describe('leadApi', () => {
   it('getFilterOptions normalizes database-backed country, city, area and type facets', async () => {
     const options = await leadApi.getFilterOptions();
-    expect(options.countries).toEqual([{ value: 'CH', count: 3 }]);
+    expect(options.countries).toEqual([{ id: 'country:CH', value: 'Switzerland', code: 'CH', count: 3 }]);
     expect(options.cities).toEqual([
-      { value: 'Basel', country: 'CH', count: 1 },
-      { value: 'Zürich', country: 'CH', count: 2 },
+      { id: 'city:111111111111111111111111', value: 'Basel', code: null, countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 1 },
+      { id: 'city:222222222222222222222222', value: 'Zürich', code: null, countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 2 },
     ]);
     expect(options.areas).toEqual([
-      { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 1 },
+      { id: 'area:333333333333333333333333', value: 'Altstadt', code: null, type: 'neighborhood', cityId: 'city:222222222222222222222222', city: 'Zürich', countryId: 'country:CH', country: 'Switzerland', countryCode: 'CH', count: 1 },
     ]);
     expect(options.types).toEqual([
       { value: 'business', count: 2 },

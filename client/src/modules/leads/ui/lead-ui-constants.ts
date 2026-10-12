@@ -118,9 +118,9 @@ export type LeadQueryFilterParams = {
   status?: LeadStatus;
   source?: LeadSource;
   type?: LeadType;
-  country?: string;
-  city?: string;
-  area?: string;
+  countryId?: string;
+  cityId?: string;
+  areaId?: string;
   businessType?: string;
   assignedTo?: string;
   q?: string;
@@ -147,9 +147,9 @@ export function buildLeadFilterParams(
     ...(filters.status !== FILTER_ALL ? { status: filters.status as LeadStatus } : {}),
     ...(filters.source !== FILTER_ALL ? { source: filters.source as LeadSource } : {}),
     ...(filters.type !== FILTER_ALL ? { type: filters.type as LeadType } : {}),
-    ...(filters.country !== FILTER_ALL ? { country: filters.country } : {}),
-    ...(filters.city !== FILTER_ALL ? { city: filters.city } : {}),
-    ...(filters.area !== FILTER_ALL ? { area: filters.area } : {}),
+    ...(filters.country !== FILTER_ALL ? { countryId: filters.country } : {}),
+    ...(filters.city !== FILTER_ALL ? { cityId: filters.city } : {}),
+    ...(filters.area !== FILTER_ALL ? { areaId: filters.area } : {}),
     ...(filters.businessType !== FILTER_ALL ? { businessType: filters.businessType } : {}),
     ...(assignedTo ? { assignedTo } : {}),
     ...(searchTerm ? { q: searchTerm } : {}),

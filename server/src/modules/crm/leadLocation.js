@@ -1,6 +1,9 @@
 import { nominatimProvider } from '../businessDiscovery/provider/NominatimProvider.js';
 import { SWISS_CANTONS } from './crm.constants.js';
 import logger from '../../shared/logger/index.js';
+import { canonicalizeLeadAddress, normalizeCountryCode } from './leadGeography.js';
+
+export { normalizeCountryCode } from './leadGeography.js';
 
 /**
  * Lead address resolution shared by every import path (Chrome extension + server
@@ -15,35 +18,6 @@ function clean(value) {
   if (value === null || value === undefined) return null;
   const s = String(value).replace(/\s+/g, ' ').trim();
   return s === '' ? null : s;
-}
-
-const COUNTRY_NAME_TO_CODE = new Map([
-  ['switzerland', 'CH'], ['schweiz', 'CH'], ['suisse', 'CH'], ['svizzera', 'CH'],
-  ['france', 'FR'], ['germany', 'DE'], ['deutschland', 'DE'], ['austria', 'AT'], ['österreich', 'AT'],
-  ['italy', 'IT'], ['italia', 'IT'], ['pakistan', 'PK'], ['india', 'IN'],
-  ['united kingdom', 'GB'], ['uk', 'GB'], ['england', 'GB'], ['scotland', 'GB'], ['wales', 'GB'],
-  ['united states', 'US'], ['united states of america', 'US'], ['usa', 'US'], ['america', 'US'],
-  ['canada', 'CA'], ['australia', 'AU'], ['united arab emirates', 'AE'], ['uae', 'AE'],
-  ['spain', 'ES'], ['españa', 'ES'], ['portugal', 'PT'], ['netherlands', 'NL'], ['belgium', 'BE'],
-  ['ireland', 'IE'], ['turkey', 'TR'], ['türkiye', 'TR'], ['saudi arabia', 'SA'],
-  ['china', 'CN'], ['japan', 'JP'], ['bangladesh', 'BD'], ['indonesia', 'ID'],
-  ['morocco', 'MA'], ['maroc', 'MA'], ['المغرب', 'MA'], ['egypt', 'EG'], ['tunisia', 'TN'], ['tunisie', 'TN'],
-  ['algeria', 'DZ'], ['algérie', 'DZ'], ['qatar', 'QA'], ['kuwait', 'KW'], ['oman', 'OM'], ['bahrain', 'BH'],
-  ['jordan', 'JO'], ['lebanon', 'LB'], ['liban', 'LB'], ['poland', 'PL'], ['polska', 'PL'],
-  ['sweden', 'SE'], ['norway', 'NO'], ['denmark', 'DK'], ['finland', 'FI'], ['greece', 'GR'],
-  ['mexico', 'MX'], ['méxico', 'MX'], ['brazil', 'BR'], ['brasil', 'BR'], ['argentina', 'AR'],
-  ['south africa', 'ZA'], ['nigeria', 'NG'], ['kenya', 'KE'], ['new zealand', 'NZ'],
-  ['singapore', 'SG'], ['malaysia', 'MY'], ['thailand', 'TH'], ['philippines', 'PH'], ['vietnam', 'VN'],
-  ['south korea', 'KR'], ['korea', 'KR'], ['russia', 'RU'], ['ukraine', 'UA'], ['czechia', 'CZ'],
-  ['czech republic', 'CZ'], ['hungary', 'HU'], ['romania', 'RO'], ['sri lanka', 'LK'], ['nepal', 'NP'],
-]);
-
-/** "Pakistan" / "pk" → "PK"; unknown → null (never a wrong guess). */
-export function normalizeCountryCode(value) {
-  const c = clean(value);
-  if (!c) return null;
-  if (/^[a-z]{2}$/i.test(c)) return c.toUpperCase();
-  return COUNTRY_NAME_TO_CODE.get(c.toLocaleLowerCase('en')) || null;
 }
 
 /**
@@ -236,7 +210,7 @@ export async function resolveLeadAddress(input = {}) {
   // `area` must never be a bare postal code (sanitizeCity rejects those too).
   if (outArea && /^[\d\s-]{3,}$/.test(outArea)) outArea = null;
 
-  return {
+  return canonicalizeLeadAddress({
     street: outStreet,
     addressSupplement: null,
     area: outArea,
@@ -248,5 +222,5 @@ export async function resolveLeadAddress(input = {}) {
     region: outCountry === 'CH' ? null : outRegion,
     country: outCountry,
     formatted: clean(formatted),
-  };
+  }, { source: input.source || 'resolver' });
 }

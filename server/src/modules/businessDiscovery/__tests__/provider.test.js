@@ -551,11 +551,13 @@ describe('NominatimProvider', () => {
 
     const response = await provider.geocode('Paris');
     const country = response.result.address_components.find((component) => component.types.includes('country'));
+    const request = http.request.mock.calls[0][0];
 
     expect(country).toMatchObject({
       long_name: 'France',
       short_name: 'FR',
       types: ['country'],
     });
+    expect(request.params['accept-language']).toBe('en');
   });
 });

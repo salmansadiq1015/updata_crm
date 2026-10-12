@@ -26,6 +26,7 @@ import type {
   LeadConvertInput,
   LeadCreateInput,
   LeadDuplicateParams,
+  LeadFilters,
   LeadListParams,
   LeadMapParams,
   LeadPage,
@@ -52,6 +53,7 @@ export const leadKeys = {
   duplicates: (params: LeadDuplicateParams) => [...leadKeys.root, 'duplicates', params] as const,
   contactLog: (id: string | null) => [...leadKeys.root, 'contact-log', id] as const,
   filterOptions: () => [...leadKeys.root, 'filter-options'] as const,
+  filterOption: (params: Omit<LeadFilters, 'areaId'> = {}) => [...leadKeys.filterOptions(), params] as const,
   enrichJob: (jobId: string | null) => [...leadKeys.root, 'enrich-job', jobId] as const,
 };
 
@@ -110,10 +112,10 @@ export function useLeadMap(params: LeadMapParams, options: { enabled?: boolean }
   });
 }
 
-export function useLeadFilterOptions() {
+export function useLeadFilterOptions(params: Omit<LeadFilters, 'areaId'> = {}) {
   return useQuery({
-    queryKey: leadKeys.filterOptions(),
-    queryFn: () => leadApi.getFilterOptions(),
+    queryKey: leadKeys.filterOption(params),
+    queryFn: () => leadApi.getFilterOptions(params),
     staleTime: 60_000,
   });
 }

@@ -9,6 +9,7 @@ import {
   updateLead,
   listLeads,
   mapLeads,
+  leadFilterOptions,
   leadIdParam,
   convertLead,
   duplicates,
@@ -36,7 +37,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 // Named routes BEFORE /:id
 router.get('/duplicates', authenticate, requirePermission('lead:read'), validate(duplicates), (req, res, next) => leadController.duplicates(req, res, next));
-router.get('/filter-options', authenticate, requirePermission('lead:read'), (req, res, next) => leadController.filterOptions(req, res, next));
+router.get('/filter-options', authenticate, requirePermission('lead:read'), validate(leadFilterOptions), (req, res, next) => leadController.filterOptions(req, res, next));
 // Map view: all filtered leads (projected, located-first) + located/unlocated counts.
 router.get('/map', authenticate, requirePermission('lead:read'), validate(mapLeads), (req, res, next) => leadController.mapLeads(req, res, next));
 

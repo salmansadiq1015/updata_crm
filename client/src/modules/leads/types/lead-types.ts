@@ -180,25 +180,33 @@ export type LeadFilters = {
   assignedTo?: string;
   source?: LeadSource;
   type?: LeadType;
-  country?: string;
-  city?: string;
-  area?: string;
+  countryId?: string;
+  cityId?: string;
+  areaId?: string;
   businessType?: string;
   q?: string;
 };
 
 export type LeadCountryFilterOption = {
+  id: string;
   value: string;
+  code: string | null;
   count: number;
 };
 
 export type LeadCityFilterOption = LeadCountryFilterOption & {
+  countryId: string;
   country: string | null;
+  countryCode: string | null;
 };
 
 export type LeadAreaFilterOption = LeadCountryFilterOption & {
+  type: 'district' | 'arrondissement' | 'borough' | 'neighborhood' | string | null;
+  cityId: string;
   city: string | null;
+  countryId: string;
   country: string | null;
+  countryCode: string | null;
 };
 
 export type LeadTypeFilterOption = {
@@ -243,7 +251,7 @@ export type CursorPage<T> = {
 export type LeadPage = CursorPage<Lead>;
 
 /** Filters the map view accepts — the list filters minus cursor pagination. */
-export type LeadMapParams = Pick<LeadFilters, 'status' | 'assignedTo' | 'source' | 'type' | 'country' | 'city' | 'area' | 'businessType' | 'q'> & {
+export type LeadMapParams = Pick<LeadFilters, 'status' | 'assignedTo' | 'source' | 'type' | 'countryId' | 'cityId' | 'areaId' | 'businessType' | 'q'> & {
   limit?: number;
 };
 

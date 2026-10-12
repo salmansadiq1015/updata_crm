@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { canonicalizeLeadAddress } from './leadGeography.js';
 
 /**
  * Lead — a prospective customer (own `leads` collection), numbered L-##### via
@@ -87,13 +88,35 @@ const leadSchema = new mongoose.Schema(
       canton: { type: String, trim: true, maxlength: 2, default: null },
       region: { type: String, trim: true, maxlength: 120, default: null },
       // No blanket CH default — forcing every country-less lead to Switzerland
-      // put foreign leads (e.g. Pakistan, Morocco) in the wrong country. Manual
-      // single-create still defaults to CH via lead.validation (the Swiss home
-      // market); imports/discovery set the country explicitly (null when truly
-      // unknown) so nothing is ever invented here.
+      // put foreign leads (e.g. Pakistan, Morocco) in the wrong country. Every
+      // creation path now supplies a resolved country or leaves it null, so an
+      // unknown location is never silently classified as Switzerland.
       country: { type: String, trim: true, maxlength: 2, default: null },
       // Full provider-supplied address string, kept verbatim for display.
       formatted: { type: String, trim: true, maxlength: 500, default: null },
+      // Server-owned canonical hierarchy. User/provider strings above remain
+      // available for display/audit; filters and parent relationships use these
+      // stable identifiers so spelling variants cannot create duplicate places.
+      geography: {
+        countryId: { type: String, trim: true, maxlength: 80, default: null },
+        countryCode: { type: String, trim: true, maxlength: 2, default: null },
+        countryName: { type: String, trim: true, maxlength: 120, default: null },
+        cityId: { type: String, trim: true, maxlength: 80, default: null },
+        cityName: { type: String, trim: true, maxlength: 120, default: null },
+        areaId: { type: String, trim: true, maxlength: 80, default: null },
+        areaName: { type: String, trim: true, maxlength: 120, default: null },
+        parentLocationId: { type: String, trim: true, maxlength: 80, default: null },
+        locationType: {
+          type: String,
+          enum: ['country', 'city', 'district', 'arrondissement', 'borough', 'neighborhood', null],
+          default: null,
+        },
+        source: { type: String, trim: true, maxlength: 60, default: 'unknown' },
+        externalPlaceId: { type: String, trim: true, maxlength: 255, default: null },
+        confidence: { type: String, enum: ['canonical', 'ambiguous', 'unresolved'], default: 'unresolved' },
+        reviewRequired: { type: Boolean, default: false },
+        issues: { type: [String], default: [] },
+      },
     },
     phone: { type: String, trim: true, maxlength: 50, default: null },
     mobile: { type: String, trim: true, maxlength: 50, default: null },
@@ -224,6 +247,12 @@ leadSchema.index({ assignedTo: 1 }); // "my leads"
 // Cascading Leads filters use the actual address hierarchy. Keeping soft-delete
 // first also helps the filter-options facet, which only exposes live leads.
 leadSchema.index({ isDeleted: 1, 'address.country': 1, 'address.city': 1, 'address.area': 1 });
+leadSchema.index({
+  isDeleted: 1,
+  'address.geography.countryId': 1,
+  'address.geography.cityId': 1,
+  'address.geography.areaId': 1,
+}, { name: 'lead_canonical_geography_filters' });
 // Import idempotency: a google-sourced place may back at most one lead.
 leadSchema.index(
   { 'sourceMetadata.googlePlaceId': 1 },
@@ -237,6 +266,14 @@ leadSchema.index(
   { name: 'text', 'address.city': 'text', email: 'text' },
   { weights: { name: 10, email: 5, 'address.city': 2 } },
 ); // search
+
+// Model-level safety net for direct writes in scripts/tests. Application write
+// paths also canonicalize in the service so findOneAndUpdate/insertMany receive
+// the same hierarchy (document middleware does not cover those operations).
+leadSchema.pre('validate', function canonicalizeAddress() {
+  const address = this.address?.toObject?.({ depopulate: true }) ?? this.address ?? {};
+  this.address = canonicalizeLeadAddress(address, { source: this.source || 'model' });
+});
 
 // --- Soft-delete pre-hook ---
 leadSchema.pre(/^find/, function () {

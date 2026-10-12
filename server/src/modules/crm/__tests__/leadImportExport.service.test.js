@@ -279,6 +279,10 @@ describe('leadImportExportService.importLeads (CSV)', () => {
     expect(result.summary).toMatchObject({ total: 1, created: 1, failed: 0 });
     const doc = mockBulkCreate.mock.calls[0][0][0];
     expect(doc.address).toMatchObject({ city: 'Lahore', country: 'PK' });
+    expect(doc.address.geography).toMatchObject({
+      countryId: 'country:PK', cityName: 'Lahore', reviewRequired: false,
+    });
+    expect(doc.address.geography.cityId).toMatch(/^city:[a-f0-9]{24}$/);
     expect(doc.address.country).not.toBe('CH');
   });
 
@@ -324,7 +328,10 @@ describe('leadImportExportService.importExtensionLeads', () => {
 
     expect(result).toMatchObject({ total: 1, created: 1, existing: 0, failed: 0 });
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      address: expect.objectContaining({ city: 'Paris', country: 'FR', canton: null }),
+      address: expect.objectContaining({
+        city: 'Paris', country: 'FR', canton: null,
+        geography: expect.objectContaining({ countryId: 'country:FR', cityName: 'Paris' }),
+      }),
     }), 'user-1', expect.objectContaining({ requestId: 'request-paris' }));
   });
 
@@ -344,6 +351,7 @@ describe('leadImportExportService.importExtensionLeads', () => {
     expect(result).toMatchObject({ total: 1, created: 1, failed: 0 });
     const doc = mockCreate.mock.calls[0][0];
     expect(doc.address).toMatchObject({ city: 'Lahore', country: 'PK' });
+    expect(doc.address.geography).toMatchObject({ countryId: 'country:PK', cityName: 'Lahore' });
     expect(doc.sourceMetadata.searchLocation).toBe('Lahore, Pakistan');
   });
 

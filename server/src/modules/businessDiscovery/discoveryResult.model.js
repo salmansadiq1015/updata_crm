@@ -78,6 +78,7 @@ const discoveryResultSchema = new mongoose.Schema(
       address: {
         formatted: { type: String, trim: true, maxlength: 500, default: null },
         street: { type: String, trim: true, maxlength: 255, default: null },
+        area: { type: String, trim: true, maxlength: 120, default: null },
         city: { type: String, trim: true, maxlength: 120, default: null },
         region: { type: String, trim: true, maxlength: 120, default: null },
         postalCode: { type: String, trim: true, maxlength: 20, default: null },

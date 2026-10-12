@@ -127,6 +127,9 @@ export class NominatimProvider extends PlacesProvider {
       lon: lng,
       format: 'jsonv2',
       addressdetails: 1,
+      // Same as geocode(): English labels. Without it OSM returns the local
+      // script ("لاہور", "Mohammédia المحمدية"), which split city filters.
+      'accept-language': 'en',
     });
     const result = toGoogleLikeResult(data);
     return { result, results: result ? [result] : [], raw: data };

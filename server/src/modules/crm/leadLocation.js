@@ -1,7 +1,9 @@
 import { nominatimProvider } from '../businessDiscovery/provider/NominatimProvider.js';
 import { SWISS_CANTONS } from './crm.constants.js';
 import logger from '../../shared/logger/index.js';
-import { canonicalizeLeadAddress, normalizeCountryCode } from './leadGeography.js';
+import {
+  canonicalizeLeadAddress, needsGeoRepair, normalizeCountryCode, normalizeGeographyKey, preferLatinScript,
+} from './leadGeography.js';
 
 export { normalizeCountryCode } from './leadGeography.js';
 
@@ -85,6 +87,69 @@ export function sanitizeCity(value) {
 // per-window budget, so a bulk import issues a handful of calls (not one per
 // lead) and never floods Nominatim.
 const reverseCache = new Map();
+
+// "Lahore District" / "District of Lahore" / "Lahore Tehsil" → "Lahore".
+function metroFromAdmin(value) {
+  const text = preferLatinScript(clean(value));
+  if (!text) return null;
+  const match = text.match(/^(.+?)\s+(?:district|tehsil)$/iu) ?? text.match(/^district of\s+(.+)$/iu);
+  return match ? clean(match[1]) : null;
+}
+
+/**
+ * Turn a Nominatim reverse result into clean, English address parts.
+ *
+ * OSM tags many metro neighbourhoods as their own village/hamlet (Bahria Town
+ * → "Tarogill", Wapda Town → "Khumbe", both in "Lahore District"). Reported as
+ * the city, each suburb became its own "city" in the filters. When there is no
+ * `city` and the place is a village/hamlet — or a town named after its district
+ * ("Lahore Cant") — the district's city is used and the place becomes the area.
+ * A genuine town (e.g. Bouznika) stays the city.
+ */
+export function addressFromNominatim(result) {
+  const comps = Array.isArray(result?.address_components) ? result.address_components : [];
+  const pick = (type, field = 'long_name') =>
+    comps.find((c) => Array.isArray(c.types) && c.types.includes(type))?.[field] ?? null;
+  // Nominatim's address_components carry raw OSM keys (city/suburb/state), not
+  // Google types; the `addr` object is the reliable source for each field.
+  const addr = result?.address ?? {};
+  const latin = (value) => preferLatinScript(clean(value));
+  const metro = metroFromAdmin(addr.county) ?? metroFromAdmin(addr.state_district);
+
+  let city = latin(addr.city);
+  let placeArea = null;
+  if (!city) {
+    const town = latin(addr.town);
+    const small = latin(addr.village || addr.hamlet);
+    const metroKey = normalizeGeographyKey(metro);
+    if (metro && !town && small) {
+      city = metro;
+      placeArea = small;
+    } else if (metro && town && metroKey && normalizeGeographyKey(town).startsWith(metroKey)) {
+      city = metro;
+      placeArea = town;
+    } else if (metro && !town && !small) {
+      // Only an administrative unit ("Model Town Tehsil") — never a city.
+      city = metro;
+    } else {
+      const municipality = metroFromAdmin(addr.municipality) ? null : latin(addr.municipality);
+      city = town || small || municipality || latin(pick('locality')) || latin(pick('postal_town'));
+    }
+  }
+  city = sanitizeCity(city);
+  // Neighborhood / district — distinct from the city.
+  const area = latin(
+    addr.suburb || addr.neighbourhood
+      || (normalizeGeographyKey(addr.city_district) !== normalizeGeographyKey(city) ? addr.city_district : null)
+      || addr.quarter || addr.residential || addr.borough,
+  ) ?? placeArea;
+  // Sub-national region (state / province), for non-Swiss addresses.
+  const region = latin(addr.state || addr.province || addr.region || addr.state_district || addr.county);
+  const street = clean([addr.house_number, addr.road || addr.pedestrian || addr.footway].filter(Boolean).join(' '));
+  const countryShort = typeof addr.country_code === 'string' ? addr.country_code.toUpperCase() : pick('country', 'short_name');
+  const country = /^[A-Z]{2}$/.test(countryShort || '') ? countryShort : normalizeCountryCode(addr.country);
+  return { city, area, region, postalCode: clean(addr.postcode || pick('postal_code')), country, street };
+}
 const MAX_REVERSE_CALLS = Number(process.env.LEAD_LOCATION_MAX_REVERSE || 120);
 const WINDOW_MS = 10 * 60 * 1000;
 let reverseCalls = 0;
@@ -117,27 +182,7 @@ export async function resolveFromCoordinates(latitude, longitude) {
   reverseCalls += 1;
   try {
     const { result } = await nominatimProvider.reverseGeocode({ lat, lng });
-    const comps = Array.isArray(result?.address_components) ? result.address_components : [];
-    const pick = (type, field = 'long_name') =>
-      comps.find((c) => Array.isArray(c.types) && c.types.includes(type))?.[field] ?? null;
-    // Nominatim's address_components carry raw OSM keys (city/suburb/state), not
-    // Google types; the `addr` object is the reliable source for each field.
-    const addr = result?.address ?? {};
-    const city = sanitizeCity(
-      addr.city || addr.town || addr.village || addr.municipality || addr.hamlet
-        || pick('locality') || pick('postal_town'),
-    );
-    // Neighborhood / district — distinct from the city.
-    const area = clean(
-      addr.suburb || addr.neighbourhood || addr.city_district || addr.quarter
-        || addr.residential || addr.borough,
-    );
-    // Sub-national region (state / province), for non-Swiss addresses.
-    const region = clean(addr.state || addr.province || addr.region || addr.state_district || addr.county);
-    const street = clean([addr.house_number, addr.road || addr.pedestrian || addr.footway].filter(Boolean).join(' '));
-    const countryShort = typeof addr.country_code === 'string' ? addr.country_code.toUpperCase() : pick('country', 'short_name');
-    const country = /^[A-Z]{2}$/.test(countryShort || '') ? countryShort : normalizeCountryCode(addr.country);
-    const resolved = { city, area, region, postalCode: clean(addr.postcode || pick('postal_code')), country, street };
+    const resolved = addressFromNominatim(result);
     reverseCache.set(key, resolved);
     return resolved;
   } catch (err) {
@@ -178,12 +223,18 @@ export async function resolveLeadAddress(input = {}) {
   // cost guarantee for well-formed leads. When it fires, area/region/street are
   // filled opportunistically from the same call; the rate-limited backfill
   // migration enriches area/region for leads that already had a good city.
-  if ((!outCity || !outCountry)
+  // A city/area written only in a non-Latin script or that is not a place
+  // ("A Rosewood Hotel · Visited link") is repaired the same way, so it never
+  // becomes its own filter option.
+  const badCity = Boolean(outCity) && needsGeoRepair(outCity);
+  const badArea = Boolean(outArea) && needsGeoRepair(outArea);
+  if ((!outCity || !outCountry || badCity || badArea)
     && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
     const geo = await resolveFromCoordinates(latitude, longitude);
     if (geo) {
-      if (!outCity) outCity = geo.city;
-      if (!outArea) outArea = geo.area;
+      const replaceCity = (!outCity || badCity) && Boolean(geo.city);
+      if (replaceCity) outCity = geo.city;
+      if (!outArea || badArea || replaceCity) outArea = geo.area ?? (badArea ? null : outArea);
       if (!outRegion) outRegion = geo.region;
       if (!outCountry) outCountry = geo.country;
       if (!outPostal) outPostal = geo.postalCode;

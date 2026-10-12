@@ -5,7 +5,7 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
-import { canonicalizeLeadAddress } from './leadGeography.js';
+import { buildGeographyFacets, canonicalizeLeadAddress, countGeographyFacets } from './leadGeography.js';
 
 // Build a regex where each letter also matches its accented variants, e.g.
 // "mull" → "[mM][uüùûú][lL][lL]" so it matches "Müller". With $options:'i'
@@ -35,24 +35,6 @@ function normalizedExactTextFilter(path, value) {
   if (!normalized) return {};
   const pattern = normalized.split(' ').map(accentSafeRegex).join('\\s+');
   return { [path]: { $regex: `^\\s*${pattern}\\s*$`, $options: 'i' } };
-}
-
-function cleanFacetText(value) {
-  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-}
-
-function displayTextScore(value) {
-  const text = cleanFacetText(value);
-  if (!text || !/\p{L}/u.test(text)) return 0;
-  const lower = text.toLocaleLowerCase('en');
-  const upper = text.toLocaleUpperCase('en');
-  const accentBonus = text.normalize('NFD') !== text.normalize('NFD').replace(/\p{M}+/gu, '') ? 1 : 0;
-  if (text === lower || text === upper) return 1 + accentBonus;
-  return 3 + accentBonus;
-}
-
-function preferredDisplayText(current, candidate) {
-  return displayTextScore(candidate) > displayTextScore(current) ? candidate : current;
 }
 
 const ALLOWED_FILTERS = {
@@ -99,6 +81,30 @@ const POPULATE = [
   { path: 'createdBy', select: USER_REF_SELECT, options: { includeDeleted: true } },
   { path: 'assignedTo', select: USER_REF_SELECT, options: { includeDeleted: true } },
 ];
+
+// One row per distinct raw place tuple shown in the table.
+const GEO_TUPLE_GROUP = {
+  $group: {
+    _id: { country: '$address.country', city: '$address.city', area: '$address.area' },
+    count: { $sum: 1 },
+  },
+};
+const tupleRow = (row) => ({
+  country: row._id?.country ?? null,
+  city: row._id?.city ?? null,
+  area: row._id?.area ?? null,
+  count: row.count,
+});
+// Match a stored raw value byte-for-byte. A plain string would be cast through
+// the schema's `trim` setter, so a legacy "lahore " could never be selected;
+// an anchored regex bypasses query casting. null matches missing/null.
+const exactStoredValue = (value) => (
+  typeof value === 'string'
+    ? { $regex: `^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }
+    : null
+);
+// A selection that resolves to no stored place must select no leads.
+const MATCH_NOTHING = { _id: { $exists: false } };
 
 function combineFilters(...filters) {
   const active = filters.filter((filter) => filter && Object.keys(filter).length > 0);
@@ -147,8 +153,9 @@ class LeadRepository {
     // stored fields are nested. Pull them out before buildFilter so arbitrary
     // client keys can never reach MongoDB. Geography maps exactly to the three
     // fields displayed in the Leads table — no discovery-location fallback.
+    // countryId/cityId/areaId are resolved asynchronously by buildDatasetFilter.
     const {
-      countryId, cityId, areaId, country, city, area, businessType, ...flatFilters
+      countryId: _countryId, cityId: _cityId, areaId: _areaId, country, city, area, businessType, ...flatFilters
     } = filters;
 
     const baseFilter = {
@@ -162,9 +169,6 @@ class LeadRepository {
     const countryFilter = normalizedExactTextFilter('address.country', normalizedLegacy.country ?? country);
     const cityFilter = normalizedExactTextFilter('address.city', normalizedLegacy.city ?? city);
     const areaFilter = normalizedExactTextFilter('address.area', normalizedLegacy.area ?? area);
-    const canonicalCountryFilter = countryId ? { 'address.geography.countryId': countryId } : {};
-    const canonicalCityFilter = cityId ? { 'address.geography.cityId': cityId } : {};
-    const canonicalAreaFilter = areaId ? { 'address.geography.areaId': areaId } : {};
     // Business category (e.g. "Chinese restaurant") lives on sourceMetadata, not
     // the lead `type` (business/private). Exact match on the stored value the
     // filter-options facet surfaced.
@@ -209,9 +213,6 @@ class LeadRepository {
       countryFilter,
       cityFilter,
       areaFilter,
-      canonicalCountryFilter,
-      canonicalCityFilter,
-      canonicalAreaFilter,
       businessTypeFilter,
       searchFilter,
     );
@@ -229,7 +230,7 @@ class LeadRepository {
   } = {}) {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
-    const datasetFilter = this.buildListFilter({
+    const datasetFilter = await this.buildDatasetFilter({
       filters, search, searchUserIds, createdBy,
     });
     const filter = combineFilters(
@@ -271,7 +272,7 @@ class LeadRepository {
     // soft-delete `pre(/^find/)` hook, so without it the counts would include
     // soft-deleted leads while the find()s (which do run the hook) exclude them —
     // leaving total/withLocation inconsistent with the returned leads.
-    const filter = combineFilters({ isDeleted: false }, this.buildListFilter({ filters, search, searchUserIds }));
+    const filter = combineFilters({ isDeleted: false }, await this.buildDatasetFilter({ filters, search, searchUserIds }));
     const locatedFilter = combineFilters(filter, HAS_COORDINATES);
 
     const [total, withLocation, locatedDocs] = await Promise.all([
@@ -306,12 +307,51 @@ class LeadRepository {
   }
 
   /**
+   * Country → City → Area facets for EVERY live lead, derived at query time
+   * from the raw address.country/city/area values shown in the table (see
+   * buildGeographyFacets). One aggregation row per distinct place tuple — the
+   * cost scales with the number of distinct places, not leads.
+   */
+  async geographyFacets() {
+    const rows = await Lead.aggregate([
+      { $match: { isDeleted: false } },
+      GEO_TUPLE_GROUP,
+    ]);
+    return buildGeographyFacets(rows.map(tupleRow));
+  }
+
+  /**
+   * Resolve canonical countryId/cityId/areaId selections to the exact raw
+   * address values they cover. An unknown id matches nothing (never "all").
+   */
+  async buildGeographyFilter({ countryId, cityId, areaId } = {}, facets = null) {
+    const ids = [countryId, cityId, areaId].filter((id) => typeof id === 'string' && id);
+    if (!ids.length) return {};
+    const index = facets ?? await this.geographyFacets();
+    return combineFilters(...ids.map((id) => {
+      const matchers = index.matchers.get(id);
+      if (!matchers?.length) return MATCH_NOTHING;
+      const clauses = matchers.map((matcher) => Object.fromEntries(
+        Object.entries(matcher).map(([field, value]) => [`address.${field}`, exactStoredValue(value)]),
+      ));
+      return clauses.length === 1 ? clauses[0] : { $or: clauses };
+    }));
+  }
+
+  /** buildListFilter + the asynchronously resolved canonical geography. */
+  async buildDatasetFilter({ filters = {}, ...rest } = {}, facets = null) {
+    return combineFilters(
+      this.buildListFilter({ filters, ...rest }),
+      await this.buildGeographyFilter(filters, facets),
+    );
+  }
+
+  /**
    * Database-backed values for list filters. Aggregation middleware does not
    * run Mongoose's soft-delete `find` hook, so `isDeleted:false` is explicit.
-   * Geographic options come only from the same address.country/address.city/
-   * address.area fields rendered in the table. City options retain their
-   * country, and area options retain city+country, so the client can cascade
-   * Country → City → Area without mixing identically named places.
+   * Geographic options are canonical and de-duplicated (one Paris, one Lahore,
+   * arrondissements as areas of Paris); cities are scoped to the selected
+   * country and areas to the selected city so the client can cascade.
    */
   async getFilterOptions({ filters = {}, search, searchUserIds = [] } = {}) {
     const {
@@ -325,110 +365,38 @@ class LeadRepository {
         searchUserIds,
       }),
     );
-    const cityContext = combineFilters(
-      base,
-      countryId ? { 'address.geography.countryId': countryId } : {},
-    );
-    const areaContext = combineFilters(
-      cityContext,
-      cityId ? { 'address.geography.cityId': cityId } : {},
-    );
 
-    const [facets] = await Lead.aggregate([
-      {
-        $facet: {
-          countries: [
-            { $match: combineFilters(base, { 'address.geography.countryId': { $type: 'string', $ne: '' } }) },
-            {
-              $group: {
-                _id: '$address.geography.countryId',
-                count: { $sum: 1 },
-                codes: { $addToSet: '$address.geography.countryCode' },
-                names: { $addToSet: '$address.geography.countryName' },
-              },
-            },
-          ],
-          cities: [
-            { $match: combineFilters(cityContext, { 'address.geography.cityId': { $type: 'string', $ne: '' } }) },
-            {
-              $group: {
-                _id: '$address.geography.cityId',
-                count: { $sum: 1 },
-                names: { $addToSet: '$address.geography.cityName' },
-                countryIds: { $addToSet: '$address.geography.countryId' },
-                countryCodes: { $addToSet: '$address.geography.countryCode' },
-                countryNames: { $addToSet: '$address.geography.countryName' },
-              },
-            },
-          ],
-          areas: [
-            { $match: combineFilters(areaContext, { 'address.geography.areaId': { $type: 'string', $ne: '' } }) },
-            {
-              $group: {
-                _id: '$address.geography.areaId',
-                count: { $sum: 1 },
-                names: { $addToSet: '$address.geography.areaName' },
-                types: { $addToSet: '$address.geography.locationType' },
-                cityIds: { $addToSet: '$address.geography.cityId' },
-                cityNames: { $addToSet: '$address.geography.cityName' },
-                countryIds: { $addToSet: '$address.geography.countryId' },
-                countryCodes: { $addToSet: '$address.geography.countryCode' },
-                countryNames: { $addToSet: '$address.geography.countryName' },
-              },
-            },
-          ],
-          types: [
-            { $match: base },
-            { $match: { type: { $in: ['business', 'private'] } } },
-            { $group: { _id: '$type', count: { $sum: 1 } } },
-            { $sort: { _id: 1 } },
-          ],
-          businessTypes: [
-            { $match: base },
-            { $match: { 'sourceMetadata.businessType': { $type: 'string', $ne: '' } } },
-            { $group: { _id: '$sourceMetadata.businessType', count: { $sum: 1 } } },
-            { $sort: { count: -1, _id: 1 } },
-          ],
+    const [geography, [facets]] = await Promise.all([
+      this.geographyFacets(),
+      Lead.aggregate([
+        {
+          $facet: {
+            places: [
+              { $match: base },
+              GEO_TUPLE_GROUP,
+            ],
+            types: [
+              { $match: base },
+              { $match: { type: { $in: ['business', 'private'] } } },
+              { $group: { _id: '$type', count: { $sum: 1 } } },
+              { $sort: { _id: 1 } },
+            ],
+            businessTypes: [
+              { $match: base },
+              { $match: { 'sourceMetadata.businessType': { $type: 'string', $ne: '' } } },
+              { $group: { _id: '$sourceMetadata.businessType', count: { $sum: 1 } } },
+              { $sort: { count: -1, _id: 1 } },
+            ],
+          },
         },
-      },
+      ]),
     ]);
 
-    const preferred = (values = []) => values
-      .map(cleanFacetText)
-      .filter(Boolean)
-      .reduce((current, candidate) => preferredDisplayText(current, candidate), '');
-    const first = (values = []) => values.find((value) => cleanFacetText(value)) ?? null;
-
-    const countries = (facets?.countries ?? []).map((row) => ({
-      id: row._id,
-      value: preferred(row.names) || first(row.codes),
-      code: first(row.codes),
-      count: row.count,
-    })).filter((option) => option.id && option.value)
-      .sort((a, b) => a.value.localeCompare(b.value));
-
-    const cities = (facets?.cities ?? []).map((row) => ({
-      id: row._id,
-      value: preferred(row.names),
-      countryId: first(row.countryIds),
-      country: preferred(row.countryNames),
-      countryCode: first(row.countryCodes),
-      count: row.count,
-    })).filter((option) => option.id && option.value && option.countryId)
-      .sort((a, b) => a.value.localeCompare(b.value));
-
-    const areas = (facets?.areas ?? []).map((row) => ({
-      id: row._id,
-      value: preferred(row.names),
-      type: first(row.types),
-      cityId: first(row.cityIds),
-      city: preferred(row.cityNames),
-      countryId: first(row.countryIds),
-      country: preferred(row.countryNames),
-      countryCode: first(row.countryCodes),
-      count: row.count,
-    })).filter((option) => option.id && option.value && option.cityId && option.countryId)
-      .sort((a, b) => a.value.localeCompare(b.value));
+    const { countries, cities, areas } = countGeographyFacets(
+      geography,
+      (facets?.places ?? []).map(tupleRow),
+      { countryId, cityId },
+    );
 
     return {
       countries,

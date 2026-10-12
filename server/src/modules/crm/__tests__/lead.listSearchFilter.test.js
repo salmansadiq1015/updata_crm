@@ -63,6 +63,109 @@ async function makeLead(overrides = {}) {
   });
 }
 
+// Legacy rows written by older code paths bypass the model's canonicalizing
+// save hook — exactly the inconsistent data the filters must still merge.
+async function insertRaw(address, extra = {}) {
+  leadNo += 1;
+  const doc = {
+    leadNumber: `L-8${String(leadNo).padStart(5, '0')}`,
+    name: `Raw ${leadNo}`,
+    type: 'business',
+    status: 'new',
+    source: 'import',
+    isDeleted: false,
+    createdBy: creator._id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    address,
+    ...extra,
+  };
+  const { insertedId } = await Lead.collection.insertOne(doc);
+  return insertedId;
+}
+
+const values = (options) => options.map((option) => option.value);
+
+describe('canonical, de-duplicated geography filters (legacy raw data)', () => {
+  it('shows Lahore once whether stored as "Lahore", "lahore ", "Lahore, Pakistan" or "Lahore Pakistan"', async () => {
+    await insertRaw({ country: 'PK', city: 'Lahore' });
+    await insertRaw({ country: 'PK', city: 'lahore ' });
+    await insertRaw({ country: 'PK', city: 'Lahore, Pakistan' });
+    await insertRaw({ country: 'PK', city: 'Lahore Pakistan', area: 'Bahria Town' });
+    const { cities } = await leadRepository.getFilterOptions();
+    expect(values(cities)).toEqual(['Lahore']);
+    expect(cities[0]).toMatchObject({ countryCode: 'PK', count: 4 });
+
+    const listed = await leadRepository.list({ filters: { cityId: cities[0].id }, limit: 50 });
+    expect(listed.pagination.total).toBe(4);
+  });
+
+  it('merges a bilingual label with its English spelling (Mohammédia المحمدية = Mohammedia) and shows it in Latin script', async () => {
+    await insertRaw({ country: 'MA', city: 'Mohammédia المحمدية' });
+    await insertRaw({ country: 'MA', city: 'Mohammédia المحمدية', area: 'Centre' });
+    await insertRaw({ country: 'MA', city: 'Mohammedia' });
+    await insertRaw({ country: 'MA', city: 'Bni Yakhlef ⴱⵏⵉ ⵉⵅⵍⴼ بني يخلف' });
+    const { cities } = await leadRepository.getFilterOptions();
+    expect(values(cities)).toEqual(['Bni Yakhlef', 'Mohammédia']);
+    expect(cities.find((c) => c.value === 'Mohammédia').count).toBe(3);
+    expect(cities.every((c) => !/[\u0600-\u06FF\u2D30-\u2D7F]/u.test(c.value))).toBe(true);
+  });
+
+  it('keeps Paris as ONE city and its arrondissements as distinct areas of Paris', async () => {
+    await insertRaw({ country: 'FR', city: 'Paris' });
+    await insertRaw({ country: 'FR', city: 'Paris', area: '10th Arrondissement' });
+    await insertRaw({ country: 'FR', city: 'Paris 10th Arrondissement' });
+    await insertRaw({ country: 'FR', city: 'Paris', area: '10th arrondissement of Paris' });
+    await insertRaw({ country: 'FR', city: 'Paris', area: '11th Arrondissement' });
+    const { cities } = await leadRepository.getFilterOptions();
+    expect(values(cities)).toEqual(['Paris']);
+    expect(cities[0].count).toBe(5);
+
+    const scoped = await leadRepository.getFilterOptions({ filters: { countryId: 'country:FR', cityId: cities[0].id } });
+    expect(values(scoped.areas)).toEqual(['10th Arrondissement', '11th Arrondissement']);
+    const tenth = scoped.areas.find((a) => a.value === '10th Arrondissement');
+    expect(tenth.count).toBe(3);
+
+    const tenthLeads = await leadRepository.list({ filters: { cityId: cities[0].id, areaId: tenth.id }, limit: 50 });
+    expect(tenthLeads.pagination.total).toBe(3);
+    const allParis = await leadRepository.list({ filters: { cityId: cities[0].id }, limit: 50 });
+    expect(allParis.pagination.total).toBe(5);
+  });
+
+  it('keeps identically named cities in different countries apart, labelled by country', async () => {
+    await insertRaw({ country: 'FR', city: 'Paris' });
+    await insertRaw({ country: 'US', city: 'Paris' });
+    const { cities } = await leadRepository.getFilterOptions();
+    expect(values(cities)).toEqual(['Paris · France', 'Paris · United States']);
+    const usOnly = await leadRepository.getFilterOptions({ filters: { countryId: 'country:US' } });
+    expect(values(usOnly.cities)).toEqual(['Paris']);
+  });
+
+  it('folds a country-less "Paris" into the only known Paris so no lead drops out of the filter', async () => {
+    await insertRaw({ country: 'FR', city: 'Paris' });
+    await insertRaw({ country: null, city: 'Paris' });
+    const { cities, countries } = await leadRepository.getFilterOptions();
+    expect(values(cities)).toEqual(['Paris']);
+    expect(cities[0].count).toBe(2);
+    expect(countries).toEqual([expect.objectContaining({ code: 'FR', count: 2 })]);
+    const viaCountry = await leadRepository.list({ filters: { countryId: 'country:FR' }, limit: 50 });
+    expect(viaCountry.pagination.total).toBe(2);
+    const viaCity = await leadRepository.list({ filters: { cityId: cities[0].id }, limit: 50 });
+    expect(viaCity.pagination.total).toBe(2);
+  });
+
+  it('never shows Lahore areas under Paris (cascade) and an unknown id matches nothing', async () => {
+    await insertRaw({ country: 'FR', city: 'Paris', area: '4th Arrondissement' });
+    await insertRaw({ country: 'PK', city: 'Lahore', area: 'Johar Town' });
+    const { cities } = await leadRepository.getFilterOptions();
+    const paris = cities.find((c) => c.value === 'Paris');
+    const parisOnly = await leadRepository.getFilterOptions({ filters: { countryId: 'country:FR', cityId: paris.id } });
+    expect(values(parisOnly.areas)).toEqual(['4th Arrondissement']);
+    const none = await leadRepository.list({ filters: { cityId: 'city:does-not-exist' }, limit: 50 });
+    expect(none.pagination.total).toBe(0);
+  });
+});
+
 describe('leadRepository.getFilterOptions', () => {
   it('returns separate country, city and area facets and scopes duplicate names by their parent location', async () => {
     await makeLead({ address: { country: 'PK', city: 'Lahore', area: 'Gulberg' } });
@@ -89,9 +192,11 @@ describe('leadRepository.getFilterOptions', () => {
     expect(areas.find((option) => option.value === 'Gulberg')).toMatchObject({
       cityId: lahore.id, countryId: 'country:PK', count: 2,
     });
-    expect(areas.filter((option) => option.value === 'Centre')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ cityId: paris.id, countryId: 'country:FR', count: 1 }),
-      expect.objectContaining({ cityId: lausanne.id, countryId: 'country:CH', count: 1 }),
+    // The same area label in two cities stays two scoped options, labelled by
+    // their city so the list never shows the same word twice.
+    expect(areas.filter((option) => option.value.startsWith('Centre'))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: 'Centre · Paris', cityId: paris.id, countryId: 'country:FR', count: 1 }),
+      expect.objectContaining({ value: 'Centre · Lausanne', cityId: lausanne.id, countryId: 'country:CH', count: 1 }),
     ]));
     expect(areas.some((option) => option.value === '8001')).toBe(false);
 

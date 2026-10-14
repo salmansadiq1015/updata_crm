@@ -59,8 +59,8 @@ function template({ name, purpose, category, description, subject, heading, eyeb
     fallbackValues: {
       firstName: 'there',
       businessName: 'your team',
-      companyName: 'Updata',
-      senderName: 'Updata team',
+      companyName: 'Updata.ai',
+      senderName: 'Updata.ai team',
       city: 'your area',
     },
     isShared: true,
@@ -198,7 +198,10 @@ export async function seedMessagingEmailTemplates(adminUserId) {
   let existing = 0;
   for (const item of OUTREACH_EMAIL_TEMPLATES) {
     const result = await MessageTemplate.updateOne(
-      { channel: 'email', name: item.name, createdBy: adminUserId },
+      // This deployment is single-tenant and these records are shared. Keying
+      // the library to its owner would duplicate all templates when the
+      // configured administrator changes.
+      { channel: 'email', name: item.name, isShared: true },
       { $setOnInsert: { ...item, createdBy: adminUserId, updatedBy: adminUserId } },
       { upsert: true, runValidators: true },
     );

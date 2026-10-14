@@ -873,6 +873,7 @@ export const ENDPOINTS = Object.freeze({
     CAMPAIGN: (id) => `/messaging/campaigns/${id}`,
     RECIPIENTS: (id) => `/messaging/campaigns/${id}/recipients`,
     RECIPIENT: (id, recipientId) => `/messaging/campaigns/${id}/recipients/${recipientId}`,
+    VERIFY_CAMPAIGN_CONSENT: (id) => `/messaging/campaigns/${id}/consent/verify`,
     START: (id) => `/messaging/campaigns/${id}/start`,
     PAUSE: (id) => `/messaging/campaigns/${id}/pause`,
     RESUME: (id) => `/messaging/campaigns/${id}/resume`,

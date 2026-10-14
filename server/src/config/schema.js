@@ -67,6 +67,7 @@ const configSchema = Joi.object({
   SMTP_SERVICE: Joi.string().default('gmail'),
   SMTP_MAIL: Joi.string().email().allow('').default(''),
   SMTP_PASSWORD: Joi.string().allow('').default(''),
+  SMTP_FROM_NAME: Joi.string().trim().max(255).default('Updata.ai'),
   SMTP_TLS_REJECT_UNAUTHORIZED: Joi.boolean().truthy('true').falsy('false').default(true),
 
   // Lead multi-channel messaging. Secrets stay server-side and are never

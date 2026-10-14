@@ -57,4 +57,16 @@ describe('Outreach email template seed', () => {
     const edited = await MessageTemplate.findOne({ name: 'Business Introduction', createdBy: adminUserId });
     expect(edited.subject).toBe('Administrator edited subject');
   });
+
+  it('does not duplicate the shared library when the seed administrator changes', async () => {
+    const firstAdmin = new mongoose.Types.ObjectId();
+    const replacementAdmin = new mongoose.Types.ObjectId();
+
+    await expect(seedMessagingEmailTemplates(firstAdmin)).resolves.toEqual({ created: 10, existing: 0 });
+    await expect(seedMessagingEmailTemplates(replacementAdmin)).resolves.toEqual({ created: 0, existing: 10 });
+
+    expect(await MessageTemplate.countDocuments({ channel: 'email', isShared: true })).toBe(10);
+    expect(await MessageTemplate.countDocuments({ channel: 'email', isShared: true, createdBy: firstAdmin })).toBe(10);
+    expect(await MessageTemplate.countDocuments({ channel: 'email', isShared: true, createdBy: replacementAdmin })).toBe(0);
+  });
 });

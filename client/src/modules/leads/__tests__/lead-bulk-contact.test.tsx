@@ -157,6 +157,61 @@ async function selectAll(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('lead outreach campaigns', () => {
+  it('loads the shared email template library and applies a selected template to every editor and preview', async () => {
+    server.use(
+      http.get(`${BASE}/messaging/templates`, ({ request }) => {
+        const channel = new URL(request.url).searchParams.get('channel');
+        return HttpResponse.json(ok(channel === 'email' ? [{
+          _id: 'template-introduction', name: 'Business Introduction', channel: 'email',
+          purpose: 'promotional', category: 'business-introduction',
+          description: 'A concise first introduction to a new business lead.',
+          subject: 'A quick introduction for {{businessName}}',
+          bodyText: 'Hello {{firstName}}, welcome to {{companyName}}.',
+          bodyHtml: '<!doctype html><html><body><h1>Hello {{firstName}}</h1><p>Welcome to {{companyName}}.</p><footer>{{senderName}}</footer></body></html>',
+          requiredVariables: ['firstName', 'companyName', 'senderName'],
+          fallbackValues: { firstName: 'there', companyName: 'Updata', senderName: 'Updata team' },
+          isShared: true,
+        }] : []));
+      }),
+    );
+
+    const user = renderLeadList();
+    await user.click(within(await row('Alpine Bakery AG')).getByRole('checkbox'));
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' });
+    await user.click(within(bar).getByRole('button', { name: 'Email' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('1 ready')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Use Business Introduction template' }));
+
+    expect(within(dialog).getByLabelText('Subject')).toHaveValue('A quick introduction for {{businessName}}');
+    expect(within(dialog).getByLabelText('Message')).toHaveValue('Hello {{firstName}}, welcome to {{companyName}}.');
+    expect(within(dialog).getByLabelText('Your company name')).toHaveValue('Updata');
+    expect(within(dialog).getByLabelText('Sender name')).toHaveValue('Updata team');
+    expect(within(dialog).getByLabelText('First name fallback')).toHaveValue('there');
+    expect(within(dialog).queryByLabelText('Rendered HTML output')).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /Advanced HTML editor/ }));
+    expect((within(dialog).getByLabelText('Rendered HTML output') as HTMLTextAreaElement).value).toContain('Hello Alpine');
+    expect((within(dialog).getByLabelText('Rendered HTML output') as HTMLTextAreaElement).value).not.toContain('{{firstName}}');
+    expect(within(dialog).getByText('A quick introduction for Alpine Bakery AG')).toBeInTheDocument();
+    expect(within(dialog).getByTitle('HTML email preview')).toHaveAttribute('srcdoc', expect.stringContaining('Hello Alpine'));
+    expect(within(dialog).getByRole('button', { name: /^Recipients$/ })).toBeEnabled();
+
+    await user.clear(within(dialog).getByLabelText('Your company name'));
+    await user.type(within(dialog).getByLabelText('Your company name'), 'Behjja');
+    await user.clear(within(dialog).getByLabelText('Sender name'));
+    await user.type(within(dialog).getByLabelText('Sender name'), 'Salman Sadiq');
+    expect((within(dialog).getByLabelText('Rendered HTML output') as HTMLTextAreaElement).value).toContain('Welcome to Behjja');
+    expect((within(dialog).getByLabelText('Rendered HTML output') as HTMLTextAreaElement).value).toContain('<footer>Salman Sadiq</footer>');
+    await user.click(within(dialog).getByRole('button', { name: /^Recipients$/ }));
+    await user.click(within(dialog).getByRole('button', { name: /^Preview eligibility$/ }));
+
+    await waitFor(() => expect(campaignRequests[0]).toMatchObject({
+      templateId: 'template-introduction',
+      content: { fallbackValues: { firstName: 'there', companyName: 'Behjja', senderName: 'Salman Sadiq' } },
+    }));
+  });
+
   it('creates an explicit email draft, lets the user remove a recipient, then queues it', async () => {
     const user = renderLeadList();
     const bar = await selectAll(user);
@@ -165,8 +220,13 @@ describe('lead outreach campaigns', () => {
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText('Subject'), 'A proper introduction');
     fireEvent.change(within(dialog).getByLabelText('Message'), { target: { value: 'Hello {{businessName}}' } });
-    fireEvent.change(within(dialog).getByLabelText('HTML content (optional)'), { target: { value: '<p>Hello <strong>{{businessName}}</strong></p>' } });
-    await user.click(within(dialog).getByRole('button', { name: /Recipients/ }));
+    await user.click(within(dialog).getByRole('button', { name: /Advanced HTML editor/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Template source' }));
+    fireEvent.change(within(dialog).getByLabelText('HTML template source'), { target: { value: '<p>Hello <strong>{{businessName}}</strong></p>' } });
+    expect(within(dialog).getAllByRole('button', { name: /^Recipients$/ })).toHaveLength(1);
+    await user.click(within(dialog).getByRole('button', { name: /^Recipients$/ }));
+    expect(within(dialog).queryByRole('button', { name: /^Recipients$/ })).not.toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button', { name: /^Preview eligibility$/ })).toHaveLength(1);
     await user.click(within(dialog).getByRole('button', { name: 'Remove Basel Dental GmbH' }));
     expect(within(dialog).getByText('2 selected')).toBeInTheDocument();
     expect(within(dialog).getByText(/Hello Alpine Bakery AG/)).toBeInTheDocument();
@@ -223,6 +283,101 @@ describe('lead outreach campaigns', () => {
     await waitFor(() => expect(removeCalls).toBe(1));
     expect(within(dialog).getByRole('button', { name: /Confirm and send/ })).toBeDisabled();
   });
+
+  it('explains when a valid email is blocked by missing promotional consent', async () => {
+    server.use(
+      http.post(`${BASE}/messaging/campaigns`, async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>;
+        return HttpResponse.json(ok({
+          _id: 'campaign-1', name: body.name, channel: 'email', status: 'draft',
+          summary: { total: 1, eligible: 0, ineligible: 1, queued: 0, accepted: 0, sent: 0, delivered: 0, read: 0, failed: 0, unknown: 0, suppressed: 0 },
+        }));
+      }),
+      http.get(`${BASE}/messaging/campaigns/campaign-1/recipients`, () => HttpResponse.json({
+        success: true,
+        data: [{
+          _id: 'recipient-1', channel: 'email', status: 'ineligible', destination: 'info@alpine.ch',
+          leadId: { _id: 'lead-a', leadNumber: 'L-00001', name: 'Alpine Bakery AG' },
+          eligibility: { eligible: false, reasons: ['consent_required'] }, createdAt: new Date().toISOString(),
+        }],
+        pagination: { page: 1, limit: 25, total: 1, pages: 1 },
+      })),
+    );
+
+    const user = renderLeadList();
+    await user.click(within(await row('Alpine Bakery AG')).getByRole('checkbox'));
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' });
+    await user.click(within(bar).getByRole('button', { name: 'Email' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Subject'), 'Consent-aware outreach');
+    fireEvent.change(within(dialog).getByLabelText('Message'), { target: { value: 'Hello' } });
+    await user.click(within(dialog).getByRole('button', { name: /Recipients/ }));
+    await user.click(within(dialog).getByRole('button', { name: /Preview eligibility/ }));
+
+    expect(await within(dialog).findByText('Verified Email consent is required')).toBeInTheDocument();
+    expect(within(dialog).getByText(/administrator may record consent here only when valid evidence exists/)).toBeInTheDocument();
+    expect(within(dialog).getByText('info@alpine.ch')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Confirm and send/ })).toBeDisabled();
+  });
+
+  it('lets an administrator verify one or more selected consent records in the campaign review', async () => {
+    auth.permissions.push('crm:admin');
+    let verified = false;
+    let verificationBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post(`${BASE}/messaging/campaigns`, async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>;
+        return HttpResponse.json(ok({
+          _id: 'campaign-1', name: body.name, channel: 'email', status: 'draft',
+          summary: { total: 1, eligible: 0, ineligible: 1, queued: 0, accepted: 0, sent: 0, delivered: 0, read: 0, failed: 0, unknown: 0, suppressed: 0 },
+        }));
+      }),
+      http.get(`${BASE}/messaging/campaigns/campaign-1/recipients`, () => HttpResponse.json({
+        success: true,
+        data: [{
+          _id: 'recipient-1', channel: 'email', status: verified ? 'draft' : 'ineligible', destination: 'info@alpine.ch',
+          leadId: { _id: 'lead-a', leadNumber: 'L-00001', name: 'Alpine Bakery AG' },
+          eligibility: { eligible: verified, reasons: verified ? [] : ['consent_required'] }, createdAt: new Date().toISOString(),
+        }],
+        pagination: { page: 1, limit: 25, total: 1, pages: 1 },
+      })),
+      http.post(`${BASE}/messaging/campaigns/campaign-1/consent/verify`, async ({ request }) => {
+        verificationBody = await request.json() as Record<string, unknown>;
+        verified = true;
+        return HttpResponse.json(ok({
+          verified: 1,
+          campaign: {
+            _id: 'campaign-1', name: 'Consent campaign', channel: 'email', status: 'draft',
+            summary: { total: 1, eligible: 1, ineligible: 0, queued: 0, accepted: 0, sent: 0, delivered: 0, read: 0, failed: 0, unknown: 0, suppressed: 0 },
+          },
+        }));
+      }),
+    );
+
+    const user = renderLeadList();
+    await user.click(within(await row('Alpine Bakery AG')).getByRole('checkbox'));
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' });
+    await user.click(within(bar).getByRole('button', { name: 'Email' }));
+    const campaignDialog = await screen.findByRole('dialog');
+    await user.type(within(campaignDialog).getByLabelText('Subject'), 'Consent review');
+    fireEvent.change(within(campaignDialog).getByLabelText('Message'), { target: { value: 'Hello' } });
+    await user.click(within(campaignDialog).getByRole('button', { name: /Recipients/ }));
+    await user.click(within(campaignDialog).getByRole('button', { name: /Preview eligibility/ }));
+
+    await user.click(await within(campaignDialog).findByRole('button', { name: 'Verify consent' }));
+    const verificationDialog = await screen.findByRole('dialog', { name: 'Verify Email consent' });
+    await user.type(within(verificationDialog).getByLabelText('Verification evidence *'), 'Signed form collected at the event');
+    await user.click(within(verificationDialog).getByRole('checkbox', { name: /I confirm this evidence applies/ }));
+    await user.click(within(verificationDialog).getByRole('button', { name: 'Verify 1 recipient' }));
+
+    await waitFor(() => expect(verificationBody).toMatchObject({
+      recipientIds: ['recipient-1'], evidence: 'Signed form collected at the event',
+      source: 'manual_admin_verification', confirmation: true,
+    }));
+    await waitFor(() => expect(within(campaignDialog).getByRole('button', { name: /Confirm and send/ })).toBeEnabled());
+    expect(within(campaignDialog).queryByText('Verified Email consent is required')).not.toBeInTheDocument();
+  }, 20_000);
 
   it('requires an approved Meta template and never opens a WhatsApp Web deep link', async () => {
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);

@@ -173,8 +173,14 @@ async function resolveLeadIds(selection) {
 }
 
 async function renderForLead(campaign, lead, template) {
-  const vars = leadVariables(lead, { senderName: campaign.createdBy?.firstName || '' });
   const fallbacks = mapFallbacks(campaign.content.fallbackValues);
+  // Company and sender are campaign-level form values, not lead fallbacks.
+  // Keep the existing profile/environment values as safe defaults, while an
+  // explicitly entered campaign value takes precedence.
+  const vars = leadVariables(lead, {
+    companyName: fallbacks.companyName || undefined,
+    senderName: fallbacks.senderName || campaign.createdBy?.firstName || '',
+  });
   const required = template?.requiredVariables || [];
   const subject = renderPersonalized(campaign.content.subject, vars, { fallbacks, required });
   const bodyText = renderPersonalized(campaign.content.bodyText, vars, { fallbacks, required });
@@ -464,6 +470,93 @@ class MessagingService {
       details: { campaignId, recipientId, leadId: recipient.leadId },
     });
     return this.getCampaign(campaignId, actor);
+  }
+
+  async verifyCampaignRecipientConsent(campaignId, input, actor, meta = {}) {
+    if (input.confirmation !== true || String(input.evidence || '').trim().length < 10) {
+      throw new ValidationError('Explicit confirmation and verifiable evidence are required');
+    }
+    const campaign = await Campaign.findOne({ _id: campaignId, createdBy: actor });
+    if (!campaign) throw new NotFoundError('MessageCampaign', campaignId);
+    if (campaign.status !== 'draft') throw new ConflictError('Consent can only be verified from a draft campaign');
+
+    const recipientIds = [...new Set(input.recipientIds.map(String))];
+    const recipients = await MessageRecipient.find({
+      _id: { $in: recipientIds }, campaignId,
+      status: 'ineligible', 'eligibility.reasons': 'consent_required',
+    }).lean();
+    if (recipients.length !== recipientIds.length) {
+      throw new ValidationError('Every selected recipient must belong to this draft and require consent verification');
+    }
+
+    const leadIds = recipients.map((item) => item.leadId);
+    const leads = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
+      .populate('assignedTo', 'firstName lastName').lean();
+    if (leads.length !== leadIds.length) throw new ValidationError('One or more selected leads are unavailable');
+    const leadById = new Map(leads.map((lead) => [String(lead._id), lead]));
+    const destinations = leads.map((lead) => destinationFor(lead, campaign.channel));
+    if (destinations.some((value) => !value)) throw new ValidationError(`One or more selected leads have no valid ${campaign.channel} destination`);
+    const hashes = destinations.map((value) => destinationHash(campaign.channel, value));
+    const suppressions = await Suppression.find({ channel: campaign.channel, destinationHash: { $in: hashes } }).lean();
+    if (suppressions.length) {
+      throw new ConflictError('A selected destination is suppressed. Verify renewed opt-in through the administrator reinstatement workflow first.');
+    }
+
+    const capturedAt = new Date(input.capturedAt);
+    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+    await Consent.bulkWrite(leads.map((lead) => ({
+      updateOne: {
+        filter: { leadId: lead._id, channel: campaign.channel },
+        update: { $set: {
+          status: 'granted', evidence: input.evidence, source: input.source || 'manual_admin_verification',
+          capturedAt, expiresAt, changedBy: actor,
+        } },
+        upsert: true,
+      },
+    })), { ordered: true });
+
+    const template = campaign.templateId ? await MessageTemplate.findById(campaign.templateId).lean() : null;
+    const consentMap = new Map(leads.map((lead) => [`${lead._id}:${campaign.channel}`, {
+      leadId: lead._id, channel: campaign.channel, status: 'granted', capturedAt, expiresAt,
+    }]));
+    const suppressionSet = new Set();
+    const providerSettings = await settings();
+    const frequencyPolicy = this._frequencyPolicy(providerSettings, campaign.channel, campaign.purpose);
+    const frequencyStats = await this._frequencyStats(campaign.channel, hashes, frequencyPolicy);
+    const writes = [];
+    for (const recipient of recipients) {
+      const lead = leadById.get(String(recipient.leadId));
+      const result = await eligibilityFor(lead, campaign, template, consentMap, suppressionSet);
+      const frequencyReason = this._frequencyViolation(frequencyPolicy, frequencyStats.get(result.hash));
+      if (frequencyReason) result.reasons.push(frequencyReason);
+      if (recipient.eligibility?.reasons?.includes('duplicate_destination')) result.reasons.push('duplicate_destination');
+      const reasons = [...new Set(result.reasons)];
+      const blocked = reasons.includes('suppressed') || reasons.includes('opted_out');
+      writes.push({
+        updateOne: {
+          filter: { _id: recipient._id, campaignId, status: 'ineligible' },
+          update: { $set: {
+            destination: result.destination || recipient.destination,
+            destinationHash: result.hash,
+            status: reasons.length ? (blocked ? 'suppressed' : 'ineligible') : 'draft',
+            eligibility: { eligible: reasons.length === 0, reasons },
+            rendered: result.rendered,
+          } },
+        },
+      });
+    }
+    if (writes.length) await MessageRecipient.bulkWrite(writes, { ordered: true });
+    await refreshCampaignSummary(campaignId);
+    auditService.logEvent({
+      eventType: 'messaging.campaign.consent_bulk_verified', userId: actor,
+      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: 'success', module: 'messaging',
+      details: {
+        campaignId, channel: campaign.channel, recipientCount: recipients.length,
+        leadIds: leadIds.map(String), evidenceRecorded: true, source: input.source || 'manual_admin_verification',
+      },
+    });
+    return { campaign: await this.getCampaign(campaignId, actor), verified: recipients.length };
   }
 
   _estimatedCost(campaign, rendered, providerSettings) {

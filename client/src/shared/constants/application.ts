@@ -1,6 +1,6 @@
 export const APP_NAME = 'Updata';
 export const APP_PRODUCT_NAME = 'Updata ERP';
-export const COMPANY_NAME = 'Updata';
+export const COMPANY_NAME = 'Updata.ai';
 export const SUPPORT_EMAIL = 'support@updata.ai';
 export const APP_DESCRIPTION = 'Updata - Enterprise Resource Planning';
 

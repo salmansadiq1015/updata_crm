@@ -134,6 +134,7 @@ const config = Object.freeze({
     service: envVars.SMTP_SERVICE,
     user: envVars.SMTP_MAIL,
     password: envVars.SMTP_PASSWORD,
+    fromName: envVars.SMTP_FROM_NAME,
     tlsRejectUnauthorized: envVars.SMTP_TLS_REJECT_UNAUTHORIZED,
   },
 

@@ -39,7 +39,7 @@ export function leadVariables(lead, context = {}) {
     assignedUserName: lead?.assignedTo
       ? [lead.assignedTo.firstName, lead.assignedTo.lastName].filter(Boolean).join(' ')
       : '',
-    companyName: context.companyName || process.env.COMPANY_NAME || 'Updata',
+    companyName: context.companyName || process.env.COMPANY_NAME || 'Updata.ai',
     senderName: context.senderName || '',
   };
 }

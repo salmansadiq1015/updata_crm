@@ -162,6 +162,38 @@ describe('messaging campaign operations', () => {
     ]));
   });
 
+  it('applies structured campaign company, sender, and lead fallback fields during personalization', async () => {
+    const lead = await Lead.create({
+      leadNumber: 'L-99010', name: 'Example Business', type: 'business',
+      email: 'hello@example.test', createdBy: actor,
+    });
+    const template = await MessageTemplate.create({
+      name: 'Structured email', channel: 'email', purpose: 'support', isShared: true,
+      subject: '{{companyName}} for {{businessName}}',
+      bodyText: 'Hello {{firstName}}, from {{senderName}} at {{companyName}}.',
+      bodyHtml: '<p>Hello {{firstName}}, from {{senderName}} at {{companyName}}.</p>',
+      requiredVariables: ['companyName', 'businessName', 'firstName', 'senderName'],
+      createdBy: actor, updatedBy: actor,
+    });
+
+    const created = await service.createCampaign({
+      name: 'Structured personalization', channel: 'email', purpose: 'support', templateId: template._id,
+      content: {
+        subject: template.subject, bodyText: template.bodyText, bodyHtml: template.bodyHtml,
+        fallbackValues: { companyName: 'Behjja', senderName: 'Salman Sadiq', firstName: 'there' },
+      },
+      selection: { mode: 'explicit', leadIds: [lead._id] },
+    }, actor);
+    const rendered = await MessageRecipient.findOne({ campaignId: created._id }).lean();
+
+    expect(rendered.rendered).toMatchObject({
+      subject: 'Behjja for Example Business',
+      bodyText: 'Hello Example, from Salman Sadiq at Behjja.',
+      bodyHtml: '<p>Hello Example, from Salman Sadiq at Behjja.</p>',
+    });
+    expect(rendered.eligibility).toMatchObject({ eligible: true, reasons: [] });
+  });
+
   it('does not infer completion for an ineligible draft', async () => {
     const item = await campaign({ status: 'draft' });
     await recipient(item._id, {
@@ -242,6 +274,69 @@ describe('messaging campaign operations', () => {
     const running = await campaign({ status: 'running', selection: { mode: 'explicit', leadIds: [new mongoose.Types.ObjectId()], selectedAt: new Date() } });
     const locked = await recipient(running._id, { leadId: new mongoose.Types.ObjectId(), status: 'queued' });
     await expect(service.removeDraftRecipient(running._id, locked._id, actor)).rejects.toThrow(/draft campaign/i);
+  });
+
+  it('lets an administrator verify consent for multiple draft recipients and refreshes eligibility', async () => {
+    const secondLeadId = new mongoose.Types.ObjectId();
+    await Lead.create([
+      { _id: leadId, leadNumber: 'L-99101', name: 'Consent One', email: 'one@example.com', createdBy: actor },
+      { _id: secondLeadId, leadNumber: 'L-99102', name: 'Consent Two', email: 'two@example.com', createdBy: actor },
+    ]);
+    const item = await campaign({
+      channel: 'email', purpose: 'promotional', status: 'draft',
+      content: { subject: 'Hello', bodyText: 'Welcome', bodyHtml: '<p>Welcome</p>' },
+      selection: { mode: 'explicit', leadIds: [leadId, secondLeadId], selectedAt: new Date() },
+    });
+    const first = await recipient(item._id, {
+      channel: 'email', destination: 'one@example.com', destinationHash: destinationHash('email', 'one@example.com'),
+      status: 'ineligible', eligibility: { eligible: false, reasons: ['consent_required'] },
+    });
+    const second = await recipient(item._id, {
+      leadId: secondLeadId, channel: 'email', destination: 'two@example.com', destinationHash: destinationHash('email', 'two@example.com'),
+      status: 'ineligible', eligibility: { eligible: false, reasons: ['consent_required'] },
+    });
+    await refreshCampaignSummary(item._id);
+
+    const result = await service.verifyCampaignRecipientConsent(item._id, {
+      recipientIds: [String(first._id), String(second._id)],
+      evidence: 'Both recipients opted in through the signed event form.',
+      source: 'signed_form', capturedAt: new Date().toISOString(), expiresAt: null, confirmation: true,
+    }, actor, { ipAddress: '127.0.0.1' });
+
+    expect(result).toMatchObject({ verified: 2, campaign: { summary: { total: 2, eligible: 2, ineligible: 0 } } });
+    expect(await Consent.countDocuments({
+      leadId: { $in: [leadId, secondLeadId] }, channel: 'email', status: 'granted', source: 'signed_form',
+    })).toBe(2);
+    expect(await MessageRecipient.countDocuments({
+      campaignId: item._id, status: 'draft', 'eligibility.eligible': true,
+    })).toBe(2);
+    expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'messaging.campaign.consent_bulk_verified',
+      details: expect.objectContaining({ recipientCount: 2, evidenceRecorded: true }),
+    }));
+  });
+
+  it('does not use campaign consent verification to bypass suppression', async () => {
+    await Lead.create({ _id: leadId, leadNumber: 'L-99103', name: 'Suppressed Lead', email: 'blocked@example.com', createdBy: actor });
+    const item = await campaign({
+      channel: 'email', purpose: 'promotional', status: 'draft',
+      content: { subject: 'Hello', bodyText: 'Welcome' },
+    });
+    const hash = destinationHash('email', 'blocked@example.com');
+    const message = await recipient(item._id, {
+      channel: 'email', destination: 'blocked@example.com', destinationHash: hash,
+      status: 'ineligible', eligibility: { eligible: false, reasons: ['consent_required'] },
+    });
+    await Suppression.create({
+      leadId, channel: 'email', destinationHash: hash, reason: 'opt_out', source: 'recipient',
+      suppressedAt: new Date(), createdBy: actor,
+    });
+
+    await expect(service.verifyCampaignRecipientConsent(item._id, {
+      recipientIds: [String(message._id)], evidence: 'Claimed renewed consent', source: 'manual_admin_verification',
+      capturedAt: new Date().toISOString(), expiresAt: null, confirmation: true,
+    }, actor)).rejects.toThrow(/suppressed/i);
+    expect(await Consent.countDocuments({ leadId, channel: 'email' })).toBe(0);
   });
 
   it('pauses only recipients that have not crossed the provider submission boundary', async () => {
@@ -1052,6 +1147,14 @@ describe('messaging campaign operations', () => {
     expect(messagingSchemas.reinstateConsent.body.validate({
       channel: 'email', evidence: 'Signed renewed consent', capturedAt: new Date().toISOString(), confirmation: false,
     }).error).toBeTruthy();
+    expect(messagingSchemas.verifyCampaignConsent.body.validate({
+      recipientIds: [new mongoose.Types.ObjectId().toString()], evidence: 'Shared signed event form',
+      capturedAt: new Date().toISOString(), confirmation: false,
+    }).error).toBeTruthy();
+    expect(messagingSchemas.verifyCampaignConsent.body.validate({
+      recipientIds: [new mongoose.Types.ObjectId().toString()], evidence: 'Shared signed event form',
+      source: 'signed_form', capturedAt: new Date().toISOString(), confirmation: true,
+    }).error).toBeFalsy();
   });
 
   it('reports date-scoped evidence, actor-scoped compliance, and currency-safe costs', async () => {

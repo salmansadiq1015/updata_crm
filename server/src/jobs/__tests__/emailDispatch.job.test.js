@@ -61,6 +61,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   jest.clearAllMocks();
+  delete process.env.SMTP_FROM_NAME;
 });
 
 function emailRecord(overrides = {}) {
@@ -114,6 +115,19 @@ describe('EmailDispatchWorker', () => {
       expect.objectContaining({ emailRecordId: 'email-1', externalId: 'smtp-1' }),
       { source: 'jobs:email-dispatch' },
     );
+  });
+
+  test('uses the configured brand when a legacy record has no sender name', async () => {
+    process.env.SMTP_FROM_NAME = 'Updata.ai';
+    mockEmailFindById.mockResolvedValue(emailRecord({ senderName: '' }));
+    mockSendMail.mockResolvedValue({ messageId: 'smtp-brand' });
+    const worker = new EmailDispatchWorker();
+
+    await worker.process(job());
+
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({
+      fromName: 'Updata.ai',
+    }));
   });
 
   test('throws first SMTP failure so BullMQ performs the single automatic retry', async () => {

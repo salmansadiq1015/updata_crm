@@ -12,6 +12,7 @@ router.get('/campaigns/:id', authenticate, requirePermission('lead:read'), valid
 router.get('/campaigns/:id/recipients', authenticate, requirePermission('lead:read'), validate(schemas.listRecipients), (req, res, next) => controller.listRecipients(req, res, next));
 router.get('/campaigns/:id/retry-eligibility', authenticate, requirePermission('lead:read'), validate(schemas.retryEligibility), (req, res, next) => controller.retryEligibility(req, res, next));
 router.delete('/campaigns/:id/recipients/:recipientId', authenticate, requirePermission('crm:write'), validate(schemas.recipientId), (req, res, next) => controller.removeDraftRecipient(req, res, next));
+router.post('/campaigns/:id/consent/verify', authenticate, requirePermission('crm:admin'), validate(schemas.verifyCampaignConsent), (req, res, next) => controller.verifyCampaignConsent(req, res, next));
 router.post('/campaigns/:id/start', authenticate, requirePermission('crm:write'), validate(schemas.startCampaign), (req, res, next) => controller.startCampaign(req, res, next));
 router.post('/campaigns/:id/pause', authenticate, requirePermission('crm:write'), validate(schemas.campaignId), (req, res, next) => controller.pauseCampaign(req, res, next));
 router.post('/campaigns/:id/resume', authenticate, requirePermission('crm:write'), validate(schemas.startCampaign), (req, res, next) => controller.startCampaign(req, res, next));

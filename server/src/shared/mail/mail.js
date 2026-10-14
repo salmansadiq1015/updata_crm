@@ -97,7 +97,7 @@ const getTransporter = () => {
  * @param {string} options.subject   - Email subject line
  * @param {string} [options.template] - Template filename (e.g., "resetPassword.ejs")
  * @param {Object} options.data      - Data passed to the EJS template
- * @param {string} [options.fromName="Updata"] - Sender display name
+ * @param {string} [options.fromName] - Sender display name (defaults to SMTP_FROM_NAME)
  * @param {string} [options.fromAddress] - Sender address override
  * @param {Array}  [options.attachments] - Nodemailer attachments array
  * @param {string} [options._rawHtml] - Pre-rendered HTML body for DocTpl emails
@@ -113,7 +113,7 @@ const sendMail = async (options) => {
       subject,
       template,
       data = {},
-      fromName = "Updata",
+      fromName = process.env.SMTP_FROM_NAME || "Updata.ai",
       fromAddress,
       attachments,
       _rawHtml,

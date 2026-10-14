@@ -108,7 +108,13 @@ Run:
 ```bash
 cd server
 npm run migrate
+npm run seed:messaging-templates
 ```
+
+The targeted template seed is non-destructive and idempotent. It creates the ten shared, editable
+email starter templates only when they are missing and does not run the full database reseed. In
+this single-tenant deployment the shared library is keyed independently of the current admin user,
+so rotating the configured administrator does not duplicate the templates.
 
 Migrations `016_messaging_indexes.js`, `018_messaging_operations_indexes.js`, `019_messaging_quota_indexes.js`, `020_messaging_frequency_indexes.js`, `021_messaging_reconciliation_indexes.js`, `022_messaging_workspace_indexes.js`, and `023_messaging_progress_backfill.js` create lookup and unique indexes for templates, campaigns, paginated campaign/recipient workspaces, attempts, delivery events, consent/suppression, operational history, quota and frequency reservations, recovery scans, reconciliation polling, and settings. Migration `023` backfills only the additive campaign progress counters from recipient evidence; it does not alter recipient outcomes. Version `018` intentionally follows the workspace's existing AI-calling migration at version `017`; later phases use additive migrations so already-applied versions are never silently changed. They do not rewrite existing lead, auth, or email data.
 

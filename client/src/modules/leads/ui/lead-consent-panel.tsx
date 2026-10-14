@@ -26,12 +26,12 @@ const channelMeta = {
 } satisfies Record<OutreachChannel, { label: string; icon: typeof Mail; tone: string }>;
 
 const statusMeta = {
-  granted: { label: 'Granted', detail: 'Evidence allows outreach while policy remains valid.', tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400', icon: CheckCircle2 },
-  denied: { label: 'Denied', detail: 'The recipient has not authorized this channel.', tone: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400', icon: LockKeyhole },
-  revoked: { label: 'Revoked', detail: 'Consent was withdrawn and delivery is blocked.', tone: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400', icon: LockKeyhole },
-  unknown: { label: 'Unknown', detail: 'No verified consent evidence is recorded.', tone: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400', icon: AlertTriangle },
+  granted: { label: 'Consent granted', detail: 'Evidence allows outreach while policy remains valid.', tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400', icon: CheckCircle2 },
+  denied: { label: 'Consent denied', detail: 'The recipient has not authorized this channel.', tone: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400', icon: LockKeyhole },
+  revoked: { label: 'Consent revoked', detail: 'Consent was withdrawn and delivery is blocked.', tone: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400', icon: LockKeyhole },
+  unknown: { label: 'Consent not recorded', detail: 'The contact is available, but no verified consent evidence is recorded.', tone: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400', icon: AlertTriangle },
   suppressed: { label: 'Suppressed', detail: 'A suppression overrides consent and blocks delivery.', tone: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400', icon: LockKeyhole },
-  expired: { label: 'Expired', detail: 'Recorded consent has passed its expiry date.', tone: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400', icon: Clock3 },
+  expired: { label: 'Consent expired', detail: 'Recorded consent has passed its expiry date.', tone: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400', icon: Clock3 },
 };
 
 function toLocalDateTime(value = new Date()) {
@@ -108,17 +108,21 @@ export function LeadConsentPanel({ leadId, canWrite }: { leadId: string; canWrit
         <div><p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-primary" />Channel consent</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Effective eligibility is checked again immediately before every send.</p></div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"><LockKeyhole className="h-3 w-3" />Evidence protected</span>
       </div>
-      <div className="grid gap-px bg-border/50 sm:grid-cols-3">
+      <div className="grid items-stretch gap-px bg-border/50 sm:grid-cols-3">
         {consent.data?.channels.map((item) => {
           const channel = channelMeta[item.channel];
           const effective = statusMeta[item.effectiveStatus];
           const ChannelIcon = channel.icon;
           const StatusIcon = effective.icon;
-          return <article key={item.channel} className="flex min-h-40 flex-col bg-background/95 p-3.5">
-            <div className="flex items-start justify-between gap-2"><div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', channel.tone)}><ChannelIcon className="h-4 w-4" /></div><span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold', effective.tone)}><StatusIcon className="h-3 w-3" />{effective.label}</span></div>
-            <p className="mt-3 text-sm font-semibold">{channel.label}</p>
-            <p className="mt-1 flex-1 text-[11px] leading-4 text-muted-foreground">{!item.hasDestination ? `No valid ${channel.label.toLowerCase()} destination.` : effective.detail}</p>
-            <div className="mt-3 flex items-end justify-between gap-2"><p className="text-[10px] text-muted-foreground">{item.suppression ? `${item.suppression.reason.replaceAll('_', ' ')} · ${readable(item.suppression.suppressedAt)}` : item.changedAt ? `Updated ${readable(item.changedAt)}` : 'No evidence yet'}</p>{canWrite && <Button size="icon-xs" variant="ghost" aria-label={`Manage ${channel.label} consent`} onClick={() => openEditor(item)}><Pencil className="h-3.5 w-3.5" /></Button>}</div>
+          const evidenceNote = item.suppression
+            ? `${item.suppression.reason.replaceAll('_', ' ')} · ${readable(item.suppression.suppressedAt)}`
+            : item.changedAt ? `Updated ${readable(item.changedAt)}` : 'Consent evidence not recorded';
+          return <article key={item.channel} className="flex min-w-0 flex-col bg-background/95 p-4">
+            <div className="flex items-center gap-2.5"><div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', channel.tone)}><ChannelIcon className="h-4 w-4" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold">{channel.label}</p><p className="text-[10px] text-muted-foreground">Outreach channel</p></div></div>
+            <div className="mt-3 flex min-h-[54px] flex-col items-start gap-1.5"><span className={cn('inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold', item.hasDestination ? 'border-sky-500/20 bg-sky-500/[0.08] text-sky-700 dark:text-sky-400' : 'border-border bg-muted text-muted-foreground')}>{item.hasDestination ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}{item.hasDestination ? 'Contact available' : 'No contact'}</span><span className={cn('inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold', effective.tone)}><StatusIcon className="h-3 w-3 shrink-0" />{effective.label}</span></div>
+            <p className="mt-3 min-h-12 flex-1 text-[11px] leading-4 text-muted-foreground">{!item.hasDestination ? `No valid ${channel.label.toLowerCase()} destination.` : effective.detail}</p>
+            <p className="mt-3 min-h-9 border-t border-border/50 pt-3 text-[10px] leading-4 text-muted-foreground" title={evidenceNote}>{evidenceNote}</p>
+            {canWrite && <Button className="mt-3 w-full justify-center whitespace-nowrap" size="sm" variant={item.effectiveStatus === 'unknown' ? 'default' : 'outline'} aria-label={`${item.effectiveStatus === 'unknown' ? 'Record' : 'Manage'} ${channel.label} consent`} onClick={() => openEditor(item)}>{item.effectiveStatus === 'unknown' ? <ShieldCheck className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}{item.effectiveStatus === 'unknown' ? 'Record consent' : 'Manage consent'}</Button>}
           </article>;
         })}
       </div>

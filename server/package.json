@@ -17,6 +17,7 @@
     "migrate:rollback": "node src/migrations/runner.js rollback",
     "migrate:status": "node src/migrations/runner.js status",
     "messaging:preflight": "node scripts/messaging-preflight.mjs",
+    "seed:messaging-templates": "node scripts/seed-messaging-email-templates.mjs",
     "seed": "node src/seed/reseed.js",
     "seed:demo": "node src/seed/demo-seed.js",
     "lint": "eslint src/",

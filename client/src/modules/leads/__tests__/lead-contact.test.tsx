@@ -255,9 +255,20 @@ describe('lead detail drawer — contact actions', () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
 
     expect(await within(drawer).findByText('Channel consent')).toBeInTheDocument();
-    expect(within(drawer).getByText('Granted')).toBeInTheDocument();
-    expect(within(drawer).getAllByText('Unknown')).toHaveLength(2);
+    expect(within(drawer).getByText('Consent granted')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Consent not recorded')).toHaveLength(2);
+    expect(within(drawer).getAllByText('Contact available')).toHaveLength(3);
     expect(within(drawer).queryByRole('button', { name: /Manage Email consent/ })).not.toBeInTheDocument();
+  });
+
+  it('separates contact availability from consent and exposes a clear recording action', async () => {
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+
+    expect(await within(drawer).findByText('Channel consent')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Contact available')).toHaveLength(3);
+    expect(within(drawer).getAllByText('Consent not recorded')).toHaveLength(2);
+    expect(within(drawer).getByRole('button', { name: 'Record SMS consent' })).toHaveTextContent('Record consent');
+    expect(within(drawer).getByRole('button', { name: 'Record WhatsApp consent' })).toHaveTextContent('Record consent');
   });
 
   it('requires administrator confirmation before releasing a suppression', async () => {

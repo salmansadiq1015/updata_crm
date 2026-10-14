@@ -14,6 +14,8 @@ export type MessageTemplate = {
   bodyText?: string;
   category?: string;
   description?: string;
+  requiredVariables?: string[];
+  fallbackValues?: Record<string, string>;
   isShared?: boolean;
   isArchived?: boolean;
   createdBy?: string | { _id?: string };
@@ -80,6 +82,11 @@ export type BulkRetryResult = {
   operationId: string;
   queued: number;
   blocked: { ambiguous: number; permanent: number };
+};
+
+export type BulkConsentVerificationResult = {
+  campaign: Campaign;
+  verified: number;
 };
 
 export type MessageHistoryEntry = {
@@ -256,6 +263,17 @@ export const messagingApi = {
   async removeDraftRecipient(id: string, recipientId: string): Promise<Campaign> {
     const response = await apiClient.delete(ENDPOINTS.MESSAGING.RECIPIENT(id, recipientId));
     return ((response as unknown as { data?: Campaign }).data ?? response) as Campaign;
+  },
+  async verifyCampaignConsent(id: string, input: {
+    recipientIds: string[];
+    evidence: string;
+    source: string;
+    capturedAt: string;
+    expiresAt?: string | null;
+    confirmation: true;
+  }): Promise<BulkConsentVerificationResult> {
+    const response = await apiClient.post(ENDPOINTS.MESSAGING.VERIFY_CAMPAIGN_CONSENT(id), input);
+    return ((response as unknown as { data?: BulkConsentVerificationResult }).data ?? response) as BulkConsentVerificationResult;
   },
   async leadHistoryPage(leadId: string, params: Record<string, unknown> = {}): Promise<Paginated<MessageHistoryEntry>> {
     const response = await apiClient.get(ENDPOINTS.MESSAGING.LEAD_HISTORY(leadId), { params: { limit: 25, ...params } });

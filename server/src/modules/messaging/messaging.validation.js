@@ -91,6 +91,17 @@ export const listCampaigns = { query: Joi.object({
 }) };
 export const listRecipients = { params: Joi.object({ id: objectId.required() }), query: Joi.object({ page, limit: Joi.number().integer().min(1).max(200).default(50), status: Joi.string().valid(...MESSAGE_STATUSES) }) };
 export const recipientId = { params: Joi.object({ id: objectId.required(), recipientId: objectId.required() }) };
+export const verifyCampaignConsent = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    recipientIds: Joi.array().items(objectId).min(1).max(5000).unique().required(),
+    evidence: Joi.string().trim().min(10).max(2000).required(),
+    source: Joi.string().trim().max(100).default('manual_admin_verification'),
+    capturedAt: Joi.date().iso().required(),
+    expiresAt: Joi.date().iso().greater('now').allow(null),
+    confirmation: Joi.boolean().valid(true).required(),
+  }),
+};
 export const leadHistory = { params: Joi.object({ leadId: objectId.required() }), query: Joi.object({
   page, limit, channel: Joi.string().valid(...CHANNELS), provider: Joi.string().valid(...PROVIDERS),
   status: Joi.string().valid(...MESSAGE_STATUSES, 'received'), campaignId: objectId,

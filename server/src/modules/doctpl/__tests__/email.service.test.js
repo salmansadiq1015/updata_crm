@@ -78,6 +78,7 @@ afterEach(() => {
   jest.clearAllMocks();
   delete process.env.COMPANY_EMAIL;
   delete process.env.SMTP_MAIL;
+  delete process.env.SMTP_FROM_NAME;
 });
 
 describe('emailService.send sender identity', () => {
@@ -109,6 +110,22 @@ describe('emailService.send sender identity', () => {
     expect(mockEmailRecordCreate).toHaveBeenCalledWith(expect.objectContaining({
       senderAddress: 'sales@example.com',
       senderName: 'Sales Team',
+    }));
+  });
+
+  test('uses the configured email brand instead of the document company name', async () => {
+    process.env.SMTP_FROM_NAME = 'Updata.ai';
+    mockCiFindOne.mockReturnValue(ciQuery({
+      companyName: 'Legal Document Company',
+      companyDetails: { email: 'company@example.com' },
+    }));
+    mockEmailRecordCreate.mockImplementation(async (payload) => ({ _id: 'email-3', ...payload }));
+
+    await emailService.send(emailInput());
+
+    expect(mockEmailRecordCreate).toHaveBeenCalledWith(expect.objectContaining({
+      senderAddress: 'company@example.com',
+      senderName: 'Updata.ai',
     }));
   });
 });

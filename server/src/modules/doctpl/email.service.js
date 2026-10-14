@@ -97,7 +97,9 @@ class EmailService {
 
     return {
       senderAddress: senderAddress || ciConfig?.companyDetails?.email || process.env.COMPANY_EMAIL || process.env.SMTP_MAIL || undefined,
-      senderName: senderName || ciConfig?.companyName || 'Updata',
+      // Keep public email branding independent from the legal/document
+      // company identity stored in CIConfiguration.
+      senderName: senderName || process.env.SMTP_FROM_NAME || ciConfig?.companyName || 'Updata.ai',
     };
   }
 

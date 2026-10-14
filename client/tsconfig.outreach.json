@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/modules/leads/**/*.ts",
+    "src/modules/leads/**/*.tsx",
+    "src/modules/messaging/**/*.ts",
+    "src/modules/messaging/**/*.tsx",
+    "src/modules/aiCalling/**/*.ts",
+    "src/modules/aiCalling/**/*.tsx",
+    "src/app/(platform)/leads/outreach/**/*.ts",
+    "src/app/(platform)/leads/outreach/**/*.tsx",
+    "src/app/(platform)/admin/messaging/**/*.ts",
+    "src/app/(platform)/admin/messaging/**/*.tsx",
+    "src/app/(platform)/ai-calling/**/*.ts",
+    "src/app/(platform)/ai-calling/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

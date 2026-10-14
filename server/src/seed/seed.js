@@ -1,5 +1,6 @@
 import { seedCatalog } from './catalog-seed.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
+import { seedMessagingEmailTemplates } from './messagingEmailTemplateSeed.js';
 import { seedOperations } from './operations-seed.js';
 import { seedAgentRegistry } from './agentRegistrySeed.js';
 import { seedProjectTaskTemplates } from './projectTaskTemplateSeed.js';
@@ -88,6 +89,11 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'crm', action: 'delete', description: 'Delete CRM data' },
   { module: 'crm', action: 'admin', description: 'Full CRM administration' },
   { module: 'crm', action: 'merge', description: 'Merge duplicate customers and undo a merge (key user)' },
+
+  // AI voice calling (implied by crm:read/write/admin + lead:read — see PERMISSION_IMPLICATIONS)
+  { module: 'ai-calling', action: 'read', description: 'View AI calling campaigns, call history and analytics' },
+  { module: 'ai-calling', action: 'write', description: 'Create, configure, start and manage AI calling campaigns' },
+  { module: 'ai-calling', action: 'admin', description: 'Reconcile call state and perform sensitive AI calling operations' },
 
   // Projects
   { module: 'projects', action: 'read', description: 'View projects' },
@@ -655,8 +661,9 @@ export async function seedDatabase() {
       const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
       if (anyAdmin) {
         await seedDoctplTemplates(anyAdmin._id);
+        await seedMessagingEmailTemplates(anyAdmin._id);
       } else {
-        logger.warn('No admin user found — skipping document template seed', { module: 'seed' });
+        logger.warn('No admin user found — skipping document and Outreach email template seeds', { module: 'seed' });
       }
     }
 

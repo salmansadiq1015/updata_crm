@@ -41,7 +41,8 @@ describe('settings hub translations', () => {
 
     for (const locale of SUPPORTED_LOCALES) {
       for (const key of SETTINGS_HUB_I18N_KEYS) {
-        const value = translations[locale]?.[key];
+        if (!key) continue;
+        const value = (translations[locale] as Record<string, string> | undefined)?.[key];
         if (typeof value !== 'string' || value.trim().length === 0) {
           missing.push(`${locale}:${key}`);
         }

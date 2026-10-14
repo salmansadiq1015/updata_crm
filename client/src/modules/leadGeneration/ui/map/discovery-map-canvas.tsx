@@ -53,7 +53,7 @@ function DiscoveryMapInner({
   onViewportChange,
   mapTypeId,
   className,
-}: DiscoveryMapCanvasProps) {
+}: Omit<DiscoveryMapCanvasProps, 'apiKey'>) {
   const status = useApiLoadingStatus();
   const { resolvedTheme } = useTheme();
   const colorScheme = resolvedTheme === 'dark' ? ColorScheme.DARK : ColorScheme.LIGHT;

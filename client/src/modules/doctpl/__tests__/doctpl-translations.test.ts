@@ -32,7 +32,7 @@ describe('DocTpl translations', () => {
 
     for (const locale of locales) {
       for (const key of germanDoctplKeys) {
-        expect(translations[locale][key], `${locale}:${key}`).toBeTruthy();
+        expect((translations[locale] as Record<string, string>)[key], `${locale}:${key}`).toBeTruthy();
       }
     }
   });

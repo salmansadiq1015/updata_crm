@@ -262,7 +262,7 @@ export function LocationSearch() {
   return (
     <Tabs
       value={locationDraft.mode}
-      onValueChange={(value) => setLocationDraft({ mode: value as LocationMode })}
+      onValueChange={(value: string) => setLocationDraft({ mode: value as LocationMode })}
       className="w-full"
     >
       <TabsList className="w-full justify-start">

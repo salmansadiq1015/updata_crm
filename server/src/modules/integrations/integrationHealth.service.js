@@ -69,19 +69,12 @@ const healthCheckFunctions = {
       return { status: 'down', details: { reason: 'SMTP connection credentials are incomplete' } };
     }
     try {
-      const { default: nodemailer } = await import('nodemailer');
-      const transporter = nodemailer.createTransport({
-        ...(process.env.SMTP_SERVICE
-          ? { service: process.env.SMTP_SERVICE }
-          : { host, port: Number(port), secure: Number(port) === 465 }),
-        auth: { user, pass },
-        tls: { rejectUnauthorized: false },
-      });
-      await transporter.verify();
-      transporter.close();
+      const { verifyMailTransport } = await import('../../shared/mail/mail.js');
+      await verifyMailTransport();
       return { status: 'healthy', details: { host: process.env.SMTP_SERVICE || host, port } };
     } catch (err) {
-      return { status: 'down', details: { reason: err.message } };
+      const authenticationFailure = err?.code === 'EAUTH' || Number(err?.responseCode) === 535;
+      return { status: 'down', details: { reason: authenticationFailure ? 'SMTP authentication failed' : 'SMTP connection failed' } };
     }
   },
 

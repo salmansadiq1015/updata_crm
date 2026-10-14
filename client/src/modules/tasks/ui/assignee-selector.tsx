@@ -72,7 +72,7 @@ export function AssigneeSelector({ assigneeIds, users, onAssigneeChange, size = 
   };
 
   return (
-    <Popover open={open} onOpenChange={(next) => { if (!disabled) setOpen(next); }}>
+    <Popover open={open} onOpenChange={(next: boolean) => { if (!disabled) setOpen(next); }}>
       <PopoverTrigger asChild>
         <button
           type="button"

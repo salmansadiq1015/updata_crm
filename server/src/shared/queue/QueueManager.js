@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import { queueConnection, defaultJobOptions, queueConfig } from '../../config/queue.js';
 import logger from '../logger/index.js';
 import eventBus from '../events/EventBus.js';
@@ -125,6 +125,27 @@ class QueueManager {
     });
 
     return job;
+  }
+
+  /**
+   * Add a bounded batch of jobs in one Redis operation. Callers remain
+   * responsible for durable database state and idempotent worker claims.
+   */
+  async addJobs(queueName, jobs = []) {
+    const queue = this.queues.get(queueName);
+    if (!queue) throw new Error(`Queue '${queueName}' not registered`);
+    if (!jobs.length) return [];
+
+    const queued = await queue.addBulk(jobs.map((job) => ({
+      name: job.name,
+      data: job.data,
+      opts: job.options || {},
+    })));
+
+    logger.debug('Jobs enqueued in bulk', {
+      module: 'queue', action: 'enqueue.bulk', queue: queueName, count: queued.length,
+    });
+    return queued;
   }
 
   /**

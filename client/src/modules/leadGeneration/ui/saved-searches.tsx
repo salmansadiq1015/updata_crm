@@ -154,7 +154,7 @@ export function SavedSearches({
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open: boolean) => { if (!open) setDeleteTarget(null); }}
         title={t('leadgen.saved.delete', 'Delete this search?')}
         description={t('leadgen.error.generic.body', 'This removes the saved search and its results.')}
         confirmText={t('leadgen.saved.delete', 'Delete')}

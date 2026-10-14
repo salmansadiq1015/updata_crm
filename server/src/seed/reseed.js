@@ -10,6 +10,7 @@
 import '../config/loadEnv.js';
 import logger from '../shared/logger/index.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
+import { seedMessagingEmailTemplates } from './messagingEmailTemplateSeed.js';
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import Permission from '../modules/auth/permission.model.js';
 import Role from '../modules/auth/role.model.js';
@@ -113,6 +114,7 @@ async function reseed() {
   // Seed doctpl default templates
   const adminUserForSeed = await User.findOne({ email: (config.admin?.email || process.env.ADMIN_EMAIL || '').toLowerCase() });
   await seedDoctplTemplates(adminUserForSeed?._id);
+  await seedMessagingEmailTemplates(adminUserForSeed?._id);
 
   console.log('Re-seed complete.');
   await disconnectDatabase(logger);

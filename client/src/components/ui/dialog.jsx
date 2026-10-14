@@ -8,30 +8,35 @@ import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/language-context"
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Root>} props */
 function Dialog({
   ...props
 }) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Trigger>} props */
 function DialogTrigger({
   ...props
 }) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Portal>} props */
 function DialogPortal({
   ...props
 }) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Close>} props */
 function DialogClose({
   ...props
 }) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Overlay>} props */
 function DialogOverlay({
   className,
   ...props
@@ -47,6 +52,13 @@ function DialogOverlay({
   );
 }
 
+/**
+ * @param {React.ComponentProps<typeof DialogPrimitive.Content> & {
+ *   showCloseButton?: boolean,
+ *   hideClose?: boolean,
+ *   dismissableOnOutsideClick?: boolean
+ * }} props
+ */
 function DialogContent({
   className,
   children,
@@ -98,6 +110,7 @@ function DialogContent({
   );
 }
 
+/** @param {React.ComponentProps<'div'>} props */
 function DialogBody({
   className,
   ...props
@@ -110,6 +123,7 @@ function DialogBody({
   );
 }
 
+/** @param {React.ComponentProps<'div'>} props */
 function DialogHeader({
   className,
   ...props
@@ -122,6 +136,7 @@ function DialogHeader({
   );
 }
 
+/** @param {React.ComponentProps<'div'> & { showCloseButton?: boolean }} props */
 function DialogFooter({
   className,
   showCloseButton = false,
@@ -148,6 +163,7 @@ function DialogFooter({
   );
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Title>} props */
 function DialogTitle({
   className,
   ...props
@@ -160,6 +176,7 @@ function DialogTitle({
   );
 }
 
+/** @param {React.ComponentProps<typeof DialogPrimitive.Description>} props */
 function DialogDescription({
   className,
   ...props

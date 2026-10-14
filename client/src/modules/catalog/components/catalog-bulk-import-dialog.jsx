@@ -20,6 +20,7 @@ function inferFormat(file) {
   return name.endsWith('.json') ? 'json' : 'csv';
 }
 
+/** @param {{ open: boolean, onClose: () => void, importErrors?: Array<Record<string, any>> }} props */
 export function CatalogBulkImportDialog({ open, onClose, importErrors: externalErrors }) {
   const { t } = useLanguage();
   const fileRef = useRef(null);

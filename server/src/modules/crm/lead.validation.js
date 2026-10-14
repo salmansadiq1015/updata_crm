@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
-import { SWISS_CANTONS, SWISS_POSTAL_CODE_PATTERN, PHONE_PATTERN } from './crm.constants.js';
+import { SWISS_CANTONS, SWISS_POSTAL_CODE_PATTERN } from './crm.constants.js';
 import { LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE } from './lead.model.js';
 
 const LEAD_TYPES = Object.values(LEAD_TYPE);
@@ -17,9 +17,20 @@ const canton = Joi.string().trim()
   .valid(...SWISS_CANTONS)
   .messages({ 'any.only': 'Must be a valid Swiss canton code (e.g., ZH, BE, GE)' });
 
+const PHONE_SEPARATOR = "[\\s.\\-/'’]*";
+const SWISS_PHONE_PATTERN = new RegExp(
+  `^(?:(?:\\+41|0041)${PHONE_SEPARATOR}(?:\\(0\\)${PHONE_SEPARATOR})?|0)[1-9](?:${PHONE_SEPARATOR}\\d){8}$`,
+);
+const INTERNATIONAL_PHONE_PATTERN = new RegExp(
+  `^(?:\\+|00)(?!41)[1-9]\\d{0,2}(?:${PHONE_SEPARATOR}\\d){6,13}$`,
+);
 const phone = Joi.string().trim().max(50)
-  .pattern(PHONE_PATTERN)
-  .messages({ 'string.pattern.base': 'Please enter a valid phone number (e.g., +41 44 123 45 67)' });
+  .custom((value, helpers) => (
+    SWISS_PHONE_PATTERN.test(value) || INTERNATIONAL_PHONE_PATTERN.test(value)
+      ? value
+      : helpers.error('string.phone')
+  ))
+  .messages({ 'string.phone': 'Please enter a valid phone number with country code (e.g., +41 44 123 45 67)' });
 
 // GeoJSON Point, coordinates [lng, lat] with sane ranges.
 const geoPoint = Joi.object({

@@ -519,7 +519,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
               >
                 <SelectTrigger className="h-8 gap-1.5 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.keys(TASK_SOURCE_META).map((k) => (
+                  {(Object.keys(TASK_SOURCE_META) as Array<keyof typeof TASK_SOURCE_META>).map((k) => (
                     <SelectItem key={k} value={k} textValue={language === 'de' ? TASK_SOURCE_META[k].labelDe : TASK_SOURCE_META[k].labelEn}>
                       {language === 'de' ? TASK_SOURCE_META[k].labelDe : TASK_SOURCE_META[k].labelEn}
                     </SelectItem>

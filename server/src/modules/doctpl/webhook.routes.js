@@ -52,6 +52,19 @@ router.post('/', async (req, res) => {
 
     await emailRecordRepository.updateStatus(emailRecordId, mappedStatus, details);
 
+    // Keep the unified lead-message record in sync with verified provider
+    // evidence. The messaging service is loaded lazily to avoid a doctpl cycle.
+    if (['DELIVERED', 'BOUNCED', 'FAILED'].includes(mappedStatus)) {
+      const { default: messagingService } = await import('../messaging/messaging.service.js');
+      await messagingService.applyProviderEvent({
+        provider: 'existing_email', providerMessageId: emailRecordId,
+        status: mappedStatus.toLowerCase(),
+        eventKey: `email:${emailRecordId}:${mappedStatus}:${messageId || ''}`,
+        occurredAt: new Date(), payload: { status: mappedStatus, messageId, bounceReason },
+      });
+      if (mappedStatus === 'BOUNCED') await messagingService.suppressEmailBounce(emailRecordId, bounceReason);
+    }
+
     // Publish appropriate event
     const eventMap = {
       DELIVERED: EVENT_TYPES.DOCTPL_EMAIL_DELIVERED,

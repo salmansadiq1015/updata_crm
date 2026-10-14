@@ -13,6 +13,18 @@ import {
   normalizeLocale,
 } from './locale-config';
 
+/**
+ * @typedef {object} LanguageContextValue
+ * @property {string} locale
+ * @property {string} language
+ * @property {'ltr' | 'rtl'} dir
+ * @property {boolean} isRTL
+ * @property {(locale: string) => void} setLocale
+ * @property {() => void} toggleLanguage
+ * @property {(key: string, fallbackOrVars?: string | null | Record<string, unknown>, vars?: Record<string, unknown>) => string} t
+ */
+
+/** @type {import('react').Context<LanguageContextValue | null>} */
 const LanguageContext = createContext(null);
 
 // Re-export so existing importers of `SUPPORTED_LOCALES` from this module keep
@@ -128,8 +140,12 @@ export function LanguageProvider({ children, initialLocale }) {
    *   t('users.title', 'Fallback string')   // returns value or fallback when key missing
    *   t('users.template', null, { name })   // interpolates {name} placeholders
    */
+  /** @type {LanguageContextValue['t']} */
   const t = useCallback(
-    (key, fallback, vars) => {
+    (key, fallbackOrVars, vars) => {
+      const fallback = typeof fallbackOrVars === 'string' ? fallbackOrVars : null;
+      const interpolationVars = vars
+        ?? (fallbackOrVars && typeof fallbackOrVars === 'object' ? fallbackOrVars : undefined);
       const raw = translations[locale]?.[key] ?? translations[DEFAULT_LOCALE][key];
       let out;
       if (raw !== undefined && raw !== null) {
@@ -142,8 +158,8 @@ export function LanguageProvider({ children, initialLocale }) {
       if (locale !== 'de' && typeof out === 'string') {
         out = localizeFallback(out, locale);
       }
-      if (vars && typeof out === 'string') {
-        out = out.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
+      if (interpolationVars && typeof out === 'string') {
+        out = out.replace(/\{(\w+)\}/g, (_, k) => (interpolationVars[k] != null ? String(interpolationVars[k]) : `{${k}}`));
       }
       if (locale === 'de') return normalizeGermanOrthography(out);
       return out;

@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Building2, MapPin, User } from 'lucide-react';
+import { AlertTriangle, AtSign, Building2, Copy, MapPin, Pencil, Phone, Plus, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatPhone } from '@/lib/formatters';
 import type { Lead } from '../types/lead-types';
-import { useLanguage } from './lead-ui-kit';
+import { Button, useLanguage } from './lead-ui-kit';
 import type { ShellColumn } from './lead-ui-kit';
 import {
   LEAD_SOURCE_ICON,
@@ -21,11 +21,15 @@ import {
   getLeadCreatorName,
   getUserDisplayName,
   getUserInitials,
+  toMailtoHref,
+  toTelHref,
 } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
 import { RatingStars } from './rating-stars';
 import { LtrText } from './ltr-text';
+import { isValidLeadPhone } from './lead-contact-validation';
+import type { LeadContactField } from './lead-contact-editor';
 
 /** A value that is really just a postal code is not a place name. */
 const isBarePostal = (value: string | null | undefined): boolean =>
@@ -64,20 +68,22 @@ export function AssigneeLabel({
 
 type UseLeadColumnsArgs = {
   users: readonly LeadUser[];
+  canWrite: boolean;
   onOpen: (lead: Lead) => void;
   onCopyPhone: (phone: string) => void;
+  onEditContact: (lead: Lead, field: LeadContactField) => void;
 };
 
 /**
  * Column set for the leads table:
- * lead number · name · status · type (real category) · source · area · city ·
- * country · rating (+reviews) · phone · assignee · creator · discovered.
+ * lead number · name · email · phone · status · type (real category) · source ·
+ * area · city · country · rating (+reviews) · assignee · creator · discovered.
  *
  * Only name, status and the date column sort — those are the fields the API
  * accepts for `sortBy`. The compact grid/card view + the detail drawer are the
  * responsive layers for the wider business-data columns.
  */
-export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArgs): ShellColumn<Lead>[] {
+export function useLeadColumns({ users, canWrite, onOpen, onCopyPhone, onEditContact }: UseLeadColumnsArgs): ShellColumn<Lead>[] {
   const { t, locale } = useLanguage();
 
   return useMemo<ShellColumn<Lead>[]>(
@@ -129,12 +135,162 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
                 >
                   <span className="line-clamp-2 break-words">{lead.name || '—'}</span>
                 </button>
-                {lead.email && (
-                  <p className="line-clamp-1 break-all text-xs text-muted-foreground">
-                    <LtrText>{lead.email}</LtrText>
-                  </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'email',
+        header: t('leads.col.email', 'Email'),
+        size: 225,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const lead = row.original;
+          const email = lead.email?.trim() ?? '';
+          const href = toMailtoHref(email);
+          if (!email) {
+            return canWrite ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={t('leads.contact.addEmailFor', 'Add email for {name}', { name: lead.name })}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEditContact(lead, 'email');
+                }}
+                className="h-7 gap-1.5 border border-dashed border-primary/30 px-2 text-[11px] font-semibold text-primary hover:border-primary/50 hover:bg-primary/10"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('leads.contact.addEmail', 'Add email')}
+              </Button>
+            ) : <Dash />;
+          }
+          return (
+            <div className="group/contact flex min-w-0 items-center gap-2 whitespace-normal">
+              <span className={cn(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1',
+                href ? 'bg-sky-500/10 text-sky-600 ring-sky-500/15 dark:text-sky-400' : 'bg-destructive/10 text-destructive ring-destructive/20',
+              )}>
+                {href ? <AtSign className="h-3.5 w-3.5" aria-hidden="true" /> : <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                {href ? (
+                  <a
+                    href={href}
+                    onClick={(event) => event.stopPropagation()}
+                    className="block truncate text-[12px] font-medium text-foreground hover:text-primary hover:underline"
+                    title={email}
+                  >
+                    <LtrText>{email}</LtrText>
+                  </a>
+                ) : (
+                  <>
+                    <span className="block truncate text-[12px] text-destructive" title={email}><LtrText>{email}</LtrText></span>
+                    <span className="text-[10px] font-medium text-destructive">{t('leads.contact.invalidEmail', 'Invalid email')}</span>
+                  </>
                 )}
               </div>
+              {canWrite && (
+                <button
+                  type="button"
+                  aria-label={t('leads.contact.editEmailFor', 'Edit email for {name}', { name: lead.name })}
+                  title={t('leads.contact.editEmail', 'Edit email')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onEditContact(lead, 'email');
+                  }}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/contact:opacity-100"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: 'phone',
+        header: t('leads.col.phone', 'Phone'),
+        size: 205,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const lead = row.original;
+          const phone = lead.phone ?? lead.mobile;
+          if (!phone) {
+            return canWrite ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={t('leads.contact.addPhoneFor', 'Add phone for {name}', { name: lead.name })}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEditContact(lead, 'phone');
+                }}
+                className="h-7 gap-1.5 border border-dashed border-primary/30 px-2 text-[11px] font-semibold text-primary hover:border-primary/50 hover:bg-primary/10"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('leads.contact.addPhone', 'Add phone')}
+              </Button>
+            ) : <Dash />;
+          }
+          const valid = isValidLeadPhone(phone);
+          const href = valid ? toTelHref(phone) : null;
+          return (
+            <div className="group/contact flex min-w-0 items-center gap-2 whitespace-normal">
+              <span className={cn(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1',
+                valid ? 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/15 dark:text-emerald-400' : 'bg-destructive/10 text-destructive ring-destructive/20',
+              )}>
+                {valid ? <Phone className="h-3.5 w-3.5" aria-hidden="true" /> : <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                {href ? (
+                  <a
+                    href={href}
+                    onClick={(event) => event.stopPropagation()}
+                    className="block truncate text-[12px] font-medium text-foreground hover:text-primary hover:underline"
+                    title={formatPhone(phone) || phone}
+                  >
+                    <LtrText>{formatPhone(phone) || phone}</LtrText>
+                  </a>
+                ) : (
+                  <>
+                    <span className="block truncate text-[12px] text-destructive" title={phone}><LtrText>{phone}</LtrText></span>
+                    <span className="text-[10px] font-medium text-destructive">{t('leads.contact.invalidPhone', 'Invalid number')}</span>
+                  </>
+                )}
+              </div>
+              {valid && (
+                <button
+                  type="button"
+                  aria-label={t('leads.contact.copyPhoneFor', 'Copy phone for {name}', { name: lead.name })}
+                  title={t('leads.action.copyPhone', 'Copy phone number')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCopyPhone(phone);
+                  }}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/contact:opacity-100"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+              {canWrite && (
+                <button
+                  type="button"
+                  aria-label={t('leads.contact.editPhoneFor', 'Edit phone for {name}', { name: lead.name })}
+                  title={t('leads.contact.editPhone', 'Edit phone')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onEditContact(lead, 'phone');
+                  }}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/contact:opacity-100"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
           );
         },
@@ -271,28 +427,6 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
         },
       },
       {
-        id: 'phone',
-        header: t('leads.col.phone', 'Phone'),
-        size: 150,
-        Cell: ({ row }) => {
-          const phone = row.original.phone ?? row.original.mobile;
-          if (!phone) return <Dash />;
-          return (
-            <button
-              type="button"
-              title={t('leads.action.copyPhone', 'Copy phone number')}
-              onClick={(event) => {
-                event.stopPropagation();
-                onCopyPhone(phone);
-              }}
-              className="rounded-sm text-[13px] text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <LtrText>{formatPhone(phone) || phone}</LtrText>
-            </button>
-          );
-        },
-      },
-      {
         id: 'assignedTo',
         header: t('leads.col.assignedTo', 'Assigned to'),
         size: 160,
@@ -328,6 +462,6 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
         ),
       },
     ],
-    [t, locale, users, onOpen, onCopyPhone],
+    [t, locale, users, canWrite, onOpen, onCopyPhone, onEditContact],
   );
 }

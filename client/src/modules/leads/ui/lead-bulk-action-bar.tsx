@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Mail, MessageCircle, Sparkles, Trash2, UserPlus, UserRound, UserX, X } from 'lucide-react';
+import { Loader2, Mail, MessageCircle, MessageSquareText, PhoneCall, Sparkles, Trash2, UserPlus, UserRound, UserX, X } from 'lucide-react';
 import {
   Button,
   ConfirmDialog,
@@ -24,7 +24,9 @@ type LeadBulkActionBarProps = {
   canDelete?: boolean;
   canEmail?: boolean;
   canWhatsApp?: boolean;
+  canSms?: boolean;
   canEnrich?: boolean;
+  canAiCall?: boolean;
   /** A bulk request is running: actions are disabled until it settles. */
   isBusy?: boolean;
   /** `null` clears the assignment. */
@@ -32,7 +34,9 @@ type LeadBulkActionBarProps = {
   onDelete: () => void;
   onEmail?: () => void;
   onWhatsApp?: () => void;
+  onSms?: () => void;
   onEnrich?: () => void;
+  onAiCall?: () => void;
   onClear: () => void;
 };
 
@@ -47,13 +51,17 @@ export function LeadBulkActionBar({
   canDelete = true,
   canEmail = false,
   canWhatsApp = false,
+  canSms = false,
   canEnrich = false,
+  canAiCall = false,
   isBusy = false,
   onAssign,
   onDelete,
   onEmail,
   onWhatsApp,
+  onSms,
   onEnrich,
+  onAiCall,
   onClear,
 }: LeadBulkActionBarProps) {
   const { t } = useLanguage();
@@ -93,14 +101,28 @@ export function LeadBulkActionBar({
           {t('common.selectedCountShort', '{count} selected', { count })}
         </span>
 
-        {(canEmail || canWhatsApp || canEnrich || canAssign || canDelete) && (
+        {(canAiCall || canEmail || canSms || canWhatsApp || canEnrich || canAssign || canDelete) && (
           <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        )}
+
+        {canAiCall && (
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={isBusy} onClick={onAiCall}>
+            <PhoneCall className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('leads.bulk.aiCall', 'AI Call')}
+          </Button>
         )}
 
         {canEmail && (
           <Button variant="outline" size="sm" className="gap-1.5" disabled={isBusy} onClick={onEmail}>
             <Mail className="h-3.5 w-3.5" aria-hidden="true" />
             {t('leads.bulk.email', 'Email')}
+          </Button>
+        )}
+
+        {canSms && (
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={isBusy} onClick={onSms}>
+            <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+            SMS
           </Button>
         )}
 

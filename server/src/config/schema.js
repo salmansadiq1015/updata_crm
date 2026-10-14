@@ -67,6 +67,41 @@ const configSchema = Joi.object({
   SMTP_SERVICE: Joi.string().default('gmail'),
   SMTP_MAIL: Joi.string().email().allow('').default(''),
   SMTP_PASSWORD: Joi.string().allow('').default(''),
+  SMTP_TLS_REJECT_UNAUTHORIZED: Joi.boolean().truthy('true').falsy('false').default(true),
+
+  // Lead multi-channel messaging. Secrets stay server-side and are never
+  // returned by provider-health/settings APIs.
+  MESSAGE_DESTINATION_HASH_SECRET: Joi.string().min(16).allow('').default(''),
+  MESSAGE_UNSUBSCRIBE_SECRET: Joi.string().min(16).allow('').default(''),
+  MESSAGING_PUBLIC_API_URL: Joi.string().uri().allow('').default(''),
+  MESSAGING_CONCURRENCY: Joi.number().integer().min(1).max(25).default(3),
+  MESSAGING_RECOVERY_STALE_MINUTES: Joi.number().integer().min(2).max(1440).default(10),
+  MESSAGING_RECOVERY_BATCH_SIZE: Joi.number().integer().min(1).max(5000).default(500),
+  MESSAGING_RECONCILIATION_MIN_AGE_MINUTES: Joi.number().integer().min(1).max(1440).default(5),
+  MESSAGING_RECONCILIATION_MAX_AGE_DAYS: Joi.number().integer().min(1).max(90).default(7),
+  MESSAGING_RECONCILIATION_BATCH_SIZE: Joi.number().integer().min(1).max(1000).default(200),
+  META_WHATSAPP_BUSINESS_ACCOUNT_ID: Joi.string().allow('').default(''),
+  META_WHATSAPP_PHONE_NUMBER_ID: Joi.string().allow('').default(''),
+  META_WHATSAPP_ACCESS_TOKEN: Joi.string().allow('').default(''),
+  META_WHATSAPP_WEBHOOK_VERIFY_TOKEN: Joi.string().allow('').default(''),
+  META_APP_SECRET: Joi.string().allow('').default(''),
+  META_GRAPH_API_VERSION: Joi.string().pattern(/^v\d+\.\d+$/).allow('').default(''),
+  META_WHATSAPP_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(15000),
+  TEXTBEE_API_KEY: Joi.string().allow('').default(''),
+  TEXTBEE_DEVICE_ID: Joi.string().allow('').default(''),
+  TEXTBEE_API_URL: Joi.string().uri().default('https://api.textbee.dev'),
+  TEXTBEE_WEBHOOK_SECRET: Joi.string().min(20).allow('').default(''),
+  TEXTBEE_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(15000),
+  TWILIO_ACCOUNT_SID: Joi.string().allow('').default(''),
+  TWILIO_AUTH_TOKEN: Joi.string().allow('').default(''),
+  TWILIO_FROM_NUMBER: Joi.string().allow('').default(''),
+  TWILIO_MESSAGING_SERVICE_SID: Joi.string().allow('').default(''),
+  TWILIO_STATUS_CALLBACK_URL: Joi.string().uri().allow('').default(''),
+  TWILIO_WHATSAPP_FROM: Joi.string().allow('').default(''),
+  TWILIO_WHATSAPP_MESSAGING_SERVICE_SID: Joi.string().allow('').default(''),
+  TWILIO_WHATSAPP_STATUS_CALLBACK_URL: Joi.string().uri().allow('').default(''),
+  TWILIO_WEBHOOK_PUBLIC_URL: Joi.string().uri().allow('').default(''),
+  TWILIO_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(15000),
 
   // Company / invoice document defaults
   COMPANY_NAME: Joi.string().default('Updata'),
@@ -177,6 +212,37 @@ const configSchema = Joi.object({
   ENRICHMENT_CONCURRENCY: Joi.number().integer().min(1).max(10).default(3),
   ENRICHMENT_RESPECT_ROBOTS: Joi.boolean().default(true),
   ENRICHMENT_USER_AGENT: Joi.string().trim().default('UpdataCRM-Enrichment/1.0'),
+
+  // AI voice calling (OpenAI Realtime + LiveKit Agents + SIP). All secrets are
+  // server-only. The feature degrades to an honest "not configured" state when
+  // these are blank — it never fabricates a PSTN call.
+  PUBLIC_API_BASE_URL: Joi.string().uri().allow('').default(''), // reachable by the agent worker
+  AI_CALLING_WORKER_CONCURRENCY: Joi.number().integer().min(1).max(25).default(5),
+  AI_CALLING_AGENT_SECRET: Joi.string().allow('').default(''),   // signs per-call agent tokens
+  AI_CALLING_PHONE_HASH_SECRET: Joi.string().allow('').default(''),
+  AI_CALLING_REQUIRE_CONSENT: Joi.boolean().default(true),
+  AI_CALLING_TWILIO_FALLBACK_ENABLED: Joi.boolean().default(false),
+  AI_CALLING_TWILIO_FALLBACK_COUNTRIES: Joi.string().allow('').default(''),
+  OPENAI_REALTIME_MODEL: Joi.string().default('gpt-realtime'),
+  OPENAI_REALTIME_VOICE: Joi.string().default('alloy'),
+  LIVEKIT_URL: Joi.string().allow('').default(''),               // wss://xxx.livekit.cloud
+  LIVEKIT_API_KEY: Joi.string().allow('').default(''),
+  LIVEKIT_API_SECRET: Joi.string().allow('').default(''),
+  LIVEKIT_SIP_OUTBOUND_TRUNK_ID: Joi.string().allow('').default(''),
+  LIVEKIT_SIP_CALLER_ID: Joi.string().allow('').default(''),
+  LIVEKIT_TWILIO_SIP_OUTBOUND_TRUNK_ID: Joi.string().allow('').default(''),
+  TWILIO_VOICE_FROM_NUMBER: Joi.string().allow('').default(''),
+  // Bring-your-own SIP carrier (carrier-agnostic, non-Twilio: Telnyx, Plivo,
+  // Vonage, Peoplefone, Sipcall, …). When set and no trunk id is given, the
+  // LiveKit outbound trunk is auto-provisioned from these.
+  SIP_OUTBOUND_ADDRESS: Joi.string().allow('').default(''),      // e.g. sip.telnyx.com
+  SIP_OUTBOUND_NUMBER: Joi.string().allow('').default(''),       // your DID / caller-ID (E.164)
+  SIP_OUTBOUND_USERNAME: Joi.string().allow('').default(''),
+  SIP_OUTBOUND_PASSWORD: Joi.string().allow('').default(''),
+  SIP_OUTBOUND_TRANSPORT: Joi.string().valid('auto', 'udp', 'tcp', 'tls').default('auto'),
+  SIP_OUTBOUND_TRUNK_NAME: Joi.string().default('crm-outbound'),
+  LIVEKIT_AGENT_NAME: Joi.string().default('crm-voice-agent'),
+  LIVEKIT_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(15000),
 
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),

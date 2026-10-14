@@ -48,4 +48,13 @@ export const handlers = [
       ),
     ),
   ),
+
+  http.get(`${BASE}/messaging/leads/:id/consent`, ({ params }) => HttpResponse.json(ok({
+    leadId: String(params.id),
+    channels: [
+      { channel: 'email', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', suppression: null },
+      { channel: 'sms', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', suppression: null },
+      { channel: 'whatsapp', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', suppression: null },
+    ],
+  }))),
 ];

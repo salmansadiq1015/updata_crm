@@ -8,7 +8,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+import { Button as ButtonImpl } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
   ChevronUp,
@@ -18,7 +18,18 @@ import {
   Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/lib/i18n/language-context';
+import { useLanguage as useLanguageImpl } from '@/lib/i18n/language-context';
+
+type DrawerButtonProps = React.ComponentPropsWithRef<'button'> & {
+  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive' | 'link';
+  size?: 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg';
+  asChild?: boolean;
+};
+const Button = ButtonImpl as unknown as React.ComponentType<DrawerButtonProps>;
+const useLanguage = useLanguageImpl as unknown as () => {
+  t: (key: string, fallback?: string, variables?: Record<string, string | number | null | undefined>) => string;
+  isRTL?: boolean;
+};
 
 export type DrawerMode = 'view' | 'edit';
 export type DrawerSize = 'sm' | 'md' | 'lg';

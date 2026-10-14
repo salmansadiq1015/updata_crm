@@ -6,6 +6,7 @@ import { Select as SelectPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
+/** @param {React.ReactNode} node */
 function extractTextContent(node) {
   if (node == null || typeof node === 'boolean') return '';
   if (typeof node === 'string') return node;
@@ -15,12 +16,14 @@ function extractTextContent(node) {
   return '';
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Root>} props */
 function Select({
   ...props
 }) {
   return <SelectPrimitive.Root data-slot="select" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Group>} props */
 function SelectGroup({
   className,
   ...props
@@ -33,12 +36,14 @@ function SelectGroup({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Value>} props */
 function SelectValue({
   ...props
 }) {
   return <SelectPrimitive.Value data-slot="select-value" {...props} />;
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Trigger>} props */
 function SelectTrigger({
   className,
   size = "default",
@@ -71,6 +76,7 @@ function SelectTrigger({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Content>} props */
 function SelectContent({
   className,
   children,
@@ -108,6 +114,7 @@ function SelectContent({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Label>} props */
 function SelectLabel({
   className,
   ...props
@@ -120,6 +127,7 @@ function SelectLabel({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Item>} props */
 function SelectItem({
   className,
   children,
@@ -165,6 +173,7 @@ function SelectItem({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.Separator>} props */
 function SelectSeparator({
   className,
   ...props
@@ -177,6 +186,7 @@ function SelectSeparator({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>} props */
 function SelectScrollUpButton({
   className,
   ...props
@@ -194,6 +204,7 @@ function SelectScrollUpButton({
   );
 }
 
+/** @param {React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>} props */
 function SelectScrollDownButton({
   className,
   ...props

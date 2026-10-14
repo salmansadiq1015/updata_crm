@@ -12,6 +12,7 @@ import {
   List,
   MapPin,
   MapPinned,
+  Megaphone,
   Pencil,
   Plus,
   Radar,
@@ -68,9 +69,9 @@ import { copyText, mapsUrlForLead } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { ConvertDialog } from './convert-dialog';
 import { LeadBulkActionBar } from './lead-bulk-action-bar';
-import { LeadBulkEmailDialog } from './lead-bulk-email-dialog';
-import { LeadBulkWhatsAppDialog } from './lead-bulk-whatsapp-dialog';
-import type { BulkWhatsAppSummary } from './lead-bulk-whatsapp-dialog';
+import { CampaignWizard } from '@/modules/aiCalling/ui/campaign-wizard';
+import { LeadOutreachComposer } from './lead-outreach-composer';
+import type { OutreachChannel } from '../services/messaging-api';
 import { LeadCard } from './lead-card';
 import { LeadDetailDrawer } from './lead-detail-drawer';
 import { LeadExportMenu } from './lead-export-menu';
@@ -78,6 +79,8 @@ import { ExtensionConnectCard } from './extension-connect-card';
 import { ExtensionImportBanner } from './extension-import-banner';
 import { useExtensionImportProgress } from '../hooks/use-extension-import-progress';
 import { LeadFilterBar } from './lead-filter-bar';
+import { LeadContactEditor } from './lead-contact-editor';
+import type { LeadContactField } from './lead-contact-editor';
 import { LeadFormDialog } from './lead-form-dialog';
 import { LeadImportDialog } from './lead-import-dialog';
 import { useLeadColumns } from './lead-table-columns';
@@ -134,15 +137,21 @@ export function LeadListView() {
   // ── Local view state ───────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [mapOpen, setMapOpen] = useState(false);
+  // AI calling: open the campaign wizard pre-filled with the selected leads.
+  const [aiCallLeadIds, setAiCallLeadIds] = useState<string[] | null>(null);
   const [pageSize, setPageSize] = useState(DEFAULT_LEAD_PAGE_SIZE);
   const [formState, setFormState] = useState<{ open: boolean; lead: Lead | null }>({ open: false, lead: null });
+  const [contactEditor, setContactEditor] = useState<{
+    open: boolean;
+    lead: Lead | null;
+    field: LeadContactField;
+  }>({ open: false, lead: null, field: 'email' });
   const [convertTarget, setConvertTarget] = useState<Lead | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   // Bulk contact dialogs snapshot the selection on open, so clearing the
   // selection on close never empties the list the dialog is working on.
-  const [emailState, setEmailState] = useState<{ open: boolean; leads: Lead[] }>({ open: false, leads: [] });
-  const [whatsappState, setWhatsappState] = useState<{ open: boolean; leads: Lead[] }>({ open: false, leads: [] });
+  const [outreachState, setOutreachState] = useState<{ open: boolean; leads: Lead[]; channel: OutreachChannel }>({ open: false, leads: [], channel: 'email' });
   // Bulk enrich runs server-side as a job: confirm → fire → poll by id → summarise.
   const [enrichConfirmOpen, setEnrichConfirmOpen] = useState(false);
   const [enrichJobId, setEnrichJobId] = useState<string | null>(null);
@@ -311,6 +320,10 @@ export function LeadListView() {
     [t],
   );
 
+  const handleEditContact = useCallback((lead: Lead, field: LeadContactField) => {
+    setContactEditor({ open: true, lead, field });
+  }, []);
+
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     const { id } = deleteTarget;
@@ -349,20 +362,7 @@ export function LeadListView() {
 
   // Snapshot the selected leads for each dialog (same summary-toast philosophy as
   // finishBulk: one truthful line, never a claim of delivery).
-  const handleBulkEmail = () => setEmailState({ open: true, leads: selectedLeads });
-  const handleBulkWhatsApp = () => setWhatsappState({ open: true, leads: selectedLeads });
-
-  const finishBulkEmail = (result: BulkLeadResult) => {
-    const sent = result.succeeded.length;
-    const failed = result.failed.length;
-    const summary = t('leads.bulk.emailDialog.summary', '{sent} sent, {failed} failed', { sent, failed });
-    if (failed === 0) showSuccess(summary);
-    else showError(summary);
-  };
-
-  const finishBulkWhatsApp = ({ opened, skipped }: BulkWhatsAppSummary) => {
-    showSuccess(t('leads.bulk.whatsapp.summary', '{opened} opened, {skipped} skipped', { opened, skipped }));
-  };
+  const handleOutreach = (channel: OutreachChannel) => setOutreachState({ open: true, leads: selectedLeads, channel });
 
   // Bulk enrich: a confirmed POST returns a jobId we poll until it settles, then
   // one summary toast (enriched/skipped/failed) and a refresh — the same honest,
@@ -380,7 +380,9 @@ export function LeadListView() {
     });
     if (data.status === 'failed' || failed > 0) showError(summary);
     else showSuccess(summary);
-    setEnrichJobId(null);
+    // Settle local polling state after the query notification commit. The
+    // compare guards a newer job if one was started before this microtask runs.
+    queueMicrotask(() => setEnrichJobId((current) => (current === enrichJobId ? null : current)));
     clearSelection();
     void queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
   }, [enrichJob.data, enrichJobId, clearSelection, queryClient, t]);
@@ -398,7 +400,13 @@ export function LeadListView() {
     }
   };
 
-  const columns = useLeadColumns({ users, onOpen: openLead, onCopyPhone: handleCopyPhone });
+  const columns = useLeadColumns({
+    users,
+    canWrite,
+    onOpen: openLead,
+    onCopyPhone: handleCopyPhone,
+    onEditContact: handleEditContact,
+  });
 
   const renderRowActions = useCallback(
     ({ row }: { row: ShellRowRef<Lead> }) => {
@@ -574,6 +582,15 @@ export function LeadListView() {
 
               {canExport && <LeadExportMenu />}
 
+              {canExport && (
+                <Button asChild variant="outline" className="h-9 gap-2">
+                  <Link href="/leads/outreach">
+                    <Megaphone className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Outreach</span>
+                  </Link>
+                </Button>
+              )}
+
               {/* Chrome Extension connect/status — gated by lead:read (same as
                   the page itself). Does not interfere with existing actions. */}
               {canExport && <ExtensionConnectCard />}
@@ -668,8 +685,6 @@ export function LeadListView() {
                 isFetching: query.isFetching,
                 onNext: () => void goNext(),
                 onPrev: goPrev,
-                currentPage,
-                totalPages,
               }}
               renderRowActions={renderRowActions}
             />
@@ -740,38 +755,43 @@ export function LeadListView() {
         canAssign={canWrite}
         canDelete={canDelete}
         canEmail={canEmail}
+        canSms={canEmail}
         canWhatsApp={canWhatsApp}
         canEnrich={canEnrich}
+        canAiCall={canWrite}
         isBusy={bulkBusy}
         onAssign={(userId) => void handleBulkAssign(userId)}
         onDelete={() => void handleBulkDelete()}
-        onEmail={handleBulkEmail}
-        onWhatsApp={handleBulkWhatsApp}
+        onEmail={() => handleOutreach('email')}
+        onSms={() => handleOutreach('sms')}
+        onWhatsApp={() => handleOutreach('whatsapp')}
         onEnrich={() => setEnrichConfirmOpen(true)}
+        onAiCall={() => setAiCallLeadIds(visibleSelectedIds)}
         onClear={clearSelection}
       />
 
-      <LeadBulkEmailDialog
-        open={emailState.open}
-        leads={emailState.leads}
+      {aiCallLeadIds && aiCallLeadIds.length ? (
+        <CampaignWizard
+          initialLeadIds={aiCallLeadIds}
+          onClose={() => setAiCallLeadIds(null)}
+          onCreated={() => { setAiCallLeadIds(null); clearSelection(); }}
+        />
+      ) : null}
+
+      <LeadOutreachComposer
+        open={outreachState.open}
+        leads={outreachState.leads}
+        defaultChannel={outreachState.channel}
+        filterSelection={params}
+        totalMatching={totalLeads}
         onOpenChange={(open) => {
-          setEmailState((state) => ({ ...state, open }));
+          setOutreachState((state) => ({ ...state, open }));
           if (!open) {
             clearSelection();
             void queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
           }
         }}
-        onComplete={finishBulkEmail}
-      />
-
-      <LeadBulkWhatsAppDialog
-        open={whatsappState.open}
-        leads={whatsappState.leads}
-        onOpenChange={(open) => {
-          setWhatsappState((state) => ({ ...state, open }));
-          if (!open) clearSelection();
-        }}
-        onComplete={finishBulkWhatsApp}
+        onComplete={() => void queryClient.invalidateQueries({ queryKey: leadKeys.lists() })}
       />
 
       <LeadDetailDrawer
@@ -793,6 +813,15 @@ export function LeadListView() {
         lead={formState.lead}
         users={users}
       />
+
+      {contactEditor.open && (
+        <LeadContactEditor
+          lead={contactEditor.lead}
+          open
+          initialFocus={contactEditor.field}
+          onOpenChange={(open) => setContactEditor((state) => ({ ...state, open }))}
+        />
+      )}
 
       {canImport && <LeadImportDialog open={importOpen} onOpenChange={setImportOpen} />}
 

@@ -85,7 +85,7 @@ describe('useFolderMutations', () => {
       await waitFor(() => expect(result.current.createFolder.isSuccess).toBe(true));
 
       expect(capturedBody).not.toBeNull();
-      expect(capturedBody?.name).toBe('New Folder');
+      expect((capturedBody as unknown as Record<string, unknown>).name).toBe('New Folder');
     });
 
     it('can create a folder with optional color and icon', async () => {
@@ -113,8 +113,8 @@ describe('useFolderMutations', () => {
 
       await waitFor(() => expect(result.current.createFolder.isSuccess).toBe(true));
 
-      expect(capturedBody?.color).toBe('#ff0000');
-      expect(capturedBody?.icon).toBe('star');
+      expect((capturedBody as unknown as Record<string, unknown>).color).toBe('#ff0000');
+      expect((capturedBody as unknown as Record<string, unknown>).icon).toBe('star');
     });
   });
 
@@ -166,7 +166,7 @@ describe('useFolderMutations', () => {
       await waitFor(() => expect(result.current.updateFolder.isSuccess).toBe(true));
 
       expect(updatedId).toBe('1');
-      expect(capturedBody?.name).toBe('Renamed');
+      expect((capturedBody as unknown as Record<string, unknown>).name).toBe('Renamed');
     });
   });
 });

@@ -26,6 +26,7 @@ import { AssigneeSelector } from './assignee-selector';
 import { TaskSubtasksPanel } from './task-subtasks-panel';
 import { taskApi } from '../services/task-api';
 import { useTaskSubtasks, useTaskNotes } from '../hooks/use-task-queries';
+import type { WorkspaceUser } from '../hooks/use-workspace-users';
 
 const STATUS_ICON = {
   OPEN:        Circle,
@@ -61,12 +62,6 @@ type TaskDetailDrawerProps = {
   users?: WorkspaceUser[];
   onDuplicateTask?: (id: string) => void;
   onSetLock?: (id: string, locked: boolean, expectedVersion?: number) => void;
-};
-
-type WorkspaceUser = {
-  id: string;
-  firstName?: string;
-  lastName?: string;
 };
 
 const toDateValue = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
@@ -531,7 +526,7 @@ export default function TaskDetailDrawer({
                         {t('tasks.noActivity')}
                       </p>
                     )}
-                    {(notesQuery.data ?? []).map((note, index) => (
+                    {((notesQuery.data ?? []) as TaskNote[]).map((note, index) => (
                       /* Some realtime-appended notes arrive without an id yet —
                          fall back to a positional key so React doesn't warn. */
                       <ActivityNote key={note.id || `note-${index}`} note={note} users={users} />
@@ -545,11 +540,11 @@ export default function TaskDetailDrawer({
                       <div className="flex-1">
                         <Textarea
                           value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNoteText(e.target.value)}
                           placeholder={t('tasks.writeNote')}
                           rows={2}
                           className="min-h-0 resize-none rounded-xl border-border/50 bg-background/60 px-4 py-3 text-xs placeholder:text-muted-foreground/40 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePostNote();
                           }}
                         />

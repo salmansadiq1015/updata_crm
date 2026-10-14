@@ -83,6 +83,22 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   'crm:write': [
     'documents:write',
     'files:upload',
+    // AI voice calling: anyone who can write CRM data can build/run call campaigns.
+    'ai-calling:read',
+    'ai-calling:write',
+  ],
+  // Reading leads/CRM data is enough to view call campaigns, history and analytics.
+  'crm:read': [
+    'ai-calling:read',
+  ],
+  'lead:read': [
+    'ai-calling:read',
+  ],
+  // Full CRM administration covers the sensitive call operations (reconcile).
+  'crm:admin': [
+    'ai-calling:read',
+    'ai-calling:write',
+    'ai-calling:admin',
   ],
   'field-service:read': [
     'mobile:read',

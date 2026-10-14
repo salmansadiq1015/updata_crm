@@ -13,6 +13,9 @@ import {
   groupSettingsItemsByCategory,
 } from '../utils/settings-hub-utils';
 
+type SettingsItem = (typeof SETTINGS_HUB_ITEMS)[number];
+type SettingsCategory = (typeof SETTINGS_HUB_CATEGORIES)[number];
+
 function hasPermission(permission: string) {
   return new Set(['users:read', 'roles:read', 'settings:read', 'templates:read']).has(permission);
 }
@@ -31,15 +34,15 @@ function translate(key: string) {
 describe('settings hub utilities', () => {
   test('filters visible settings by permissions', () => {
     const visible = getVisibleSettingsItems(SETTINGS_HUB_ITEMS, hasPermission);
-    const ids = visible.map((item) => item.id);
+    const ids = visible.map((item: SettingsItem) => item.id);
 
     // The rule, not the roster: every visible item is one this user may open,
     // and nothing they may open is hidden. Spelling the list out here meant
     // that adding an ordinary settings entry broke a test with nothing to say
     // about it.
-    expect(visible.every((item) => hasPermission(item.permission))).toBe(true);
+    expect(visible.every((item: SettingsItem) => hasPermission(item.permission))).toBe(true);
     expect(ids).toEqual(expect.arrayContaining(['users', 'roles', 'system', 'templates']));
-    expect(SETTINGS_HUB_ITEMS.filter((item) => hasPermission(item.permission)).length)
+    expect(SETTINGS_HUB_ITEMS.filter((item: SettingsItem) => hasPermission(item.permission)).length)
       .toBe(visible.length);
   });
 
@@ -47,11 +50,11 @@ describe('settings hub utilities', () => {
     const visible = getVisibleSettingsItems(SETTINGS_HUB_ITEMS, hasPermission);
     const categories = getVisibleSettingsCategories(SETTINGS_HUB_CATEGORIES, visible);
 
-    const ids = categories.map((category) => category.id);
+    const ids = categories.map((category: SettingsCategory) => category.id);
     expect(ids[0]).toBe('all');
     // Every category kept has something in it, and nothing with something in
     // it was dropped.
-    const withItems = new Set(visible.map((item) => item.category));
+    const withItems = new Set(visible.map((item: SettingsItem) => item.category));
     expect(new Set(ids.slice(1))).toEqual(withItems);
   });
 
@@ -62,13 +65,13 @@ describe('settings hub utilities', () => {
       category: 'documents',
       search: 'pdf',
       translate,
-    }).map((item) => item.id)).toEqual(['templates']);
+    }).map((item: SettingsItem) => item.id)).toEqual(['templates']);
 
     expect(filterSettingsHubItems(visible, {
       category: SETTINGS_HUB_DEFAULT_CATEGORY,
       search: 'settings:read',
       translate,
-    }).map((item) => item.id)).toEqual(['system']);
+    }).map((item: SettingsItem) => item.id)).toEqual(['system']);
 
     expect(filterSettingsHubItems(visible, {
       category: 'integrations',
@@ -85,7 +88,7 @@ describe('settings hub utilities', () => {
       available: visible.length,
       // 'all' is a filter, not a section of its own.
       categories: categories.length - 1,
-      protected: visible.filter((item) => item.permission).length,
+      protected: visible.filter((item: SettingsItem) => item.permission).length,
       healthStatus: 'degraded',
       healthLabelKey: 'settingsHub.health.degraded',
       healthProgress: 65,

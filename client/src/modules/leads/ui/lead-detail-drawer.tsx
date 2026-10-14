@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,6 +13,7 @@ import {
   Clock,
   Compass,
   ExternalLink,
+  FilterX,
   Globe,
   Hash,
   Loader2,
@@ -21,6 +23,7 @@ import {
   Navigation,
   Pencil,
   Phone,
+  RefreshCw,
   Search,
   Smartphone,
   Sparkles,
@@ -42,8 +45,8 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { DetailDrawer } from '@/shared/components/detail-drawer';
 import type { DrawerMode } from '@/shared/components/detail-drawer';
 import { RatingStars } from './rating-stars';
-import { EmailComposeModal as EmailComposeModalImpl } from '@/modules/doctpl/components/EmailComposeModal';
 import { EmailHistoryPanel as EmailHistoryPanelImpl } from '@/modules/doctpl/components/email-history-panel';
+import { LeadCallsTab } from '@/modules/aiCalling/ui/lead-calls-tab';
 import { useDeleteLead, useEnrichLead, useLead, useLeadContactLog, useUpdateLead } from '../hooks/use-leads';
 import type {
   Lead,
@@ -56,6 +59,7 @@ import type {
 import {
   Button,
   ConfirmDialog,
+  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -64,7 +68,10 @@ import {
   useLanguage,
 } from './lead-ui-kit';
 import type { TranslateFn } from './lead-ui-kit';
-import { LeadWhatsAppDialog } from './lead-whatsapp-dialog';
+import { LeadOutreachComposer } from './lead-outreach-composer';
+import { LeadConsentPanel } from './lead-consent-panel';
+import type { OutreachChannel } from '../services/messaging-api';
+import { messagingApi } from '../services/messaging-api';
 import {
   LEAD_EDITABLE_STATUSES,
   LEAD_SOURCE_ICON,
@@ -97,19 +104,12 @@ import { ConvertDialog } from './convert-dialog';
 import { LtrText } from './ltr-text';
 import { useDiscardGuard } from './use-discard-guard';
 import { LEAD_STATUS_META, LeadStatusBadge } from './status-badge';
+import {
+  activeHistoryFilterCount,
+  buildProviderHistoryParams,
+  isHistoryDateRangeValid,
+} from './provider-history-filters';
 
-// The e-mail composer + history panel are shared, untyped (.jsx) doctpl
-// components; re-type them here with the props the drawer passes (the module's
-// own `lead-ui-kit` pattern, kept local so the composer isn't pulled into every
-// leads bundle).
-const EmailComposeModal = EmailComposeModalImpl as unknown as ComponentType<{
-  open: boolean;
-  onClose: () => void;
-  onSent?: (record: unknown) => void;
-  requireAttachment?: boolean;
-  leadId?: string;
-  initialValues?: Record<string, unknown>;
-}>;
 const EmailHistoryPanel = EmailHistoryPanelImpl as unknown as ComponentType<{
   sourceModule?: string;
   sourceRecordId: string;
@@ -263,6 +263,86 @@ function ContactLog({
   );
 }
 
+function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: string }) {
+  const [page, setPage] = useState(1);
+  const [channel, setChannel] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [provider, setProvider] = useState('all');
+  const [campaignId, setCampaignId] = useState('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const dateRangeValid = isHistoryDateRangeValid(from, to);
+  const activeFilterCount = activeHistoryFilterCount({ channel: channel as OutreachChannel | 'all', status, provider, campaignId, from, to });
+  const campaigns = useQuery({
+    queryKey: ['messaging', 'campaigns', 'history-filter'],
+    queryFn: () => messagingApi.listCampaigns({ limit: 100 }),
+    staleTime: 60_000,
+  });
+  const query = useQuery({
+    queryKey: ['messaging', 'lead-history', leadId, page, channel, status, provider, campaignId, from, to],
+    queryFn: () => messagingApi.leadHistoryPage(leadId, buildProviderHistoryParams({
+      page, channel: channel as OutreachChannel | 'all', status, provider, campaignId, from, to,
+    })),
+    enabled: dateRangeValid,
+    staleTime: 15_000,
+  });
+  const entries = query.data?.data ?? [];
+  const resetFilters = () => {
+    setChannel('all');
+    setStatus('all');
+    setProvider('all');
+    setCampaignId('all');
+    setFrom('');
+    setTo('');
+    setPage(1);
+  };
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-border/70 bg-muted/[0.16] p-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div><p className="text-xs font-semibold">Provider message evidence</p><p className="mt-0.5 text-[11px] text-muted-foreground">Filter verified outbound and inbound provider records.</p></div>
+          <div className="flex items-center gap-2">
+            {query.isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Refreshing history" />}
+            {activeFilterCount > 0 && <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={resetFilters}><FilterX className="h-3.5 w-3.5" /> Clear {activeFilterCount}</Button>}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={channel} onValueChange={(value) => { setChannel(value); setPage(1); }}><SelectTrigger aria-label="History channel" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All channels</SelectItem><SelectItem value="email">Email</SelectItem><SelectItem value="sms">SMS</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem></SelectContent></Select>
+          <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger aria-label="History status" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{['received', 'draft', 'queued', 'submitting', 'accepted', 'sent', 'delivered', 'read', 'failed', 'undelivered', 'unknown', 'suppressed', 'ineligible', 'cancelled'].map((item) => <SelectItem key={item} value={item}><span className="capitalize">{item}</span></SelectItem>)}</SelectContent></Select>
+          <Select value={provider} onValueChange={(value) => { setProvider(value); setPage(1); }}><SelectTrigger aria-label="History provider" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All providers</SelectItem><SelectItem value="existing_email">Email</SelectItem><SelectItem value="meta_whatsapp">Meta</SelectItem><SelectItem value="textbee">TextBee</SelectItem><SelectItem value="twilio">Twilio</SelectItem></SelectContent></Select>
+          <Select value={campaignId} onValueChange={(value) => { setCampaignId(value); setPage(1); }} disabled={campaigns.isLoading}><SelectTrigger aria-label="History campaign" className="h-8 text-xs"><SelectValue placeholder="All campaigns" /></SelectTrigger><SelectContent><SelectItem value="all">All campaigns</SelectItem>{(campaigns.data?.data ?? []).map((campaign) => <SelectItem key={campaign._id} value={campaign._id}>{campaign.name}</SelectItem>)}</SelectContent></Select>
+          <Input aria-label="History from date" title="History from date" type="date" className="h-8 text-xs" max={to || undefined} value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} />
+          <Input aria-label="History to date" title="History to date" type="date" className="h-8 text-xs" min={from || undefined} value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} />
+        </div>
+      </div>
+      {!dateRangeValid ? <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">The end date must be on or after the start date.</p> : query.isError ? <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2"><p className="text-xs text-destructive">Provider history could not be loaded.</p><Button type="button" size="sm" variant="outline" onClick={() => void query.refetch()}><RefreshCw className="h-3.5 w-3.5" /> Retry</Button></div> : query.isLoading ? <div className="skeleton-shimmer h-20 rounded-xl bg-muted" aria-hidden="true" /> : !entries.length ? <MutedText>No provider messages match these filters.</MutedText> : <ul className="space-y-2" aria-label="Provider message history">
+      {entries.map((entry) => {
+        const Icon = entry.channel === 'email' ? Mail : entry.channel === 'sms' ? Smartphone : MessageCircle;
+        const campaign = typeof entry.campaignId === 'object' ? entry.campaignId?.name : null;
+        const evidenceAt = entry.readAt || entry.deliveredAt || entry.sentAt || entry.acceptedAt;
+        return (
+          <li key={entry._id} className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Icon className="h-3.5 w-3.5 text-primary" /></div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span>{entry.direction === 'inbound' ? 'Inbound' : 'Outbound'} {entry.channel}</span><span>·</span><span>{entry.provider || 'pending provider'}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 normal-case capitalize text-foreground">{entry.status}</span>
+                <span>{formatRelativeTime(entry.createdAt, locale)}</span>
+              </div>
+              <p className="mt-1 truncate text-sm text-foreground">{entry.rendered?.subject || entry.rendered?.bodyText || campaign || 'Message'}</p>
+              {(campaign || evidenceAt) && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{campaign ? `Campaign: ${campaign}` : 'Direct message'}{evidenceAt ? ` · ${entry.status} ${formatRelativeTime(evidenceAt, locale)}` : ''}</p>}
+              {entry.error?.message && <p className="mt-0.5 text-xs text-destructive">{entry.error.message}</p>}
+              {entry.providerMessageId && <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{entry.providerMessageId}</p>}
+            </div>
+          </li>
+        );
+      })}
+      </ul>}
+      {(query.data?.pagination.pages ?? 0) > 1 && <div className="flex items-center justify-between"><Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><span className="text-xs text-muted-foreground">Page {page} of {query.data?.pagination.pages}</span><Button size="sm" variant="ghost" disabled={page >= (query.data?.pagination.pages ?? 1)} onClick={() => setPage((value) => value + 1)}>Next</Button></div>}
+    </div>
+  );
+}
+
 // Google Places price level → a localized label. The server stores the Places
 // (New) string enum (e.g. 'PRICE_LEVEL_MODERATE'); legacy data / imports may use a
 // 0–4 number. Known values map to the shared `leadgen.priceLevel.*` keys; an
@@ -373,8 +453,7 @@ export function LeadDetailDrawer({
   const discard = useDiscardGuard();
   const [convertOpen, setConvertOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [outreach, setOutreach] = useState<{ open: boolean; channel: OutreachChannel }>({ open: false, channel: 'email' });
 
   // Edit mode belongs to one lead in one opening: reset it whenever either
   // changes (state adjusted during render, no effect needed).
@@ -384,8 +463,7 @@ export function LeadDetailDrawer({
     setTrackedKey(currentKey);
     setMode('view');
     setFormPending(false);
-    setEmailOpen(false);
-    setWhatsAppOpen(false);
+    setOutreach((value) => ({ ...value, open: false }));
   }
 
   const isConverted = lead?.status === 'converted';
@@ -459,8 +537,9 @@ export function LeadDetailDrawer({
         canEmail={canEmail}
         canWhatsApp={canWhatsApp}
         canEnrich={canEnrich}
-        onEmail={() => setEmailOpen(true)}
-        onWhatsApp={() => setWhatsAppOpen(true)}
+        onEmail={() => setOutreach({ open: true, channel: 'email' })}
+        onSms={() => setOutreach({ open: true, channel: 'sms' })}
+        onWhatsApp={() => setOutreach({ open: true, channel: 'whatsapp' })}
         onPatch={patchLead}
       />
     );
@@ -559,19 +638,16 @@ export function LeadDetailDrawer({
         onConfirm={handleDelete}
       />
 
-      {/* Single-lead contact: reuse the shared composer (no mandatory attachment
-          for a plain message) and the WhatsApp deep-link dialog. */}
+      {/* Single-lead contact uses the same consent-aware provider pipeline as
+          bulk outreach; it never opens WhatsApp Web or claims delivery. */}
       {lead && (
-        <>
-          <EmailComposeModal
-            open={emailOpen}
-            onClose={() => setEmailOpen(false)}
-            requireAttachment={false}
-            leadId={lead.id}
-            initialValues={{ to: lead.email || '', sourceModule: 'lead', sourceRecordId: lead.id }}
-          />
-          <LeadWhatsAppDialog lead={lead} open={whatsAppOpen} onOpenChange={setWhatsAppOpen} />
-        </>
+        <LeadOutreachComposer
+          open={outreach.open}
+          leads={[lead]}
+          defaultChannel={outreach.channel}
+          totalMatching={1}
+          onOpenChange={(next) => setOutreach((value) => ({ ...value, open: next }))}
+        />
       )}
     </>
   );
@@ -588,6 +664,7 @@ type LeadDetailBodyProps = {
   canWhatsApp: boolean;
   canEnrich: boolean;
   onEmail: () => void;
+  onSms: () => void;
   onWhatsApp: () => void;
   onPatch: (patch: { status?: LeadStatus; assignedTo?: string | null }) => void;
 };
@@ -601,6 +678,7 @@ function LeadDetailBody({
   canWhatsApp,
   canEnrich,
   onEmail,
+  onSms,
   onWhatsApp,
   onPatch,
 }: LeadDetailBodyProps) {
@@ -688,6 +766,7 @@ function LeadDetailBody({
   // Email + WhatsApp open the in-app composer/deep-link dialog rather than a bare
   // link, so they are permission-gated and only shown when the lead can be reached.
   if (canEmail && mailHref) quickActions.push({ key: 'email', label: t('leads.action.email', 'Email'), icon: Mail, onClick: onEmail });
+  if (canEmail && callHref) quickActions.push({ key: 'sms', label: 'SMS', icon: Smartphone, onClick: onSms });
   if (canWhatsApp && waHref) quickActions.push({ key: 'whatsapp', label: t('leads.action.whatsapp', 'WhatsApp'), icon: MessageCircle, onClick: onWhatsApp });
   if (webHref) quickActions.push({ key: 'website', label: t('leads.action.website', 'Website'), icon: Globe, href: webHref, external: true });
   if (mapsHref) quickActions.push({ key: 'maps', label: t('leads.action.openMaps', 'Open in Google Maps'), icon: Navigation, href: mapsHref, external: true });
@@ -905,6 +984,10 @@ function LeadDetailBody({
         ) : (
           <MutedText>{t('leads.drawer.noContact', 'No contact details yet.')}</MutedText>
         )}
+      </Section>
+
+      <Section title="Consent & suppression">
+        <LeadConsentPanel leadId={lead.id} canWrite={canEmail} />
       </Section>
 
       {/* Social profiles (website-scraped) — only platforms that actually have a link */}
@@ -1164,6 +1247,7 @@ function LeadDetailBody({
       <Section title={t('leads.drawer.sectionHistory', 'Communication')}>
         <div className="space-y-4">
           <EmailHistoryPanel sourceModule="lead" sourceRecordId={lead.id} />
+          <ProviderMessageHistory leadId={lead.id} locale={locale} />
           <ContactLog
             entries={contactLog.data ?? []}
             loading={contactLog.isLoading}
@@ -1171,6 +1255,11 @@ function LeadDetailBody({
             t={t}
           />
         </div>
+      </Section>
+
+      {/* AI voice calls: campaigns, dispositions, collected answers, status history */}
+      <Section title={t('leads.drawer.sectionAiCalls', 'AI Calls')}>
+        <LeadCallsTab leadId={lead.id} />
       </Section>
 
       {/* Record details */}

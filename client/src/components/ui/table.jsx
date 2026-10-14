@@ -4,6 +4,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/** @param {React.ComponentProps<'table'>} props */
 function Table({
   className,
   ...props
@@ -18,6 +19,7 @@ function Table({
   );
 }
 
+/** @param {React.ComponentProps<'thead'>} props */
 function TableHeader({
   className,
   ...props
@@ -30,6 +32,7 @@ function TableHeader({
   );
 }
 
+/** @param {React.ComponentProps<'tbody'>} props */
 function TableBody({
   className,
   ...props
@@ -42,6 +45,7 @@ function TableBody({
   );
 }
 
+/** @param {React.ComponentProps<'tfoot'>} props */
 function TableFooter({
   className,
   ...props
@@ -54,6 +58,7 @@ function TableFooter({
   );
 }
 
+/** @param {React.ComponentProps<'tr'>} props */
 function TableRow({
   className,
   ...props
@@ -69,6 +74,7 @@ function TableRow({
   );
 }
 
+/** @param {React.ComponentProps<'th'>} props */
 function TableHead({
   className,
   ...props
@@ -84,6 +90,7 @@ function TableHead({
   );
 }
 
+/** @param {React.ComponentProps<'td'>} props */
 function TableCell({
   className,
   ...props
@@ -99,6 +106,7 @@ function TableCell({
   );
 }
 
+/** @param {React.ComponentProps<'caption'>} props */
 function TableCaption({
   className,
   ...props

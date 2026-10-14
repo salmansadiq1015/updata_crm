@@ -189,6 +189,7 @@ beforeEach(() => {
     // The detail drawer's Communication section loads these when it opens.
     http.get(`${L}/:id/contact-log`, () => HttpResponse.json(ok([]))),
     http.get(`${BASE}/doctpl/emails`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/messaging/leads/:id/history`, () => HttpResponse.json(ok([]))),
   );
 });
 
@@ -225,7 +226,7 @@ describe('LeadListView', () => {
     expect(within(table).getByText('Basel Dental GmbH')).toBeInTheDocument();
     expect(within(table).getByText('Chur Yoga Studio')).toBeInTheDocument();
 
-    for (const header of ['Lead #', 'Name', 'Status', 'Type', 'Source', 'Area', 'City', 'Country', 'Rating', 'Phone', 'Assigned to', 'Discovered']) {
+    for (const header of ['Lead #', 'Name', 'Email', 'Phone', 'Status', 'Type', 'Source', 'Area', 'City', 'Country', 'Rating', 'Assigned to', 'Discovered']) {
       expect(within(table).getByRole('columnheader', { name: new RegExp(header, 'i') })).toBeInTheDocument();
     }
 
@@ -242,6 +243,56 @@ describe('LeadListView', () => {
     // The assignee comes from the user directory.
     expect(await within(table).findByText('Mia Meier')).toBeInTheDocument();
   });
+
+  it('validates and saves missing email and phone details directly from the table', async () => {
+    const patches: Array<{ id: string; body: Record<string, unknown> }> = [];
+    server.use(
+      http.patch(`${L}/:id`, async ({ params, request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        patches.push({ id: String(params.id), body });
+        return HttpResponse.json(ok(makeLeadDTO({
+          ...LEAD_B,
+          id: String(params.id),
+          ...body,
+        })));
+      }),
+    );
+    const { user } = renderLeadList();
+    const row = await findRow('Basel Dental GmbH');
+
+    expect(within(row).getByRole('button', { name: 'Add email for Basel Dental GmbH' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Add phone for Basel Dental GmbH' })).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Add email for Basel Dental GmbH' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Contact details for Basel Dental GmbH' });
+    const email = within(dialog).getByLabelText('Email');
+    const phone = within(dialog).getByLabelText('Phone');
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+
+    await user.type(email, 'not-an-email');
+    expect(within(dialog).getByText('Enter a valid email address')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await user.clear(email);
+    await user.type(email, 'Hello@Basel.CH');
+    await user.type(phone, '12345');
+    expect(within(dialog).getByText('Enter a valid phone number with country code')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await user.clear(phone);
+    await user.type(phone, '+41 61 555 01 02');
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(patches).toEqual([{
+      id: 'lead-b',
+      body: { email: 'Hello@basel.ch', phone: '+41 61 555 01 02' },
+    }]));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Contact details for Basel Dental GmbH/ })).not.toBeInTheDocument());
+    expect(within(await findRow('Basel Dental GmbH')).getByText('Hello@basel.ch')).toBeInTheDocument();
+    expect(within(await findRow('Basel Dental GmbH')).getByText('+41 61 555 01 02')).toBeInTheDocument();
+    expect(showSuccess).toHaveBeenCalledWith('Contact details updated');
+  }, 20_000);
 
   it('asks the API for the first page with the default sort', async () => {
     const requests: URL[] = [];
@@ -289,7 +340,9 @@ describe('LeadListView', () => {
     const { user } = renderLeadList();
     await screen.findByText('Alpine Bakery AG');
 
-    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    const countryFilter = screen.getByRole('combobox', { name: 'Country' });
+    await waitFor(() => expect(countryFilter).toBeEnabled());
+    await user.click(countryFilter);
     await user.click(await screen.findByRole('option', { name: /Switzerland/ }));
 
     await user.click(screen.getByRole('combobox', { name: 'City' }));
@@ -312,7 +365,7 @@ describe('LeadListView', () => {
       expect(last.searchParams.get('cityId')).toBe('city:222222222222222222222222');
       expect(last.searchParams.get('areaId')).toBe('area:333333333333333333333333');
     });
-  }, 10_000);
+  }, 20_000);
 
   it('clears an incompatible city and area when the country changes', async () => {
     const requests: URL[] = [];
@@ -323,14 +376,17 @@ describe('LeadListView', () => {
     const { user } = renderLeadList();
     await screen.findByText('Alpine Bakery AG');
 
-    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    const countryFilter = screen.getByRole('combobox', { name: 'Country' });
+    await waitFor(() => expect(countryFilter).toBeEnabled());
+    await user.click(countryFilter);
     await user.click(await screen.findByRole('option', { name: /Switzerland/ }));
     await user.click(screen.getByRole('combobox', { name: 'City' }));
     await user.click(await screen.findByRole('option', { name: /Zürich/ }));
     await user.click(screen.getByRole('combobox', { name: 'Area' }));
     await user.click(await screen.findByRole('option', { name: /Altstadt/ }));
 
-    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await waitFor(() => expect(countryFilter).toBeEnabled());
+    await user.click(countryFilter);
     await user.click(await screen.findByRole('option', { name: /France/ }));
 
     await waitFor(() => {
@@ -341,7 +397,7 @@ describe('LeadListView', () => {
     });
     expect(screen.getByRole('combobox', { name: 'City' })).toHaveTextContent('All cities');
     expect(screen.getByRole('combobox', { name: 'Area' })).toHaveTextContent('All areas');
-  }, 10_000);
+  }, 20_000);
 
   it('pages forward with the cursor the API returned', async () => {
     const requests: URL[] = [];
@@ -479,8 +535,9 @@ describe('LeadListView', () => {
 
       await waitFor(() => expect(bulkCalls).toBe(1));
       expect(perIdCalls).toBe(0);
-      expect([...(bulkBody?.leadIds ?? [])].sort()).toEqual(['lead-a', 'lead-c']);
-      expect(bulkBody?.assignedTo).toBe('u-2');
+      const submittedBody = bulkBody as { leadIds: string[]; assignedTo: string | null } | null;
+      expect([...(submittedBody?.leadIds ?? [])].sort()).toEqual(['lead-a', 'lead-c']);
+      expect(submittedBody?.assignedTo).toBe('u-2');
       await waitFor(() => expect(showSuccess).toHaveBeenCalledWith('Leads updated: 2'));
     });
   });

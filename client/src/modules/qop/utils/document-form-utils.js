@@ -39,6 +39,7 @@ export const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
 ];
 
+/** @param {unknown} payload @returns {any[]} */
 export function normalizeReferenceItems(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
@@ -55,6 +56,7 @@ export function normalizeReferenceItems(payload) {
   return candidates.find(Array.isArray) ?? [];
 }
 
+/** @param {unknown} [departments] */
 export function buildDepartmentOptions(departments = []) {
   return normalizeReferenceItems(departments).map((d) => ({
     value: d._id ?? d.id,
@@ -63,6 +65,7 @@ export function buildDepartmentOptions(departments = []) {
   }));
 }
 
+/** @param {unknown} [projects] */
 export function buildProjectOptions(projects = []) {
   return normalizeReferenceItems(projects).map((p) => ({
     value: p._id ?? p.id,
@@ -72,6 +75,7 @@ export function buildProjectOptions(projects = []) {
   }));
 }
 
+/** @param {unknown} [customers] */
 export function buildCustomerOptions(customers = []) {
   return normalizeReferenceItems(customers).map((c) => ({
     value: c._id ?? c.id,

@@ -281,12 +281,12 @@ export function AreaLayer({ area, center, drawingMode, onAreaChange }: AreaLayer
     return (
       <Circle
         ref={circleRef}
+        {...shapeStyle}
         center={circleCenter}
         radius={radius}
         editable={editable}
         draggable={editable}
         clickable={editable}
-        {...shapeStyle}
         onRadiusChanged={commitCircle}
         onCenterChanged={commitCircle}
         onDragEnd={commitCircle}

@@ -150,7 +150,7 @@ function StepSurface({ title, description, children }) {
   );
 }
 
-export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article }) {
+export function CatalogArticleFormDialog({ open, onOpenChange = undefined, onClose, article }) {
   const { t } = useLanguage();
   const handleClose = onOpenChange ?? onClose ?? (() => {});
   const { createArticle, updateArticle, uploadImage, deleteImage } = useArticleMutations();

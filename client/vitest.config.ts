@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/modules/tasks/__tests__/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    // React 19 + Radix integration tests can legitimately cross Vitest's
+    // five-second default when the complete jsdom suite runs under load.
+    testTimeout: 15_000,
   },
   resolve: {
     alias: {

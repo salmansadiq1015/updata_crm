@@ -68,7 +68,8 @@ vi.mock('@/modules/doctpl/hooks/useTemplateMutations', () => ({
   useDeleteTemplate: () => ({ mutateAsync: deleteMutateAsync, isPending: false }),
 }));
 
-import AdminTemplatesPage, { buildTemplateFilters } from '../../../app/(platform)/admin/templates/page';
+import AdminTemplatesPage from '../../../app/(platform)/admin/templates/page';
+import { buildTemplateFilters } from '../utils/template-admin-utils';
 
 describe('AdminTemplatesPage', () => {
   beforeEach(() => {

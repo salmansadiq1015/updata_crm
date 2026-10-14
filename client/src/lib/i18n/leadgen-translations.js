@@ -19,6 +19,7 @@ export const leadgenTranslations = {
     'leadgen.nav': 'Lead-Generierung',
     'sidebar.leadGeneration': 'Lead-Generierung',
     'sidebar.leads': 'Leads',
+    'sidebar.aiCalling': 'KI-Telefonie',
     // Discovery wizard UI additions
     'leadgen.analyze.discovered': 'Gefunden',
     'leadgen.bulk.selectOne': '{name} auswählen',
@@ -827,6 +828,7 @@ export const leadgenTranslations = {
     'leadgen.nav': 'Lead Generation',
     'sidebar.leadGeneration': 'Lead Generation',
     'sidebar.leads': 'Leads',
+    'sidebar.aiCalling': 'AI Calling',
     // Discovery wizard UI additions
     'leadgen.analyze.discovered': 'Found',
     'leadgen.bulk.selectOne': 'Select {name}',
@@ -1614,6 +1616,7 @@ export const leadgenTranslations = {
     'leadgen.nav': 'Génération de leads',
     'sidebar.leadGeneration': 'Génération de leads',
     'sidebar.leads': 'Leads',
+    'sidebar.aiCalling': 'Appels IA',
     // Discovery wizard UI additions
     'leadgen.analyze.discovered': 'Trouvés',
     'leadgen.bulk.selectOne': 'Sélectionner {name}',
@@ -2401,6 +2404,7 @@ export const leadgenTranslations = {
     'leadgen.nav': 'توليد العملاء المحتملين',
     'sidebar.leadGeneration': 'توليد العملاء المحتملين',
     'sidebar.leads': 'العملاء المحتملون',
+    'sidebar.aiCalling': 'الاتصال بالذكاء الاصطناعي',
     // Discovery wizard UI additions
     'leadgen.analyze.discovered': 'تم العثور',
     'leadgen.bulk.selectOne': 'تحديد {name}',

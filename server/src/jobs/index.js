@@ -45,6 +45,12 @@ import { DiscoveryRunWorker } from './discoveryRun.job.js';
 import { DISCOVERY_QUEUE_NAME } from '../modules/businessDiscovery/discovery.constants.js';
 import { LeadImportWorker } from './leadImport.job.js';
 import { LeadEnrichmentWorker } from './leadEnrichment.job.js';
+import { OutboundMessagingWorker } from './outboundMessaging.job.js';
+import { OutboundMessagingRecoveryWorker } from './outboundMessagingRecovery.job.js';
+import { OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE } from '../modules/messaging/messaging.constants.js';
+import { OutboundCallingWorker } from './outboundCalling.job.js';
+import { registerAiCallReconciliationJob } from './aiCallReconciliation.job.js';
+import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
 import { registerAiAgentJob } from './aiAgent.job.js';
 import { registerAiAgentTimeoutJob } from './aiAgentTimeout.job.js';
 import logger from '../shared/logger/index.js';
@@ -668,6 +674,42 @@ export function registerJobs() {
     },
   });
 
+  // Unified lead outreach. Provider calls are one-shot inside the worker:
+  // ambiguous external outcomes are persisted as unknown and are never retried
+  // by BullMQ, which prevents cross-provider duplicate delivery.
+  const outboundMessaging = new OutboundMessagingWorker();
+  queueManager.registerQueue(OUTBOUND_QUEUE, outboundMessaging.getHandler(), {
+    concurrency: Number(process.env.MESSAGING_CONCURRENCY || 3),
+    jobOptions: { attempts: 1, removeOnComplete: { age: 86400, count: 5000 } },
+  });
+
+  // Recover jobs orphaned by process/host failure. Any work that crossed the
+  // provider boundary is quarantined as unknown and never sent automatically.
+  const outboundMessagingRecovery = new OutboundMessagingRecoveryWorker();
+  queueManager.registerQueue(OUTBOUND_RECOVERY_QUEUE, outboundMessagingRecovery.getHandler(), {
+    concurrency: 1,
+    jobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 30000 } },
+  });
+  queueManager.addScheduledJob(OUTBOUND_RECOVERY_QUEUE, 'periodic-outbound-messaging-recovery', {}, '*/5 * * * *').catch((err) => {
+    logger.warn('Failed to schedule outbound messaging recovery', {
+      module: 'jobs',
+      error: { message: err.message },
+    });
+  });
+
+  // AI voice calling — one BullMQ job per campaign "tick" leases and dispatches
+  // due recipients up to the configured concurrency, then re-enqueues itself.
+  // attempts:1 so a tick is never blindly retried (campaign state lives in the
+  // recipient documents; crash recovery happens via lease expiry on the next tick).
+  const outboundCalling = new OutboundCallingWorker();
+  queueManager.registerQueue(OUTBOUND_CALL_QUEUE, outboundCalling.getHandler(), {
+    concurrency: Number(process.env.AI_CALLING_WORKER_CONCURRENCY || 5),
+    jobOptions: { attempts: 1, removeOnComplete: { age: 86400, count: 5000 } },
+  });
+
+  // AI call reconciliation — recover calls stuck after a crash / lost webhook.
+  registerAiCallReconciliationJob(queueManager);
+
   // AI agent — agentic orchestration (execute + resume with confirmation)
   registerAiAgentJob(queueManager);
 
@@ -677,7 +719,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', DISCOVERY_QUEUE_NAME, 'lead-import', 'lead-enrichment', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', DISCOVERY_QUEUE_NAME, 'lead-import', 'lead-enrichment', OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE, OUTBOUND_CALL_QUEUE, 'ai-call-reconciliation', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

@@ -16,6 +16,7 @@ const BASE_TASK: Task = {
   priority: 'NONE',
   listId: 'list-1',
   assigneeId: null,
+  assigneeIds: [],
   createdBy: null,
   updatedBy: null,
   parentTaskId: null,
@@ -34,6 +35,12 @@ const BASE_TASK: Task = {
   completedAt: null,
   completedBy: null,
   cancelledAt: null,
+  locked: false,
+  lockedBy: null,
+  inPool: false,
+  poolHelperId: null,
+  projectName: null,
+  orderName: null,
 };
 
 const makeTask = (patch: Partial<Task>): Task => ({ ...BASE_TASK, ...patch });

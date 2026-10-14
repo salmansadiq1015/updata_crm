@@ -114,9 +114,6 @@ const CONTACT_LOG = [
   { id: 'c-2', channel: 'phone', subject: 'Called about pricing', note: null, createdAt: new Date().toISOString() },
 ];
 
-let whatsappCalls: Array<Record<string, unknown>> = [];
-let openSpy: ReturnType<typeof vi.spyOn>;
-
 // ── Harness ───────────────────────────────────────────────────────────────────
 
 beforeAll(() => {
@@ -136,18 +133,29 @@ afterAll(() => server.close());
 
 beforeEach(() => {
   vi.clearAllMocks();
-  whatsappCalls = [];
-  openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
   auth.permissions = ['lead:read', 'lead:write', 'lead:convert', 'lead:delete', 'crm:write', 'lead:whatsapp'];
   server.use(
     http.get(`${L}/:id/contact-log`, () => HttpResponse.json(ok(CONTACT_LOG))),
-    http.post(`${L}/:id/whatsapp`, async ({ request }) => {
-      whatsappCalls.push((await request.json()) as Record<string, unknown>);
-      return HttpResponse.json(ok({ waNumber: '41441234567', logged: true }));
-    }),
     http.get(`${L}/:id`, ({ params }) => HttpResponse.json(ok(leadFor(params.id)))),
     http.get(`${D}/emails`, () => HttpResponse.json(ok([]))),
     http.get(`${D}/email-templates`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/messaging/templates`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/messaging/campaigns`, () => HttpResponse.json({
+      ...ok([{
+        _id: '507f1f77bcf86cd799439011', name: 'October nurture', channel: 'email', status: 'completed',
+        summary: { total: 1, eligible: 1, ineligible: 0, queued: 0, accepted: 0, sent: 0, delivered: 1, read: 0, failed: 0, unknown: 0, suppressed: 0, missingContact: 0, invalidContact: 0, duplicate: 0, optedOut: 0 },
+      }]),
+      pagination: { page: 1, limit: 100, total: 1, pages: 1 },
+    })),
+    http.get(`${BASE}/messaging/leads/:id/history`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/messaging/leads/:id/consent`, ({ params }) => HttpResponse.json(ok({
+      leadId: String(params.id),
+      channels: [
+        { channel: 'email', status: 'granted', effectiveStatus: 'granted', hasDestination: true, evidence: 'Signed contact form', source: 'signed_form', capturedAt: '2026-10-01T10:00:00.000Z', changedAt: '2026-10-01T10:00:00.000Z', suppression: null },
+        { channel: 'sms', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', source: null, suppression: null },
+        { channel: 'whatsapp', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', source: null, suppression: null },
+      ],
+    }))),
   );
 });
 
@@ -172,10 +180,11 @@ const openDrawer = async (leadId: string, name: string) => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('lead detail drawer — contact actions', () => {
-  it('offers Email + WhatsApp when the lead has the data and the user has the rights', async () => {
+  it('offers Email, SMS, and WhatsApp when the lead has the data and the user has the rights', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
 
     expect(await within(drawer).findByRole('button', { name: 'Email' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'SMS' })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'WhatsApp' })).toBeInTheDocument();
     // The plain phone/website actions are still links, not the composer buttons.
     expect(within(drawer).getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:+41441234567');
@@ -185,6 +194,7 @@ describe('lead detail drawer — contact actions', () => {
     const drawer = await openDrawer('lead-no-phone', 'Basel Dental GmbH');
 
     expect(await within(drawer).findByRole('button', { name: 'Email' })).toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'SMS' })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
   });
 
@@ -192,46 +202,42 @@ describe('lead detail drawer — contact actions', () => {
     const drawer = await openDrawer('lead-no-email', 'Chur Yoga Studio');
 
     expect(await within(drawer).findByRole('button', { name: 'WhatsApp' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'SMS' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: 'Email' })).not.toBeInTheDocument();
   });
 
-  it('hides both actions when the user lacks the permissions', async () => {
+  it('hides all outreach actions when the user lacks the permissions', async () => {
     auth.permissions = ['lead:read'];
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
 
     // Wait for the body to settle (Call still appears for a read-only user).
     expect(await within(drawer).findByRole('link', { name: 'Call' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: 'Email' })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'SMS' })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
   });
 
-  it('opens the email composer pre-filled with the lead address', async () => {
+  it('opens the unified email campaign composer for exactly that lead', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
     const user = userEvent.setup();
 
     await user.click(await within(drawer).findByRole('button', { name: 'Email' }));
 
-    // The composer opened with the lead's e-mail already in the To field.
-    expect(await screen.findByDisplayValue('info@example.ch')).toBeInTheDocument();
+    const dialogs = await screen.findAllByRole('dialog');
+    const composer = dialogs.find((dialog) => within(dialog).queryByText('New outreach campaign'));
+    expect(composer).toBeDefined();
+    expect(within(composer!).getByLabelText('Subject')).toBeInTheDocument();
+    expect(within(composer!).getByRole('button', { name: 'Email' })).toHaveClass('text-primary');
   });
 
-  it('opens WhatsApp with the resolved message and logs the intent', async () => {
+  it('uses the Meta template composer and never opens a WhatsApp Web deep link', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
     const user = userEvent.setup();
 
     await user.click(await within(drawer).findByRole('button', { name: 'WhatsApp' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Send a WhatsApp message' });
-    await user.click(within(dialog).getByRole('button', { name: 'Open WhatsApp' }));
-
-    await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
-    const url = String(openSpy.mock.calls[0][0]);
-    // wa.me number is digits only, and {{businessName}} resolved to the lead name.
-    expect(url).toContain('https://web.whatsapp.com/send?phone=41441234567');
-    expect(url).toContain('Alpine%20Bakery%20AG');
-
-    // The intent was logged to the backend with the resolved message.
-    await waitFor(() => expect(whatsappCalls).toHaveLength(1));
-    expect(String(whatsappCalls[0].message)).toContain('Alpine Bakery AG');
+    expect(await screen.findByText(/Select a Meta-approved WhatsApp template/)).toBeInTheDocument();
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('shows the communication history: e-mail panel + contact-log entries', async () => {
@@ -242,6 +248,67 @@ describe('lead detail drawer — contact actions', () => {
     // The contact-log entries render with their notes/subjects.
     expect(within(drawer).getByText('Sent intro on WhatsApp')).toBeInTheDocument();
     expect(within(drawer).getByText('Called about pricing')).toBeInTheDocument();
+  });
+
+  it('shows effective channel consent and hides management from read-only users', async () => {
+    auth.permissions = ['lead:read'];
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+
+    expect(await within(drawer).findByText('Channel consent')).toBeInTheDocument();
+    expect(within(drawer).getByText('Granted')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Unknown')).toHaveLength(2);
+    expect(within(drawer).queryByRole('button', { name: /Manage Email consent/ })).not.toBeInTheDocument();
+  });
+
+  it('requires administrator confirmation before releasing a suppression', async () => {
+    auth.permissions.push('crm:admin');
+    const reinstatements: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/messaging/leads/:id/consent`, ({ params }) => HttpResponse.json(ok({
+        leadId: String(params.id),
+        channels: [
+          { channel: 'email', status: 'granted', effectiveStatus: 'suppressed', hasDestination: true, evidence: 'Earlier form', source: 'signed_form', capturedAt: '2026-09-01T10:00:00.000Z', suppression: { active: true, reason: 'opt_out', source: 'email_unsubscribe', suppressedAt: '2026-10-01T10:00:00.000Z' } },
+          { channel: 'sms', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', suppression: null },
+          { channel: 'whatsapp', status: 'unknown', effectiveStatus: 'unknown', hasDestination: true, evidence: '', suppression: null },
+        ],
+      }))),
+      http.post(`${BASE}/messaging/leads/:id/consent/reinstate`, async ({ request }) => {
+        reinstatements.push(await request.json());
+        return HttpResponse.json(ok({ channel: 'email', status: 'granted' }));
+      }),
+    );
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    const user = userEvent.setup();
+
+    await user.click(await within(drawer).findByRole('button', { name: 'Manage Email consent' }));
+    const editor = await screen.findByRole('dialog', { name: 'Manage Email consent' });
+    const save = within(editor).getByRole('button', { name: 'Verify and reinstate' });
+    expect(save).toBeDisabled();
+    await user.clear(within(editor).getByLabelText(/Evidence \*/));
+    await user.type(within(editor).getByLabelText(/Evidence \*/), 'Signed renewed opt-in form received today');
+    await user.click(within(editor).getByRole('checkbox'));
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(reinstatements).toEqual([expect.objectContaining({
+      channel: 'email', confirmation: true, evidence: 'Signed renewed opt-in form received today',
+    })]));
+  }, 20_000);
+
+  it('filters provider history by an explicitly selected campaign', async () => {
+    const requests: string[] = [];
+    server.use(http.get(`${BASE}/messaging/leads/:id/history`, ({ request }) => {
+      requests.push(request.url);
+      return HttpResponse.json(ok([]));
+    }));
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    const user = userEvent.setup();
+
+    await user.click(await within(drawer).findByRole('combobox', { name: 'History campaign' }));
+    await user.click(await screen.findByRole('option', { name: 'October nurture' }));
+
+    await waitFor(() => expect(requests.some((url) => url.includes('campaignId=507f1f77bcf86cd799439011'))).toBe(true));
+    expect(within(drawer).getByRole('button', { name: /Clear 1/ })).toBeInTheDocument();
   });
 
   it('shows an empty state when there is no contact log', async () => {

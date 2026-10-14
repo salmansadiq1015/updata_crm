@@ -120,9 +120,9 @@ describe('duplicateTask', () => {
     });
 
     expect(capturedCreateBody).not.toBeNull();
-    expect(capturedCreateBody?.title).toBe('Copy of My Task');
-    expect(capturedCreateBody?.status).toBe('OPEN');
-    expect(capturedCreateBody?.priority).toBe('HIGH');
+    expect((capturedCreateBody as unknown as Record<string, unknown>).title).toBe('Copy of My Task');
+    expect((capturedCreateBody as unknown as Record<string, unknown>).status).toBe('OPEN');
+    expect((capturedCreateBody as unknown as Record<string, unknown>).priority).toBe('HIGH');
   });
 
   it('uses cached task data when available (no extra GET request)', async () => {
@@ -170,6 +170,6 @@ describe('duplicateTask', () => {
 
     // When cached, duplicateTask reads from cache without an extra GET
     expect(getCallCount).toBe(0);
-    expect(capturedCreateBody?.title).toBe('Copy of My Task');
+    expect((capturedCreateBody as unknown as Record<string, unknown>).title).toBe('Copy of My Task');
   });
 });

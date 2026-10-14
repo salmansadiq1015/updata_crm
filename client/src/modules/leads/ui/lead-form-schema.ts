@@ -10,6 +10,7 @@ import type {
 } from '../types/lead-types';
 import type { TranslateFn } from './lead-ui-kit';
 import { toSafeWebUrl } from './lead-ui-utils';
+import { isValidLeadEmail, isValidLeadPhone } from './lead-contact-validation';
 
 /**
  * Form model for creating / editing a lead (LEAD_GENERATION_DESIGN.md §4.3).
@@ -59,9 +60,7 @@ export const BLANK_LEAD_FORM_VALUES: LeadFormValues = {
 };
 
 // Same patterns as the server (crm.constants.js).
-const PHONE_PATTERN = /^(\+[1-9]\d{0,2}[\s.-]?)?(\(?\d{1,4}\)?[\s.-]?){1,5}\d{1,4}$/;
 const SWISS_POSTAL_CODE_PATTERN = /^[1-9]\d{3}$/;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COUNTRY_PATTERN = /^[A-Za-z]{2}$/;
 
 const CANTON_CODES: readonly string[] = CH_CANTONS.map((canton: { code: string }) => canton.code);
@@ -112,7 +111,7 @@ export function createLeadFormSchema(t: TranslateFn) {
     .string()
     .trim()
     .max(50, tooLong(50))
-    .refine((value) => value === '' || PHONE_PATTERN.test(value), phoneMessage);
+    .refine(isValidLeadPhone, phoneMessage);
 
   return z
     .object({
@@ -130,7 +129,7 @@ export function createLeadFormSchema(t: TranslateFn) {
         .trim()
         .max(255, tooLong(255))
         .refine(
-          (value) => value === '' || EMAIL_PATTERN.test(value),
+          isValidLeadEmail,
           t('leads.form.error.email', 'Enter a valid email address'),
         ),
       website: z

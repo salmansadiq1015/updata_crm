@@ -10,6 +10,7 @@ export type SortOrder = 'asc' | 'desc';
 
 export type Task = {
   id: string;
+  _id?: string;
   title: string;
   description: string | null;
   status: TaskStatus;

@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-query';
 import { showError, showSuccess } from '@/lib/toast';
 import { downloadBlob } from '@/lib/api/download';
-import { useLanguage } from '@/lib/i18n/language-context';
+import { useLanguage } from '../ui/lead-ui-kit';
 import { leadApi } from '../services/lead-api';
 import type {
   LeadBlobDownload,

@@ -1,6 +1,68 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
+
+function cleanOperationalError(value) {
+  if (!value) return null;
+  return String(value)
+    .replace(/bearer\s+[a-z0-9._~-]+/gi, 'Bearer [REDACTED]')
+    .replace(/(token|secret|password|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .slice(0, 300);
+}
+
+export function buildIntegrationStatusNotification(payload, adminIds) {
+  const newStatus = payload.newStatus || payload.currentStatus;
+  const oldStatus = payload.oldStatus || payload.previousStatus || 'unknown';
+  if (!['healthy', 'degraded', 'down'].includes(newStatus)) return null;
+  if (newStatus === 'healthy' && !['degraded', 'down'].includes(oldStatus)) return null;
+  const displayName = payload.displayName || payload.integrationKey || 'Integration';
+  const recovered = newStatus === 'healthy';
+  const checkedAt = new Date(payload.checkedAt || Date.now());
+  const transitionAt = Number.isNaN(checkedAt.getTime()) ? new Date().toISOString() : checkedAt.toISOString();
+  const transitionHour = transitionAt.slice(0, 13);
+  const errorMessage = cleanOperationalError(payload.errorMessage);
+  const body = recovered
+    ? `${displayName} recovered from ${oldStatus} and is healthy again.`
+    : `${displayName} changed from ${oldStatus} to ${newStatus}.${errorMessage ? ` Reason: ${errorMessage}` : ''}`;
+
+  return {
+    type: 'integration_status_alert',
+    category: 'SYSTEM',
+    priority: newStatus === 'down' ? 'CRITICAL' : (newStatus === 'degraded' ? 'HIGH' : 'NORMAL'),
+    channels: recovered ? ['IN_APP'] : ['IN_APP', 'EMAIL'],
+    recipientIds: adminIds,
+    payload: {
+      title: recovered ? `${displayName} recovered` : `${displayName} is ${newStatus}`,
+      body,
+      deepLink: payload.settingsPath || '/admin/messaging',
+      integrationKey: payload.integrationKey,
+      displayName,
+      oldStatus,
+      newStatus,
+      errorMessage,
+      checkedAt: transitionAt,
+    },
+    sourceModule: 'integrations',
+    sourceEvent: 'INTEGRATION_STATUS_CHANGED',
+    // Hour bucketing suppresses repeated scheduler/API-instance transitions
+    // while allowing a later incident in a subsequent hour to alert again.
+    idempotencyKey: `integration-status:${payload.integrationKey || 'unknown'}:${oldStatus}:${newStatus}:${transitionHour}`.slice(0, 200),
+  };
+}
+
+export async function findActiveAdminIds() {
+  const User = (await import('../auth/user.model.js')).default;
+  const Role = (await import('../auth/role.model.js')).default;
+  const adminRole = await Role.findOne({ name: 'Admin' }).select('_id').lean();
+  if (!adminRole) return [];
+  const admins = await User.find({
+    role: adminRole._id,
+    status: 'active',
+    isDeleted: false,
+  }).select('_id').lean();
+  return admins.map((user) => user._id);
+}
 
 export function registerIntegrationsEvents() {
   // NOTE: WIDGET_SUBMISSION_RECEIVED is intentionally not subscribed here.
@@ -57,34 +119,25 @@ export function registerIntegrationsEvents() {
       const newStatus = payload.newStatus || payload.currentStatus;
       const oldStatus = payload.oldStatus || payload.previousStatus;
 
-      if (newStatus === 'down' || newStatus === 'degraded') {
+      if (newStatus === 'down' || newStatus === 'degraded' || (newStatus === 'healthy' && ['down', 'degraded'].includes(oldStatus))) {
         // Notify admins via Module 13 notification service
         const notificationService = (await import('../notifications/notification.service.js')).default;
-        // Get admin users
-        const User = (await import('../auth/user.model.js')).default;
-        const admins = await User.find({ isActive: true }).select('_id role').lean();
-        const adminIds = admins
-          .filter((u) => u.role?.name === 'Admin' || u.role === 'admin')
-          .map((u) => u._id)
-          .slice(0, 10);
+        const adminIds = await findActiveAdminIds();
 
         if (adminIds.length > 0) {
-          await notificationService.create({
-            type: 'integration_status_alert',
-            category: 'SYSTEM',
-            priority: newStatus === 'down' ? 'CRITICAL' : 'HIGH',
-            channels: ['IN_APP', 'EMAIL'],
-            recipientIds: adminIds,
-            payload: {
-              integrationKey: payload.integrationKey,
-              displayName: payload.displayName || payload.integrationKey,
-              oldStatus,
-              newStatus,
-              errorMessage: payload.errorMessage || null,
-            },
-            sourceModule: 'integrations',
-            sourceEvent: 'INTEGRATION_STATUS_CHANGED',
-          }, null, { ipAddress: 'internal', userAgent: 'event-handler' });
+          const notification = buildIntegrationStatusNotification(payload, adminIds);
+          if (notification) {
+            try {
+              await notificationService.create(notification, null, { ipAddress: 'internal', userAgent: 'event-handler' });
+            } catch (error) {
+              if (error?.code === ERROR_CODES.NOTIF_DUPLICATE || error?.code === 11000) {
+                logger.info('Skipped duplicate integration status alert', {
+                  module: 'integrations', action: 'event.integration_status_changed.duplicate',
+                  integrationKey: payload.integrationKey, oldStatus, newStatus,
+                });
+              } else throw error;
+            }
+          }
         }
       }
     } catch (err) {

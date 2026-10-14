@@ -186,7 +186,7 @@ export function ImportPreviewDialog({
               {/* Mode */}
               <RadioGroup
                 value={mode}
-                onValueChange={(value) => setMode(value as ImportMode)}
+                onValueChange={(value: string) => setMode(value as ImportMode)}
                 aria-label={t('leadgen.import.mode', 'Import mode')}
                 className="gap-2"
               >

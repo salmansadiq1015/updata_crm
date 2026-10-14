@@ -71,7 +71,7 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
   );
   const paramsKey = JSON.stringify(params);
   const filterOptionParams = useMemo(() => {
-    const { limit: _limit, areaId: _areaId, ...facetFilters } = params;
+    const { areaId: _areaId, ...facetFilters } = params;
     return facetFilters;
   }, [params]);
   const filterOptionsQuery = useLeadFilterOptions(filterOptionParams);
@@ -173,7 +173,9 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
     setDrawMode(null);
     setDetailId(null);
     setEditLead(null);
-    setEnrichJobId(null);
+    // Settle local polling state after the query notification commit. The
+    // compare guards a newer job if one was started before this microtask runs.
+    queueMicrotask(() => setEnrichJobId((current) => (current === enrichJobId ? null : current)));
     setGeocodingIds({});
     setGeocodingAll(false);
     setGeocodeProgress(null);

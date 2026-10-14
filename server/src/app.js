@@ -64,6 +64,8 @@ import apkRoutes from './modules/apk/apk.routes.js';
 import discoveryRoutes from './modules/businessDiscovery/discovery.routes.js';
 import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.routes.js';
 import extensionRoutes from './modules/extension/extension.routes.js';
+import messagingRoutes, { messagingWebhookRoutes } from './modules/messaging/messaging.routes.js';
+import aiCallingRoutes, { agentToolRoutes, aiCallingWebhookRoutes } from './modules/aiCalling/aiCalling.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -93,8 +95,11 @@ export function createApp() {
   // Body parsing — 10MB for JSON, 50MB handled at multer level for files
   app.use(bodyParser.json({
     limit: "10mb",
+    // LiveKit sends signed webhook JSON as application/webhook+json. Preserve
+    // normal JSON handling while accepting provider-specific +json media types.
+    type: ['application/json', 'application/*+json'],
     verify: (req, _res, buf) => {
-      if (req.originalUrl?.startsWith('/api/v1/webhooks/email')) {
+      if (req.originalUrl?.startsWith('/api/v1/webhooks/email') || req.originalUrl?.startsWith('/api/v1/webhooks/messaging/') || req.originalUrl?.startsWith('/api/v1/webhooks/ai-calling/')) {
         req.rawBody = Buffer.from(buf);
       }
     },
@@ -148,6 +153,11 @@ export function createApp() {
   app.use("/api/v1/roles", roleRoutes);
   app.use("/api/v1/permissions", permissionRouter);
   app.use("/api/v1/crm", crmRoutes);
+  app.use("/api/v1/messaging", messagingRoutes);
+  app.use("/api/v1/webhooks/messaging", messagingWebhookRoutes);
+  app.use("/api/v1/ai-calling", aiCallingRoutes);
+  app.use("/api/v1/ai-calling/agent", agentToolRoutes);
+  app.use("/api/v1/webhooks/ai-calling", aiCallingWebhookRoutes);
   // Lead Generation / Business Discovery — discovery sessions/results + lead import.
   // Two routers share the prefix (disjoint paths/methods): discovery first, then import.
   app.use("/api/v1/business-discovery", discoveryRoutes);

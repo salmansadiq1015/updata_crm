@@ -32,6 +32,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { FOLDER_COLOR_OPTIONS } from './task-ui-constants';
 import { ListColorDialog, FolderColorDialog } from './color-picker-dialog';
 import type { TaskFolderWithLists, TaskList } from '../types/task-types';
+import type { TaskSavedView } from '../state/task-workspace-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,13 +43,13 @@ type TaskSidebarProps = {
   folders: TaskFolderWithLists[];
   standaloneLists: TaskList[];
   activeListId: string | undefined;
-  activeSavedView: string;  // 'none' | 'dueToday' | 'overdue'
+  activeSavedView: TaskSavedView;
   collapsed: boolean;
   collapsedFolderIds: string[];
   onCollapseChange: (collapsed: boolean) => void;
   onToggleFolder: (folderId: string) => void;
   onSelectList: (listId: string | undefined) => void;
-  onSelectSavedView: (view: string) => void;
+  onSelectSavedView: (view: TaskSavedView) => void;
   onCreateFolder: () => void;
   onCreateList: (folderId?: string) => void;
   onFolderAction: (action: FolderAction, folder: TaskFolderWithLists) => void;
@@ -292,11 +293,11 @@ function SavedViewButton({
   activeSavedView,
   onSelectSavedView,
 }: {
-  view: string;
+  view: Exclude<TaskSavedView, 'none'>;
   label: string;
   icon: ElementType;
-  activeSavedView: string;
-  onSelectSavedView: (view: string) => void;
+  activeSavedView: TaskSavedView;
+  onSelectSavedView: (view: TaskSavedView) => void;
 }) {
   const isActive = activeSavedView === view;
   return (

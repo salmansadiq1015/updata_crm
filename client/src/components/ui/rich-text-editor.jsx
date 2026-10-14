@@ -286,6 +286,19 @@ function EditorToolbar({ editor, showImage = true, onImageUpload, uploading }) {
   );
 }
 
+/**
+ * @param {{
+ *   value: string,
+ *   onChange: (value: string) => void,
+ *   placeholder?: string,
+ *   maxLength?: number,
+ *   minHeight?: number,
+ *   disabled?: boolean,
+ *   error?: unknown,
+ *   showImage?: boolean,
+ *   onImageUpload?: (file: File) => Promise<string | { url: string, fileId?: string } | null> | string | { url: string, fileId?: string } | null
+ * }} props
+ */
 export function RichTextEditor({
   value,
   onChange,

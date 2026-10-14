@@ -17,8 +17,8 @@ let cachedTransporter = null;
 let cachedTransporterCreatedAt = 0;
 
 // ─── Create Transporter ──────────────────────────────────────
-const createTransporter = () => {
-  if (!process.env.SMTP_MAIL || !process.env.SMTP_PASSWORD) {
+export const createTransporter = (env = process.env) => {
+  if (!env.SMTP_MAIL || !env.SMTP_PASSWORD) {
     throw new Error(
       "SMTP configuration is missing. Please check environment variables."
     );
@@ -26,13 +26,15 @@ const createTransporter = () => {
 
   const config = {
     pool: true,
-    maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 5),
-    maxMessages: Number(process.env.SMTP_MAX_MESSAGES || 100),
+    maxConnections: Number(env.SMTP_MAX_CONNECTIONS || 5),
+    maxMessages: Number(env.SMTP_MAX_MESSAGES || 100),
     auth: {
-      user: process.env.SMTP_MAIL,
-      pass: process.env.SMTP_PASSWORD,
+      user: env.SMTP_MAIL,
+      pass: env.SMTP_PASSWORD,
     },
-    tls: { rejectUnauthorized: false },
+    // Certificate validation is secure by default. Private SMTP deployments
+    // using a self-signed certificate must opt out explicitly.
+    tls: { rejectUnauthorized: String(env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() !== 'false' },
   };
 
   // A service name (e.g. "gmail") auto-configures host/port — but only for the
@@ -40,7 +42,7 @@ const createTransporter = () => {
   // used to silently win over SMTP_HOST and leave nodemailer falling back to
   // localhost:587, so an explicit host always takes precedence and an
   // unrecognised service is reported instead of quietly ignored.
-  const service = process.env.SMTP_SERVICE?.trim();
+  const service = env.SMTP_SERVICE?.trim();
   const knownService = service ? Boolean(wellKnown(service)) : false;
 
   if (service && !knownService) {
@@ -49,11 +51,11 @@ const createTransporter = () => {
     });
   }
 
-  if (knownService && !process.env.SMTP_HOST) {
+  if (knownService && !env.SMTP_HOST) {
     config.service = service;
   } else {
-    config.host = process.env.SMTP_HOST;
-    config.port = parseInt(process.env.SMTP_PORT, 10) || 587;
+    config.host = env.SMTP_HOST;
+    config.port = parseInt(env.SMTP_PORT, 10) || 587;
     config.secure = config.port === 465;
     if (!config.host) {
       throw new Error('SMTP configuration is missing: set SMTP_HOST (or a service nodemailer supports).');
@@ -61,6 +63,16 @@ const createTransporter = () => {
   }
 
   return nodemailer.createTransport(config);
+};
+
+export const verifyMailTransport = async (env = process.env) => {
+  const transporter = createTransporter(env);
+  try {
+    await transporter.verify();
+    return true;
+  } finally {
+    transporter.close();
+  }
 };
 
 const getTransporter = () => {

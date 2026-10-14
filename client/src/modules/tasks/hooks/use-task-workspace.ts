@@ -116,12 +116,15 @@ export function useTaskDetailV2(id: string | null) {
 }
 
 const applyPatchToTask = (task: Task, patch: TaskPatch): Task => {
-  const { expectedVersion, ...taskPatch } = patch;
+  const { expectedVersion, departmentId, ...taskPatch } = patch;
   void expectedVersion;
 
   return {
     ...task,
     ...taskPatch,
+    ...(departmentId !== undefined
+      ? { departmentId: departmentId ? { id: departmentId, _id: departmentId } : null }
+      : {}),
     version: task.version + 1,
     updatedAt: new Date().toISOString(),
   };
@@ -213,7 +216,7 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       if (activeParams.listId) params.listId = activeParams.listId;
       if (activeParams.priority) params.priority = activeParams.priority;
       if (statusOverride) params.status = statusOverride;
-      else if (activeParams.status && activeParams.status !== 'ALL') params.status = activeParams.status;
+      else if (activeParams.status) params.status = activeParams.status;
       return taskApi.create(params);
     },
     onSuccess: (task) => {

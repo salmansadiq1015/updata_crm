@@ -12,6 +12,12 @@ import {
 import type { LeadFormValues } from '../ui/lead-form-schema';
 import { leadSchema } from '../schemas/lead-schemas';
 import { makeLeadDTO } from './mocks/data';
+import {
+  isValidLeadEmail,
+  isValidLeadPhone,
+  normalizeLeadEmail,
+  normalizeLeadPhone,
+} from '../ui/lead-contact-validation';
 
 // The schema only needs a translate function; echo the fallback.
 const t = (_key: string, fallback?: string | null) => fallback ?? _key;
@@ -48,6 +54,15 @@ describe('lead form validation', () => {
     ).toBe(true);
   });
 
+  it('accepts explicit Swiss and international phone formats but rejects ambiguous local numbers', () => {
+    for (const phone of ['044/123 45 67', '0041 44 123 45 67', '+41 (0)44 123 45 67', '+49 30 1234567']) {
+      expect(schema.safeParse(values({ phone })).success, phone).toBe(true);
+    }
+    for (const phone of ['123456789', '44 123 45 67', '+41 44 123', '+41 044 123 45 67']) {
+      expect(schema.safeParse(values({ phone })).success, phone).toBe(false);
+    }
+  });
+
   it('only insists on a 4-digit postal code for Swiss addresses', () => {
     expect(issuesFor(values({ postalCode: '80010', country: 'CH' }))).toHaveProperty('postalCode');
     expect(issuesFor(values({ postalCode: '800', country: '' }))).toHaveProperty('postalCode');
@@ -72,6 +87,16 @@ describe('form helpers', () => {
     expect(normalizeWebsite('example.ch')).toBe('https://example.ch');
     expect(normalizeWebsite(' http://example.ch ')).toBe('http://example.ch');
     expect(normalizeWebsite('')).toBe('');
+  });
+
+  it('validates and normalizes contact values consistently', () => {
+    expect(isValidLeadEmail('sales@example.com')).toBe(true);
+    expect(isValidLeadEmail('sales@example')).toBe(false);
+    expect(isValidLeadPhone('079\'123\'45\'67')).toBe(true);
+    expect(isValidLeadPhone('555-0102')).toBe(false);
+    expect(normalizeLeadEmail('  Sales@Example.COM ')).toBe('Sales@example.com');
+    expect(normalizeLeadPhone(' 0049 30 1234567 ')).toBe('+49 30 1234567');
+    expect(normalizeLeadPhone('   ')).toBeNull();
   });
 });
 

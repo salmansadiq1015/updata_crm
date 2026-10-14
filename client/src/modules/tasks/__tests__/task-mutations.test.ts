@@ -107,7 +107,7 @@ describe('useTaskWorkspaceMutations', () => {
       await waitFor(() => expect(result.current.createTask.isSuccess).toBe(true));
 
       expect(capturedBody).not.toBeNull();
-      expect(capturedBody?.title).toBe('Test task');
+      expect((capturedBody as unknown as Record<string, unknown>).title).toBe('Test task');
     });
   });
 
@@ -289,8 +289,8 @@ describe('useTaskWorkspaceMutations', () => {
       await waitFor(() => expect(result.current.patchTask.isSuccess).toBe(true));
 
       expect(putCalled).toBe(true);
-      expect(capturedBody?.title).toBe('Updated title');
-      expect(capturedBody?.priority).toBe('HIGH');
+      expect((capturedBody as unknown as Record<string, unknown>).title).toBe('Updated title');
+      expect((capturedBody as unknown as Record<string, unknown>).priority).toBe('HIGH');
     });
   });
 

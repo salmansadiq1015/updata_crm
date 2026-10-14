@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function ConfirmDialog({ open, onOpenChange, title, description, onConfirm, loading, isLoading, variant = 'destructive', confirmText = 'Bestätigen', cancelText = 'Abbrechen' }) {
+export function ConfirmDialog({ open, onOpenChange, title, description, onConfirm, loading = false, isLoading = false, variant = 'destructive', confirmText = 'Bestätigen', cancelText = 'Abbrechen' }) {
   const busy = loading || isLoading;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

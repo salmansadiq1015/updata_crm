@@ -554,7 +554,7 @@ export function LeadGenWorkspace() {
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
           <SheetHeader className="border-b border-border px-5 py-4">
-            <SheetTitle>{t('leadgen.saved.title', 'Saved searches')}</SheetTitle>
+            <SheetTitle className="text-base">{t('leadgen.saved.title', 'Saved searches')}</SheetTitle>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin p-4">
             <SavedSearches onView={handleReopen} onRerun={handleRerun} />

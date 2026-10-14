@@ -2,6 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/** @param {React.ComponentProps<'input'>} props */
 function Input({
   className,
   type,

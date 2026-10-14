@@ -14,6 +14,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     priority: 'NONE',
     listId: null,
     assigneeId: null,
+    assigneeIds: [],
     createdBy: null,
     updatedBy: null,
     parentTaskId: null,
@@ -32,6 +33,12 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     completedAt: null,
     completedBy: null,
     cancelledAt: null,
+    locked: false,
+    lockedBy: null,
+    inPool: false,
+    poolHelperId: null,
+    projectName: null,
+    orderName: null,
     ...overrides,
   };
 }

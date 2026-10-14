@@ -12,6 +12,10 @@ export function localDateTimeValue(date = new Date(Date.now() + 24 * 60 * 60 * 1
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
+/**
+ * @param {unknown} value
+ * @param {{ min?: number, max?: number, sort?: 'none' | 'asc' | 'desc', maxItems?: number }} [options]
+ */
 export function parseNumberList(value, { min, max, sort = 'none', maxItems = 12 } = {}) {
   const seen = new Set();
   const numbers = String(value || '')

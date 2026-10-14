@@ -40,6 +40,14 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * @typedef {React.ComponentProps<'button'> &
+ *   import('class-variance-authority').VariantProps<typeof buttonVariants> & {
+ *     asChild?: boolean
+ *   }} ButtonProps
+ */
+
+/** @param {ButtonProps} props */
 function Button({
   className,
   variant = "default",

@@ -87,7 +87,7 @@ export const LeadListItem = memo(function LeadListItem({
             </View>
           ) : null}
         </View>
-        <LeadStatusBadge status={lead.status} />
+        <LeadStatusBadge status={lead.status} compact />
       </View>
     </AppPressableCard>
   );

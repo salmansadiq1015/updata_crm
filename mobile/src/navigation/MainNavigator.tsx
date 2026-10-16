@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Bell, LayoutDashboard, Settings, Users, type LucideIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallAgentHomeScreen } from '@/features/callAgent/screens/CallAgentHomeScreen';
@@ -53,7 +53,18 @@ export function MainNavigator() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
-        tabBarLabelStyle: { fontFamily: 'Geist-SemiBold', fontSize: 11, marginTop: 2 },
+        // Shrink a long label (e.g. "Notifications" on 360dp phones) instead of cutting it off.
+        tabBarLabel: ({ color, children }) => (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            maxFontSizeMultiplier={1.3}
+            style={{ fontFamily: 'Geist-SemiBold', fontSize: 11, marginTop: 2, color }}
+          >
+            {children}
+          </Text>
+        ),
         tabBarItemStyle: { paddingTop: 8 },
         tabBarStyle: {
           backgroundColor: colors.card,

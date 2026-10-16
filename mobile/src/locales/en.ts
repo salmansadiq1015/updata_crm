@@ -229,6 +229,7 @@ export const en = {
       cardBody:
         'Allow phone access so the app can place the call on the SIM you pick and note when the call starts and ends. Without it, the number opens in your phone app.',
       allow: 'Allow phone access',
+      granted: 'Phone access allowed',
       openSettings: 'Open app settings',
       callTitle: 'Place calls',
       callMessage: 'Updata places the call on the SIM you choose, only when you tap Start call.',

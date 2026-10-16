@@ -22,14 +22,25 @@ export const LEAD_STATUS_META: Record<LeadStatus, { icon: LucideIcon; variant: B
   converted: { icon: CircleCheck, variant: 'success' },
 };
 
-export function LeadStatusBadge({ status, className }: { status: LeadStatus; className?: string }) {
+export function LeadStatusBadge({
+  status,
+  className,
+  compact = false,
+}: {
+  status: LeadStatus;
+  className?: string;
+  /** List rows: smaller pill without the icon, so the lead name keeps the width. */
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const meta = LEAD_STATUS_META[status];
   return (
     <AppBadge
       label={t(`leads.status.${status}`)}
       variant={meta.variant}
-      icon={meta.icon}
+      icon={compact ? undefined : meta.icon}
+      size={compact ? 'sm' : 'md'}
+      dot={compact}
       className={className}
     />
   );

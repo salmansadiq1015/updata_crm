@@ -230,6 +230,7 @@ export const fr: Translations = {
       cardBody:
         "Autorisez l'accès au téléphone pour que l'app appelle avec la SIM choisie et note le début et la fin de l'appel. Sinon, le numéro s'ouvre dans votre app Téléphone.",
       allow: "Autoriser l'accès au téléphone",
+      granted: 'Accès au téléphone autorisé',
       openSettings: "Ouvrir les réglages de l'app",
       callTitle: 'Passer des appels',
       callMessage: "Updata appelle avec la SIM choisie, uniquement quand vous touchez « Lancer l'appel ».",

@@ -96,6 +96,9 @@ function PrepareCall({
   const [chosenSim, setSelectedSim] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
+  // Once the user has seen the permission card on this screen it stays put (as "allowed"),
+  // so granting access never slides "Start call" under a finger that is still tapping.
+  const [permissionCardShown, setPermissionCardShown] = useState(false);
 
   // Permissions and SIMs can change in system settings while we are away.
   const { refetch: refetchCaps } = capabilities;
@@ -132,6 +135,7 @@ function PrepareCall({
 
   const askPermissions = useSingleFlight(
     useCallback(async () => {
+      setPermissionCardShown(true);
       const result = await requestCallingPermissions({
         callPhone: {
           title: t('communication.permissions.callTitle'),
@@ -202,7 +206,9 @@ function PrepareCall({
         ) : null}
       </View>
 
-      {caps && caps.hasTelephony && !(caps.callPhoneGranted && caps.readPhoneStateGranted) ? (
+      {caps &&
+      caps.hasTelephony &&
+      (permissionCardShown || !(caps.callPhoneGranted && caps.readPhoneStateGranted)) ? (
         <AppCard className="gap-3">
           <View className="flex-row items-center gap-3">
             <IconContainer icon={ShieldCheck} tone="primary" round />
@@ -211,7 +217,14 @@ function PrepareCall({
             </AppText>
           </View>
           <AppText tone="muted">{t('communication.permissions.cardBody')}</AppText>
-          {permissionBlocked ? (
+          {caps.callPhoneGranted && caps.readPhoneStateGranted ? (
+            <AppButton
+              title={t('communication.permissions.granted')}
+              variant="outline"
+              leftIcon={CheckCircle2}
+              disabled
+            />
+          ) : permissionBlocked ? (
             <AppButton
               title={t('communication.permissions.openSettings')}
               variant="outline"

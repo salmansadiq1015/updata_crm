@@ -235,6 +235,7 @@ export const de: Translations = {
       cardBody:
         'Erlauben Sie den Telefonzugriff, damit die App über die gewählte SIM anruft und Beginn und Ende des Anrufs erfasst. Ohne Zugriff öffnet sich die Nummer in Ihrer Telefon-App.',
       allow: 'Telefonzugriff erlauben',
+      granted: 'Telefonzugriff erlaubt',
       openSettings: 'App-Einstellungen öffnen',
       callTitle: 'Anrufe tätigen',
       callMessage: 'Updata ruft über die gewählte SIM an, nur wenn Sie auf «Anruf starten» tippen.',

@@ -46,6 +46,9 @@ This is a monorepo of three independently-installed apps (no root `package.json`
 - **Lead Generation** — Google Places / Maps business discovery → dedupe → review
   on map + list → import as leads; CSV/XLSX/PDF import & export; website enrichment;
   email + WhatsApp outreach.
+- **Android app** (`mobile/`) — the CRM's own leads on the phone, SIM calling and SMS-composer
+  hand-off with outcome, notes and qualification synced back to the lead
+  ([details](LEAD-MOBILE-CALLING.md)).
 - **Chrome extension integration** — install from the Leads page and securely link it
   to the signed-in CRM account (see below).
 - **Operations** — quotes & orders, projects/PM, scheduling, assignments, field

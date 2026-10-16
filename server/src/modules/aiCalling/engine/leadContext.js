@@ -6,6 +6,8 @@
  * prompt-injection in spoken input.
  */
 
+import { AUTO_LANGUAGE, defaultAgentLanguage, resolveAgentLanguage } from '../aiCalling.languages.js';
+
 const CHARS = (v, n) => (v == null ? null : String(v).slice(0, n));
 
 /** Public, non-sensitive snapshot of the lead for the agent. */
@@ -24,12 +26,36 @@ export function leadContext(lead = {}) {
   };
 }
 
+const describe = (lang) => (lang.nativeName && lang.nativeName !== lang.name ? `${lang.name} (${lang.nativeName})` : lang.name);
+
+/**
+ * The language instruction, naming the language (models follow a named language
+ * far more reliably than a bare code). `auto` mirrors the callee and opens in the
+ * deployment default. An unknown code falls back to the default rather than
+ * passing an arbitrary string into the prompt.
+ */
+export function languageInstruction(code, { defaultLanguage = defaultAgentLanguage() } = {}) {
+  const fallback = defaultLanguage || resolveAgentLanguage('en');
+  const lang = resolveAgentLanguage(code || fallback.code) || fallback;
+  if (lang.code === AUTO_LANGUAGE) {
+    return [
+      `Language: open the call, including the AI disclosure, in ${describe(fallback)}.`,
+      'As soon as the person answers in a different language, switch to that language and keep using it for the rest of the call.',
+      `If you cannot tell which language they speak, continue in ${fallback.name}.`,
+    ].join(' ');
+  }
+  return [
+    `Language: speak ${describe(lang)} for the entire call, including the AI disclosure (translate it faithfully, keeping its meaning).`,
+    `Ask every question in ${lang.name}. Only switch languages if the person explicitly asks you to or clearly cannot understand ${lang.name}.`,
+  ].join(' ');
+}
+
 /**
  * Compose the agent system prompt from the campaign agent config + lead context.
  * This is text only — the actual tool-call contract that governs the flow lives
  * in the agent tool API, not in this prompt.
  */
-export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, objective = '' } = {}) {
+export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, objective = '', defaultLanguage } = {}) {
   const ctx = leadContext(lead);
   const companyName = agentConfig.organizationName || company.name || 'our company';
   const style = {
@@ -45,6 +71,7 @@ export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, o
     `You are speaking with someone at the business "${ctx.businessName || 'the business'}"${ctx.city ? ` in ${ctx.city}` : ''}.`,
     objective ? `Call objective: ${objective}` : '',
     style,
+    languageInstruction(agentConfig.language, defaultLanguage ? { defaultLanguage } : undefined),
     'Rules you must always follow:',
     '- Disclose that you are an AI at the start, and that the call may be recorded if recording is enabled.',
     '- Keep spoken turns short (1–2 sentences). Ask one question at a time.',

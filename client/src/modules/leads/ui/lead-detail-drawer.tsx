@@ -47,6 +47,7 @@ import type { DrawerMode } from '@/shared/components/detail-drawer';
 import { RatingStars } from './rating-stars';
 import { EmailHistoryPanel as EmailHistoryPanelImpl } from '@/modules/doctpl/components/email-history-panel';
 import { LeadCallsTab } from '@/modules/aiCalling/ui/lead-calls-tab';
+import { LeadMobileCommunications } from './lead-mobile-communications';
 import { useDeleteLead, useEnrichLead, useLead, useLeadContactLog, useUpdateLead } from '../hooks/use-leads';
 import type {
   Lead,
@@ -1255,6 +1256,11 @@ function LeadDetailBody({
             t={t}
           />
         </div>
+      </Section>
+
+      {/* Mobile app SIM calls / SMS (device-originated) + merged lead qualification */}
+      <Section title={t('leads.drawer.sectionMobileComm', 'Mobile calls & SMS')}>
+        <LeadMobileCommunications leadId={lead.id} />
       </Section>
 
       {/* AI voice calls: campaigns, dispositions, collected answers, status history */}

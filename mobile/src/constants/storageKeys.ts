@@ -1,0 +1,16 @@
+// Every persisted key in one place, so logout can clear exactly what it owns.
+
+/** Android Keystore-backed (expo-secure-store). Keys may only contain [A-Za-z0-9._-]. */
+export const SECURE_KEYS = {
+  refreshToken: 'updata.session.refreshToken',
+} as const;
+
+/**
+ * AsyncStorage — non-sensitive only, with one documented exception: the per-user
+ * communication outbox (call notes awaiting sync). It is suffixed with the user id,
+ * never loaded for another user, and deleted when that user signs out.
+ */
+export const STORAGE_KEYS = {
+  preferences: 'updata.preferences',
+  communicationOperations: 'updata.communication.operations.v1',
+} as const;

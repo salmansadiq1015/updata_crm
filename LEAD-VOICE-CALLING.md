@@ -98,6 +98,7 @@ AI_CALLING_AGENT_SECRET=
 AI_CALLING_PHONE_HASH_SECRET=
 AI_CALLING_REQUIRE_CONSENT=true
 AI_CALLING_WORKER_CONCURRENCY=5
+AI_CALLING_DEFAULT_LANGUAGE=en             # opening language for agentConfig.language='auto'
 LIVEKIT_TIMEOUT_MS=15000
 ```
 
@@ -210,6 +211,7 @@ ALL/ANY rules).
 | POST | `/suppressions` | write — manual do-not-call |
 | GET/PUT | `/leads/:leadId/consent` | read / write — evidence-backed call consent |
 | GET | `/telephony/health` | read |
+| GET | `/languages` | read — AI agent language allow-list (`aiCalling.languages.js`) + default |
 
 **Agent tool API** (`/api/v1/ai-calling/agent/:callId/*`): authenticated by a **per-call
 bearer token** (not a user session), scoped to exactly one call. The only DB mutations the AI

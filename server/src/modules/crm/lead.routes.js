@@ -24,6 +24,8 @@ import {
   bulkAssign,
 } from './lead.validation.js';
 import { exportLeads, importTemplate } from './leadImportExport.validation.js';
+import leadCommunicationRoutes from './leadCommunication.routes.js';
+import leadQualificationRoutes from './leadQualification.routes.js';
 
 /**
  * Lead routes — mounted at /api/v1/crm/leads by crm.routes.js (§11).
@@ -84,5 +86,10 @@ router.post('/:id/geocode', authenticate, requirePermission('lead:write'), geoco
 // opens the wa.me link) and read a lead's logged communications.
 router.post('/:id/whatsapp', authenticate, requirePermission('lead:whatsapp'), validate(logWhatsApp), (req, res, next) => leadController.logWhatsApp(req, res, next));
 router.get('/:id/contact-log', authenticate, requirePermission('lead:read'), validate(leadContactLog), (req, res, next) => leadController.contactLog(req, res, next));
+
+// Device-originated (mobile SIM call / SMS composer) communications and the
+// lead qualification they feed. Sub-routers use mergeParams for :leadId.
+router.use('/:leadId/communications', leadCommunicationRoutes);
+router.use('/:leadId/qualification', leadQualificationRoutes);
 
 export default router;

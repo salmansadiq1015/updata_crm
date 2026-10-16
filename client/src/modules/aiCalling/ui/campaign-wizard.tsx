@@ -8,6 +8,7 @@ import type {
   AgentConfig, CreateCampaignInput, Question, QuestionType, RuleAction, Schedule, StatusRule,
 } from '../types/ai-calling-types';
 import { ConditionEditor, type ConditionValue, type FieldOption } from './condition-editor';
+import { LanguageSelect } from './language-select';
 
 const QUESTION_TYPES: QuestionType[] = [
   'short_text', 'long_text', 'boolean', 'single_choice', 'multiple_choice', 'integer',
@@ -177,7 +178,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
               </div>
               <Field label="Call objective"><input className={inputCls} value={agent.objective} onChange={(e) => setAgent({ ...agent, objective: e.target.value })} placeholder="Qualify interest in a heating-system service contract" /></Field>
               <div className="grid grid-cols-3 gap-3">
-                <Field label="Language"><input className={inputCls} value={agent.language} onChange={(e) => setAgent({ ...agent, language: e.target.value })} /></Field>
+                <Field label="Language"><LanguageSelect className={inputCls} value={agent.language || 'en'} onChange={(language) => setAgent({ ...agent, language })} /></Field>
                 <Field label="Voice">
                   <select className={inputCls} value={agent.voice} onChange={(e) => setAgent({ ...agent, voice: e.target.value })}>
                     {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}

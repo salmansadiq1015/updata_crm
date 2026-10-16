@@ -12,6 +12,7 @@ const keys = {
   recipients: (id: string) => ['ai-calling', 'recipients', id] as const,
   analytics: () => ['ai-calling', 'analytics'] as const,
   telephony: () => ['ai-calling', 'telephony'] as const,
+  languages: () => ['ai-calling', 'languages'] as const,
   leadHistory: (leadId: string) => ['ai-calling', 'lead-history', leadId] as const,
   consent: (leadId: string) => ['ai-calling', 'consent', leadId] as const,
 };
@@ -59,6 +60,11 @@ export function useAnalytics(params: { from?: string; to?: string; campaignId?: 
     queryFn: () => aiCallingApi.analytics(params),
     refetchInterval: 20000,
   });
+}
+
+/** The AI agent language allow-list rarely changes: cache it for the session. */
+export function useAgentLanguages() {
+  return useQuery({ queryKey: keys.languages(), queryFn: () => aiCallingApi.languages(), staleTime: Infinity });
 }
 
 export function useTelephonyHealth() {

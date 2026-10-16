@@ -4,6 +4,7 @@ import {
   CAMPAIGN_STATUSES, QUESTION_TYPES, RULE_ACTIONS, SPEAKING_STYLES, RECIPIENT_STATES,
   QUALIFICATION_RESULTS, ANSWER_VALIDATION,
 } from './aiCalling.constants.js';
+import { canonicalAgentLanguage, isSupportedAgentLanguage } from './aiCalling.languages.js';
 
 const page = Joi.number().integer().min(1).default(1);
 const limit = Joi.number().integer().min(1).max(100).default(25);
@@ -48,11 +49,17 @@ const statusRule = Joi.object({
   requiresReview: Joi.boolean().default(false),
 });
 
+// Must be a language from AI_AGENT_LANGUAGES (or 'auto'). Unlisted regional
+// variants of a listed language (legacy 'de-AT') stay valid; see resolveAgentLanguage.
+const agentLanguage = Joi.string().trim().max(10).custom((value, helpers) => (
+  isSupportedAgentLanguage(value) ? canonicalAgentLanguage(value) : helpers.error('any.invalid')
+), 'AI agent language').messages({ 'any.invalid': '{{#label}} must be a supported AI agent language code (see GET /ai-calling/languages)' });
+
 const agentConfig = Joi.object({
   agentName: Joi.string().trim().max(120).default('Assistant'),
   organizationName: Joi.string().trim().max(200).allow('').default(''),
   disclosure: Joi.string().trim().max(2000).allow('').default(''),
-  language: Joi.string().trim().max(10).default('en'),
+  language: agentLanguage.default('en'),
   voice: Joi.string().trim().max(40).default('alloy'),
   speakingStyle: Joi.string().valid(...SPEAKING_STYLES).default('professional'),
   customStyle: Joi.string().trim().max(500).allow('').default(''),

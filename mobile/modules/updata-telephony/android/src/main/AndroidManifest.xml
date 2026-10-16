@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Permissions are declared by the app (app.config.ts android.permissions), not here, so the
+    app owns the Play Store declaration. Telephony is optional: Wi-Fi tablets can still install
+    and fall back to "no dialer" UI.
+  -->
+  <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
+  <!-- Package visibility (API 30+): resolveActivity for the dialer and SMS composer. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.DIAL" />
+      <data android:scheme="tel" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.SENDTO" />
+      <data android:scheme="smsto" />
+    </intent>
+  </queries>
+</manifest>

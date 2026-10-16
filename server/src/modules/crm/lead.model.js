@@ -50,6 +50,29 @@ const pointSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const leadQualificationFieldSchema = new mongoose.Schema(
+  {
+    fieldKey: { type: String, required: true, trim: true, maxlength: 80 },
+    label: { type: String, trim: true, maxlength: 200, default: null },
+    value: { type: mongoose.Schema.Types.Mixed, default: null },
+    status: { type: String, enum: ['answered', 'unknown', 'refused', 'not_applicable'], required: true },
+    source: { type: String, enum: ['user', 'ai_proposed_user_confirmed'], default: 'user' },
+    evidence: { type: String, maxlength: 2000, default: null },
+    communicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadCommunication', default: null },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    updatedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
+const leadQualificationSchema = new mongoose.Schema(
+  {
+    fields: { type: [leadQualificationFieldSchema], default: [] },
+    updatedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const leadSchema = new mongoose.Schema(
   {
     leadNumber: {
@@ -219,6 +242,10 @@ const leadSchema = new mongoose.Schema(
       enum: ['email', 'whatsapp', 'phone', 'sms', null],
       default: null,
     },
+    // Merged qualification answers (leadQualification.constants.js schema),
+    // written by the mobile call/SMS wrap-up. Each field records which
+    // communication set it and who confirmed it. Absent until first written.
+    qualification: { type: leadQualificationSchema, default: null },
     convertedCustomerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',

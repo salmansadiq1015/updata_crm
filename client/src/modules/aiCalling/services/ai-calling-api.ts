@@ -1,7 +1,7 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import type {
-  ActiveCall, Analytics, Campaign, CallConsentProfile, CallRecord, CreateCampaignInput, SimResult, SimState, TelephonyHealth,
+  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallRecord, CreateCampaignInput, SimResult, SimState, TelephonyHealth,
 } from '../types/ai-calling-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
@@ -96,6 +96,9 @@ export const aiCallingApi = {
       _raw?: { data?: Blob }; data?: Blob;
     };
     return (res?._raw?.data ?? res?.data) as Blob;
+  },
+  async languages(): Promise<AgentLanguageList> {
+    return unwrap<AgentLanguageList>(await apiClient.get(ENDPOINTS.AI_CALLING.LANGUAGES));
   },
   async telephonyHealth(): Promise<TelephonyHealth> {
     return unwrap<TelephonyHealth>(await apiClient.get(ENDPOINTS.AI_CALLING.TELEPHONY_HEALTH));

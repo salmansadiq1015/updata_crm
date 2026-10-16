@@ -163,6 +163,13 @@ export interface CallRecord {
   campaignId?: { _id: string; name: string } | string;
 }
 
+/** One entry of GET /ai-calling/languages (server aiCalling.languages.js). */
+export interface AgentLanguage {
+  code: string; name: string; nativeName: string; support: 'full' | 'limited'; rtl: boolean;
+}
+
+export interface AgentLanguageList { languages: AgentLanguage[]; defaultLanguage: string }
+
 export interface TelephonyHealth {
   configured: boolean; livekitReady?: boolean; reachable: boolean; eligible: boolean; reason: string | null;
   primary?: Omit<TelephonyHealth, 'primary' | 'fallback'>;

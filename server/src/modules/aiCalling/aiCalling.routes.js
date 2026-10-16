@@ -35,6 +35,7 @@ router.get('/analytics/export', authenticate, requirePermission('ai-calling:read
 router.post('/suppressions', authenticate, requirePermission('ai-calling:write'), validate(schemas.suppress), (req, res, next) => controller.suppress(req, res, next));
 router.get('/leads/:leadId/consent', authenticate, requirePermission('ai-calling:read'), validate(schemas.callConsentRead), (req, res, next) => controller.getConsent(req, res, next));
 router.put('/leads/:leadId/consent', authenticate, requirePermission('ai-calling:write'), validate(schemas.callConsentUpdate), (req, res, next) => controller.updateConsent(req, res, next));
+router.get('/languages', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.languages(req, res, next));
 router.get('/telephony/health', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.telephonyHealth(req, res, next));
 
 /**

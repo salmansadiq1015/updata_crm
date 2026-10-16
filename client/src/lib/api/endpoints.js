@@ -867,6 +867,8 @@ export const ENDPOINTS = Object.freeze({
     ENRICH_BULK: '/crm/leads/enrich-bulk',
     ENRICH_JOB: (jobId) => `/crm/leads/enrich-jobs/${jobId}`,
     GEOCODE: (id) => `/crm/leads/${id}/geocode`,
+    COMMUNICATIONS: (id) => `/crm/leads/${id}/communications`,
+    QUALIFICATION: (id) => `/crm/leads/${id}/qualification`,
   },
   MESSAGING: {
     CAMPAIGNS: '/messaging/campaigns',
@@ -916,5 +918,6 @@ export const ENDPOINTS = Object.freeze({
     ANALYTICS_EXPORT: '/ai-calling/analytics/export',
     SUPPRESSIONS: '/ai-calling/suppressions',
     TELEPHONY_HEALTH: '/ai-calling/telephony/health',
+    LANGUAGES: '/ai-calling/languages',
   },
 });

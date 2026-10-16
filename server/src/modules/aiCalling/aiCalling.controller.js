@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import service from './aiCalling.service.js';
 import { telephonyHealth } from './providers/telephonyRouter.js';
+import { AI_AGENT_LANGUAGES, defaultAgentLanguage } from './aiCalling.languages.js';
 
 const meta = (req) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') });
 
@@ -43,6 +44,7 @@ class AiCallingController {
   async suppress(req, res, next) { try { return res.success({ data: await service.suppressNumber(req.body, req.user._id), message: 'Number suppressed' }); } catch (e) { next(e); } }
   async getConsent(req, res, next) { try { return res.success({ data: await service.getConsent(req.params.leadId, req.user._id) }); } catch (e) { next(e); } }
   async updateConsent(req, res, next) { try { return res.success({ data: await service.updateConsent(req.params.leadId, req.body, req.user._id, meta(req)), message: 'Call consent updated' }); } catch (e) { next(e); } }
+  async languages(req, res, next) { try { return res.success({ data: { languages: AI_AGENT_LANGUAGES, defaultLanguage: defaultAgentLanguage().code } }); } catch (e) { next(e); } }
   async telephonyHealth(req, res, next) { try { return res.success({ data: await telephonyHealth() }); } catch (e) { next(e); } }
 
   // ---- agent tool API (worker-authenticated via req.agentCall.callId) ----

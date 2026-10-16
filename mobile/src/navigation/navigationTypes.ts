@@ -26,8 +26,19 @@ export type RootStackParamList = {
   // Signed in
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   LeadDetail: { leadId: string };
+  // Create (no leadId) or edit a lead. Not deep-linkable.
+  LeadForm: { leadId?: string } | undefined;
+  FollowUps: undefined;
   // Not deep-linkable: a contact attempt starts only from an explicit tap in the app.
-  CallSession: { leadId: string; operationId?: string; destinationField?: 'phone' | 'mobile' };
+  // `queueId`: the call belongs to the SIM call queue (shows "Next lead" after the outcome).
+  CallSession: {
+    leadId: string;
+    operationId?: string;
+    destinationField?: 'phone' | 'mobile';
+    queueId?: string;
+  };
+  // SIM call queue (not deep-linkable): the user calls chosen leads one by one.
+  CallQueue: undefined;
   SmsCompose: { leadId: string; operationId?: string; destinationField?: 'phone' | 'mobile' };
   CommunicationQueue: undefined;
   // AI agent (not deep-linkable: a campaign starts only from an explicit selection in the app).
@@ -37,7 +48,7 @@ export type RootStackParamList = {
   // Call Agent tab. Settings are deep-linkable (they start nothing); the picker and
   // the test screen are reached only from an explicit tap.
   CallAgentSettings: undefined;
-  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' };
+  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' | 'queue' };
   CallAgentTest: { leadId?: string } | undefined;
 };
 

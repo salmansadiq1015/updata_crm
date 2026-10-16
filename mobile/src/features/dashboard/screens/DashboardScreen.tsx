@@ -13,12 +13,14 @@ import { AppText } from '@/components/ui/AppText';
 import { GradientSurface } from '@/components/ui/GradientSurface';
 import { AppIconButton } from '@/components/ui/AppIconButton';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
+import { useFollowUps } from '@/features/followUps/hooks/useFollowUps';
 import { LeadListItem } from '@/features/leads/components/LeadListItem';
 import { LeadListSkeleton } from '@/features/leads/components/LeadListSkeleton';
 import { useRecentLeads } from '@/features/leads/hooks/useLeads';
 import { useUnreadCount } from '@/features/notifications/hooks/useNotifications';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 
+import { FollowUpsCard } from '../components/FollowUpsCard';
 import { StatGrid, StatTile } from '../components/StatTile';
 import { useDashboardStats } from '../hooks/useDashboardStats';
 
@@ -28,11 +30,13 @@ export function DashboardScreen({ navigation }: MainTabScreenProps<'Dashboard'>)
   const stats = useDashboardStats();
   const recent = useRecentLeads();
   const unread = useUnreadCount();
+  const followUps = useFollowUps('mine');
 
-  const refreshing = stats.isRefetching || recent.isRefetching;
+  const refreshing = stats.isRefetching || recent.isRefetching || followUps.isRefetching;
   const refresh = () => {
     void stats.refetch();
     void recent.refetch();
+    void followUps.refetch();
     void unread.refetch();
   };
 
@@ -128,6 +132,14 @@ export function DashboardScreen({ navigation }: MainTabScreenProps<'Dashboard'>)
       )}
 
       <Appear index={2}>
+        <FollowUpsCard
+          onViewAll={() => navigation.navigate('FollowUps')}
+          onOpen={(item) => navigation.navigate('LeadDetail', { leadId: item.leadId })}
+          onCall={(item) => navigation.navigate('CallSession', { leadId: item.leadId })}
+        />
+      </Appear>
+
+      <Appear index={3}>
         <View className="gap-2">
           <SectionHeader
             title={t('dashboard.recentLeads')}

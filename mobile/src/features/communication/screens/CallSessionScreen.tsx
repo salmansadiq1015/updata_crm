@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { CheckCircle2, ListChecks, Phone, ShieldCheck } from 'lucide-react-native';
+import { CheckCircle2, ChevronRight, ListChecks, Phone, ShieldCheck } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -16,6 +16,8 @@ import { AppSkeleton } from '@/components/ui/AppSkeleton';
 import { AppText } from '@/components/ui/AppText';
 import { IconContainer } from '@/components/ui/IconContainer';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
+import { attachOperation, isFinished } from '@/features/callQueue/domain/queue';
+import { useCallQueueStore } from '@/features/callQueue/store/callQueueStore';
 import { useLead } from '@/features/leads/hooks/useLeads';
 import type { Lead } from '@/features/leads/types';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
@@ -49,8 +51,10 @@ import { retryOperation } from '../services/outboxSync';
 import type { DestinationField } from '../types';
 
 export function CallSessionScreen({ route, navigation }: RootScreenProps<'CallSession'>) {
-  const { leadId, operationId } = route.params;
+  const { leadId, operationId, queueId } = route.params;
   const lead = useLead(leadId);
+  // Only while that queue is still the active one (it may have been replaced or ended).
+  const inQueue = useCallQueueStore((state) => Boolean(queueId) && state.queue?.id === queueId);
 
   return (
     <Screen edges={[]} mode="keyboard" contentClassName="gap-4 pt-3 pb-10">
@@ -59,12 +63,20 @@ export function CallSessionScreen({ route, navigation }: RootScreenProps<'CallSe
       ) : lead.isError ? (
         <AppErrorState error={lead.error} onRetry={() => void lead.refetch()} />
       ) : operationId ? (
-        <ActiveCall operationId={operationId} lead={lead.data} onClose={() => navigation.goBack()} />
+        <ActiveCall
+          operationId={operationId}
+          lead={lead.data}
+          onClose={() => navigation.goBack()}
+          onNextLead={inQueue ? () => navigation.popTo('CallQueue') : undefined}
+        />
       ) : (
         <PrepareCall
           lead={lead.data}
           initialField={route.params.destinationField}
-          onStarted={(id) => navigation.setParams({ operationId: id })}
+          onStarted={(id) => {
+            if (inQueue) useCallQueueStore.getState().change((queue) => attachOperation(queue, leadId, id));
+            navigation.setParams({ operationId: id });
+          }}
         />
       )}
     </Screen>
@@ -313,12 +325,18 @@ function ActiveCall({
   operationId,
   lead,
   onClose,
+  onNextLead,
 }: {
   operationId: string;
   lead: Lead;
   onClose: () => void;
+  /** Set when this call belongs to the active SIM call queue. */
+  onNextLead?: () => void;
 }) {
   const { t } = useTranslation();
+  // After this outcome, is any lead left in the queue? (Decides "Next lead" vs "See summary".)
+  // The outcome has already moved this lead to done, so any current/pending item is "next".
+  const queueHasMore = useCallQueueStore((state) => (state.queue ? !isFinished(state.queue) : false));
   const op = useOperation(operationId);
   const capabilities = useTelephonyCapabilities();
   const [retrying, setRetrying] = useState(false);
@@ -385,12 +403,25 @@ function ActiveCall({
       {op.completePayload ? (
         <>
           <ReceiptCard op={op} onRetry={() => void retry()} retrying={retrying} />
-          <AppButton
-            title={t('communication.backToLead')}
-            variant={op.phase === 'done' ? 'primary' : 'outline'}
-            onPress={onClose}
-            fullWidth
-          />
+          {onNextLead ? (
+            // The outcome is recorded on the device and owned by the outbox from here on,
+            // so moving on is safe even while it is still syncing. Nothing is dialed: the
+            // queue shows the next lead and waits for the user's tap.
+            <AppButton
+              title={queueHasMore ? t('callQueue.actions.nextLead') : t('callQueue.actions.seeSummary')}
+              rightIcon={ChevronRight}
+              size="lg"
+              onPress={onNextLead}
+              fullWidth
+            />
+          ) : (
+            <AppButton
+              title={t('communication.backToLead')}
+              variant={op.phase === 'done' ? 'primary' : 'outline'}
+              onPress={onClose}
+              fullWidth
+            />
+          )}
         </>
       ) : null}
     </>

@@ -1,4 +1,4 @@
-import { Bot, X } from 'lucide-react-native';
+import { Bot, ListOrdered, X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -13,6 +13,8 @@ type Props = {
   onClear: () => void;
   onDone: () => void;
   onGiveToAgent: () => void;
+  /** Optional second action: call the selection one by one from the user's SIM (call queue). */
+  onCallOneByOne?: () => void;
 };
 
 /** Bottom action bar of the leads multi-select mode. Counts only explicit, visible selections. */
@@ -23,6 +25,7 @@ export function LeadSelectionBar({
   onClear,
   onDone,
   onGiveToAgent,
+  onCallOneByOne,
 }: Props) {
   const { t } = useTranslation();
   // Sits directly above the tab bar, which already clears the system navigation area.
@@ -52,6 +55,16 @@ export function LeadSelectionBar({
         onPress={onGiveToAgent}
         fullWidth
       />
+      {onCallOneByOne ? (
+        <AppButton
+          title={t('callQueue.callOneByOne', { count })}
+          leftIcon={ListOrdered}
+          variant="soft"
+          disabled={count === 0}
+          onPress={onCallOneByOne}
+          fullWidth
+        />
+      ) : null}
     </View>
   );
 }

@@ -7,13 +7,14 @@ import {
   Mail,
   MapPin,
   MessageSquare,
+  Pencil,
   Phone,
   Smartphone,
   Tag,
   UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -110,6 +111,25 @@ function LeadDetail({
       [mutateAsync],
     ),
   );
+
+  // Edit lives in the header; converted leads are read-only (managed as customers).
+  const editable = lead.status !== 'converted';
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: editable
+        ? () => (
+            <AppButton
+              title={t('leadForm.edit')}
+              leftIcon={Pencil}
+              variant="ghost"
+              size="sm"
+              accessibilityLabel={t('leadForm.editA11y', { name: lead.name })}
+              onPress={() => navigation.navigate('LeadForm', { leadId: lead.id })}
+            />
+          )
+        : undefined,
+    });
+  }, [editable, lead.id, lead.name, navigation, t]);
 
   const hasNumber = Boolean(lead.phone ?? lead.mobile);
   type Action = { key: string; label: string; icon: LucideIcon; url: string | null; a11y?: string };

@@ -6,6 +6,7 @@ import { showApiErrorToast, showSuccessToast } from '@/utils/toast';
 
 import { leadsApi } from '../api/leadsApi';
 import type { AssignableLeadStatus, Lead, LeadListFilters } from '../types';
+import type { LeadCreateInput, LeadPatch } from '../utils/leadForm';
 
 const RECENT_LEADS_LIMIT = 5;
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
@@ -58,5 +59,35 @@ export function useUpdateLeadStatus(id: string) {
       );
     },
     onError: showApiErrorToast,
+  });
+}
+
+function useInvalidateLeadLists() {
+  const client = useQueryClient();
+  return (lead: Lead) => {
+    client.setQueryData(queryKeys.leads.detail(lead.id), lead);
+    void client.invalidateQueries({ queryKey: queryKeys.leads.lists });
+    void client.invalidateQueries({ queryKey: queryKeys.leads.recent });
+    // The agenda shows lead names.
+    void client.invalidateQueries({ queryKey: queryKeys.followUps.all });
+  };
+}
+
+/** Create a lead. Errors are left to the form (field errors), not toasted here. */
+export function useCreateLead() {
+  const refresh = useInvalidateLeadLists();
+  return useMutation({
+    mutationKey: ['leads', 'create'],
+    mutationFn: (input: LeadCreateInput) => leadsApi.create(input),
+    onSuccess: ({ lead }) => refresh(lead),
+  });
+}
+
+export function useUpdateLead(id: string) {
+  const refresh = useInvalidateLeadLists();
+  return useMutation({
+    mutationKey: ['leads', 'update', id],
+    mutationFn: (patch: LeadPatch) => leadsApi.update(id, patch),
+    onSuccess: refresh,
   });
 }

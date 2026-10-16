@@ -36,7 +36,10 @@ function renderDetail(leadId: string) {
     name: 'LeadDetail',
     params: { leadId },
   } as RootScreenProps<'LeadDetail'>['route'];
-  const navigation = {} as RootScreenProps<'LeadDetail'>['navigation'];
+  const navigation = {
+    setOptions: jest.fn(),
+    navigate: jest.fn(),
+  } as unknown as RootScreenProps<'LeadDetail'>['navigation'];
   return renderWithProviders(<LeadDetailScreen route={route} navigation={navigation} />);
 }
 

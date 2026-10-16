@@ -1,4 +1,4 @@
-import { Bot, FlaskConical, ListChecks, MessageSquare, PhoneCall } from 'lucide-react-native';
+import { Bot, FlaskConical, ListChecks, ListOrdered, MessageSquare, PhoneCall } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -22,6 +22,8 @@ import {
 } from '@/features/aiAgent/hooks/useAiAgent';
 import { rowCounts } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
 import { ACTIVE_CAMPAIGN_STATUSES } from '@/features/aiAgent/types';
+import { ActiveQueueBanner } from '@/features/callQueue/components/ActiveQueueBanner';
+import { useActiveCallQueue } from '@/features/callQueue/hooks/useCallQueue';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 import { formatRelative } from '@/utils/date';
 
@@ -69,7 +71,10 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
     void campaigns.refetch();
   };
 
-  const pick = (purpose: 'call' | 'sms') => navigation.navigate('CallAgentLeadPicker', { purpose });
+  const pick = (purpose: 'call' | 'sms' | 'queue') => navigation.navigate('CallAgentLeadPicker', { purpose });
+  // SIM call queue: resume the active one, otherwise choose leads for a new one.
+  const activeQueue = useActiveCallQueue();
+  const openCallQueue = () => (activeQueue.queue ? navigation.navigate('CallQueue') : pick('queue'));
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh} contentClassName="gap-5 pt-3">
@@ -83,6 +88,7 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
         />
       </Appear>
       {defaults.isError ? <AppAlert tone="warning" message={t('callAgent.defaultsFailed')} /> : null}
+      <ActiveQueueBanner onPress={() => navigation.navigate('CallQueue')} />
 
       <Appear index={1}>
         <View className="gap-2">
@@ -115,6 +121,20 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
                 : t('callAgent.actions.callDraftOnly')
             }
             onPress={() => pick('call')}
+          />
+          <ActionTile
+            icon={ListOrdered}
+            tone="warning"
+            title={t('callQueue.action.title')}
+            hint={
+              activeQueue.queue && activeQueue.progress && !activeQueue.finished
+                ? t('callQueue.action.resumeHint', {
+                    position: Math.max(1, activeQueue.progress.position),
+                    total: activeQueue.progress.total,
+                  })
+                : t('callQueue.action.hint')
+            }
+            onPress={openCallQueue}
           />
           <ActionTile
             icon={MessageSquare}

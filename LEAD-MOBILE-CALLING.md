@@ -105,6 +105,32 @@ is protected), and the existing suppression ledgers (`CallSuppression`, messagin
 | Give leads to the AI agent (AI call / AI SMS campaigns) from the phone | Implemented on the CRM's existing campaign APIs; mocked tests; **not launched against a real backend** | see [In-app AI agent](#in-app-ai-agent) | ai-calling:write / crm:write |
 | AI agent languages | 73 languages + `auto` (mirror the callee), validated server-side, named in the agent prompt | server tests | — |
 
+## Call queue (call selected leads one by one on your SIM)
+
+Leads → **Select** (or long-press) → choose leads → **Call one by one (n)** (or Call Agent tab →
+**Call queue**). The queue screen shows "Lead 3 of 10", progress, the current lead (number masked,
+eligibility checked by the CRM when the lead comes up — ineligible leads are skipped with the
+CRM's reason), and Up next. **Call** opens the normal call screen; nothing is dialed until the user
+presses **Start call**. After the outcome is saved the call screen offers **Next lead**. Skip, Pause
+and End queue (confirmed) are available; the summary lists called / skipped / callbacks /
+qualification answers and each lead's result. The queue is stored per user, deleted on sign-out,
+and a restart never re-dials: an open call stays current with "Record outcome".
+
+This is the honest form of "the agent calls one by one": the user speaks over their own SIM and the
+assistant collects the information (questions to ask, AI suggestions from notes, qualification).
+A fully autonomous AI voice on calls uses the cloud agent below and needs a SIP trunk.
+
+## Leads and follow-ups in the app
+
+- **Create / edit leads** (`LeadForm`): same rules as the CRM API (international numbers
+  required; a local number such as `03054949624` gets a one-tap "Use +92 3054949624" suggestion,
+  defaulting to the phone's own region; nothing is changed silently), duplicate warning, only
+  changed fields are sent on edit, converted leads are read-only.
+- **Follow-ups agenda**: `GET /crm/leads/follow-ups?from&to&scope=mine|all` (contact-log
+  follow-ups, soft-deleted leads excluded) → Overdue / Today / Upcoming screen and a dashboard card;
+  refreshed after every saved call/SMS outcome. On a server older than this release the card hides
+  itself instead of showing an error.
+
 ## In-app AI agent
 
 Leads screen → **Select** (or long-press) → choose leads → **Give to AI agent (n)**; or **Give to AI

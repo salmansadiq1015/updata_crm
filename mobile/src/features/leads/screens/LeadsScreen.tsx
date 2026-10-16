@@ -1,4 +1,4 @@
-import { Bot, CheckSquare, FilterX, SlidersHorizontal, Users } from 'lucide-react-native';
+import { Bot, CheckSquare, FilterX, Plus, SlidersHorizontal, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, ScrollView, View } from 'react-native';
@@ -14,6 +14,8 @@ import { AppSearchInput } from '@/components/ui/AppSearchInput';
 import { AppText } from '@/components/ui/AppText';
 import { LeadSelectionBar } from '@/features/aiAgent/components/LeadSelectionBar';
 import { useStartAiAgent } from '@/features/aiAgent/hooks/useAiAgent';
+import { ActiveQueueBanner } from '@/features/callQueue/components/ActiveQueueBanner';
+import { useStartCallQueue } from '@/features/callQueue/hooks/useCallQueue';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { useDebouncedValue } from '@/hooks/useDebounce';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
@@ -82,6 +84,17 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
     });
     return () => subscription.remove();
   }, [selecting]);
+  const openQueue = useCallback(() => navigation.navigate('CallQueue'), [navigation]);
+  const callQueue = useStartCallQueue(openQueue);
+  // Same explicit selection, in the order shown, called one by one from the user's SIM.
+  const callOneByOne = () => {
+    const chosen = leads
+      .filter((lead) => selection?.has(lead.id))
+      .map((lead) => ({ id: lead.id, name: lead.name }));
+    if (chosen.length === 0) return;
+    setSelection(null);
+    callQueue.start(chosen);
+  };
   const giveToAgent = () => {
     const ids = leads.filter((lead) => selection?.has(lead.id)).map((lead) => lead.id);
     if (ids.length === 0) return;
@@ -96,6 +109,7 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
 
   const header = (
     <View className="gap-2.5 pb-3">
+      <ActiveQueueBanner onPress={openQueue} />
       <View className="flex-row items-center gap-2">
         <View className="flex-1">
           <AppSearchInput
@@ -174,6 +188,18 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
         title: t('leads.title'),
         right: (
           <View className="flex-row items-center gap-1">
+            {selecting ? null : (
+              // A labelled button, not only an icon, placed first: easy to find and not
+              // hidden under the dev tools overlay in the top-right corner of dev builds.
+              <AppButton
+                title={t('aiAgent.selection.select')}
+                leftIcon={CheckSquare}
+                variant="soft"
+                size="sm"
+                accessibilityLabel={t('aiAgent.selection.selectA11y')}
+                onPress={() => setSelection(new Set())}
+              />
+            )}
             <AppIconButton
               icon={Bot}
               accessibilityLabel={t('aiAgent.campaignsA11y')}
@@ -181,9 +207,10 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
             />
             {selecting ? null : (
               <AppIconButton
-                icon={CheckSquare}
-                accessibilityLabel={t('aiAgent.selection.selectA11y')}
-                onPress={() => setSelection(new Set())}
+                icon={Plus}
+                variant="primary"
+                accessibilityLabel={t('leadForm.createTitle')}
+                onPress={() => navigation.navigate('LeadForm')}
               />
             )}
           </View>
@@ -245,8 +272,10 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
           onClear={() => setSelection(new Set())}
           onDone={() => setSelection(null)}
           onGiveToAgent={giveToAgent}
+          onCallOneByOne={callOneByOne}
         />
       ) : null}
+      {callQueue.dialog}
     </Screen>
   );
 }

@@ -1,4 +1,5 @@
 import leadService from './lead.service.js';
+import leadFollowUpsService from './leadFollowUps.service.js';
 import leadEnrichmentService from './leadEnrichment.service.js';
 import leadImportExportService from './leadImportExport.service.js';
 import extensionImportService from '../extension/extensionImport.service.js';
@@ -37,6 +38,15 @@ class LeadController {
     try {
       const query = req._validatedQuery || req.query;
       const data = await leadService.listForMap(query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  /** Upcoming / overdue follow-ups across leads (ascending, capped at 200). */
+  async followUps(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await leadFollowUpsService.listFollowUps(query, req.user._id);
       return res.success({ data });
     } catch (err) { next(err); }
   }

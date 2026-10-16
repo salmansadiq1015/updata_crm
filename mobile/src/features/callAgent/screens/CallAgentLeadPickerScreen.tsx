@@ -1,5 +1,5 @@
 import { ChevronRight, Users } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppSearchInput } from '@/components/ui/AppSearchInput';
 import { AppText } from '@/components/ui/AppText';
+import { useStartCallQueue } from '@/features/callQueue/hooks/useCallQueue';
 import { LeadListItem } from '@/features/leads/components/LeadListItem';
 import { useLeadList } from '@/features/leads/hooks/useLeads';
 import { LEAD_STATUSES, type Lead, type LeadStatus } from '@/features/leads/types';
@@ -44,10 +45,17 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
   // Ordered, so the launch flow receives leads in the order they were picked.
   const [selected, setSelected] = useState<string[]>([]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  // Names of picked leads, kept even when a later search hides them (the call queue shows them).
+  const names = useRef(new Map<string, string>());
   const onToggle = useCallback(
-    (lead: Lead) => setSelected((current) => toggleSelection(current, lead.id, single)),
+    (lead: Lead) => {
+      names.current.set(lead.id, lead.name);
+      setSelected((current) => toggleSelection(current, lead.id, single));
+    },
     [single],
   );
+  const openQueue = useCallback(() => navigation.replace('CallQueue'), [navigation]);
+  const callQueue = useStartCallQueue(openQueue);
   const shownIds = leads.map((lead) => lead.id);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selectedSet.has(id));
 
@@ -58,12 +66,16 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
   const proceed = () => {
     if (selected.length === 0) return;
     if (purpose === 'test') navigation.replace('CallAgentTest', { leadId: selected[0]! });
+    else if (purpose === 'queue')
+      callQueue.start(selected.map((id) => ({ id, name: names.current.get(id) ?? '' })));
     else navigation.navigate('AiAgentLaunch', { leadIds: selected, initialChannel: purpose });
   };
 
   const header = (
     <View className="gap-3 pb-3">
-      <AppText tone="muted">{t(`callAgent.picker.intro.${purpose}`)}</AppText>
+      <AppText tone="muted">
+        {purpose === 'queue' ? t('callQueue.picker.intro') : t(`callAgent.picker.intro.${purpose}`)}
+      </AppText>
       <AppSearchInput
         value={search}
         onChangeText={setSearch}
@@ -146,7 +158,10 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
               title={t('callAgent.picker.selectShown')}
               variant="ghost"
               size="sm"
-              onPress={() => setSelected((current) => selectAllVisible(current, shownIds))}
+              onPress={() => {
+                leads.forEach((lead) => names.current.set(lead.id, lead.name));
+                setSelected((current) => selectAllVisible(current, shownIds));
+              }}
             />
           ) : null}
           {selected.length > 0 ? (
@@ -162,7 +177,9 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
           title={
             single
               ? t('callAgent.picker.continueTest')
-              : t('callAgent.picker.continue', { count: selected.length })
+              : purpose === 'queue'
+                ? t('callQueue.picker.continue', { count: selected.length })
+                : t('callAgent.picker.continue', { count: selected.length })
           }
           rightIcon={ChevronRight}
           disabled={selected.length === 0}
@@ -170,6 +187,7 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
           fullWidth
         />
       </View>
+      {callQueue.dialog}
     </Screen>
   );
 }

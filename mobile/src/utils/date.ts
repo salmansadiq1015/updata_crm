@@ -31,6 +31,11 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ];
 
+/** False on Hermes (Android), where formatRelative falls back to an absolute date. */
+export function supportsRelativeTime(): boolean {
+  return typeof Intl.RelativeTimeFormat === 'function';
+}
+
 /** `3 hours ago`, `yesterday`, `now`. */
 export function formatRelative(
   value: string | Date | null | undefined,

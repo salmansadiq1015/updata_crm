@@ -52,14 +52,31 @@ const addressSchema = z
     formatted: nullableString,
   })
   .nullish()
-  .transform((address) => {
+  .transform((address): LeadAddress | null => {
     if (!address) return null;
     const composed = [address.street, [address.postalCode, address.city].filter(Boolean).join(' ')]
       .filter(Boolean)
       .join(', ');
     const text = address.formatted ?? (composed || null);
-    return text ? { text, city: address.city } : null;
+    if (!text && !address.country) return null;
+    return {
+      text,
+      city: address.city,
+      // The raw parts, for the edit form.
+      street: address.street,
+      postalCode: address.postalCode,
+      country: address.country,
+    };
   });
+
+/** `text` is for display; the optional parts prefill the edit form. */
+export type LeadAddress = {
+  text: string | null;
+  city: string | null;
+  street?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+};
 
 export const leadSchema = z
   .object({

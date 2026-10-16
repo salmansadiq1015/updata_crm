@@ -45,6 +45,8 @@ async function syncOne(operationId: string, userId: string): Promise<void> {
       store.update(operationId, (current) => afterReceipt(current, receipt));
       void queryClient.invalidateQueries({ queryKey: queryKeys.leads.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.communication.all });
+      // A saved outcome may have scheduled a callback: refresh the follow-ups agenda too.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.followUps.all });
     }
   } catch (error) {
     if (activeUserId() !== userId) return;

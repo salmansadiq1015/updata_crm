@@ -15,10 +15,13 @@ import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { CallAgentLeadPickerScreen } from '@/features/callAgent/screens/CallAgentLeadPickerScreen';
 import { CallAgentSettingsScreen } from '@/features/callAgent/screens/CallAgentSettingsScreen';
 import { CallAgentTestScreen } from '@/features/callAgent/screens/CallAgentTestScreen';
+import { CallQueueScreen } from '@/features/callQueue/screens/CallQueueScreen';
 import { CallSessionScreen } from '@/features/communication/screens/CallSessionScreen';
 import { CommunicationQueueScreen } from '@/features/communication/screens/CommunicationQueueScreen';
 import { SmsComposeScreen } from '@/features/communication/screens/SmsComposeScreen';
+import { FollowUpsScreen } from '@/features/followUps/screens/FollowUpsScreen';
 import { LeadDetailScreen } from '@/features/leads/screens/LeadDetailScreen';
+import { LeadFormScreen } from '@/features/leads/screens/LeadFormScreen';
 import { useTheme } from '@/theme/ThemeProvider';
 
 import { linking } from './linking';
@@ -53,6 +56,20 @@ export function RootNavigator() {
               name="LeadDetail"
               component={LeadDetailScreen}
               options={{ headerShown: true, title: t('leads.details'), headerBackTitle: t('common.back') }}
+            />
+            <Stack.Screen
+              name="LeadForm"
+              component={LeadFormScreen}
+              options={({ route }) => ({
+                headerShown: true,
+                title: route.params?.leadId ? t('leadForm.editTitle') : t('leadForm.createTitle'),
+                headerBackTitle: t('common.back'),
+              })}
+            />
+            <Stack.Screen
+              name="FollowUps"
+              component={FollowUpsScreen}
+              options={{ headerShown: true, title: t('followUps.title'), headerBackTitle: t('common.back') }}
             />
             <Stack.Screen
               name="CallSession"
@@ -132,6 +149,15 @@ export function RootNavigator() {
               options={{
                 headerShown: true,
                 title: t('callAgent.test.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallQueue"
+              component={CallQueueScreen}
+              options={{
+                headerShown: true,
+                title: t('callQueue.title'),
                 headerBackTitle: t('common.back'),
               }}
             />

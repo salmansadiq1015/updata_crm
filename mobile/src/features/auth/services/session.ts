@@ -5,6 +5,7 @@ import { queryClient } from '@/app/queryClient';
 import { toApiError } from '@/services/api/apiErrors';
 import { refreshAccessToken, setSessionEndedHandler } from '@/services/auth/sessionManager';
 import { tokenManager } from '@/services/auth/tokenManager';
+import { useCallQueueStore } from '@/features/callQueue/store/callQueueStore';
 import { useOperationsStore } from '@/features/communication/store/operationsStore';
 import { logger } from '@/services/logging/logger';
 
@@ -62,6 +63,8 @@ export async function signOut(): Promise<void> {
   // Sign-out is explicit: the user's local outbox (call notes awaiting sync) goes with it.
   // The Settings screen warns first when it still holds unsynced work.
   await useOperationsStore.getState().purge();
+  // The SIM call queue (lead names and outcomes) is per user too and goes with it.
+  await useCallQueueStore.getState().purge();
   try {
     await authApi.logout();
   } catch (error) {

@@ -263,6 +263,16 @@ export const leadFilterOptions = {
   }),
 };
 
+// Follow-ups agenda across leads (contact-log followUpAt). `scope=mine` keeps
+// entries the caller created or is the employee on; `all` is company-wide.
+export const followUps = {
+  query: Joi.object({
+    from: Joi.date().iso(),
+    to: Joi.date().iso(),
+    scope: Joi.string().valid('mine', 'all').default('mine'),
+  }),
+};
+
 export const leadIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };

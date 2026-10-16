@@ -12,6 +12,10 @@ export const queryKeys = {
     recent: ['leads', 'recent'] as const,
     detail: (id: string) => ['leads', 'detail', id] as const,
   },
+  followUps: {
+    all: ['follow-ups'] as const,
+    list: (scope: string) => ['follow-ups', scope] as const,
+  },
   communication: {
     all: ['communication'] as const,
     history: (leadId: string) => ['communication', 'history', leadId] as const,

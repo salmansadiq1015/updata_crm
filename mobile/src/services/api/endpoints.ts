@@ -19,6 +19,8 @@ export const ENDPOINTS = {
   leads: {
     list: '/crm/leads',
     detail: (id: string) => `/crm/leads/${encodeURIComponent(id)}`,
+    // Follow-ups agenda across leads (lead.routes.js, before /:id).
+    followUps: '/crm/leads/follow-ups',
   },
   // Device-originated calls/SMS (server/src/modules/crm/leadCommunication.routes.js).
   communications: {

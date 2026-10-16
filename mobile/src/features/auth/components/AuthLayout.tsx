@@ -17,6 +17,9 @@ import { useTheme } from '@/theme/ThemeProvider';
  * Shared frame for signed-out screens: a brand-navy gradient hero with the logo,
  * and the form on a raised card that overlaps it. Mirrors the web (auth) layout.
  */
+/** How far the form card rides up over the hero band. */
+const CARD_OVERLAP = 40;
+
 export function AuthLayout({
   title,
   subtitle,
@@ -39,15 +42,19 @@ export function AuthLayout({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 32 }}
       >
+        {/* Hero band: tall enough that the mark and wordmark sit fully on navy (in
+            both themes) with room left for the card to overlap its lower edge. */}
         <GradientSurface
           className="rounded-b-4xl px-6"
-          style={{ paddingTop: insets.top + 36, paddingBottom: 72 }}
+          style={{ paddingTop: insets.top + 40, paddingBottom: CARD_OVERLAP + 36 }}
         >
-          <View className="w-full max-w-md flex-row items-center gap-3 self-center">
-            <BrandMark size={44} tone="light" />
+          <View className="w-full max-w-md items-center gap-3 self-center">
+            <View className="rounded-[18px] border border-white/20 bg-white/10 p-1.5">
+              <BrandMark size={52} tone="light" />
+            </View>
             <AppText
-              variant="h3"
-              className="text-white"
+              variant="h2"
+              className="text-[22px] leading-7 text-white"
               accessibilityElementsHidden
               importantForAccessibility="no"
             >
@@ -56,14 +63,14 @@ export function AuthLayout({
           </View>
         </GradientSurface>
 
-        <View className="-mt-12 px-4">
+        <View className="px-4" style={{ marginTop: -CARD_OVERLAP }}>
           <Appear>
             <View
               style={shadows.xl}
-              className="w-full max-w-md self-center rounded-3xl border border-border bg-card p-6"
+              className="w-full max-w-md self-center rounded-3xl border border-border bg-card p-5"
             >
-              <OfflineBanner className="mx-0 mb-5 mt-0" />
-              <View className="mb-6 gap-2">
+              <OfflineBanner className="mx-0 mb-4 mt-0" />
+              <View className="mb-5 gap-1">
                 <AppText variant="h2">{title}</AppText>
                 {subtitle ? <AppText tone="muted">{subtitle}</AppText> : null}
               </View>
@@ -92,7 +99,7 @@ function ServerHost() {
     // keep the raw value
   }
   return (
-    <AppText variant="caption" tone="muted" className="mt-4 text-center" selectable>
+    <AppText variant="caption" tone="muted" className="mt-3 text-center" selectable>
       {t('auth.serverHost', { host })}
     </AppText>
   );

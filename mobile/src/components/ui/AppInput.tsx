@@ -59,7 +59,8 @@ export function AppInput({
       <View
         style={ring}
         className={cn(
-          'h-12 flex-row items-center gap-2.5 rounded-xl border px-3.5',
+          'flex-row gap-2.5 rounded-xl border px-3.5',
+          props.multiline ? 'min-h-28 items-start py-2.5' : 'h-12 items-center',
           focused ? 'border-ring bg-card' : 'border-input bg-muted/50',
           error && 'border-destructive',
           disabled && 'opacity-50',
@@ -82,7 +83,13 @@ export function AppInput({
           placeholderTextColor={colors.mutedForeground}
           selectionColor={colors.primary}
           cursorColor={colors.primary}
-          className="h-full flex-1 font-geist text-lg text-foreground"
+          textAlignVertical={props.multiline ? 'top' : 'center'}
+          // Android wraps a long placeholder in a single-line field unless told otherwise.
+          numberOfLines={props.multiline ? undefined : 1}
+          className={cn(
+            'flex-1 font-geist text-base text-foreground',
+            props.multiline ? 'min-h-24 py-0 leading-6' : 'h-full',
+          )}
           onFocus={(event) => {
             setFocused(true);
             onFocus?.(event);

@@ -12,6 +12,9 @@ import { AiAgentCampaignDetailScreen } from '@/features/aiAgent/screens/AiAgentC
 import { AiAgentCampaignsScreen } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
 import { AiAgentLaunchScreen } from '@/features/aiAgent/screens/AiAgentLaunchScreen';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
+import { CallAgentLeadPickerScreen } from '@/features/callAgent/screens/CallAgentLeadPickerScreen';
+import { CallAgentSettingsScreen } from '@/features/callAgent/screens/CallAgentSettingsScreen';
+import { CallAgentTestScreen } from '@/features/callAgent/screens/CallAgentTestScreen';
 import { CallSessionScreen } from '@/features/communication/screens/CallSessionScreen';
 import { CommunicationQueueScreen } from '@/features/communication/screens/CommunicationQueueScreen';
 import { SmsComposeScreen } from '@/features/communication/screens/SmsComposeScreen';
@@ -102,6 +105,33 @@ export function RootNavigator() {
               options={{
                 headerShown: true,
                 title: t('aiAgent.detailTitle'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallAgentSettings"
+              component={CallAgentSettingsScreen}
+              options={{
+                headerShown: true,
+                title: t('callAgent.settings.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallAgentLeadPicker"
+              component={CallAgentLeadPickerScreen}
+              options={{
+                headerShown: true,
+                title: t('callAgent.picker.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallAgentTest"
+              component={CallAgentTestScreen}
+              options={{
+                headerShown: true,
+                title: t('callAgent.test.title'),
                 headerBackTitle: t('common.back'),
               }}
             />

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
+import { usePullRefresh } from '@/components/layout/usePullRefresh';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppPressableCard } from '@/components/ui/AppCard';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
@@ -27,11 +28,13 @@ export function rowCounts(row: AgentCampaignRow): { done: number; total: number 
   return { done: progress?.processed ?? 0, total: progress?.eligible ?? row.campaign.summary.eligible ?? 0 };
 }
 
-const Gap = () => <View className="h-3" />;
+const Gap = () => <View className="h-2" />;
 
 export function AiAgentCampaignsScreen({ navigation }: RootScreenProps<'AiAgentCampaigns'>) {
   const { t, i18n } = useTranslation();
   const query = useAgentCampaigns();
+  // Spinner only for a user pull; background polling never flashes the refresh disc.
+  const pull = usePullRefresh(query.isRefetching, () => void query.refetch());
 
   return (
     <Screen mode="static" edges={['bottom']}>
@@ -39,9 +42,9 @@ export function AiAgentCampaignsScreen({ navigation }: RootScreenProps<'AiAgentC
         data={query.data ?? []}
         keyExtractor={(row) => `${row.kind}-${row.campaign.id}`}
         ItemSeparatorComponent={Gap}
-        contentContainerClassName="grow px-4 py-4"
-        onRefresh={() => void query.refetch()}
-        refreshing={query.isRefetching}
+        contentContainerClassName="grow px-4 pb-6 pt-3"
+        onRefresh={pull.onRefresh}
+        refreshing={pull.refreshing}
         ListEmptyComponent={
           query.isPending ? (
             <Loading label={t('common.loading')} />
@@ -73,7 +76,7 @@ export function AiAgentCampaignsScreen({ navigation }: RootScreenProps<'AiAgentC
                   campaignId: item.campaign.id,
                 })
               }
-              className="gap-2"
+              className="gap-1.5 px-3.5 py-3"
             >
               <View className="flex-row items-center gap-2">
                 <Icon

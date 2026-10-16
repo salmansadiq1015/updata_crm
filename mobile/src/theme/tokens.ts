@@ -19,9 +19,11 @@ export const shadows: Record<ColorScheme, Record<ShadowLevel, ViewStyle>> = {
     lg: { boxShadow: '0px 2px 6px rgba(16, 42, 86, 0.05), 0px 12px 28px rgba(16, 42, 86, 0.09)' },
     xl: { boxShadow: '0px 4px 10px rgba(16, 42, 86, 0.06), 0px 24px 48px rgba(16, 42, 86, 0.16)' },
   },
+  // Dark: resting surfaces are separated by their hairline border only (shadows read
+  // as muddy halos on near-black); floating layers (sheets, dialogs) keep depth.
   dark: {
-    sm: { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.30)' },
-    md: { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.30), 0px 6px 16px rgba(0, 0, 0, 0.30)' },
+    sm: {},
+    md: {},
     lg: { boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.35), 0px 12px 28px rgba(0, 0, 0, 0.40)' },
     xl: { boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.40), 0px 24px 48px rgba(0, 0, 0, 0.55)' },
   },
@@ -57,4 +59,23 @@ export const motion = {
   stagger: 45,
   maxStaggerItems: 8,
   shimmerDuration: 1300,
+} as const;
+
+/**
+ * Layout rhythm (4/8pt grid). Classes are the source of truth on screens; these
+ * mirror them for raw-style call sites and document the rules in one place:
+ * - screen gutter 16 (`px-4`), section gap 20 (`gap-5`), related blocks 12 (`gap-3`)
+ * - card padding 16 (`p-4`, dense cards `p-3.5`), card radius 16 (`rounded-2xl`),
+ *   hero radius 20 (`rounded-3xl`)
+ * - list row gap 8 (`h-2` separator); rows stay ≥ 48dp tall
+ * - large title 28/34 with 8 above and 12 below; pushed screens start content 12 below the bar
+ */
+export const layout = {
+  gutter: 16,
+  sectionGap: 20,
+  blockGap: 12,
+  cardPadding: 16,
+  rowGap: 8,
+  cardRadius: 16,
+  heroRadius: 20,
 } as const;

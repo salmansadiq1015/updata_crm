@@ -6,7 +6,6 @@ import { ScrollView, View } from 'react-native';
 import { AppAlert } from '@/components/feedback/AppAlert';
 import { Screen } from '@/components/layout/Screen';
 import { SectionHeader } from '@/components/layout/SectionHeader';
-import { AppAvatar } from '@/components/ui/AppAvatar';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppChip } from '@/components/ui/AppChip';
@@ -27,6 +26,7 @@ import { analyzeSms } from '../domain/smsEncoding';
 import { findUnresolvedTokens, leadTemplateVariables, renderTemplate } from '../domain/templates';
 import { useEligibility, useOperation, useSmsTemplates } from '../hooks/useCommunication';
 import { ContactFlowError, dismissOperation, startSms } from '../services/contactFlows';
+import { ContactHero } from '../components/ContactHero';
 import { tKey } from '../i18n';
 import { retryOperation } from '../services/outboxSync';
 import type { DestinationField, SmsTemplate } from '../types';
@@ -38,9 +38,9 @@ export function SmsComposeScreen({ route, navigation }: RootScreenProps<'SmsComp
   const lead = useLead(leadId);
 
   return (
-    <Screen edges={[]} mode="keyboard" contentClassName="gap-4 pt-4 pb-10">
+    <Screen edges={[]} mode="keyboard" contentClassName="gap-4 pt-3 pb-10">
       {lead.isPending ? (
-        <AppSkeleton className="h-40 w-full rounded-2xl" />
+        <AppSkeleton className="h-20 w-full rounded-3xl" />
       ) : lead.isError ? (
         <AppErrorState error={lead.error} onRetry={() => void lead.refetch()} />
       ) : operationId ? (
@@ -128,13 +128,15 @@ function Compose({
 
   return (
     <>
-      <AppCard className="gap-3">
-        <View className="flex-row items-center gap-3">
-          <AppAvatar name={lead.name} size="lg" />
-          <AppText variant="h3" className="flex-1">
-            {lead.name}
-          </AppText>
-        </View>
+      <View className="gap-2">
+        <ContactHero
+          name={lead.name}
+          subtitle={
+            eligibility.data?.destinationMasked
+              ? t('communication.sms.to', { number: eligibility.data.destinationMasked })
+              : null
+          }
+        />
         {fields.length > 1 ? (
           <View className="flex-row gap-2">
             {fields.map((value) => (
@@ -147,12 +149,7 @@ function Compose({
             ))}
           </View>
         ) : null}
-        {eligibility.data?.destinationMasked ? (
-          <AppText tone="muted">
-            {t('communication.sms.to', { number: eligibility.data.destinationMasked })}
-          </AppText>
-        ) : null}
-      </AppCard>
+      </View>
 
       <AppCard className="gap-3">
         <SectionHeader title={t('communication.sms.templates')} />
@@ -163,7 +160,12 @@ function Compose({
         ) : templates.data.length === 0 ? (
           <AppText tone="muted">{t('communication.sms.noTemplates')}</AppText>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="-mx-4"
+            contentContainerClassName="gap-2 px-4"
+          >
             <AppChip
               label={t('communication.sms.blank')}
               selected={!template}
@@ -242,20 +244,13 @@ function SmsOutcome({
 
   return (
     <>
-      <AppCard className="gap-3">
-        <View className="flex-row items-center gap-3">
-          <AppAvatar name={lead.name} size="lg" />
-          <View className="flex-1 gap-0.5">
-            <AppText variant="h3">{lead.name}</AppText>
-            <AppText tone="muted">{t(`communication.phase.${op.phase}`)}</AppText>
-          </View>
-        </View>
+      <ContactHero name={lead.name} subtitle={t(`communication.phase.${op.phase}`)}>
         {op.smsBody ? (
-          <AppText selectable className="rounded-2xl border border-primary/15 bg-primary/5 p-3.5">
+          <AppText selectable className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
             {op.smsBody}
           </AppText>
         ) : null}
-      </AppCard>
+      </ContactHero>
 
       {op.phase === 'dispatch_failed' || op.phase === 'abandoned' ? (
         <AppCard className="gap-3">

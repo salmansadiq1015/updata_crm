@@ -27,11 +27,13 @@ export type AppErrorStateProps = {
   /** Omit when retrying cannot help (forbidden, not found). */
   onRetry?: () => void;
   retrying?: boolean;
+  /** `inline` for a failed section inside a scrolling screen (see AppEmptyState). */
+  size?: 'screen' | 'inline';
   className?: string;
 };
 
 /** Full-area error with a mapped, localized message — never the raw server text. */
-export function AppErrorState({ error, onRetry, retrying, className }: AppErrorStateProps) {
+export function AppErrorState({ error, onRetry, retrying, size, className }: AppErrorStateProps) {
   const { t } = useTranslation();
   const kind = errorKind(error);
   const canRetry = onRetry && kind !== 'forbidden' && kind !== 'not_found';
@@ -42,12 +44,14 @@ export function AppErrorState({ error, onRetry, retrying, className }: AppErrorS
       iconColor={kind === 'generic' ? 'destructive' : 'mutedForeground'}
       title={t('errors.screenTitle')}
       description={t(errorMessageKey(error))}
+      size={size}
       className={className}
       action={
         canRetry ? (
           <AppButton
             title={t('common.retry')}
             variant="outline"
+            size={size === 'inline' ? 'sm' : 'md'}
             leftIcon={RotateCcw}
             loading={retrying}
             onPress={onRetry}

@@ -1,6 +1,8 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
+import { aiAgentApi } from '@/features/aiAgent/api/aiAgentApi';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
+import { callAgentApi } from '@/features/callAgent/api/callAgentApi';
 import { dashboardApi } from '@/features/dashboard/api/dashboardApi';
 import { leadsApi } from '@/features/leads/api/leadsApi';
 import { notificationsApi } from '@/features/notifications/api/notificationsApi';
@@ -11,6 +13,8 @@ import { RootNavigator } from '../RootNavigator';
 jest.mock('@/features/dashboard/api/dashboardApi');
 jest.mock('@/features/leads/api/leadsApi');
 jest.mock('@/features/notifications/api/notificationsApi');
+jest.mock('@/features/aiAgent/api/aiAgentApi');
+jest.mock('@/features/callAgent/api/callAgentApi');
 jest.mock('@/features/auth/services/session', () => ({
   signIn: jest.fn(),
   signOut: jest.fn(),
@@ -64,6 +68,17 @@ beforeEach(() => {
   jest
     .mocked(notificationsApi.feed)
     .mockResolvedValue({ items: [], pagination: { hasNext: false, nextCursor: null, limit: 30 } });
+  jest.mocked(callAgentApi.defaults).mockResolvedValue(null);
+  jest.mocked(aiAgentApi.languages).mockResolvedValue({ languages: [], defaultLanguage: 'en' });
+  jest
+    .mocked(aiAgentApi.telephonyHealth)
+    .mockResolvedValue({ configured: false, livekitReady: false, reason: 'no_sip_trunk' });
+  jest.mocked(aiAgentApi.messagingHealth).mockResolvedValue({
+    settings: { providers: { textbeeEnabled: true, twilioEnabled: false } },
+    providers: { textbee: { eligible: true, reason: null }, twilio: { eligible: false, reason: null } },
+  });
+  jest.mocked(aiAgentApi.listCallCampaigns).mockResolvedValue({ items: [], total: 0 });
+  jest.mocked(aiAgentApi.listSmsCampaigns).mockResolvedValue({ items: [], total: 0 });
 });
 
 describe('RootNavigator', () => {
@@ -109,5 +124,28 @@ describe('RootNavigator', () => {
       expect(screen.getByText('Your session has expired. Please sign in again.')).toBeTruthy(),
     );
     expect(screen.queryByText('Hello, Ana')).toBeNull();
+  });
+
+  it('shows five tabs with the highlighted Call Agent tab in the centre', async () => {
+    jest.mocked(notificationsApi.unreadCount).mockResolvedValue(3);
+    useSessionStore.setState({ status: 'authenticated', user });
+    await renderWithProviders(<RootNavigator />);
+    expect(await screen.findByText('Hello, Ana')).toBeTruthy();
+
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(5);
+    expect(tabs[2]).toHaveAccessibleName('Updata Call Agent');
+    expect(screen.getByTestId('tab-call-agent')).not.toBeSelected();
+    // The unread badge stays on Notifications.
+    expect(await screen.findByRole('tab', { name: 'Notifications, 3 unread notifications' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Updata Call Agent' }));
+    expect(screen.getByTestId('tab-call-agent')).toBeSelected();
+    expect(await screen.findByRole('button', { name: 'Set up agent' })).toBeTruthy();
+    expect(await screen.findByText("AI calling can't dial yet: no phone trunk is configured.")).toBeTruthy();
+    expect(await screen.findByText('SMS sending is ready.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Set up agent' }));
+    expect(await screen.findByLabelText('Agent name')).toBeTruthy();
   });
 });

@@ -12,8 +12,7 @@ import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Appear } from '@/components/motion/Appear';
 import { AppAvatar } from '@/components/ui/AppAvatar';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppCard } from '@/components/ui/AppCard';
-import { AppListItem } from '@/components/ui/AppListItem';
+import { AppListGroup, AppListItem } from '@/components/ui/AppListItem';
 import { AppRadioGroup } from '@/components/ui/AppRadioGroup';
 import { AppText } from '@/components/ui/AppText';
 import { GradientSurface } from '@/components/ui/GradientSurface';
@@ -71,22 +70,26 @@ export function SettingsScreen() {
   ];
 
   return (
-    <Screen header={{ title: t('settings.title') }} contentClassName="gap-6">
+    <Screen header={{ title: t('settings.title') }} contentClassName="gap-5 pt-1">
       {user ? (
         <Appear>
-          <GradientSurface className="flex-row items-center gap-4 rounded-4xl p-5">
+          <GradientSurface className="flex-row items-center gap-3 rounded-3xl p-4">
             <AppAvatar name={user.fullName} imageUrl={user.avatarUrl} size="lg" ring />
             <View className="flex-1 gap-0.5">
-              <AppText variant="title" className="text-lg text-white" numberOfLines={1}>
+              <AppText variant="h3" className="text-white" numberOfLines={1}>
                 {user.fullName}
               </AppText>
-              <AppText className="text-white/75" numberOfLines={1}>
+              <AppText variant="label" className="font-geist text-white/70" numberOfLines={1}>
                 {user.email}
               </AppText>
               {user.roleName ? (
-                <View className="mt-2 flex-row items-center gap-1.5 self-start rounded-full border border-white/20 bg-white/15 px-2.5 py-1">
+                <View className="mt-1.5 h-6 flex-row items-center gap-1.5 self-start rounded-full border border-white/20 bg-white/15 px-2.5">
                   <Icon icon={ShieldCheck} size="xs" color="primaryForeground" />
-                  <AppText variant="caption" className="font-geist-semibold text-white">
+                  <AppText
+                    variant="caption"
+                    style={{ includeFontPadding: false }}
+                    className="font-geist-semibold leading-4 text-white"
+                  >
                     {user.roleName}
                   </AppText>
                 </View>
@@ -97,10 +100,11 @@ export function SettingsScreen() {
       ) : null}
 
       <Appear index={1}>
-        <View className="gap-2">
-          <SectionHeader title={t('settings.appearance')} />
+        <View className="gap-1.5">
+          <SectionHeader title={t('settings.appearance')} size="group" />
           <AppRadioGroup
             accessibilityLabel={t('settings.appearance')}
+            appearance="segmented"
             value={theme}
             onChange={setTheme}
             options={THEMES.map((value) => ({ value, label: t(`settings.theme.${value}`) }))}
@@ -109,25 +113,26 @@ export function SettingsScreen() {
       </Appear>
 
       <Appear index={2}>
-        <View className="gap-2">
-          <SectionHeader title={t('settings.language')} />
+        <View className="gap-1.5">
+          <SectionHeader title={t('settings.language')} size="group" />
           <AppRadioGroup
             accessibilityLabel={t('settings.language')}
             value={language ?? DEVICE}
             onChange={(value) => void changeLanguage(value === DEVICE ? null : (value as Locale))}
             options={languageOptions}
           />
-          <AppText variant="caption" tone="muted" className="ms-1">
+          <AppText variant="caption" tone="muted" className="px-1">
             {t('settings.languageRestart')}
           </AppText>
         </View>
       </Appear>
 
       <Appear index={3}>
-        <AppCard className="py-1">
-          <SectionHeader title={t('communication.settings.title')} className="pt-2" />
+        <AppListGroup title={t('communication.settings.title')}>
           <AppListItem
             icon={CloudUpload}
+            iconTone={unsynced > 0 ? 'warning' : 'success'}
+            layout="inline"
             label={t('communication.queue.title')}
             value={
               unsynced > 0
@@ -135,33 +140,36 @@ export function SettingsScreen() {
                 : t('communication.settings.allSynced')
             }
             onPress={() => navigation.navigate('CommunicationQueue')}
-            bordered
           />
           <AppListItem
             icon={Phone}
+            iconTone="primary"
+            layout="inline"
             label={t('communication.settings.calling')}
             value={callingSummary}
-            bordered
           />
-        </AppCard>
+        </AppListGroup>
       </Appear>
 
+      {/* Further feature groups (e.g. the call agent) go here as their own AppListGroup. */}
+
       <Appear index={4}>
-        <AppCard className="py-1">
-          <SectionHeader title={t('settings.about')} className="pt-2" />
+        <AppListGroup title={t('settings.about')}>
           <AppListItem
             icon={Info}
+            iconTone="info"
+            layout="inline"
             label={t('settings.version')}
             value={Constants.expoConfig?.version ?? '—'}
-            bordered
           />
           <AppListItem
             icon={Server}
+            iconTone="muted"
+            layout="inline"
             label={t('settings.environment')}
             value={`${t(`settings.envName.${env.appEnv}`)} · ${new URL(env.apiUrl).host}`}
-            bordered
           />
-        </AppCard>
+        </AppListGroup>
       </Appear>
 
       <AppButton
@@ -169,6 +177,7 @@ export function SettingsScreen() {
         variant="outline"
         leftIcon={LogOut}
         onPress={() => setConfirmingSignOut(true)}
+        className="border-destructive/30"
         fullWidth
       />
 

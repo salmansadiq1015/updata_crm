@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
+import { usePullRefresh } from '@/components/layout/usePullRefresh';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppChip } from '@/components/ui/AppChip';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
@@ -25,7 +26,7 @@ import { useLeadList } from '../hooks/useLeads';
 import { countAdvanced, useLeadFiltersStore } from '../store/leadFiltersStore';
 import { LEAD_STATUSES, type Lead } from '../types';
 
-const RowGap = () => <View className="h-3" />;
+const RowGap = () => <View className="h-2" />;
 
 export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
   const { t } = useTranslation();
@@ -87,12 +88,14 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
     setSelection(null);
     startAiAgent(ids);
   };
+  // Spinner only for a user pull; background refetches never flash the refresh disc.
+  const pull = usePullRefresh(query.isRefetching && !query.isFetchingNextPage, () => void query.refetch());
   const loadMore = () => {
     if (query.hasNextPage && !query.isFetchingNextPage && !query.isError) void query.fetchNextPage();
   };
 
   const header = (
-    <View className="gap-3 pb-3">
+    <View className="gap-2.5 pb-3">
       <View className="flex-row items-center gap-2">
         <View className="flex-1">
           <AppSearchInput
@@ -101,15 +104,36 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
             placeholder={t('leads.searchPlaceholder')}
           />
         </View>
-        <AppButton
-          title={advancedCount > 0 ? String(advancedCount) : ''}
-          leftIcon={SlidersHorizontal}
-          variant={advancedCount > 0 ? 'primary' : 'outline'}
-          accessibilityLabel={t('leads.filters.openA11y', { count: advancedCount })}
-          onPress={() => setFiltersOpen(true)}
-        />
+        <View>
+          <AppIconButton
+            icon={SlidersHorizontal}
+            variant={advancedCount > 0 ? 'primary' : 'outline'}
+            accessibilityLabel={t('leads.filters.openA11y', { count: advancedCount })}
+            onPress={() => setFiltersOpen(true)}
+            className="rounded-xl"
+          />
+          {advancedCount > 0 ? (
+            <View
+              pointerEvents="none"
+              className="absolute -end-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-background bg-foreground px-1"
+            >
+              <AppText
+                variant="caption"
+                style={{ includeFontPadding: false }}
+                className="font-geist-bold text-[10px] leading-3 text-background"
+              >
+                {advancedCount}
+              </AppText>
+            </View>
+          ) : null}
+        </View>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="-mx-4"
+        contentContainerClassName="gap-2 px-4"
+      >
         <AppChip label={t('leads.all')} selected={!status} onPress={() => setStatus(undefined)} />
         {LEAD_STATUSES.map((value) => (
           <AppChip
@@ -203,8 +227,8 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
         onEndReachedThreshold={0.4}
         refreshControl={
           <RefreshControl
-            refreshing={query.isRefetching && !query.isFetchingNextPage}
-            onRefresh={() => void query.refetch()}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
             progressBackgroundColor={colors.card}

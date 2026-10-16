@@ -54,6 +54,9 @@ Rules enforced by the schema:
 > `10.0.2.2` only exists inside the Android emulator — a physical phone needs the live
 > server (`https://updata.behjja.com/api/v1`) or `http://localhost:9097/api/v1` with
 > `adb reverse tcp:9097 tcp:9097`. Non-production builds show the API host under the sign-in form.
+>
+> Do not start Metro with `CI=1`: in CI mode Expo disables file watching, so edits never reach
+> the device and the app keeps running a stale bundle.
 
 Switching environment for release builds — shell variables override `.env*` files:
 

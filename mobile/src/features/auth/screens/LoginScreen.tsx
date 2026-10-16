@@ -46,7 +46,7 @@ export function LoginScreen({ navigation }: RootScreenProps<'Login'>) {
 
   return (
     <AuthLayout title={t('auth.loginTitle')} subtitle={t('auth.loginSubtitle')}>
-      <View className="gap-5">
+      <View className="gap-4">
         {endReason === 'expired' ? <AppAlert tone="warning" message={t('errors.sessionExpired')} /> : null}
         {endReason === 'signed_out' ? <AppAlert tone="info" message={t('auth.signedOut')} /> : null}
         {formError ? <AppAlert tone="destructive" message={formError} /> : null}
@@ -65,7 +65,7 @@ export function LoginScreen({ navigation }: RootScreenProps<'Login'>) {
           returnKeyType="next"
           disabled={formState.isSubmitting}
         />
-        <View className="gap-2">
+        <View className="gap-1">
           <FormPasswordField
             control={control}
             name="password"

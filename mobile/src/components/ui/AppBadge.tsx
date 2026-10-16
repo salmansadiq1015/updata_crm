@@ -25,8 +25,8 @@ const VARIANTS = {
 } as const satisfies Record<string, { box: string; text: string; fg: keyof SemanticColors }>;
 
 const SIZES = {
-  sm: { box: 'gap-1 px-2 py-0.5', text: 'caption' },
-  md: { box: 'gap-1.5 px-2.5 py-1', text: 'caption' },
+  sm: { box: 'h-5 gap-1 px-2', text: 'caption' },
+  md: { box: 'h-6 gap-1.5 px-2.5', text: 'caption' },
 } as const;
 
 export type BadgeVariant = keyof typeof VARIANTS;
@@ -55,16 +55,26 @@ const DOTS: Record<BadgeVariant, string> = {
 export function AppBadge({ label, variant = 'default', icon, dot, size = 'md', className }: AppBadgeProps) {
   const v = VARIANTS[variant];
   const s = SIZES[size];
+  // The outer row hugs the pill: in a column it sits at the start edge, in a row it
+  // follows the row's alignment (so `items-center` rows centre it on their text).
   return (
-    <View className={cn('flex-row items-center self-start rounded-full border', s.box, v.box, className)}>
-      {icon ? (
-        <Icon icon={icon} size="xs" color={v.fg} />
-      ) : dot ? (
-        <View className={cn('h-1.5 w-1.5 rounded-full', DOTS[variant])} />
-      ) : null}
-      <AppText variant={s.text} className={cn('font-geist-semibold', v.text)} numberOfLines={1}>
-        {label}
-      </AppText>
+    <View className={cn('flex-row', className)}>
+      <View className={cn('flex-row items-center rounded-full border', s.box, v.box)}>
+        {icon ? (
+          <Icon icon={icon} size="xs" color={v.fg} />
+        ) : dot ? (
+          <View className={cn('h-1.5 w-1.5 rounded-full', DOTS[variant])} />
+        ) : null}
+        <AppText
+          variant={s.text}
+          // No Android font padding: the label sits on the pill's optical centre.
+          style={{ includeFontPadding: false }}
+          className={cn('font-geist-semibold leading-4', v.text)}
+          numberOfLines={1}
+        >
+          {label}
+        </AppText>
+      </View>
     </View>
   );
 }

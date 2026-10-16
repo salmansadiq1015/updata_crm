@@ -57,7 +57,7 @@ export function CallStatusCard({
             observation.phase === 'ended' ? PhoneOff : observation.phase === 'off_hook' ? PhoneCall : Radio
           }
           tone={observation.phase === 'off_hook' ? 'primary' : 'muted'}
-          size="lg"
+          size="md"
           round
         />
         <View className="flex-1 gap-0.5">

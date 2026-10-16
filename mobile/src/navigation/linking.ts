@@ -1,6 +1,7 @@
-// Deep links: `updata://leads/<id>`, `updata://reset-password?token=…`, and the
-// tabs. A link to a route the current session does not have (e.g. a lead while
-// signed out) is ignored by React Navigation instead of exposing the screen.
+// Deep links: `updata://leads/<id>`, `updata://reset-password?token=…`, the tabs
+// and `updata://call-agent/settings`. A link to a route the current session does
+// not have (e.g. a lead while signed out) is ignored by React Navigation instead
+// of exposing the screen.
 import type { LinkingOptions } from '@react-navigation/native';
 
 import type { RootStackParamList } from './navigationTypes';
@@ -18,11 +19,13 @@ export const linking: LinkingOptions<RootStackParamList> = {
         screens: {
           Dashboard: 'dashboard',
           Leads: 'leads',
+          CallAgent: 'call-agent',
           Notifications: 'notifications',
           Settings: 'settings',
         },
       },
       LeadDetail: 'leads/:leadId',
+      CallAgentSettings: 'call-agent/settings',
     },
   },
 };

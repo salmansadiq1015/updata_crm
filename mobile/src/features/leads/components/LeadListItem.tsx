@@ -1,4 +1,4 @@
-import { Building2, CheckSquare, Clock, MapPin, Square, User, UserRound } from 'lucide-react-native';
+import { Building2, CheckSquare, Clock, Square, User } from 'lucide-react-native';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { AppPressableCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { Icon } from '@/components/ui/Icon';
+import { cn } from '@/utils/cn';
 import { formatRelative } from '@/utils/date';
 
 import type { Lead } from '../types';
@@ -34,6 +35,17 @@ export const LeadListItem = memo(function LeadListItem({
   const lastContact = formatRelative(lead.lastContactedAt, i18n.language);
   const statusLabel = t(`leads.status.${lead.status}`);
 
+  const lastContactLabel = lastContact
+    ? lead.lastContactChannel
+      ? t('leads.lastContactVia', {
+          when: lastContact,
+          channel: t(`leads.channel.${lead.lastContactChannel}`),
+        })
+      : lastContact
+    : null;
+  // One muted meta line (number · city · owner); last contact gets its own line when known.
+  const meta = [lead.leadNumber, city, lead.assignedTo?.name].filter(Boolean).join(' · ');
+
   return (
     <AppPressableCard
       onPress={() => onPress(lead)}
@@ -42,9 +54,9 @@ export const LeadListItem = memo(function LeadListItem({
       {...(selectionMode
         ? { accessibilityRole: 'checkbox' as const, accessibilityState: { checked: selected } }
         : {})}
-      className={selectionMode && selected ? 'gap-2 border-primary' : 'gap-2'}
+      className={cn('px-3.5 py-3', selectionMode && selected && 'border-primary bg-primary/5')}
     >
-      <View className="flex-row items-start gap-3">
+      <View className="flex-row items-center gap-3">
         {selectionMode ? (
           <View className="h-10 w-6 items-center justify-center" testID={`lead-select-${lead.id}`}>
             <Icon
@@ -54,49 +66,26 @@ export const LeadListItem = memo(function LeadListItem({
             />
           </View>
         ) : null}
-        <View className="h-10 w-10 items-center justify-center rounded-lg bg-accent">
+        <View className="h-10 w-10 items-center justify-center rounded-xl bg-accent">
           <Icon icon={lead.type === 'private' ? User : Building2} size="sm" color="accentForeground" />
         </View>
-        <View className="flex-1 gap-1">
+        <View className="flex-1 gap-0.5">
           <AppText variant="title" numberOfLines={1}>
             {lead.name}
           </AppText>
-          <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            {lead.leadNumber ? (
-              <AppText variant="caption" tone="muted">
-                {lead.leadNumber}
+          {meta ? (
+            <AppText variant="caption" tone="muted" numberOfLines={1}>
+              {meta}
+            </AppText>
+          ) : null}
+          {lastContactLabel ? (
+            <View className="flex-row items-center gap-1">
+              <Icon icon={Clock} size="xs" color="mutedForeground" />
+              <AppText variant="caption" tone="muted" numberOfLines={1} className="flex-1">
+                {lastContactLabel}
               </AppText>
-            ) : null}
-            {city ? (
-              <View className="flex-row items-center gap-1">
-                <Icon icon={MapPin} size="xs" color="mutedForeground" />
-                <AppText variant="caption" tone="muted" numberOfLines={1}>
-                  {city}
-                </AppText>
-              </View>
-            ) : null}
-            {lead.assignedTo?.name ? (
-              <View className="flex-row items-center gap-1">
-                <Icon icon={UserRound} size="xs" color="mutedForeground" />
-                <AppText variant="caption" tone="muted" numberOfLines={1}>
-                  {lead.assignedTo.name}
-                </AppText>
-              </View>
-            ) : null}
-            {lastContact ? (
-              <View className="flex-row items-center gap-1">
-                <Icon icon={Clock} size="xs" color="mutedForeground" />
-                <AppText variant="caption" tone="muted" numberOfLines={1}>
-                  {lead.lastContactChannel
-                    ? t('leads.lastContactVia', {
-                        when: lastContact,
-                        channel: t(`leads.channel.${lead.lastContactChannel}`),
-                      })
-                    : lastContact}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
         </View>
         <LeadStatusBadge status={lead.status} />
       </View>

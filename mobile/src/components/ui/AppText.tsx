@@ -2,20 +2,22 @@ import { Text, type TextProps } from 'react-native';
 
 import { cn } from '@/utils/cn';
 
-// Type scale from the web CRM (globals.css): h1 32/40 bold … xs 12/16 medium.
+// Mobile type scale (tightened from the web CRM): large title 28/34, section 20/28,
+// card title 17/24, row title 15/20, body 14/20, label 13/18, caption 12/16.
 const VARIANTS = {
-  /** Hero numbers and large titles. */
-  display: 'text-4xl font-geist-bold tracking-tight',
-  h1: 'text-3xl font-geist-bold tracking-tight',
-  h2: 'text-2xl font-geist-semibold tracking-tight',
-  h3: 'text-xl font-geist-semibold',
-  title: 'text-lg font-geist-semibold',
+  /** Hero numbers (KPIs). Pair with `tabular-nums` where digits change. */
+  display: 'text-[28px] leading-[34px] font-geist-bold tracking-tight',
+  /** Large title of a top-level screen. */
+  h1: 'text-[28px] leading-[34px] font-geist-bold tracking-tight',
+  h2: 'text-xl font-geist-semibold tracking-tight',
+  h3: 'text-[17px] leading-6 font-geist-semibold tracking-tight',
+  title: 'text-[15px] leading-5 font-geist-semibold',
   bodyLg: 'text-lg font-geist',
   body: 'text-base font-geist',
   label: 'text-sm font-geist-medium',
   caption: 'text-xs font-geist-medium',
   /** Small uppercase section label ("eyebrow"). */
-  overline: 'text-2xs font-geist-semibold uppercase',
+  overline: 'text-2xs font-geist-semibold uppercase tracking-wider',
 } as const;
 
 const TONES = {

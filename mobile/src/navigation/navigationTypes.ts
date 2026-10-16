@@ -5,6 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 export type MainTabParamList = {
   Dashboard: undefined;
   Leads: undefined;
+  /** "Updata Call Agent": the highlighted centre tab. */
+  CallAgent: undefined;
   Notifications: undefined;
   Settings: undefined;
 };
@@ -29,9 +31,14 @@ export type RootStackParamList = {
   SmsCompose: { leadId: string; operationId?: string; destinationField?: 'phone' | 'mobile' };
   CommunicationQueue: undefined;
   // AI agent (not deep-linkable: a campaign starts only from an explicit selection in the app).
-  AiAgentLaunch: { leadIds: string[] };
+  AiAgentLaunch: { leadIds: string[]; initialChannel?: 'call' | 'sms' };
   AiAgentCampaigns: undefined;
   AiAgentCampaignDetail: { kind: 'call' | 'sms'; campaignId: string };
+  // Call Agent tab. Settings are deep-linkable (they start nothing); the picker and
+  // the test screen are reached only from an explicit tap.
+  CallAgentSettings: undefined;
+  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' };
+  CallAgentTest: { leadId?: string } | undefined;
 };
 
 export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

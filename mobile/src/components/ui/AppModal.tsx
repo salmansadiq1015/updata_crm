@@ -84,7 +84,7 @@ export function AppModal({
               style={[shadows.xl, sheet ? { paddingBottom: insets.bottom + 16 } : undefined]}
               className={cn(
                 'w-full shrink border border-border bg-card',
-                sheet ? 'rounded-t-4xl border-b-0 px-5 pt-2' : 'rounded-3xl p-6',
+                sheet ? 'rounded-t-4xl border-b-0 px-4 pt-2' : 'rounded-3xl p-5',
               )}
             >
               {sheet ? (
@@ -94,9 +94,9 @@ export function AppModal({
                   importantForAccessibility="no-hide-descendants"
                 />
               ) : null}
-              <AppText variant="h3">{title}</AppText>
+              <AppText variant="h2">{title}</AppText>
               {description ? (
-                <AppText tone="muted" className="mt-2">
+                <AppText tone="muted" className="mt-1.5">
                   {description}
                 </AppText>
               ) : null}
@@ -108,8 +108,8 @@ export function AppModal({
               {footer ? (
                 <View
                   className={cn(
-                    'mt-5 flex-row flex-wrap justify-end gap-2',
-                    sheet && 'border-t border-border pt-4',
+                    'mt-4 flex-row flex-wrap justify-end gap-2',
+                    sheet && 'border-t border-border pt-3',
                   )}
                 >
                   {footer}

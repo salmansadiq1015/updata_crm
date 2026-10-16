@@ -7,15 +7,15 @@ import { useTheme } from '@/theme/ThemeProvider';
 export function LeadListSkeleton({ rows = 6 }: { rows?: number }) {
   const { shadows } = useTheme();
   return (
-    <View className="gap-3" accessibilityLabel="Loading" accessibilityRole="progressbar">
+    <View className="gap-2" accessibilityLabel="Loading" accessibilityRole="progressbar">
       {Array.from({ length: rows }, (_, index) => (
         <View
           key={index}
           style={shadows.sm}
-          className="flex-row items-start gap-3 rounded-2xl border border-border bg-card p-4"
+          className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3"
         >
           <AppSkeleton className="h-10 w-10 rounded-xl" />
-          <View className="flex-1 gap-2.5 pt-0.5">
+          <View className="flex-1 gap-2">
             <AppSkeleton className="h-4 w-3/5 rounded-md" />
             <View className="flex-row gap-2">
               <AppSkeleton className="h-3 w-16 rounded-md" />

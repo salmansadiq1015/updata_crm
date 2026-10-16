@@ -348,6 +348,11 @@ export type AgentQuestion = {
 export type CallSchedule = {
   timezone: string;
   callWindow: { start: string; end: string };
+  /** Optional: the server applies its own defaults when absent (aiCalling.validation schedule). */
+  daysOfWeek?: number[];
+  maxAttemptsPerLead?: number;
+  retryDelayMinutes?: number;
+  maxCallsPerDay?: number;
 };
 
 export type StatusRuleInput = {
@@ -377,6 +382,8 @@ export type CallCampaignInput = {
   };
   schedule: CallSchedule;
   selection: { mode: 'explicit'; leadIds: string[] };
+  /** Test drafts never change a lead, even if they were started (aiCalling.service). */
+  isTest?: boolean;
 };
 
 export type SmsCampaignInput = {

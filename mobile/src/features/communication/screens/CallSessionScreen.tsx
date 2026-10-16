@@ -7,14 +7,12 @@ import { View } from 'react-native';
 import { AppAlert } from '@/components/feedback/AppAlert';
 import { Screen } from '@/components/layout/Screen';
 import { SectionHeader } from '@/components/layout/SectionHeader';
-import { AppAvatar } from '@/components/ui/AppAvatar';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppChip } from '@/components/ui/AppChip';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppSkeleton } from '@/components/ui/AppSkeleton';
 import { AppText } from '@/components/ui/AppText';
-import { GradientSurface } from '@/components/ui/GradientSurface';
 import { IconContainer } from '@/components/ui/IconContainer';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { useLead } from '@/features/leads/hooks/useLeads';
@@ -26,6 +24,7 @@ import { requestCallingPermissions, telephony } from '@/services/telephony/telep
 import { showApiErrorToast, showErrorToast } from '@/utils/toast';
 
 import { CallStatusCard } from '../components/CallStatusCard';
+import { ContactHero } from '../components/ContactHero';
 import { OutcomeForm } from '../components/OutcomeForm';
 import { ReceiptCard } from '../components/ReceiptCard';
 import { SimPicker } from '../components/SimPicker';
@@ -53,9 +52,9 @@ export function CallSessionScreen({ route, navigation }: RootScreenProps<'CallSe
   const lead = useLead(leadId);
 
   return (
-    <Screen edges={[]} mode="keyboard" contentClassName="gap-4 pt-4 pb-10">
+    <Screen edges={[]} mode="keyboard" contentClassName="gap-4 pt-3 pb-10">
       {lead.isPending ? (
-        <AppSkeleton className="h-40 w-full rounded-2xl" />
+        <AppSkeleton className="h-20 w-full rounded-3xl" />
       ) : lead.isError ? (
         <AppErrorState error={lead.error} onRetry={() => void lead.refetch()} />
       ) : operationId ? (
@@ -179,13 +178,15 @@ function PrepareCall({
 
   return (
     <>
-      <AppCard className="gap-3">
-        <View className="flex-row items-center gap-3">
-          <AppAvatar name={lead.name} size="lg" />
-          <AppText variant="h3" className="flex-1">
-            {lead.name}
-          </AppText>
-        </View>
+      <View className="gap-2">
+        <ContactHero
+          name={lead.name}
+          subtitle={
+            eligibility.data?.destinationMasked
+              ? t('communication.calling', { number: eligibility.data.destinationMasked })
+              : t(`leads.${field}`)
+          }
+        />
         {fields.length > 1 ? (
           <View className="flex-row gap-2">
             {fields.map((value) => (
@@ -198,12 +199,7 @@ function PrepareCall({
             ))}
           </View>
         ) : null}
-        <AppText tone="muted">
-          {eligibility.data?.destinationMasked
-            ? t('communication.calling', { number: eligibility.data.destinationMasked })
-            : t(`leads.${field}`)}
-        </AppText>
-      </AppCard>
+      </View>
 
       {caps && caps.hasTelephony && !(caps.callPhoneGranted && caps.readPhoneStateGranted) ? (
         <AppCard className="gap-3">
@@ -260,7 +256,7 @@ function PrepareCall({
         <AppCard className="gap-2">
           <View className="flex-row items-center gap-3">
             <IconContainer icon={ListChecks} tone="primary" size="sm" />
-            <SectionHeader title={t('communication.guide.title')} />
+            <SectionHeader title={t('communication.guide.title')} className="flex-1" />
           </View>
           <AppText variant="caption" tone="muted">
             {t('communication.guide.body')}
@@ -327,19 +323,12 @@ function ActiveCall({
 
   return (
     <>
-      <GradientSurface className="flex-row items-center gap-4 rounded-3xl p-5">
-        <AppAvatar name={lead.name} size="lg" ring />
-        <View className="flex-1 gap-1">
-          <AppText variant="h3" className="text-white">
-            {lead.name}
-          </AppText>
-          {op.sim ? (
-            <AppText className="text-white/75">
-              {t('communication.sim.using', { sim: op.sim.label, slot: op.sim.slotIndex + 1 })}
-            </AppText>
-          ) : null}
-        </View>
-      </GradientSurface>
+      <ContactHero
+        name={lead.name}
+        subtitle={
+          op.sim ? t('communication.sim.using', { sim: op.sim.label, slot: op.sim.slotIndex + 1 }) : null
+        }
+      />
       <CallStatusCard op={op} monitoringAvailable={monitoring} />
 
       {op.phase === 'dispatch_unknown' ? (

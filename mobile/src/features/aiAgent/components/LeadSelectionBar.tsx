@@ -1,7 +1,6 @@
 import { Bot, X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppIconButton } from '@/components/ui/AppIconButton';
@@ -26,14 +25,11 @@ export function LeadSelectionBar({
   onGiveToAgent,
 }: Props) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  // Sits directly above the tab bar, which already clears the system navigation area.
   return (
-    <View
-      className="gap-2 border-t border-border bg-card px-4 pt-3"
-      style={{ paddingBottom: insets.bottom + 12 }}
-    >
+    <View className="gap-2 border-t border-border bg-card px-4 pb-3 pt-2">
       <View className="flex-row items-center gap-2">
-        <AppText variant="label" className="flex-1" accessibilityLiveRegion="polite">
+        <AppText variant="label" className="flex-1 font-geist-semibold" accessibilityLiveRegion="polite">
           {t('aiAgent.selection.selected', { count })}
         </AppText>
         {count < shownCount ? (

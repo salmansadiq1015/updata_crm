@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/utils/cn';
 
 import { ScreenHeader, type ScreenHeaderProps } from './ScreenHeader';
+import { usePullRefresh } from './usePullRefresh';
 
 export type ScreenProps = {
   children: ReactNode;
@@ -36,11 +37,14 @@ export function Screen({
   contentClassName,
 }: ScreenProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Only a user pull shows the spinner; background refetches stay silent.
+  const pull = usePullRefresh(refreshing, onRefresh);
   const contentClasses = cn('grow px-4 pb-8', contentClassName);
-  const refreshControl = onRefresh ? (
+  const refreshControl = pull.onRefresh ? (
     <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       colors={[colors.primary]}
       tintColor={colors.primary}
       progressBackgroundColor={colors.card}
@@ -48,7 +52,17 @@ export function Screen({
   ) : undefined;
 
   return (
-    <SafeAreaView edges={edges} className="flex-1 bg-background">
+    // Insets are applied as plain padding (not a native SafeAreaView) so the first
+    // block can never slide under the status bar on edge-to-edge Android.
+    <View
+      className="flex-1 bg-background"
+      style={{
+        paddingTop: edges.includes('top') ? insets.top : 0,
+        paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
+        paddingLeft: edges.includes('left') ? insets.left : 0,
+        paddingRight: edges.includes('right') ? insets.right : 0,
+      }}
+    >
       <OfflineBanner />
       {header ? <ScreenHeader {...header} /> : null}
       {mode === 'static' ? (
@@ -70,6 +84,6 @@ export function Screen({
           {children}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }

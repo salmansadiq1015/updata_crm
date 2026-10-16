@@ -60,7 +60,7 @@ export function ResetPasswordScreen({ navigation, route }: RootScreenProps<'Rese
 
   return (
     <AuthLayout title={t('auth.resetTitle')} subtitle={t('auth.resetSubtitle')}>
-      <View className="gap-5">
+      <View className="gap-4">
         {formError ? <AppAlert tone="destructive" message={formError} /> : null}
         {linkedToken ? null : (
           <FormTextField

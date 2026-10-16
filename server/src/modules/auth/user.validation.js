@@ -1,5 +1,8 @@
 import Joi from 'joi';
 import { objectId, cursorPagination, idParam } from '../../shared/validation/commonSchemas.js';
+import { ValidationError } from '../../shared/errors/AppError.js';
+import * as aiCallingSchemas from '../aiCalling/aiCalling.validation.js';
+import { MESSAGE_PURPOSES } from '../messaging/messaging.constants.js';
 
 const schedulingCapabilitySchema = Joi.array().items(Joi.string().trim().max(80)).max(50);
 const assignmentTypes = ['manager', 'team'];
@@ -136,3 +139,70 @@ export const bulkDeleteSchema = {
 };
 
 export { idParam };
+
+// ------------------------------------------------------------ AI agent defaults
+// Per-user defaults for the AI calling / AI SMS agent (preferences.aiAgentDefaults).
+// Every field reuses the exact rule the campaign API applies (aiCalling createCampaign),
+// so a saved default is always campaign-valid; only `voice` and `timezone` are tightened.
+
+/**
+ * OpenAI Realtime voices the agent worker can speak with (agent-worker passes
+ * agentConfig.voice to the Realtime session). Same list as the web campaign wizard.
+ */
+export const AI_AGENT_VOICES = Object.freeze(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']);
+
+const campaignBody = aiCallingSchemas.createCampaign.body;
+const campaignAgentConfig = campaignBody.extract('agentConfig');
+const campaignSchedule = campaignBody.extract('schedule');
+const pick = (schema, keys) => Joi.object(Object.fromEntries(keys.map((key) => [key, schema.extract(key)])));
+
+const validTimezone = (value, helpers) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return value;
+  } catch {
+    return helpers.error('any.invalid');
+  }
+};
+
+export const aiAgentDefaultsSchema = Joi.object({
+  agentConfig: pick(campaignAgentConfig, ['agentName', 'organizationName', 'objective', 'language', 'voice', 'disclosure'])
+    .keys({ voice: Joi.string().trim().valid(...AI_AGENT_VOICES).default('alloy') })
+    .default({}),
+  // Same question rules as a campaign questionnaire; optional (the app proposes its own).
+  questions: campaignBody.extract('questionnaire.questions').optional(),
+  schedule: pick(campaignSchedule, [
+    'timezone', 'callWindow', 'daysOfWeek', 'maxAttemptsPerLead', 'retryDelayMinutes', 'maxCallsPerDay',
+  ])
+    .keys({
+      timezone: Joi.string().trim().max(80).custom(validTimezone, 'IANA time zone').default('UTC')
+        .messages({ 'any.invalid': '{{#label}} must be a valid IANA time zone, e.g. Europe/Zurich' }),
+      daysOfWeek: Joi.array().items(Joi.number().integer().min(0).max(6)).unique().min(1).max(7).default([1, 2, 3, 4, 5]),
+    })
+    .default({}),
+  sms: Joi.object({
+    purpose: Joi.string().valid(...MESSAGE_PURPOSES).default('promotional'),
+    templateId: objectId.allow(null).default(null),
+  }).default({}),
+});
+
+/**
+ * Validate a PATCH /users/me/preferences `aiAgentDefaults` value. `null` clears the
+ * defaults. Returns the normalized value or throws a 400 ValidationError.
+ */
+export function parseAiAgentDefaults(input) {
+  if (input === null) return null;
+  // Absent sections still get their campaign defaults (Joi's object default skips children).
+  const withSections = input && typeof input === 'object' && !Array.isArray(input)
+    ? { agentConfig: {}, schedule: {}, sms: {}, ...input }
+    : input;
+  const { error, value } = aiAgentDefaultsSchema.validate(withSections, { abortEarly: false, stripUnknown: true, convert: true });
+  if (error) {
+    throw new ValidationError('Validation failed', error.details.map((d) => ({
+      field: ['aiAgentDefaults', ...d.path].join('.'),
+      message: d.message.replace(/"/g, "'"),
+      type: d.type,
+    })));
+  }
+  return { ...value, updatedAt: new Date() };
+}

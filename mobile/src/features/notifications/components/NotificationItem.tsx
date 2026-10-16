@@ -8,7 +8,6 @@ import { usePressScale } from '@/components/motion/usePressScale';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppText } from '@/components/ui/AppText';
 import { IconContainer } from '@/components/ui/IconContainer';
-import { useTheme } from '@/theme/ThemeProvider';
 import { motion } from '@/theme/tokens';
 import { cn } from '@/utils/cn';
 import { formatRelative } from '@/utils/date';
@@ -21,7 +20,6 @@ export const NotificationItem = memo(function NotificationItem({ notification, o
   const { t, i18n } = useTranslation();
   const when = formatRelative(notification.sentAt, i18n.language);
   const urgent = notification.priority === 'HIGH' || notification.priority === 'CRITICAL';
-  const { shadows } = useTheme();
   const press = usePressScale(motion.pressScale.card);
 
   return (
@@ -40,10 +38,9 @@ export const NotificationItem = memo(function NotificationItem({ notification, o
         onPress={() => onPress(notification)}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={notification.isRead ? undefined : shadows.md}
         className={cn(
-          'flex-row gap-3 rounded-2xl border p-4 active:bg-muted/60',
-          notification.isRead ? 'border-border bg-card' : 'border-primary/25 bg-card',
+          'flex-row gap-3 rounded-2xl border px-3.5 py-3 active:bg-muted/60',
+          notification.isRead ? 'border-border bg-card' : 'border-primary/25 bg-primary/5',
         )}
       >
         {/* Icon tile; unread adds a dot on its corner (shape cue, not colour alone). */}
@@ -51,41 +48,46 @@ export const NotificationItem = memo(function NotificationItem({ notification, o
           <IconContainer
             icon={urgent ? AlertTriangle : Bell}
             tone={urgent ? 'destructive' : notification.isRead ? 'muted' : 'primary'}
-            size="md"
+            size="sm"
+            className="h-9 w-9"
             round
           />
           {notification.isRead ? null : (
-            <View className="absolute -end-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card bg-primary" />
+            <View className="absolute -end-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-primary" />
           )}
         </View>
-        <View className="flex-1 gap-1">
-          <View className="flex-row items-start gap-2">
+        <View className="flex-1 gap-0.5">
+          <View className="min-h-5 flex-row items-center gap-2">
             <AppText
               variant="label"
-              className={cn('flex-1', notification.isRead ? 'font-geist-medium' : 'font-geist-semibold')}
+              className={cn(
+                'flex-1',
+                notification.isRead ? 'font-geist-medium' : 'font-geist-semibold text-foreground',
+              )}
               numberOfLines={2}
             >
               {notification.title}
             </AppText>
-            {urgent ? (
-              <AppBadge
-                label={t(
-                  `notifications.priority.${notification.priority === 'CRITICAL' ? 'critical' : 'high'}`,
-                )}
-                variant="destructive"
-                size="sm"
-              />
+            {when ? (
+              <AppText variant="caption" tone="muted" numberOfLines={1}>
+                {when}
+              </AppText>
             ) : null}
           </View>
           {notification.body ? (
-            <AppText tone="muted" numberOfLines={3}>
+            <AppText variant="label" tone="muted" className="font-geist" numberOfLines={2}>
               {notification.body}
             </AppText>
           ) : null}
-          {when ? (
-            <AppText variant="caption" tone="muted">
-              {when}
-            </AppText>
+          {urgent ? (
+            <AppBadge
+              label={t(
+                `notifications.priority.${notification.priority === 'CRITICAL' ? 'critical' : 'high'}`,
+              )}
+              variant="destructive"
+              size="sm"
+              className="mt-1"
+            />
           ) : null}
         </View>
       </Pressable>

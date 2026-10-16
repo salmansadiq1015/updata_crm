@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CallAgentHomeScreen } from '@/features/callAgent/screens/CallAgentHomeScreen';
 import { useCommunicationRuntime } from '@/features/communication/hooks/useCommunicationRuntime';
 import { DashboardScreen } from '@/features/dashboard/screens/DashboardScreen';
 import { LeadsScreen } from '@/features/leads/screens/LeadsScreen';
@@ -13,6 +14,7 @@ import { SettingsScreen } from '@/features/settings/screens/SettingsScreen';
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/utils/cn';
 
+import { AgentTabButton } from './AgentTabButton';
 import type { MainTabParamList } from './navigationTypes';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -82,6 +84,18 @@ export function MainNavigator() {
         name="Leads"
         component={LeadsScreen}
         options={{ title: t('tabs.leads'), tabBarIcon: tabIcon(Users) }}
+      />
+      {/* Centre, highlighted: the AI calling agent hub. */}
+      <Tab.Screen
+        name="CallAgent"
+        component={CallAgentHomeScreen}
+        options={{
+          title: t('tabs.callAgent'),
+          tabBarAccessibilityLabel: t('tabs.callAgentA11y'),
+          tabBarButton: (props) => (
+            <AgentTabButton {...props} label={t('tabs.callAgent')} a11yLabel={t('tabs.callAgentA11y')} />
+          ),
+        }}
       />
       <Tab.Screen
         name="Notifications"

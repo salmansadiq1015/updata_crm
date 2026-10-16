@@ -64,6 +64,14 @@ const VARIANTS = {
     fg: 'successForeground',
     glow: false,
   },
+  /** Translucent white, for actions placed on a gradient/hero surface. */
+  inverse: {
+    box: 'border border-white/20 bg-white/15',
+    pressed: 'active:bg-white/25',
+    text: 'text-white',
+    fg: 'primaryForeground',
+    glow: false,
+  },
   // Inline text action ("Forgot password?"); keeps a 48dp target through hitSlop.
   link: {
     box: 'h-auto bg-transparent px-0',

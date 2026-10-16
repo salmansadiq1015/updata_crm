@@ -13,8 +13,10 @@ import type { CallPreview, SmsRecipient } from '../types';
 
 export function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <View className="min-w-[30%] flex-1 gap-0.5 rounded-lg bg-muted px-3 py-2">
-      <AppText variant="h3">{String(value)}</AppText>
+    <View className="min-w-[30%] flex-1 gap-0.5 rounded-xl bg-muted/70 px-3 py-2.5">
+      <AppText variant="h3" style={{ fontVariant: ['tabular-nums'] }}>
+        {String(value)}
+      </AppText>
       <AppText variant="caption" tone="muted" numberOfLines={2}>
         {label}
       </AppText>

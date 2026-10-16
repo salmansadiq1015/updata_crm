@@ -2,6 +2,7 @@ import userService from './user.service.js';
 import sessionService from './session.service.js';
 import auditService from './audit.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import { parseAiAgentDefaults } from './user.validation.js';
 
 /**
  * User controller — HTTP layer only.
@@ -224,8 +225,14 @@ class UserController {
   async updatePreferences(req, res, next) {
     try {
       const User = (await import('./user.model.js')).default;
-      const { preferredDepartmentId, dashboard, siteDetail, startPage } = req.body || {};
+      const { preferredDepartmentId, dashboard, siteDetail, startPage, aiAgentDefaults } = req.body || {};
       const updates = {};
+
+      // AI agent defaults: validated with the campaign rules; replaced as a whole
+      // (the app always sends the full form), `null` clears them.
+      if (aiAgentDefaults !== undefined) {
+        updates['preferences.aiAgentDefaults'] = parseAiAgentDefaults(aiAgentDefaults);
+      }
 
       if (startPage !== undefined) {
         updates['preferences.startPage'] = (typeof startPage === 'string' && startPage.trim()) ? startPage.trim().slice(0, 200) : null;

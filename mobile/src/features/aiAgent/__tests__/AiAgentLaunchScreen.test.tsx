@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { ApiError } from '@/services/api/apiErrors';
+import { callAgentApi } from '@/features/callAgent/api/callAgentApi';
 import { renderWithProviders } from '@/test/renderWithProviders';
 
 import { aiAgentApi } from '../api/aiAgentApi';
@@ -30,6 +31,11 @@ jest.mock('../api/aiAgentApi', () => ({
     cancelSmsCampaign: jest.fn(),
     simulate: jest.fn(),
   },
+}));
+
+// No saved Call Agent defaults: the flow starts from the app's standard values.
+jest.mock('@/features/callAgent/api/callAgentApi', () => ({
+  callAgentApi: { defaults: jest.fn(), saveDefaults: jest.fn() },
 }));
 
 const LEADS = ['64b7f0c2a1b2c3d4e5f60718', '64b7f0c2a1b2c3d4e5f60719'];
@@ -72,6 +78,7 @@ const smsCampaign = smsCampaignSchema.parse({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(callAgentApi.defaults).mockResolvedValue(null);
   jest.mocked(aiAgentApi.languages).mockResolvedValue({ languages, defaultLanguage: 'en' });
   jest
     .mocked(aiAgentApi.telephonyHealth)

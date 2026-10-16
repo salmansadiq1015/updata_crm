@@ -17,6 +17,8 @@ import { useSingleFlight } from '@/hooks/useSingleFlight';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { formatDate } from '@/utils/date';
 import { showSuccessToast } from '@/utils/toast';
+import { scheduleExtras } from '@/features/callAgent/domain/agentSettings';
+import { useAgentDefaults } from '@/features/callAgent/hooks/useCallAgent';
 
 import { LanguageList } from '../components/LanguagePicker';
 import { QuestionListEditor } from '../components/QuestionListEditor';
@@ -65,7 +67,7 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
   const { t, i18n } = useTranslation();
   const leadIds = useMemo(() => [...new Set(route.params?.leadIds ?? [])], [route.params?.leadIds]);
 
-  const [channel, setChannel] = useState<AgentChannel | null>(null);
+  const [channel, setChannel] = useState<AgentChannel | null>(route.params?.initialChannel ?? null);
   const [step, setStep] = useState<Step>('channel');
   const steps = stepsFor(channel);
   const stepIndex = Math.max(0, steps.indexOf(step));
@@ -82,7 +84,10 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
   const [language, setLanguage] = useState<string | null>(null);
   const languageList = languages.data?.languages ?? [];
   const uiLanguage = languageList.some((item) => item.code === i18n.language) ? i18n.language : null;
-  const chosenLanguage = language ?? uiLanguage ?? languages.data?.defaultLanguage ?? 'en';
+  // Saved agent defaults (Call Agent settings) prefill every field; edits made here win.
+  const saved = useAgentDefaults().data ?? null;
+  const chosenLanguage =
+    language ?? saved?.agentConfig?.language ?? uiLanguage ?? languages.data?.defaultLanguage ?? 'en';
 
   // Call configuration.
   const defaultTexts = useMemo<DefaultQuestionTexts>(
@@ -101,21 +106,37 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
     }),
     [t],
   );
-  const [agentName, setAgentName] = useState('Alex');
-  const [organization, setOrganization] = useState('');
-  const [objective, setObjective] = useState('');
-  const [voice, setVoice] = useState<string>('alloy');
-  const [questions, setQuestions] = useState<AgentQuestion[]>(() => defaultQuestions(defaultTexts));
-  const [windowStart, setWindowStart] = useState('09:00');
-  const [windowEnd, setWindowEnd] = useState('18:00');
-  const [timezone, setTimezone] = useState(deviceTimezone);
+  const [agentNameEdit, setAgentName] = useState<string | null>(null);
+  const [organizationEdit, setOrganization] = useState<string | null>(null);
+  const [objectiveEdit, setObjective] = useState<string | null>(null);
+  const [voiceEdit, setVoice] = useState<string | null>(null);
+  const [questionsEdit, setQuestions] = useState<AgentQuestion[] | null>(null);
+  const [windowStartEdit, setWindowStart] = useState<string | null>(null);
+  const [windowEndEdit, setWindowEnd] = useState<string | null>(null);
+  const [timezoneEdit, setTimezone] = useState<string | null>(null);
+  const standardQuestions = useMemo(() => defaultQuestions(defaultTexts), [defaultTexts]);
+  const agentName = agentNameEdit ?? saved?.agentConfig?.agentName ?? 'Alex';
+  const organization = organizationEdit ?? saved?.agentConfig?.organizationName ?? '';
+  const objective = objectiveEdit ?? saved?.agentConfig?.objective ?? '';
+  const voice = voiceEdit ?? saved?.agentConfig?.voice ?? 'alloy';
+  const questions = questionsEdit ?? saved?.questions ?? standardQuestions;
+  const windowStart = windowStartEdit ?? saved?.schedule?.callWindow?.start ?? '09:00';
+  const windowEnd = windowEndEdit ?? saved?.schedule?.callWindow?.end ?? '18:00';
+  const timezone = timezoneEdit ?? saved?.schedule?.timezone ?? deviceTimezone();
+  const disclosure = saved?.agentConfig?.disclosure || t('aiAgent.call.disclosure');
   const [showErrors, setShowErrors] = useState(false);
 
   // SMS configuration.
   const templates = useAgentSmsTemplates(channel === 'sms');
-  const [templateId, setTemplateId] = useState<string | null>(null);
-  const [body, setBody] = useState('');
-  const [purpose, setPurpose] = useState<MessagePurpose>('promotional');
+  // `undefined` = not chosen here yet (null is the explicit "write my own text").
+  const [templateIdEdit, setTemplateId] = useState<string | null | undefined>(undefined);
+  const [bodyEdit, setBody] = useState<string | null>(null);
+  const [purposeEdit, setPurpose] = useState<MessagePurpose | null>(null);
+  // A saved default template is used only while it still exists (not archived).
+  const savedTemplate = templates.data?.find((item) => item.id === saved?.sms?.templateId) ?? null;
+  const templateId = templateIdEdit !== undefined ? templateIdEdit : (savedTemplate?.id ?? null);
+  const body = bodyEdit ?? savedTemplate?.bodyText ?? '';
+  const purpose = purposeEdit ?? savedTemplate?.purpose ?? saved?.sms?.purpose ?? 'promotional';
   const sms = analyzeSms(body);
 
   // Drafts + review.
@@ -164,9 +185,13 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
             objective: objective.trim(),
             language: chosenLanguage,
             voice,
-            disclosure: t('aiAgent.call.disclosure'),
+            disclosure,
           },
-          schedule: { timezone, callWindow: { start: windowStart, end: windowEnd } },
+          schedule: {
+            timezone,
+            callWindow: { start: windowStart, end: windowEnd },
+            ...scheduleExtras(saved),
+          },
           selection: { mode: 'explicit', leadIds },
         },
       });
@@ -216,14 +241,14 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
 
   if (leadIds.length === 0) {
     return (
-      <Screen edges={[]} contentClassName="gap-4 pt-4">
+      <Screen edges={[]} contentClassName="gap-4 pt-3">
         <AppAlert tone="warning" message={t('aiAgent.leadsExplain')} />
       </Screen>
     );
   }
 
   return (
-    <Screen edges={['bottom']} mode="keyboard" contentClassName="gap-4 pt-4">
+    <Screen edges={['bottom']} mode="keyboard" contentClassName="gap-4 pt-3">
       {header}
 
       {step === 'channel' ? (

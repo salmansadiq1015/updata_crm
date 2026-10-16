@@ -1,6 +1,43 @@
 import mongoose from 'mongoose';
 
 /**
+ * Per-user defaults for the AI calling / AI SMS agent. Validated with the campaign
+ * rules (user.validation.js parseAiAgentDefaults) before it is written, so every
+ * value can be copied into a new campaign as-is. `null` = never configured.
+ */
+const aiAgentDefaultsSchema = new mongoose.Schema(
+  {
+    agentConfig: {
+      agentName: { type: String, trim: true, maxlength: 120 },
+      organizationName: { type: String, trim: true, maxlength: 200 },
+      objective: { type: String, trim: true, maxlength: 1000 },
+      language: { type: String, trim: true, maxlength: 10 },
+      voice: { type: String, trim: true, maxlength: 40 },
+      disclosure: { type: String, trim: true, maxlength: 2000 },
+    },
+    // Campaign-shaped questions (aiCalling question schema); validated by Joi.
+    questions: { type: [mongoose.Schema.Types.Mixed], default: undefined },
+    schedule: {
+      timezone: { type: String, trim: true, maxlength: 80 },
+      callWindow: {
+        start: { type: String, maxlength: 5 },
+        end: { type: String, maxlength: 5 },
+      },
+      daysOfWeek: { type: [Number], default: undefined },
+      maxAttemptsPerLead: { type: Number },
+      retryDelayMinutes: { type: Number },
+      maxCallsPerDay: { type: Number },
+    },
+    sms: {
+      purpose: { type: String, enum: ['transactional', 'promotional', 'support'] },
+      templateId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    },
+    updatedAt: { type: Date },
+  },
+  { _id: false },
+);
+
+/**
  * User schema.
  *
  * Stores identity, credentials, and account state. Sensitive fields
@@ -193,6 +230,8 @@ const userSchema = new mongoose.Schema(
       },
       // Personal start page — overrides the role's configured start page.
       startPage: { type: String, trim: true, maxlength: 200, default: null },
+      // AI agent (calls + SMS) defaults used to prefill new campaigns.
+      aiAgentDefaults: { type: aiAgentDefaultsSchema, default: null },
     },
     schedulingSkills: {
       type: [String],

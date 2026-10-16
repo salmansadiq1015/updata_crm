@@ -37,7 +37,7 @@ export function ForgotPasswordScreen({ navigation }: RootScreenProps<'ForgotPass
 
   return (
     <AuthLayout title={t('auth.forgotTitle')} subtitle={t('auth.forgotSubtitle')}>
-      <View className="gap-5">
+      <View className="gap-4">
         {sent ? (
           <AppAlert tone="success" message={t('auth.resetLinkSent')} />
         ) : (

@@ -16,6 +16,11 @@ export type AppEmptyStateProps = {
   /** Usually one AppButton: the next useful step. */
   action?: ReactNode;
   iconColor?: keyof SemanticColors;
+  /**
+   * `screen` (default): centred, for a whole-screen list with nothing in it.
+   * `inline`: one compact row for an empty section inside a scrolling screen.
+   */
+  size?: 'screen' | 'inline';
   className?: string;
 };
 
@@ -34,19 +39,48 @@ export function AppEmptyState({
   description,
   action,
   iconColor = 'mutedForeground',
+  size = 'screen',
   className,
 }: AppEmptyStateProps) {
   const halo = HALOS[iconColor] ?? NEUTRAL_HALO;
+
+  if (size === 'inline') {
+    return (
+      <View
+        accessibilityRole="summary"
+        className={cn(
+          'min-h-14 flex-row items-center gap-3 rounded-2xl border border-dashed border-border px-3.5 py-3',
+          className,
+        )}
+      >
+        <View className={cn('h-9 w-9 items-center justify-center rounded-xl border', halo.inner)}>
+          <Icon icon={icon} size="sm" color={iconColor} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <AppText variant="label" className="font-geist-semibold">
+            {title}
+          </AppText>
+          {description ? (
+            <AppText variant="caption" tone="muted">
+              {description}
+            </AppText>
+          ) : null}
+        </View>
+        {action}
+      </View>
+    );
+  }
+
   return (
-    <View className={cn('items-center gap-3 px-6 py-12', className)} accessibilityRole="summary">
+    <View className={cn('items-center gap-2 px-6 py-10', className)} accessibilityRole="summary">
       <Appear variant="fade">
-        <View className={cn('mb-1 h-24 w-24 items-center justify-center rounded-full', halo.outer)}>
-          <View className={cn('h-16 w-16 items-center justify-center rounded-3xl border', halo.inner)}>
+        <View className={cn('mb-2 h-20 w-20 items-center justify-center rounded-full', halo.outer)}>
+          <View className={cn('h-14 w-14 items-center justify-center rounded-2xl border', halo.inner)}>
             <Icon icon={icon} size="lg" color={iconColor} />
           </View>
         </View>
       </Appear>
-      <AppText variant="title" className="text-center text-xl">
+      <AppText variant="h3" accessibilityRole="text" className="text-center">
         {title}
       </AppText>
       {description ? (

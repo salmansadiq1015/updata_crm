@@ -25,30 +25,26 @@ export function ScreenHeader({
   className,
 }: ScreenHeaderProps) {
   const large = size === 'large';
+  // One pattern everywhere: eyebrow, then a 48dp row with the title flush to the
+  // content gutter and actions vertically centred on it, then an optional subtitle.
   return (
-    <View
-      className={cn(
-        'flex-row items-end gap-3 px-4',
-        large ? 'pb-4 pt-3' : 'items-center pb-3 pt-2',
-        className,
-      )}
-    >
-      <View className="flex-1 gap-1">
-        {eyebrow ? (
-          <AppText variant="overline" tone="primary" numberOfLines={1}>
-            {eyebrow}
-          </AppText>
-        ) : null}
-        <AppText variant={large ? 'h1' : 'h2'} numberOfLines={1}>
+    <View className={cn('px-4', large ? 'pb-3 pt-2' : 'pb-2 pt-1', className)}>
+      {eyebrow ? (
+        <AppText variant="overline" tone="primary" numberOfLines={1}>
+          {eyebrow}
+        </AppText>
+      ) : null}
+      <View className="min-h-12 flex-row items-center gap-2">
+        <AppText variant={large ? 'h1' : 'h2'} numberOfLines={1} className="flex-1">
           {title}
         </AppText>
-        {subtitle ? (
-          <AppText tone="muted" numberOfLines={2}>
-            {subtitle}
-          </AppText>
-        ) : null}
+        {right ? <View className="-me-1 flex-row items-center gap-1">{right}</View> : null}
       </View>
-      {right ? <View className="flex-row items-center gap-2">{right}</View> : null}
+      {subtitle ? (
+        <AppText tone="muted" numberOfLines={2}>
+          {subtitle}
+        </AppText>
+      ) : null}
     </View>
   );
 }

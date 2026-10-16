@@ -33,7 +33,7 @@ export function CommunicationQueueScreen({ navigation }: RootScreenProps<'Commun
   return (
     <Screen
       edges={[]}
-      contentClassName="gap-3 pt-4 pb-10"
+      contentClassName="gap-2 pt-3 pb-10"
       refreshing={syncing}
       onRefresh={() => {
         setSyncing(true);
@@ -68,15 +68,15 @@ function QueueItem({ op, onOpen }: { op: LocalOperation; onOpen: () => void }) {
     pending === 0 && (op.phase === 'done' || op.phase === 'abandoned' || op.phase === 'dispatch_failed');
 
   return (
-    <AppCard className="gap-2">
+    <AppCard className="gap-2 px-3.5 py-3">
       <View className="flex-row items-center gap-3">
         <IconContainer icon={op.channel === 'sms' ? MessageSquare : Phone} tone="muted" size="sm" round />
-        <AppText variant="label" className="flex-1" numberOfLines={1}>
+        <AppText variant="title" className="flex-1" numberOfLines={1}>
           {op.leadName}
         </AppText>
         <AppBadge label={t(`communication.phase.${op.phase}`)} variant={variant} dot />
       </View>
-      <AppText variant="caption" tone="muted">
+      <AppText variant="caption" tone="muted" className="ms-11">
         {[
           formatRelative(new Date(op.createdAt), i18n.language),
           pending > 0 ? t('communication.queue.pendingEvents', { count: pending }) : null,
@@ -87,7 +87,7 @@ function QueueItem({ op, onOpen }: { op: LocalOperation; onOpen: () => void }) {
           .filter(Boolean)
           .join(' · ')}
       </AppText>
-      <View className="flex-row flex-wrap gap-2">
+      <View className="ms-11 flex-row flex-wrap gap-2">
         <AppButton title={t('communication.queue.open')} size="sm" variant="outline" onPress={onOpen} />
         {op.sync.paused || op.phase === 'needs_attention' ? (
           <AppButton

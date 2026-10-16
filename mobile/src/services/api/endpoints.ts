@@ -10,6 +10,8 @@ export const ENDPOINTS = {
   },
   users: {
     me: '/users/me',
+    // PATCH merges only the keys sent (server/src/modules/auth/user.controller.js updatePreferences).
+    preferences: '/users/me/preferences',
   },
   dashboard: {
     stats: '/dashboard/stats',

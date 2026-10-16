@@ -104,14 +104,14 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
 
   if (campaignQuery.isPending) {
     return (
-      <Screen edges={['bottom']} contentClassName="pt-4">
+      <Screen edges={['bottom']} contentClassName="pt-3">
         <Loading label={t('common.loading')} />
       </Screen>
     );
   }
   if (campaignQuery.isError || !campaign) {
     return (
-      <Screen edges={['bottom']} contentClassName="pt-4">
+      <Screen edges={['bottom']} contentClassName="pt-3">
         <AppErrorState
           error={campaignQuery.error}
           retrying={campaignQuery.isRefetching}
@@ -141,7 +141,7 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
   return (
     <Screen
       edges={['bottom']}
-      contentClassName="gap-4 pt-4"
+      contentClassName="gap-4 pt-3"
       refreshing={campaignQuery.isRefetching}
       onRefresh={() => {
         void campaignQuery.refetch();
@@ -171,7 +171,7 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
       </AppCard>
 
       <AppCard className="gap-3">
-        <AppText variant="title">{t('aiAgent.detail.progress')}</AppText>
+        <AppText variant="h3">{t('aiAgent.detail.progress')}</AppText>
         {smsProgress ? (
           <AppText accessibilityLiveRegion="polite">
             {t('aiAgent.detail.percent', { percent: smsProgress.percent })}
@@ -225,11 +225,11 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
       {kind === 'call' ? <TestConversation campaignId={campaignId} /> : null}
 
       <AppCard className="gap-3">
-        <AppText variant="title">{t('aiAgent.detail.recipients')}</AppText>
+        <AppText variant="h3">{t('aiAgent.detail.recipients')}</AppText>
         {recipients.isPending ? (
           <Loading label={t('common.loading')} />
         ) : recipients.isError ? (
-          <AppErrorState error={recipients.error} onRetry={() => void recipients.refetch()} />
+          <AppErrorState error={recipients.error} onRetry={() => void recipients.refetch()} size="inline" />
         ) : (
           <>
             {recipients.data.total > recipients.data.items.length ? (
@@ -246,7 +246,10 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
             <ReasonList rows={recipients.data.items} />
             {kind === 'call'
               ? (callRecipients.data?.items ?? []).map((recipient) => (
-                  <View key={recipient.id} className="gap-1 border-t border-border pt-2">
+                  <View
+                    key={recipient.id}
+                    className="min-h-11 justify-center gap-1 border-t border-border pt-2.5"
+                  >
                     <View className="flex-row items-center gap-2">
                       <AppText className="flex-1" numberOfLines={1}>
                         {recipient.lead.name ?? recipient.lead.leadNumber ?? t('aiAgent.detail.unknownLead')}
@@ -266,7 +269,10 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
                   </View>
                 ))
               : smsItems.map((recipient) => (
-                  <View key={recipient.id} className="gap-1 border-t border-border pt-2">
+                  <View
+                    key={recipient.id}
+                    className="min-h-11 justify-center gap-1 border-t border-border pt-2.5"
+                  >
                     <View className="flex-row items-center gap-2">
                       <AppText className="flex-1" numberOfLines={1}>
                         {recipient.lead.name ?? recipient.lead.leadNumber ?? t('aiAgent.detail.unknownLead')}

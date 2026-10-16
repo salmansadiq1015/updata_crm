@@ -9,6 +9,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppSkeleton } from '@/components/ui/AppSkeleton';
 import { AppText } from '@/components/ui/AppText';
 import { IconContainer } from '@/components/ui/IconContainer';
+import { cn } from '@/utils/cn';
 import { formatDate, formatRelative } from '@/utils/date';
 
 import { formatElapsed } from '../domain/callEvidence';
@@ -31,63 +32,66 @@ export function CommunicationHistory({
   const items = history.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <AppCard className="gap-3">
-      <SectionHeader title={t('communication.history.title')} />
-
-      {openOperations.map((op) => (
-        <View key={op.operationId} className="gap-3 rounded-xl border border-warning/35 bg-warning/5 p-3">
-          <View className="flex-row items-center gap-2.5">
-            <IconContainer
-              icon={op.channel === 'sms' ? MessageSquare : Phone}
-              tone="warning"
+    <View className="gap-1.5">
+      <SectionHeader title={t('communication.history.title')} size="group" />
+      <AppCard variant="outline" className="gap-3 py-3">
+        {openOperations.map((op) => (
+          <View key={op.operationId} className="gap-3 rounded-xl border border-warning/35 bg-warning/5 p-3">
+            <View className="flex-row items-center gap-2.5">
+              <IconContainer
+                icon={op.channel === 'sms' ? MessageSquare : Phone}
+                tone="warning"
+                size="sm"
+                round
+              />
+              <AppText variant="label" className="flex-1">
+                {t(`communication.phase.${op.phase}`)}
+              </AppText>
+              <AppText variant="caption" tone="muted">
+                {formatRelative(new Date(op.createdAt), i18n.language)}
+              </AppText>
+            </View>
+            <AppButton
+              title={t('communication.history.resume')}
               size="sm"
-              round
+              variant="outline"
+              onPress={() => onResume(op)}
             />
-            <AppText variant="label" className="flex-1">
-              {t(`communication.phase.${op.phase}`)}
-            </AppText>
-            <AppText variant="caption" tone="muted">
-              {formatRelative(new Date(op.createdAt), i18n.language)}
-            </AppText>
           </View>
-          <AppButton
-            title={t('communication.history.resume')}
-            size="sm"
-            variant="outline"
-            onPress={() => onResume(op)}
-          />
-        </View>
-      ))}
+        ))}
 
-      {history.isPending ? (
-        <AppSkeleton className="h-16 w-full rounded-xl" />
-      ) : history.isError ? (
-        <AppText tone="muted">{t('communication.history.loadFailed')}</AppText>
-      ) : items.length === 0 ? (
-        <AppText tone="muted">{t('communication.history.empty')}</AppText>
-      ) : (
-        items.map((item) => <HistoryItem key={item.id} item={item} language={i18n.language} />)
-      )}
-      {history.hasNextPage ? (
-        <AppButton
-          title={t('communication.history.more')}
-          variant="ghost"
-          size="sm"
-          loading={history.isFetchingNextPage}
-          onPress={() => void history.fetchNextPage()}
-        />
-      ) : null}
-    </AppCard>
+        {history.isPending ? (
+          <AppSkeleton className="h-14 w-full rounded-xl" />
+        ) : history.isError ? (
+          <AppText tone="muted">{t('communication.history.loadFailed')}</AppText>
+        ) : items.length === 0 ? (
+          <AppText tone="muted">{t('communication.history.empty')}</AppText>
+        ) : (
+          items.map((item, index) => (
+            <HistoryItem key={item.id} item={item} language={i18n.language} first={index === 0} />
+          ))
+        )}
+        {history.hasNextPage ? (
+          <AppButton
+            title={t('communication.history.more')}
+            variant="ghost"
+            size="sm"
+            loading={history.isFetchingNextPage}
+            onPress={() => void history.fetchNextPage()}
+          />
+        ) : null}
+      </AppCard>
+    </View>
   );
 }
 
-function HistoryItem({ item, language }: { item: Communication; language: string }) {
+function HistoryItem({ item, language, first }: { item: Communication; language: string; first: boolean }) {
   const { t } = useTranslation();
   const status = item.state === 'completed' ? receiptStatus(item.receipt) : null;
   const offhook = item.observed?.offhookDurationSec;
 
   return (
-    <View className="gap-1 border-t border-border pt-3">
+    <View className={cn('gap-1', !first && 'border-t border-border pt-3')}>
       <View className="flex-row items-center gap-2.5">
         <IconContainer icon={item.channel === 'sms' ? MessageSquare : Phone} tone="muted" size="sm" round />
         <AppText variant="label" className="flex-1">

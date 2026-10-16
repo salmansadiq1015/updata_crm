@@ -75,7 +75,12 @@ export function LanguagePicker({ languages, value, onSelect, loading }: PickerPr
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const current = languages.find((language) => language.code.toLowerCase() === value.toLowerCase());
-  const label = current ? `${current.nativeName} · ${current.name}` : value;
+  // "Deutsch · German", but just "English" when both names are the same.
+  const label = current
+    ? current.nativeName === current.name
+      ? current.name
+      : `${current.nativeName} · ${current.name}`
+    : value;
 
   return (
     <>

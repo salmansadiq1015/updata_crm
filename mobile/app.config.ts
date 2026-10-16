@@ -1,6 +1,22 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { withGradleProperties, type ConfigPlugin } from 'expo/config-plugins';
 
 import { parseEnv } from './src/config/envSchema.ts';
+
+// Release builds compile every Kotlin module; the template's 512 MB Metaspace runs out
+// ("Metaspace" in compileReleaseKotlin). android/ is generated, so set it here.
+const GRADLE_JVM_ARGS = '-Xmx4096m -XX:MaxMetaspaceSize=1536m -XX:+HeapDumpOnOutOfMemoryError';
+const withGradleMemory: ConfigPlugin = (config) =>
+  withGradleProperties(config, (gradle) => {
+    for (const [key, value] of [
+      ['org.gradle.jvmargs', GRADLE_JVM_ARGS],
+      ['kotlin.daemon.jvmargs', '-Xmx3072m -XX:MaxMetaspaceSize=1024m'],
+    ] as const) {
+      gradle.modResults = gradle.modResults.filter((item) => !(item.type === 'property' && item.key === key));
+      gradle.modResults.push({ type: 'property', key, value });
+    }
+    return gradle;
+  });
 
 // Fail the build (and `expo start`) early on missing or unsafe configuration:
 // a production APK can never ship pointing at a development API.
@@ -20,74 +36,75 @@ const VARIANT = {
   production: { name: 'Updata', idSuffix: '' },
 } as const;
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
-  ...config,
-  name: VARIANT[env.appEnv].name,
-  slug: 'updata-mobile',
-  scheme: 'updata',
-  version: '0.1.0',
-  orientation: 'portrait',
-  icon: './assets/icon.png',
-  // Follows the device; the user can override it in Settings (light / dark / system).
-  userInterfaceStyle: 'automatic',
-  backgroundColor: '#F7F8FC',
-  android: {
-    // Each environment installs side by side, so a dev build never overwrites production.
-    package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
-    versionCode: 1,
-    adaptiveIcon: {
-      foregroundImage: './assets/android-icon-foreground.png',
-      backgroundColor: BRAND_NAVY,
-    },
-    // Session material lives in the Android Keystore; never let Auto Backup copy app data off-device.
-    allowBackup: false,
-    predictiveBackGestureEnabled: false,
-    // Calling (local module modules/updata-telephony):
-    // - CALL_PHONE: TelecomManager.placeCall on the SIM the user picked (without it the app
-    //   only opens the dialer with the number pre-filled).
-    // - READ_PHONE_STATE: list active SIMs and observe idle/ringing/offhook for a call the
-    //   user started from the app.
-    // Both are ordinary runtime ("dangerous") permissions requested at the moment of use; neither
-    // is in Google Play's restricted SMS / Call Log groups, so no core-use declaration is needed.
-    // Deliberately absent: SEND_SMS / READ_SMS / RECEIVE_SMS and READ_CALL_LOG /
-    // PROCESS_OUTGOING_CALLS (restricted groups; the app opens the system SMS composer instead
-    // and never reads the call log), ANSWER_PHONE_CALLS, MANAGE_OWN_CALLS, READ_PHONE_NUMBERS,
-    // foreground services, contacts and microphone. Telephony hardware is optional
-    // (uses-feature required=false in the module manifest) so Wi-Fi tablets can install.
-    permissions: ['android.permission.CALL_PHONE', 'android.permission.READ_PHONE_STATE'],
-    blockedPermissions: [
-      'android.permission.READ_EXTERNAL_STORAGE',
-      'android.permission.WRITE_EXTERNAL_STORAGE',
-      'android.permission.RECORD_AUDIO',
-      'android.permission.SYSTEM_ALERT_WINDOW',
-    ],
-  },
-  plugins: [
-    [
-      'expo-splash-screen',
-      {
-        image: './assets/splash-icon.png',
-        imageWidth: 120,
+export default ({ config }: ConfigContext): ExpoConfig =>
+  withGradleMemory({
+    ...config,
+    name: VARIANT[env.appEnv].name,
+    slug: 'updata-mobile',
+    scheme: 'updata',
+    version: '0.1.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    // Follows the device; the user can override it in Settings (light / dark / system).
+    userInterfaceStyle: 'automatic',
+    backgroundColor: '#F7F8FC',
+    android: {
+      // Each environment installs side by side, so a dev build never overwrites production.
+      package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
+      versionCode: 1,
+      adaptiveIcon: {
+        foregroundImage: './assets/android-icon-foreground.png',
         backgroundColor: BRAND_NAVY,
-        dark: { image: './assets/splash-icon.png', backgroundColor: BRAND_NAVY },
       },
+      // Session material lives in the Android Keystore; never let Auto Backup copy app data off-device.
+      allowBackup: false,
+      predictiveBackGestureEnabled: false,
+      // Calling (local module modules/updata-telephony):
+      // - CALL_PHONE: TelecomManager.placeCall on the SIM the user picked (without it the app
+      //   only opens the dialer with the number pre-filled).
+      // - READ_PHONE_STATE: list active SIMs and observe idle/ringing/offhook for a call the
+      //   user started from the app.
+      // Both are ordinary runtime ("dangerous") permissions requested at the moment of use; neither
+      // is in Google Play's restricted SMS / Call Log groups, so no core-use declaration is needed.
+      // Deliberately absent: SEND_SMS / READ_SMS / RECEIVE_SMS and READ_CALL_LOG /
+      // PROCESS_OUTGOING_CALLS (restricted groups; the app opens the system SMS composer instead
+      // and never reads the call log), ANSWER_PHONE_CALLS, MANAGE_OWN_CALLS, READ_PHONE_NUMBERS,
+      // foreground services, contacts and microphone. Telephony hardware is optional
+      // (uses-feature required=false in the module manifest) so Wi-Fi tablets can install.
+      permissions: ['android.permission.CALL_PHONE', 'android.permission.READ_PHONE_STATE'],
+      blockedPermissions: [
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.WRITE_EXTERNAL_STORAGE',
+        'android.permission.RECORD_AUDIO',
+        'android.permission.SYSTEM_ALERT_WINDOW',
+      ],
+    },
+    plugins: [
+      [
+        'expo-splash-screen',
+        {
+          image: './assets/splash-icon.png',
+          imageWidth: 120,
+          backgroundColor: BRAND_NAVY,
+          dark: { image: './assets/splash-icon.png', backgroundColor: BRAND_NAVY },
+        },
+      ],
+      [
+        'expo-font',
+        {
+          fonts: [
+            './assets/fonts/Geist-Regular.ttf',
+            './assets/fonts/Geist-Medium.ttf',
+            './assets/fonts/Geist-SemiBold.ttf',
+            './assets/fonts/Geist-Bold.ttf',
+          ],
+        },
+      ],
+      ['expo-secure-store', { configureAndroidBackup: true }],
+      ['expo-localization', { supportsRTL: true }],
+      'expo-system-ui',
     ],
-    [
-      'expo-font',
-      {
-        fonts: [
-          './assets/fonts/Geist-Regular.ttf',
-          './assets/fonts/Geist-Medium.ttf',
-          './assets/fonts/Geist-SemiBold.ttf',
-          './assets/fonts/Geist-Bold.ttf',
-        ],
-      },
-    ],
-    ['expo-secure-store', { configureAndroidBackup: true }],
-    ['expo-localization', { supportsRTL: true }],
-    'expo-system-ui',
-  ],
-  extra: {
-    appEnv: env.appEnv,
-  },
-});
+    extra: {
+      appEnv: env.appEnv,
+    },
+  });

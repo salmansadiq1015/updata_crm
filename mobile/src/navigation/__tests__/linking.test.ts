@@ -25,4 +25,12 @@ describe('deep links', () => {
       state: { routes: [{ name: 'Notifications' }] },
     });
   });
+
+  it('maps the Call Agent tab and its settings', () => {
+    expect(resolve('call-agent')).toMatchObject({
+      name: 'Main',
+      state: { routes: [{ name: 'CallAgent' }] },
+    });
+    expect(resolve('call-agent/settings')).toMatchObject({ name: 'CallAgentSettings' });
+  });
 });

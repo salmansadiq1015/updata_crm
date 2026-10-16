@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
+import { usePullRefresh } from '@/components/layout/usePullRefresh';
 import { Appear } from '@/components/motion/Appear';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppErrorState } from '@/components/ui/AppErrorState';
@@ -20,7 +21,7 @@ import {
 } from '../hooks/useNotifications';
 import type { AppNotification } from '../types';
 
-const RowGap = () => <View className="h-3" />;
+const RowGap = () => <View className="h-2" />;
 
 export function NotificationsScreen() {
   const { t } = useTranslation();
@@ -39,6 +40,12 @@ export function NotificationsScreen() {
     },
     [markOneRead],
   );
+
+  // Spinner only for a user pull; background refetches never flash the refresh disc.
+  const pull = usePullRefresh(feed.isRefetching && !feed.isFetchingNextPage, () => {
+    void feed.refetch();
+    void unreadQuery.refetch();
+  });
 
   const empty = feed.isPending ? (
     <LeadListSkeleton rows={5} />
@@ -61,7 +68,7 @@ export function NotificationsScreen() {
           <AppIconButton
             icon={CheckCheck}
             accessibilityLabel={t('notifications.markAllRead')}
-            variant="outline"
+            variant="ghost"
             disabled={unread === 0}
             loading={markAllRead.isPending}
             onPress={() => markAllRead.mutate()}
@@ -82,18 +89,15 @@ export function NotificationsScreen() {
           feed.isFetchingNextPage ? <ActivityIndicator className="py-4" color={colors.primary} /> : null
         }
         ItemSeparatorComponent={RowGap}
-        contentContainerClassName="grow px-4 pb-8"
+        contentContainerClassName="grow px-4 pb-8 pt-1"
         onEndReached={() => {
           if (feed.hasNextPage && !feed.isFetchingNextPage && !feed.isError) void feed.fetchNextPage();
         }}
         onEndReachedThreshold={0.4}
         refreshControl={
           <RefreshControl
-            refreshing={feed.isRefetching && !feed.isFetchingNextPage}
-            onRefresh={() => {
-              void feed.refetch();
-              void unreadQuery.refetch();
-            }}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
             progressBackgroundColor={colors.card}

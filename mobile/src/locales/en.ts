@@ -54,6 +54,7 @@ export const en = {
     passwordMismatch: 'Passwords do not match',
   },
   auth: {
+    serverHost: 'Server: {{host}}',
     passwordPlaceholder: 'Enter your password',
     welcome: 'Welcome back, {{name}}!',
     haveResetLink: 'I already have a reset link',

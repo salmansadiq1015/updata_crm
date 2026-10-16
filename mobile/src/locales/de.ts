@@ -56,6 +56,7 @@ export const de: Translations = {
     passwordMismatch: 'Passwörter stimmen nicht überein',
   },
   auth: {
+    serverHost: 'Server: {{host}}',
     passwordPlaceholder: 'Ihr Passwort eingeben',
     welcome: 'Willkommen zurück, {{name}}!',
     haveResetLink: 'Ich habe bereits einen Link',

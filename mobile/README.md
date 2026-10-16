@@ -49,7 +49,13 @@ Rules enforced by the schema:
 - Each environment has its own application id (`ai.updata.crm.dev`, `.staging`, none), so
   builds install side by side.
 
-Switching environment — shell variables override `.env*` files:
+> **Development builds:** Expo SDK 57 merges the `.env*` files **over** shell variables at
+> runtime in dev, so set `EXPO_PUBLIC_API_URL` in `.env.local` (restart Metro after changing it).
+> `10.0.2.2` only exists inside the Android emulator — a physical phone needs the live
+> server (`https://updata.behjja.com/api/v1`) or `http://localhost:9097/api/v1` with
+> `adb reverse tcp:9097 tcp:9097`. Non-production builds show the API host under the sign-in form.
+
+Switching environment for release builds — shell variables override `.env*` files:
 
 ```bash
 # Local release build against staging

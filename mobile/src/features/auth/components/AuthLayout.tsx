@@ -9,6 +9,7 @@ import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { Appear } from '@/components/motion/Appear';
 import { AppText } from '@/components/ui/AppText';
 import { BrandMark } from '@/components/ui/BrandMark';
+import { getEnv } from '@/config/env';
 import { GradientSurface } from '@/components/ui/GradientSurface';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -69,8 +70,30 @@ export function AuthLayout({
               {children}
             </View>
           </Appear>
+          <ServerHost />
         </View>
       </KeyboardAwareScrollView>
     </View>
+  );
+}
+
+/**
+ * Development/staging builds name the API host under the form, so a build pointing at
+ * the wrong server (e.g. the emulator-only 10.0.2.2 on a real phone) is obvious at sign-in.
+ */
+function ServerHost() {
+  const { t } = useTranslation();
+  const env = getEnv();
+  if (env.appEnv === 'production') return null;
+  let host = env.apiUrl;
+  try {
+    host = new URL(env.apiUrl).host;
+  } catch {
+    // keep the raw value
+  }
+  return (
+    <AppText variant="caption" tone="muted" className="mt-4 text-center" selectable>
+      {t('auth.serverHost', { host })}
+    </AppText>
   );
 }

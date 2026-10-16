@@ -54,6 +54,7 @@ export const fr: Translations = {
     passwordMismatch: 'Les mots de passe ne correspondent pas',
   },
   auth: {
+    serverHost: 'Serveur : {{host}}',
     passwordPlaceholder: 'Saisissez votre mot de passe',
     welcome: 'Bon retour, {{name}} !',
     haveResetLink: 'J’ai déjà un lien de réinitialisation',

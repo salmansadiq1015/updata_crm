@@ -54,6 +54,7 @@ export const ar: Translations = {
     passwordMismatch: 'كلمتا المرور غير متطابقتين',
   },
   auth: {
+    serverHost: 'الخادم: {{host}}',
     passwordPlaceholder: 'أدخل كلمة المرور',
     welcome: 'مرحبًا بعودتك، {{name}}!',
     haveResetLink: 'لدي رابط إعادة تعيين بالفعل',

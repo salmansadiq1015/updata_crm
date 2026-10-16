@@ -60,19 +60,21 @@ export function CallStatusCard({
           size="md"
           round
         />
-        <View className="flex-1 gap-0.5">
+        <View className="flex-1 gap-1">
           <AppText variant="label" accessibilityLiveRegion="polite">
             {stateLabel}
           </AppText>
-          <AppText variant="caption" tone="muted">
+          <AppText variant="caption" tone="muted" numberOfLines={1}>
             {routeLabel}
           </AppText>
+          <View className="flex-row">
+            <AppBadge
+              label={t(`communication.phase.${op.phase}`)}
+              variant={op.phase === 'in_progress' ? 'default' : 'muted'}
+              dot
+            />
+          </View>
         </View>
-        <AppBadge
-          label={t(`communication.phase.${op.phase}`)}
-          variant={op.phase === 'in_progress' ? 'default' : 'muted'}
-          dot
-        />
       </View>
       {monitoringAvailable && observation.phase !== 'not_observed' ? (
         <AppText variant="caption" tone="muted" className="border-t border-border pt-3">

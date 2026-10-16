@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { ListChecks, Phone, ShieldCheck } from 'lucide-react-native';
+import { CheckCircle2, ListChecks, Phone, ShieldCheck } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { AppAlert } from '@/components/feedback/AppAlert';
 import { Screen } from '@/components/layout/Screen';
 import { SectionHeader } from '@/components/layout/SectionHeader';
+import { AppBadge } from '@/components/ui/AppBadge';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppChip } from '@/components/ui/AppChip';
@@ -261,18 +262,22 @@ function PrepareCall({
           <AppText variant="caption" tone="muted">
             {t('communication.guide.body')}
           </AppText>
-          {qualification.data.schema.map((entry) => {
-            const known = qualification.data.fields.find(
-              (stored) => stored.fieldKey === entry.fieldKey && stored.status === 'answered',
-            );
-            return (
-              <AppText key={entry.fieldKey} tone={known ? 'muted' : 'default'}>
-                {known ? '✓ ' : '• '}
-                {label(entry)}
-                {known ? ` — ${String(known.value)}` : ''}
-              </AppText>
-            );
-          })}
+          {/* Compact chips: answered questions are ticked (state is not colour-only). */}
+          <View className="flex-row flex-wrap gap-1.5">
+            {qualification.data.schema.map((entry) => {
+              const known = qualification.data.fields.find(
+                (stored) => stored.fieldKey === entry.fieldKey && stored.status === 'answered',
+              );
+              return (
+                <AppBadge
+                  key={entry.fieldKey}
+                  label={known ? `${label(entry)}: ${String(known.value)}` : label(entry)}
+                  icon={known ? CheckCircle2 : undefined}
+                  variant={known ? 'success' : 'outline'}
+                />
+              );
+            })}
+          </View>
         </AppCard>
       ) : null}
 

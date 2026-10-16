@@ -10,7 +10,6 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppChip } from '@/components/ui/AppChip';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppModal } from '@/components/ui/AppModal';
-import { AppRadioGroup } from '@/components/ui/AppRadioGroup';
 import { AppText } from '@/components/ui/AppText';
 import { ASSIGNABLE_LEAD_STATUSES, type LeadStatus } from '@/features/leads/types';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
@@ -196,14 +195,26 @@ export function OutcomeForm({ op, leadStatus }: { op: LocalOperation; leadStatus
         <SectionHeader
           title={isSms ? t('communication.outcome.smsTitle') : t('communication.outcome.title')}
         />
-        <AppRadioGroup
-          options={dispositionOptions}
-          value={draft.disposition ?? ''}
-          onChange={(value) =>
-            update({ disposition: value, doNotContact: value === 'do_not_contact' || draft.doNotContact })
-          }
+        {/* Chips instead of a 10-row list: same single choice, a third of the height. */}
+        <View
+          className="flex-row flex-wrap gap-2"
+          accessibilityRole="radiogroup"
           accessibilityLabel={t('communication.outcome.title')}
-        />
+        >
+          {dispositionOptions.map((option) => (
+            <AppChip
+              key={option.value}
+              label={option.label}
+              selected={draft.disposition === option.value}
+              onPress={() =>
+                update({
+                  disposition: option.value,
+                  doNotContact: option.value === 'do_not_contact' || draft.doNotContact,
+                })
+              }
+            />
+          ))}
+        </View>
         {!isSms ? (
           <View className="gap-2">
             <AppText variant="label">{t('communication.outcome.connected')}</AppText>
@@ -389,9 +400,16 @@ export function OutcomeForm({ op, leadStatus }: { op: LocalOperation; leadStatus
                 : current
                   ? tKey(t, `communication.answerStatus.${current.status}`)
                   : '—';
+            const field = qualification.data?.schema.find((entry) => entry.fieldKey === answer.fieldKey);
+            const answeredLabel =
+              field?.type === 'single_choice'
+                ? tKey(t, `communication.options.${String(answer.value)}`, {
+                    defaultValue: String(answer.value).replace(/_/g, ' '),
+                  })
+                : String(answer.value);
             const after =
               answer.status === 'answered'
-                ? String(answer.value)
+                ? answeredLabel
                 : tKey(t, `communication.answerStatus.${answer.status}`);
             return <ReviewRow key={answer.fieldKey} label={label(answer)} value={`${before} → ${after}`} />;
           })}

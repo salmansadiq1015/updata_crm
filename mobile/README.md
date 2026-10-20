@@ -4,6 +4,10 @@ React Native app for the Updata CRM. It talks to the same `/api/v1` backend as t
 (`../client`) and uses the same design tokens, translations (de/en/fr/ar, RTL for Arabic) and
 error envelope.
 
+The implementation/UX inventory, verified API boundaries, Android risks, and remaining staging work are
+tracked in [`../docs/MOBILE_UI_AUDIT.md`](../docs/MOBILE_UI_AUDIT.md). Exact test/build evidence and the
+release decision are in [`../docs/MOBILE_IMPLEMENTATION_REPORT.md`](../docs/MOBILE_IMPLEMENTATION_REPORT.md).
+
 ## Requirements
 
 | Tool        | Version                                                   |
@@ -25,6 +29,9 @@ npm run android                      # prebuild + Gradle debug build + install +
 
 `npm run android` builds a **development client** (not Expo Go: the app uses native modules
 Expo Go does not ship). After the first install, `npm start` is enough for JS-only changes.
+Mobile development uses Metro on port `8082`; port `8081` is reserved by the LiveKit agent
+worker's health server. When using a USB-connected Android device, run
+`adb reverse tcp:8082 tcp:8082` if Expo does not create the reverse automatically.
 
 The backend must be running (`cd ../server && npm run dev`, port 9097). From the Android
 emulator the host machine is `10.0.2.2`; from a physical phone use your machine's LAN IP.
@@ -79,8 +86,8 @@ staging/production lives in the EAS environment variables, not in the repository
 
 | Command                   | What it does                                                |
 | ------------------------- | ----------------------------------------------------------- |
-| `npm run android`         | Debug build, install on emulator/device, start Metro        |
-| `npm start`               | Metro for an already-installed dev client                   |
+| `npm run android`         | Debug build, install on emulator/device, Metro on port 8082 |
+| `npm start`               | Metro on port 8082 for an installed dev client              |
 | `npm run android:release` | Local release build (signed with the debug key — see below) |
 | `npm run prebuild`        | Regenerate `android/` from `app.config.ts`                  |
 | `npm run check`           | typecheck + lint + format check + tests (CI gate)           |

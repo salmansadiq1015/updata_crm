@@ -14,7 +14,7 @@ import { formatRelative } from '@/utils/date';
 
 import type { AppNotification } from '../types';
 
-type Props = { notification: AppNotification; onPress: (notification: AppNotification) => void };
+type Props = { notification: AppNotification; onPress?: (notification: AppNotification) => void };
 
 export const NotificationItem = memo(function NotificationItem({ notification, onPress }: Props) {
   const { t, i18n } = useTranslation();
@@ -25,7 +25,7 @@ export const NotificationItem = memo(function NotificationItem({ notification, o
   return (
     <Animated.View style={press.style}>
       <Pressable
-        accessibilityRole="button"
+        accessibilityRole={onPress ? 'button' : 'text'}
         accessibilityLabel={[
           !notification.isRead && t('notifications.unread'),
           notification.title,
@@ -34,13 +34,15 @@ export const NotificationItem = memo(function NotificationItem({ notification, o
         ]
           .filter(Boolean)
           .join(', ')}
-        accessibilityHint={notification.isRead ? undefined : t('notifications.markRead')}
-        onPress={() => onPress(notification)}
+        accessibilityHint={!notification.isRead && onPress ? t('notifications.markRead') : undefined}
+        disabled={!onPress}
+        onPress={() => onPress?.(notification)}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         className={cn(
-          'flex-row gap-3 rounded-2xl border px-3.5 py-3 active:bg-muted/60',
+          'flex-row gap-3 rounded-2xl border px-3.5 py-3',
           notification.isRead ? 'border-border bg-card' : 'border-primary/25 bg-primary/5',
+          onPress && 'active:bg-muted/60',
         )}
       >
         {/* Icon tile; unread adds a dot on its corner (shape cue, not colour alone). */}

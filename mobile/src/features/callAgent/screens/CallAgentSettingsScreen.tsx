@@ -12,6 +12,7 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppRadioGroup } from '@/components/ui/AppRadioGroup';
 import { AppText } from '@/components/ui/AppText';
+import { AppTimeField } from '@/components/ui/AppTimeField';
 import { LanguagePicker } from '@/features/aiAgent/components/LanguagePicker';
 import { QuestionListEditor } from '@/features/aiAgent/components/QuestionListEditor';
 import { Loading } from '@/features/aiAgent/components/ReviewPanels';
@@ -204,23 +205,17 @@ export function SettingsForm({ initial, onSaved }: { initial: AgentSettingsForm;
 
       <Section title={t('aiAgent.call.scheduleSection')}>
         <View className="flex-row gap-3">
-          <AppInput
-            containerClassName="flex-1"
+          <AppTimeField
             label={t('aiAgent.call.windowStart')}
+            accessibilityLabel={t('aiAgent.call.windowStart')}
             value={form.windowStart}
-            maxLength={5}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={(windowStart) => update({ windowStart })}
-            error={invalid('windowStart') ? t('aiAgent.call.invalidTime') : undefined}
+            onChange={(windowStart) => update({ windowStart })}
           />
-          <AppInput
-            containerClassName="flex-1"
+          <AppTimeField
             label={t('aiAgent.call.windowEnd')}
+            accessibilityLabel={t('aiAgent.call.windowEnd')}
             value={form.windowEnd}
-            maxLength={5}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={(windowEnd) => update({ windowEnd })}
-            error={invalid('windowEnd') ? t('aiAgent.call.invalidTime') : undefined}
+            onChange={(windowEnd) => update({ windowEnd })}
           />
         </View>
         <AppText variant="label">{t('callAgent.settings.days')}</AppText>

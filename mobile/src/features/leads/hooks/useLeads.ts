@@ -5,7 +5,7 @@ import { i18next } from '@/i18n';
 import { showApiErrorToast, showSuccessToast } from '@/utils/toast';
 
 import { leadsApi } from '../api/leadsApi';
-import type { AssignableLeadStatus, Lead, LeadListFilters } from '../types';
+import type { AssignableLeadStatus, BulkLeadResult, Lead, LeadListFilters } from '../types';
 import type { LeadCreateInput, LeadPatch } from '../utils/leadForm';
 
 const RECENT_LEADS_LIMIT = 5;
@@ -30,6 +30,15 @@ export function useRecentLeads() {
   return useQuery({
     queryKey: queryKeys.leads.recent,
     queryFn: async ({ signal }) => (await leadsApi.list({}, undefined, signal, RECENT_LEADS_LIMIT)).items,
+  });
+}
+
+export function useLeadDirectory(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.leads.directory,
+    queryFn: ({ signal }) => leadsApi.directory(signal),
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -90,4 +99,40 @@ export function useUpdateLead(id: string) {
     mutationFn: (patch: LeadPatch) => leadsApi.update(id, patch),
     onSuccess: refresh,
   });
+}
+
+function useBulkLeadMutation<TInput>(
+  mutationKey: readonly unknown[],
+  mutationFn: (input: TInput) => Promise<BulkLeadResult>,
+) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey,
+    mutationFn,
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.leads.lists });
+      void client.invalidateQueries({ queryKey: queryKeys.leads.recent });
+      void client.invalidateQueries({ queryKey: queryKeys.followUps.all });
+    },
+  });
+}
+
+export function useBulkDeleteLeads() {
+  return useBulkLeadMutation(['leads', 'bulk-delete'], (ids: string[]) => leadsApi.bulkDelete(ids));
+}
+
+export function useBulkAssignLeads() {
+  return useBulkLeadMutation(
+    ['leads', 'bulk-assign'],
+    ({ ids, assignedTo }: { ids: string[]; assignedTo: string | null }) =>
+      leadsApi.bulkAssign(ids, assignedTo),
+  );
+}
+
+export function useBulkUpdateLeadStatus() {
+  return useBulkLeadMutation(
+    ['leads', 'bulk-status'],
+    ({ ids, status }: { ids: string[]; status: AssignableLeadStatus }) =>
+      leadsApi.bulkUpdateStatus(ids, status),
+  );
 }

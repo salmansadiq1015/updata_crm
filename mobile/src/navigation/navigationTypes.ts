@@ -45,10 +45,22 @@ export type RootStackParamList = {
   AiAgentLaunch: { leadIds: string[]; initialChannel?: 'call' | 'sms' };
   AiAgentCampaigns: undefined;
   AiAgentCampaignDetail: { kind: 'call' | 'sms'; campaignId: string };
+  AiCallHistory: { leadId: string };
+  // AI SMS from this phone's SIM (private build only; not deep-linkable).
+  SimSmsLaunch: { leadIds: string[] };
+  SimSmsCampaigns: undefined;
+  CallAudioCheck: undefined;
+  CallCampaigns: undefined;
+  CallCampaignCreate: { leadIds: string[] };
+  CallCampaignDetail: { campaignId: string };
+  CallCampaignRun: { campaignId: string };
+  SimSmsCampaignDetail: { campaignId: string };
+  SimSmsConversation: { conversationId: string };
+  AiCallDetail: { callId: string };
   // Call Agent tab. Settings are deep-linkable (they start nothing); the picker and
   // the test screen are reached only from an explicit tap.
   CallAgentSettings: undefined;
-  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' | 'queue' };
+  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' | 'queue' | 'campaign' };
   CallAgentTest: { leadId?: string } | undefined;
 };
 

@@ -1,9 +1,10 @@
 import { useNavigation } from '@react-navigation/native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { queryKeys } from '@/constants/queryKeys';
-import { showApiErrorToast } from '@/utils/toast';
+import { i18next } from '@/i18n';
+import { showApiErrorToast, showSuccessToast } from '@/utils/toast';
 
 import { aiAgentApi, type SimulateInput } from '../api/aiAgentApi';
 import {
@@ -124,6 +125,31 @@ export function useCallRecipients(id: string, status: string | undefined, enable
   });
 }
 
+export function useAiCallHistory(leadId: string) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.aiAgent.callHistory(leadId),
+    queryFn: ({ pageParam, signal }) => aiAgentApi.callHistory(leadId, pageParam, signal),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.pages ? last.page + 1 : undefined),
+    enabled: Boolean(leadId),
+  });
+}
+
+export function useAiCall(id: string) {
+  return useQuery({
+    queryKey: queryKeys.aiAgent.call(id),
+    queryFn: ({ signal }) => aiAgentApi.getCall(id, signal),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCallAnalytics(from?: string, to?: string) {
+  return useQuery({
+    queryKey: queryKeys.aiAgent.analytics(from, to),
+    queryFn: ({ signal }) => aiAgentApi.callAnalytics({ from, to }, signal),
+  });
+}
+
 export function useSmsRecipients(id: string, status: string | undefined, enabled = true) {
   return useQuery({
     queryKey: queryKeys.aiAgent.recipients('sms', id),
@@ -191,6 +217,20 @@ export function useStartCampaign() {
       kind === 'call' ? aiAgentApi.startCallCampaign(id) : aiAgentApi.startSmsCampaign(id),
     onSuccess: (campaign, { kind }) => {
       client.setQueryData(queryKeys.aiAgent.campaign(kind, campaign.id), campaign);
+      void client.invalidateQueries({ queryKey: queryKeys.aiAgent.all });
+    },
+    onError: showApiErrorToast,
+  });
+}
+
+export function useRetryFailedCalls() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => aiAgentApi.retryFailedCalls(id),
+    onSuccess: ({ retried }) => {
+      showSuccessToast(
+        i18next.t(retried ? 'aiAgent.detail.retried' : 'aiAgent.detail.retryNone', { count: retried }),
+      );
       void client.invalidateQueries({ queryKey: queryKeys.aiAgent.all });
     },
     onError: showApiErrorToast,

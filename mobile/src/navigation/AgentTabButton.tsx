@@ -1,6 +1,5 @@
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { Sparkles } from 'lucide-react-native';
-import { useEffect, useId } from 'react';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -9,25 +8,24 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, LinearGradient, RadialGradient, Stop } from 'react-native-svg';
 
 import { usePressScale } from '@/components/motion/usePressScale';
 import { AppText } from '@/components/ui/AppText';
+import { AiAgentAvatar } from '@/features/callAgent/components/AiAgentAvatar';
 import { brand, withAlpha } from '@/theme/colors';
 import { useTheme } from '@/theme/ThemeProvider';
 import { motion } from '@/theme/tokens';
 
-const SIZE = 58;
+const SIZE = 60;
+// The source PNG has intentional transparent breathing room. Render it slightly
+// beyond the 60dp backing disc so the visible orb reads at the same weight as
+// the neighbouring 22dp navigation glyphs.
+const IMAGE_SIZE = 64;
 /** How far the button rises above the tab bar's top edge. */
 const LIFT = 24;
 /** Must match MainNavigator's tabBarItemStyle.paddingTop and the default 24dp icon. */
 const TAB_PADDING_TOP = 8;
 const ICON_SLOT = 24;
-
-const STOPS = {
-  light: [brand[400], brand[600], brand[800]],
-  dark: [brand[300], brand[500], brand[700]],
-} as const;
 
 type Props = BottomTabBarButtonProps & {
   label: string;
@@ -36,15 +34,14 @@ type Props = BottomTabBarButtonProps & {
 };
 
 /**
- * The highlighted centre tab: a raised brand-gradient disc with a soft glow, its
- * label underneath. Still a real tab for assistive tech (role, selected state,
+ * The highlighted centre tab: the canonical Agent image on a raised surface with
+ * a soft glow and its label underneath. Still a real tab for assistive tech (role, selected state,
  * full-height ≥48dp target). Focus/press motion is skipped under reduced motion.
  */
 export function AgentTabButton({ onPress, onLongPress, testID, style, label, a11yLabel, ...rest }: Props) {
   const { scheme, colors } = useTheme();
   const selected = rest['aria-selected'] === true;
   const reduceMotion = useReducedMotion();
-  const id = useId().replace(/:/g, '');
   const press = usePressScale(motion.pressScale.chip);
 
   const focus = useSharedValue(selected ? 1 : 0);
@@ -55,11 +52,10 @@ export function AgentTabButton({ onPress, onLongPress, testID, style, label, a11
   }, [focus, reduceMotion, selected]);
   const focusStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.06 * focus.value }] }));
 
-  const stops = STOPS[scheme];
   const glow =
     scheme === 'dark'
-      ? `0px 6px 18px ${withAlpha(brand[400], selected ? 0.5 : 0.32)}`
-      : `0px 8px 20px ${withAlpha(brand[600], selected ? 0.5 : 0.36)}`;
+      ? `0px 6px 18px ${withAlpha(brand[400], selected ? 0.55 : 0.3)}`
+      : `0px 8px 20px ${withAlpha(brand[600], selected ? 0.48 : 0.3)}`;
 
   return (
     <Pressable
@@ -80,40 +76,17 @@ export function AgentTabButton({ onPress, onLongPress, testID, style, label, a11
         <Animated.View
           style={[
             styles.disc,
-            { borderColor: colors.card, boxShadow: glow },
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.card,
+              boxShadow: glow,
+              opacity: selected ? 1 : 0.9,
+            },
             selected && { outlineColor: withAlpha(colors.primary, 0.28), outlineWidth: 3 },
             focusStyle,
           ]}
         >
-          <Svg
-            style={StyleSheet.absoluteFill}
-            width="100%"
-            height="100%"
-            viewBox="0 0 100 100"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <Defs>
-              <LinearGradient id={`t${id}`} x1="0" y1="0" x2="1" y2="1">
-                {stops.map((color, index) => (
-                  <Stop key={color} offset={index / (stops.length - 1)} stopColor={color} />
-                ))}
-              </LinearGradient>
-              <RadialGradient id={`h${id}`} cx="30%" cy="22%" r="55%">
-                <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.42} />
-                <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
-              </RadialGradient>
-            </Defs>
-            <Circle cx="50" cy="50" r="50" fill={`url(#t${id})`} />
-            <Circle cx="50" cy="50" r="50" fill={`url(#h${id})`} />
-          </Svg>
-          <Sparkles
-            size={26}
-            color="#FFFFFF"
-            strokeWidth={selected ? 2.4 : 2.1}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
+          <AiAgentAvatar size={IMAGE_SIZE} testID="ai-agent-tab-logo" />
         </Animated.View>
       </Animated.View>
       <View style={styles.labelBox}>
@@ -148,9 +121,10 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 4,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   labelBox: { marginTop: 2 },
   label: { fontFamily: 'Geist-SemiBold', fontSize: 11 },

@@ -1,4 +1,4 @@
-import { Bot, ListOrdered, X } from 'lucide-react-native';
+import { Bot, ListOrdered, MoreHorizontal, X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -13,6 +13,8 @@ type Props = {
   onClear: () => void;
   onDone: () => void;
   onGiveToAgent: () => void;
+  /** Opens CRM actions such as status, assignment, and delete. */
+  onManage?: () => void;
   /** Optional second action: call the selection one by one from the user's SIM (call queue). */
   onCallOneByOne?: () => void;
 };
@@ -25,6 +27,7 @@ export function LeadSelectionBar({
   onClear,
   onDone,
   onGiveToAgent,
+  onManage,
   onCallOneByOne,
 }: Props) {
   const { t } = useTranslation();
@@ -62,6 +65,16 @@ export function LeadSelectionBar({
           variant="soft"
           disabled={count === 0}
           onPress={onCallOneByOne}
+          fullWidth
+        />
+      ) : null}
+      {onManage ? (
+        <AppButton
+          title={t('leads.bulk.manage')}
+          leftIcon={MoreHorizontal}
+          variant="outline"
+          disabled={count === 0}
+          onPress={onManage}
           fullWidth
         />
       ) : null}

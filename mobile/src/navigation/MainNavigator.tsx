@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CallAgentHomeScreen } from '@/features/callAgent/screens/CallAgentHomeScreen';
 import { useCallQueueRuntime } from '@/features/callQueue/hooks/useCallQueueRuntime';
 import { useCommunicationRuntime } from '@/features/communication/hooks/useCommunicationRuntime';
+import { useSmsAgentRuntime } from '@/features/smsAgent/hooks/useSmsAgentRuntime';
+import { useCampaignOutboxRuntime } from '@/features/callCampaign/hooks/useCampaignOutboxRuntime';
 import { DashboardScreen } from '@/features/dashboard/screens/DashboardScreen';
 import { LeadsScreen } from '@/features/leads/screens/LeadsScreen';
 import { useUnreadCount } from '@/features/notifications/hooks/useNotifications';
@@ -46,6 +48,8 @@ export function MainNavigator() {
   const insets = useSafeAreaInsets();
   const unread = useUnreadCount().data ?? 0;
   useCommunicationRuntime();
+  useSmsAgentRuntime();
+  useCampaignOutboxRuntime();
   useCallQueueRuntime();
 
   return (

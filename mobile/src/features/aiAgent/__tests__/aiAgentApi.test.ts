@@ -167,6 +167,61 @@ describe('aiAgentApi', () => {
     expect(result.items[1]).toMatchObject({ state: 'brand_new_state', lead: { id: 'l2', name: null } });
   });
 
+  it('parses persisted lead call history with structured answers and pagination', async () => {
+    jest.mocked(api.get).mockImplementation(
+      respond({
+        data: [
+          {
+            _id: 'call-1',
+            campaignId: { _id: 'campaign-1', name: 'October follow-up' },
+            recipientId: 'recipient-1',
+            leadId: { _id: 'lead-1', name: 'Acme AG', leadNumber: 'L-1' },
+            state: 'completed',
+            disposition: 'answered',
+            qualification: 'qualified',
+            durationSeconds: 74,
+            attemptNumber: 2,
+            answers: [
+              {
+                questionFieldKey: 'need',
+                label: 'Need',
+                rawAnswer: 'A better CRM',
+                normalizedValue: 'A better CRM',
+                validation: 'valid',
+              },
+            ],
+            createdAt: '2026-10-18T08:00:00Z',
+          },
+        ],
+        pagination: { page: 2, pages: 4, total: 61, limit: 20 },
+      }) as never,
+    );
+
+    const result = await aiAgentApi.callHistory('lead-1', 2);
+    expect(api.get).toHaveBeenCalledWith(
+      '/ai-calling/leads/lead-1/history',
+      expect.anything(),
+      expect.objectContaining({ params: { page: 2, limit: 20 } }),
+    );
+    expect(result).toMatchObject({ page: 2, pages: 4, total: 61 });
+    expect(result.items[0]).toMatchObject({
+      id: 'call-1',
+      campaign: { id: 'campaign-1', name: 'October follow-up' },
+      lead: { id: 'lead-1', name: 'Acme AG' },
+      answers: [{ questionFieldKey: 'need', validation: 'valid' }],
+    });
+  });
+
+  it('retries failed AI calls via the campaign retry endpoint and returns the re-queued count', async () => {
+    jest.mocked(api.post).mockImplementationOnce(respond({ data: { retried: 3 } }) as never);
+    await expect(aiAgentApi.retryFailedCalls('c 1')).resolves.toEqual({ retried: 3 });
+    expect(api.post).toHaveBeenCalledWith(
+      '/ai-calling/campaigns/c%201/retry',
+      { recipientIds: [] },
+      expect.anything(),
+    );
+  });
+
   it('creates SMS campaigns on the messaging module and parses rendered recipients', async () => {
     jest.mocked(api.post).mockImplementationOnce(
       respond({

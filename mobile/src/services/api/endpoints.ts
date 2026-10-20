@@ -10,15 +10,20 @@ export const ENDPOINTS = {
   },
   users: {
     me: '/users/me',
+    // Lightweight active-user directory; available to every authenticated user.
+    directory: '/users/directory',
     // PATCH merges only the keys sent (server/src/modules/auth/user.controller.js updatePreferences).
     preferences: '/users/me/preferences',
   },
   dashboard: {
     stats: '/dashboard/stats',
+    mobileCrm: '/dashboard/mobile-crm',
   },
   leads: {
     list: '/crm/leads',
     detail: (id: string) => `/crm/leads/${encodeURIComponent(id)}`,
+    bulkDelete: '/crm/leads/bulk-delete',
+    bulkAssign: '/crm/leads/bulk-assign',
     // Follow-ups agenda across leads (lead.routes.js, before /:id).
     followUps: '/crm/leads/follow-ups',
   },
@@ -32,6 +37,7 @@ export const ENDPOINTS = {
       `/crm/leads/${encodeURIComponent(leadId)}/communications/${encodeURIComponent(operationId)}/complete`,
     qualification: (leadId: string) => `/crm/leads/${encodeURIComponent(leadId)}/qualification`,
     propose: (leadId: string) => `/crm/leads/${encodeURIComponent(leadId)}/qualification/propose`,
+    transcribe: (leadId: string) => `/crm/leads/${encodeURIComponent(leadId)}/qualification/transcribe`,
   },
   messaging: {
     templates: '/messaging/templates',
@@ -58,6 +64,45 @@ export const ENDPOINTS = {
     pause: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/pause`,
     resume: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/resume`,
     cancel: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/cancel`,
+    retry: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/retry`,
+    call: (id: string) => `/ai-calling/calls/${encodeURIComponent(id)}`,
+    leadHistory: (leadId: string) => `/ai-calling/leads/${encodeURIComponent(leadId)}/history`,
+    analytics: '/ai-calling/analytics',
+  },
+  // SIM call campaigns: AI-assisted calling from THIS phone's SIM (server/src/modules/simCall).
+  simCalls: {
+    campaigns: '/sim-calls/campaigns',
+    campaign: (id: string) => `/sim-calls/campaigns/${encodeURIComponent(id)}`,
+    action: (id: string, action: 'start' | 'resume' | 'pause' | 'cancel' | 'retry') =>
+      `/sim-calls/campaigns/${encodeURIComponent(id)}/${action}`,
+    tasks: (id: string) => `/sim-calls/campaigns/${encodeURIComponent(id)}/tasks`,
+    events: (id: string) => `/sim-calls/campaigns/${encodeURIComponent(id)}/events`,
+    next: (id: string) => `/sim-calls/campaigns/${encodeURIComponent(id)}/next`,
+    task: (id: string) => `/sim-calls/tasks/${encodeURIComponent(id)}`,
+    taskAction: (id: string, action: 'dial' | 'release' | 'skip' | 'complete' | 'sync') =>
+      `/sim-calls/tasks/${encodeURIComponent(id)}/${action}`,
+    answers: (id: string) => `/sim-calls/tasks/${encodeURIComponent(id)}/answers`,
+    callback: (id: string) => `/sim-calls/tasks/${encodeURIComponent(id)}/callback`,
+    callbacks: '/sim-calls/callbacks',
+    leadTasks: (leadId: string) => `/sim-calls/leads/${encodeURIComponent(leadId)}/tasks`,
+  },
+  // AI SMS agent over THIS phone's SIM (server/src/modules/simSms). Private build only.
+  simSms: {
+    campaigns: '/sim-sms/campaigns',
+    campaign: (id: string) => `/sim-sms/campaigns/${encodeURIComponent(id)}`,
+    start: (id: string) => `/sim-sms/campaigns/${encodeURIComponent(id)}/start`,
+    pause: (id: string) => `/sim-sms/campaigns/${encodeURIComponent(id)}/pause`,
+    cancel: (id: string) => `/sim-sms/campaigns/${encodeURIComponent(id)}/cancel`,
+    conversations: (id: string) => `/sim-sms/campaigns/${encodeURIComponent(id)}/conversations`,
+    conversation: (id: string) => `/sim-sms/conversations/${encodeURIComponent(id)}`,
+    resolve: (id: string) => `/sim-sms/conversations/${encodeURIComponent(id)}/resolve`,
+    leadConversations: (leadId: string) => `/sim-sms/leads/${encodeURIComponent(leadId)}/conversations`,
+    lease: '/sim-sms/device/lease',
+    attempting: (id: string) => `/sim-sms/device/messages/${encodeURIComponent(id)}/attempting`,
+    result: (id: string) => `/sim-sms/device/messages/${encodeURIComponent(id)}/result`,
+    delivery: (id: string) => `/sim-sms/device/messages/${encodeURIComponent(id)}/delivery`,
+    watchList: '/sim-sms/device/watch-list',
+    inbound: '/sim-sms/device/inbound',
   },
   notifications: {
     feed: '/users/me/notifications',

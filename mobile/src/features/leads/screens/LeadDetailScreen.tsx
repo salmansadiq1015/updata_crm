@@ -314,6 +314,14 @@ function LeadDetail({
 
       <QualificationSummary leadId={lead.id} />
 
+      <AppButton
+        title={t('aiAgent.callHistory.open')}
+        leftIcon={Bot}
+        variant="outline"
+        fullWidth
+        onPress={() => navigation.navigate('AiCallHistory', { leadId: lead.id })}
+      />
+
       <CommunicationHistory
         leadId={lead.id}
         openOperations={openOperations}

@@ -1,12 +1,11 @@
 // Leads list filters survive tab switches but not a restart; they are UI state,
 // not server data, so they live here rather than in the query cache. Same filter set
-// as the web CRM list (status, source, type, "Mine", sort); geography facets are web-only.
+// as the web CRM list (status, source, assignee, type, sort); geography facets are web-only.
 import { create } from 'zustand';
 
 import type { LeadListFilters, LeadSortField, LeadStatus, SortOrder } from '../types';
 
-export type LeadAdvancedFilters = Pick<LeadListFilters, 'source' | 'type'> & {
-  mine: boolean;
+export type LeadAdvancedFilters = Pick<LeadListFilters, 'source' | 'type' | 'assignedTo'> & {
   sortBy: LeadSortField;
   sortOrder: SortOrder;
 };
@@ -14,7 +13,7 @@ export type LeadAdvancedFilters = Pick<LeadListFilters, 'source' | 'type'> & {
 export const DEFAULT_ADVANCED: LeadAdvancedFilters = {
   source: undefined,
   type: undefined,
-  mine: false,
+  assignedTo: undefined,
   sortBy: 'createdAt',
   sortOrder: 'desc',
 };
@@ -44,7 +43,7 @@ export function countAdvanced(advanced: LeadAdvancedFilters): number {
   return (
     Number(Boolean(advanced.source)) +
     Number(Boolean(advanced.type)) +
-    Number(advanced.mine) +
+    Number(Boolean(advanced.assignedTo)) +
     Number(advanced.sortBy !== DEFAULT_ADVANCED.sortBy || advanced.sortOrder !== DEFAULT_ADVANCED.sortOrder)
   );
 }

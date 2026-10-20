@@ -1,4 +1,4 @@
-import { Building2, CheckSquare, Clock, Square, User } from 'lucide-react-native';
+import { Building2, CheckSquare, Clock, Mail, Phone, Square, User } from 'lucide-react-native';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -45,6 +45,8 @@ export const LeadListItem = memo(function LeadListItem({
     : null;
   // One muted meta line (number · city · owner); last contact gets its own line when known.
   const meta = [lead.leadNumber, city, lead.assignedTo?.name].filter(Boolean).join(' · ');
+  const contact = lead.mobile ?? lead.phone ?? lead.email;
+  const ContactIcon = lead.mobile || lead.phone ? Phone : Mail;
 
   return (
     <AppPressableCard
@@ -77,6 +79,14 @@ export const LeadListItem = memo(function LeadListItem({
             <AppText variant="caption" tone="muted" numberOfLines={1}>
               {meta}
             </AppText>
+          ) : null}
+          {contact ? (
+            <View className="flex-row items-center gap-1">
+              <Icon icon={ContactIcon} size="xs" color="mutedForeground" />
+              <AppText variant="caption" tone="muted" numberOfLines={1} className="flex-1">
+                {contact}
+              </AppText>
+            </View>
           ) : null}
           {lastContactLabel ? (
             <View className="flex-row items-center gap-1">

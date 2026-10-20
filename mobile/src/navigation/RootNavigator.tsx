@@ -9,8 +9,19 @@ import { ResetPasswordScreen } from '@/features/auth/screens/ResetPasswordScreen
 import { SessionErrorScreen } from '@/features/auth/screens/SessionErrorScreen';
 import { SessionLoadingScreen } from '@/features/auth/screens/SessionLoadingScreen';
 import { AiAgentCampaignDetailScreen } from '@/features/aiAgent/screens/AiAgentCampaignDetailScreen';
+import { SimSmsCampaignDetailScreen } from '@/features/smsAgent/screens/SimSmsCampaignDetailScreen';
+import { SimSmsCampaignsScreen } from '@/features/smsAgent/screens/SimSmsCampaignsScreen';
+import { CallAudioCheckScreen } from '@/features/communication/screens/CallAudioCheckScreen';
+import { CallCampaignCreateScreen } from '@/features/callCampaign/screens/CallCampaignCreateScreen';
+import { CallCampaignDetailScreen } from '@/features/callCampaign/screens/CallCampaignDetailScreen';
+import { CallCampaignRunScreen } from '@/features/callCampaign/screens/CallCampaignRunScreen';
+import { CallCampaignsScreen } from '@/features/callCampaign/screens/CallCampaignsScreen';
+import { SimSmsConversationScreen } from '@/features/smsAgent/screens/SimSmsConversationScreen';
+import { SimSmsLaunchScreen } from '@/features/smsAgent/screens/SimSmsLaunchScreen';
 import { AiAgentCampaignsScreen } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
 import { AiAgentLaunchScreen } from '@/features/aiAgent/screens/AiAgentLaunchScreen';
+import { AiCallDetailScreen } from '@/features/aiAgent/screens/AiCallDetailScreen';
+import { AiCallHistoryScreen } from '@/features/aiAgent/screens/AiCallHistoryScreen';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { CallAgentLeadPickerScreen } from '@/features/callAgent/screens/CallAgentLeadPickerScreen';
 import { CallAgentSettingsScreen } from '@/features/callAgent/screens/CallAgentSettingsScreen';
@@ -122,6 +133,97 @@ export function RootNavigator() {
               options={{
                 headerShown: true,
                 title: t('aiAgent.detailTitle'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="SimSmsLaunch"
+              component={SimSmsLaunchScreen}
+              options={{ headerShown: true, title: t('smsAgent.title'), headerBackTitle: t('common.back') }}
+            />
+            <Stack.Screen
+              name="CallCampaigns"
+              component={CallCampaignsScreen}
+              options={{
+                headerShown: true,
+                title: t('callCampaign.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallCampaignCreate"
+              component={CallCampaignCreateScreen}
+              options={{
+                headerShown: true,
+                title: t('callCampaign.create.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallCampaignDetail"
+              component={CallCampaignDetailScreen}
+              options={{
+                headerShown: true,
+                title: t('callCampaign.detail.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallCampaignRun"
+              component={CallCampaignRunScreen}
+              options={{
+                headerShown: true,
+                title: t('callCampaign.run.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="CallAudioCheck"
+              component={CallAudioCheckScreen}
+              options={{
+                headerShown: true,
+                title: t('communication.callCheck.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="SimSmsCampaigns"
+              component={SimSmsCampaignsScreen}
+              options={{
+                headerShown: true,
+                title: t('smsAgent.campaignsTitle'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="SimSmsCampaignDetail"
+              component={SimSmsCampaignDetailScreen}
+              options={{ headerShown: true, title: t('smsAgent.title'), headerBackTitle: t('common.back') }}
+            />
+            <Stack.Screen
+              name="SimSmsConversation"
+              component={SimSmsConversationScreen}
+              options={{
+                headerShown: true,
+                title: t('smsAgent.conversation.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="AiCallHistory"
+              component={AiCallHistoryScreen}
+              options={{
+                headerShown: true,
+                title: t('aiAgent.callHistory.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="AiCallDetail"
+              component={AiCallDetailScreen}
+              options={{
+                headerShown: true,
+                title: t('aiAgent.callHistory.detailTitle'),
                 headerBackTitle: t('common.back'),
               }}
             />

@@ -40,6 +40,21 @@ class PlaceCallRequest : Record {
   val operationId: String = ""
 }
 
+/** Mirrors the JS `SendSmsRequest`. */
+class SendSmsRequest : Record {
+  @Field
+  val messageId: String = ""
+
+  @Field
+  val to: String = ""
+
+  @Field
+  val body: String = ""
+
+  @Field
+  val subscriptionId: Int? = null
+}
+
 /** Rejection whose `code` is one of the JS `TelephonyErrorCode` strings. */
 internal class TelephonyException(code: String, message: String, cause: Throwable? = null) :
   CodedException(code, message, cause)
@@ -48,7 +63,8 @@ internal class TelephonyException(code: String, message: String, cause: Throwabl
  * Android telephony bridge. Contract: modules/updata-telephony/src/UpdataTelephony.types.ts.
  *
  * - Never places a call except from an explicit JS `placeCall` request.
- * - Never sends SMS (only opens the system composer).
+ * - Sends SMS only from an explicit JS `sendSms` request for a CRM-leased message, and only
+ *   in the private build (SEND_SMS declared + granted); the Play build only opens the composer.
  * - Never logs full phone numbers (at most the last two digits).
  */
 class UpdataTelephonyModule : Module() {
@@ -58,10 +74,11 @@ class UpdataTelephonyModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("UpdataTelephony")
 
-    Events(EVENT_CALL_STATE)
+    Events(EVENT_CALL_STATE, SmsEvents.STATUS, SmsEvents.RECEIVED)
 
     OnCreate {
       CallStateMonitor.emitter = { event -> sendEvent(EVENT_CALL_STATE, event.toMap()) }
+      SmsEvents.emitter = { name, payload -> sendEvent(name, payload) }
       // Re-attach monitoring for an operation that was active when the process died.
       appContext.reactContext?.let { ctx ->
         android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -78,6 +95,7 @@ class UpdataTelephonyModule : Module() {
       // The observer itself is process-wide and keeps recording (persisted); only JS
       // emission is detached from this (dying) module instance.
       CallStateMonitor.emitter = null
+      SmsEvents.emitter = null
     }
 
     AsyncFunction("getCapabilities") {
@@ -121,6 +139,99 @@ class UpdataTelephonyModule : Module() {
     AsyncFunction("clearCallStateEvents") { operationId: String ->
       CallStateMonitor.store(context).clear(operationId)
     }
+
+    // ---- SIM SMS agent (private build) ----
+    AsyncFunction("sendSms") { request: SendSmsRequest ->
+      if (request.messageId.isBlank()) throw TelephonyException("INVALID_ARGUMENT", "messageId required")
+      mapOf("parts" to SmsSender.send(context, request.messageId, request.to, request.body, request.subscriptionId))
+    }
+
+    AsyncFunction("getSmsJournal") {
+      SmsStore.get(context).journalEntries().map { e ->
+        mapOf(
+          "messageId" to e.optString("messageId"),
+          "status" to e.optString("status"),
+          "errorCode" to e.opt("errorCode")?.takeIf { it != org.json.JSONObject.NULL },
+          "parts" to e.optInt("parts", 1),
+          "startedAt" to e.optLong("startedAt"),
+          "finishedAt" to (if (e.has("finishedAt")) e.optLong("finishedAt") else null),
+          "deliveredAt" to (if (e.has("deliveredAt")) e.optLong("deliveredAt") else null),
+        )
+      }
+    }
+
+    AsyncFunction("ackSmsJournal") { messageIds: List<String> ->
+      SmsStore.get(context).journalAck(messageIds, System.currentTimeMillis())
+    }
+
+    AsyncFunction("setWatchedNumbers") { numbers: List<String> ->
+      SmsStore.get(context).setWatched(numbers)
+    }
+
+    AsyncFunction("getInboundSms") {
+      SmsStore.get(context).inboundEntries().map { e ->
+        mapOf(
+          "key" to e.optString("key"), "from" to e.optString("from"), "matchedTo" to e.optString("matchedTo"),
+          "body" to e.optString("body"), "receivedAt" to e.optLong("receivedAt"), "subscriptionId" to e.optInt("subscriptionId", -1),
+        )
+      }
+    }
+
+    AsyncFunction("ackInboundSms") { keys: List<String> ->
+      SmsStore.get(context).inboundAck(keys)
+    }
+
+    AsyncFunction("startSmsAgentService") { title: String, text: String ->
+      if (!SmsSender.permissionDeclared(context, "android.permission.FOREGROUND_SERVICE_DATA_SYNC") &&
+        !SmsSender.permissionDeclared(context, Manifest.permission.FOREGROUND_SERVICE)) {
+        return@AsyncFunction false
+      }
+      val intent = Intent(context, SmsAgentService::class.java).setAction(SmsAgentService.ACTION_START)
+        .putExtra(SmsAgentService.EXTRA_TITLE, title).putExtra(SmsAgentService.EXTRA_TEXT, text)
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+        true
+      } catch (e: Exception) {
+        // e.g. ForegroundServiceStartNotAllowedException when started from the background.
+        Log.w(TAG, "Agent service not started: ${e.javaClass.simpleName}")
+        false
+      }
+    }
+
+    /** True when the OS will not defer this app's background work (Doze / OEM battery savers). */
+    AsyncFunction("isIgnoringBatteryOptimizations") {
+      val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+      pm?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+    }
+
+    /** Private build: ask the user to exempt the app (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). */
+    AsyncFunction("requestIgnoreBatteryOptimizations") {
+      val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+      val declared = SmsSender.permissionDeclared(context, "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+      startActivitySafely(if (declared) direct else Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    }
+
+    // ---- Diagnostics (SIM AI-calling capability check). Levels only; audio is never kept.
+    AsyncFunction("probeCallAudio") { sources: List<String>, ms: Int ->
+      CallAudioProbe.probe(context, sources, ms.coerceIn(500, 10_000))
+    }
+
+    AsyncFunction("setCallSpeaker") { on: Boolean ->
+      CallAudioProbe.setSpeaker(context, on)
+    }
+
+    AsyncFunction("probeToneLoop") { usage: String, ms: Int ->
+      CallAudioProbe.toneLoop(context, usage, ms.coerceIn(500, 5_000))
+    }
+
+    AsyncFunction("stopSmsAgentService") {
+      try {
+        context.startService(Intent(context, SmsAgentService::class.java).setAction(SmsAgentService.ACTION_STOP))
+      } catch (e: Exception) {
+        context.stopService(Intent(context, SmsAgentService::class.java))
+      }
+      Unit
+    }
   }
 
   // ---------------------------------------------------------------------------------------
@@ -154,7 +265,13 @@ class UpdataTelephonyModule : Module() {
       "dialerAvailable" to resolves(ctx, Intent(Intent.ACTION_DIAL, Uri.parse("tel:"))),
       "smsComposerAvailable" to resolves(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))),
       "isDefaultDialer" to isDefaultDialer(ctx),
-      "directSmsSupported" to false
+      // Private build only: SEND_SMS / RECEIVE_SMS are declared in the manifest.
+      "smsPermissionsDeclared" to SmsSender.permissionDeclared(ctx, Manifest.permission.SEND_SMS),
+      "sendSmsGranted" to granted(ctx, Manifest.permission.SEND_SMS),
+      "receiveSmsGranted" to granted(ctx, Manifest.permission.RECEIVE_SMS),
+      "notificationsGranted" to (Build.VERSION.SDK_INT < 33 || granted(ctx, "android.permission.POST_NOTIFICATIONS")),
+      "directSmsSupported" to (SmsSender.permissionDeclared(ctx, Manifest.permission.SEND_SMS) &&
+        granted(ctx, Manifest.permission.SEND_SMS) && telephony)
     )
   }
 

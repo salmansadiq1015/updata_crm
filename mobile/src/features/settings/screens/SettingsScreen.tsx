@@ -1,10 +1,21 @@
 import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { reloadAppAsync } from 'expo';
-import { CloudUpload, Info, LogOut, Phone, Server, ShieldCheck } from 'lucide-react-native';
+import {
+  Bot,
+  CloudUpload,
+  Info,
+  LogOut,
+  MessageSquare,
+  Phone,
+  Server,
+  Settings2,
+  ShieldCheck,
+  Stethoscope,
+} from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { Screen } from '@/components/layout/Screen';
@@ -20,11 +31,15 @@ import { Icon } from '@/components/ui/Icon';
 import { getEnv } from '@/config/env';
 import { signOut } from '@/features/auth/services/session';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
+import { callReadiness, smsReadiness } from '@/features/aiAgent/domain/agentDomain';
+import { useMessagingHealth, useTelephonyHealth } from '@/features/aiAgent/hooks/useAiAgent';
+import { useAgentDefaults } from '@/features/callAgent/hooks/useCallAgent';
 import { hasUnsyncedWork } from '@/features/communication/domain/operations';
 import { useAllOperations, useTelephonyCapabilities } from '@/features/communication/hooks/useCommunication';
 import { applyLayoutDirection, i18next, resolveLocale } from '@/i18n';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@/i18n/locales';
 import { logger } from '@/services/logging/logger';
+import { openAppSettings } from '@/services/permissions/permissionsService';
 import { flushPreferences, usePreferencesStore, type ThemePreference } from '@/store/preferencesStore';
 
 const THEMES: ThemePreference[] = ['system', 'light', 'dark'];
@@ -56,6 +71,9 @@ export function SettingsScreen() {
   const operations = useAllOperations();
   const unsynced = useMemo(() => operations.filter(hasUnsyncedWork).length, [operations]);
   const capabilities = useTelephonyCapabilities().data;
+  const defaults = useAgentDefaults();
+  const telephony = useTelephonyHealth();
+  const messaging = useMessagingHealth();
   const callingSummary = !capabilities?.hasTelephony
     ? capabilities?.dialerAvailable
       ? t('communication.settings.handoffOnly')
@@ -63,6 +81,14 @@ export function SettingsScreen() {
     : capabilities.callPhoneGranted && capabilities.readPhoneStateGranted
       ? t('communication.settings.full')
       : t('communication.settings.limited');
+  const readinessLabel = (state: 'ready' | 'not_ready' | 'unknown' | 'checking') =>
+    state === 'ready'
+      ? t('callAgent.readiness.ready')
+      : state === 'not_ready'
+        ? t('callAgent.readiness.notReady')
+        : state === 'checking'
+          ? t('callAgent.readiness.checking')
+          : t('callAgent.readiness.unknown');
 
   const languageOptions = [
     { value: DEVICE, label: t('settings.languageSystem') },
@@ -147,13 +173,56 @@ export function SettingsScreen() {
             layout="inline"
             label={t('communication.settings.calling')}
             value={callingSummary}
+            onPress={() => void openAppSettings()}
+          />
+          {Platform.OS === 'android' ? (
+            <AppListItem
+              icon={Stethoscope}
+              iconTone="muted"
+              layout="inline"
+              label={t('communication.callCheck.title')}
+              onPress={() => navigation.navigate('CallAudioCheck')}
+            />
+          ) : null}
+          <AppListItem
+            icon={Settings2}
+            iconTone="muted"
+            layout="inline"
+            label={t('settings.devicePermissions')}
+            value={t('settings.openSystemSettings')}
+            onPress={() => void openAppSettings()}
           />
         </AppListGroup>
       </Appear>
 
-      {/* Further feature groups (e.g. the call agent) go here as their own AppListGroup. */}
-
       <Appear index={4}>
+        <AppListGroup title={t('settings.aiAgent')}>
+          <AppListItem
+            icon={Bot}
+            iconTone="primary"
+            layout="inline"
+            label={t('settings.agentDefaults')}
+            value={defaults.data ? t('settings.configured') : t('settings.notConfigured')}
+            onPress={() => navigation.navigate('CallAgentSettings')}
+          />
+          <AppListItem
+            icon={Phone}
+            iconTone={callReadiness(telephony).state === 'ready' ? 'success' : 'warning'}
+            layout="inline"
+            label={t('callAgent.readiness.calls')}
+            value={readinessLabel(callReadiness(telephony).state)}
+          />
+          <AppListItem
+            icon={MessageSquare}
+            iconTone={smsReadiness(messaging).state === 'ready' ? 'success' : 'warning'}
+            layout="inline"
+            label={t('callAgent.readiness.sms')}
+            value={readinessLabel(smsReadiness(messaging).state)}
+          />
+        </AppListGroup>
+      </Appear>
+
+      <Appear index={5}>
         <AppListGroup title={t('settings.about')}>
           <AppListItem
             icon={Info}

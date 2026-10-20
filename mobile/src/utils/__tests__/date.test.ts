@@ -1,4 +1,4 @@
-import { formatDate, formatRelative } from '../date';
+import { formatDate, formatDateTime, formatRelative } from '../date';
 
 describe('date formatting', () => {
   const now = new Date('2026-10-16T12:00:00Z');
@@ -18,6 +18,19 @@ describe('date formatting', () => {
 
   it('formats absolute dates', () => {
     expect(formatDate('2026-10-12T10:00:00Z', 'en')).toBe('12 Oct 2026');
+  });
+
+  it('formats a persisted event with its localized date and time', () => {
+    const value = '2026-10-12T10:00:00Z';
+    const expected = new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+    expect(formatDateTime(value, 'en')).toBe(expected);
+    expect(formatDateTime('invalid', 'en')).toBeNull();
   });
 });
 

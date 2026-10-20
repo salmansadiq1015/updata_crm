@@ -4,8 +4,10 @@
 //
 // Honesty rules encoded in the types:
 // - `offhook` is NOT "answered": Android reports OFFHOOK while dialing, active or held.
-// - Nothing here sends SMS. The app only opens the system composer; launching it is
-//   not proof of sending.
+// - `openSmsComposer` only opens the system composer; launching it is not proof of sending.
+// - `sendSms` exists only in the PRIVATE build (SEND_SMS declared). It transmits one
+//   CRM-leased message and journals it BEFORE calling SmsManager, so a message id is
+//   handed to the modem at most once. Its outcome is read from the journal.
 // - A SIM's `number` is whatever the carrier/SIM reports (often null); it is not proof
 //   of the caller ID the recipient sees.
 
@@ -27,9 +29,54 @@ export type TelephonyCapabilities = {
   smsComposerAvailable: boolean;
   /** RoleManager ROLE_DIALER held. The app never requests it. */
   isDefaultDialer: boolean;
-  /** Always false in this build: direct SMS (SEND_SMS) is not declared. */
-  directSmsSupported: false;
+  /** SEND_SMS / RECEIVE_SMS are declared in the manifest (private build only). */
+  smsPermissionsDeclared: boolean;
+  sendSmsGranted: boolean;
+  receiveSmsGranted: boolean;
+  /** POST_NOTIFICATIONS granted (always true below Android 13). */
+  notificationsGranted: boolean;
+  /** Private build + SEND_SMS granted + telephony hardware. */
+  directSmsSupported: boolean;
 };
+
+export type SendSmsRequest = {
+  /** CRM SimSmsMessage id (leased to this device and marked attempting). */
+  messageId: string;
+  to: string;
+  body: string;
+  /** Selected SIM; omitted → system default SMS SIM. */
+  subscriptionId?: number | null;
+};
+
+export type SmsJournalStatus = 'attempting' | 'sent' | 'failed' | 'unknown';
+
+export type SmsJournalEntry = {
+  messageId: string;
+  status: SmsJournalStatus;
+  errorCode: string | null;
+  parts: number;
+  startedAt: number;
+  finishedAt: number | null;
+  deliveredAt: number | null;
+};
+
+export type InboundSms = {
+  /** De-duplication key (hash of sender, time, SIM and text). */
+  key: string;
+  from: string;
+  /** The watched E.164 number this sender matched. */
+  matchedTo: string;
+  body: string;
+  receivedAt: number;
+  subscriptionId: number;
+};
+
+export type SmsStatusEvent = {
+  messageId: string;
+  status: 'sent' | 'failed' | 'unknown' | 'delivered';
+  errorCode?: string | null;
+};
+export type SmsReceivedEvent = { key: string };
 
 export type SimInfo = {
   subscriptionId: number;
@@ -80,13 +127,73 @@ export type TelephonyErrorCode =
   | 'INVALID_NUMBER'
   | 'SUBSCRIPTION_NOT_FOUND'
   | 'NO_ACTIVITY'
-  | 'CALL_FAILED';
+  | 'CALL_FAILED'
+  | 'SMS_NOT_SUPPORTED'
+  | 'SMS_SEND_FAILED'
+  | 'ALREADY_ATTEMPTED'
+  | 'INVALID_ARGUMENT';
+
+/** Diagnostics: what this device lets the app do with audio during a SIM call. */
+export type AudioProbeSource =
+  | 'MIC'
+  | 'VOICE_COMMUNICATION'
+  | 'VOICE_RECOGNITION'
+  | 'UNPROCESSED'
+  | 'CAMCORDER'
+  | 'VOICE_CALL'
+  | 'VOICE_DOWNLINK'
+  | 'VOICE_UPLINK';
+
+export type AudioDeviceState = {
+  sdk: number;
+  manufacturer: string;
+  model: string;
+  callState: 'idle' | 'ringing' | 'offhook' | 'unknown' | 'no_permission';
+  audioMode: string;
+  speakerphoneOn: boolean;
+  communicationDevice: string | null;
+  micPermission: boolean;
+};
+
+export type AudioCaptureResult = {
+  source: AudioProbeSource;
+  result:
+    | 'ok'
+    | 'no_permission'
+    | 'unsupported_format'
+    | 'construct_error'
+    | 'init_failed'
+    | 'start_error'
+    | 'not_recording'
+    | 'no_samples';
+  seconds?: number;
+  rms?: number;
+  peak?: number;
+  /** Android 10+: the platform is feeding this client silence. */
+  clientSilenced?: boolean | null;
+  error?: string;
+};
+
+export type AudioProbeReport = AudioDeviceState & { captures: AudioCaptureResult[] };
 
 export type UpdataTelephonyModuleEvents = {
   onCallStateChanged: (event: CallStateEvent) => void;
+  onSmsStatus: (event: SmsStatusEvent) => void;
+  onSmsReceived: (event: SmsReceivedEvent) => void;
 };
 
 export interface UpdataTelephonyNativeModule {
+  /** Diagnostics: capture `ms` per source (all when empty) and report levels; samples are discarded. */
+  probeCallAudio(sources: AudioProbeSource[], ms: number): Promise<AudioProbeReport>;
+  /** Diagnostics: try to route the active call to/from the loudspeaker as a non-dialer app. */
+  setCallSpeaker(
+    on: boolean,
+  ): Promise<AudioDeviceState & { requested: boolean; accepted: boolean | null; error: string | null }>;
+  /** Diagnostics: play a test tone (usage voice/media) while recording MIC. */
+  probeToneLoop(
+    usage: 'voice' | 'media',
+    ms: number,
+  ): Promise<{ usage: string; result: string; micWhilePlaying?: AudioCaptureResult; error?: string }>;
   getCapabilities(): Promise<TelephonyCapabilities>;
   /** Rejects with PERMISSION_DENIED without READ_PHONE_STATE. */
   getActiveSims(): Promise<SimInfo[]>;
@@ -105,4 +212,19 @@ export interface UpdataTelephonyNativeModule {
   /** Persisted events for the operation, oldest first. */
   getCallStateEvents(operationId: string): Promise<CallStateEvent[]>;
   clearCallStateEvents(operationId: string): Promise<void>;
+
+  // ---- SIM SMS agent (private build; reject SMS_NOT_SUPPORTED in the Play build) ----
+  sendSms(request: SendSmsRequest): Promise<{ parts: number }>;
+  getSmsJournal(): Promise<SmsJournalEntry[]>;
+  ackSmsJournal(messageIds: string[]): Promise<void>;
+  /** Replies are kept only from these numbers (E.164); everything else is dropped natively. */
+  setWatchedNumbers(numbers: string[]): Promise<void>;
+  getInboundSms(): Promise<InboundSms[]>;
+  ackInboundSms(keys: string[]): Promise<void>;
+  /** Foreground service + notification while the agent runs. Resolves false if not allowed. */
+  startSmsAgentService(title: string, text: string): Promise<boolean>;
+  stopSmsAgentService(): Promise<void>;
+  isIgnoringBatteryOptimizations(): Promise<boolean>;
+  /** Opens the system prompt/settings; resolves true when an activity was launched. */
+  requestIgnoreBatteryOptimizations(): Promise<boolean>;
 }

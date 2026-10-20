@@ -17,4 +17,5 @@
       <data android:scheme="smsto" />
     </intent>
   </queries>
+
 </manifest>

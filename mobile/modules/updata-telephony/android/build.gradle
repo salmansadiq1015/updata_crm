@@ -22,5 +22,7 @@ android {
 }
 
 dependencies {
+  // HeadlessJsTaskService for the SMS agent loop (version supplied by the RN Gradle plugin).
+  implementation 'com.facebook.react:react-android'
   testImplementation 'junit:junit:4.13.2'
 }

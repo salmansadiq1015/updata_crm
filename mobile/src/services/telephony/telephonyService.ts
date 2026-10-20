@@ -14,6 +14,11 @@ import {
 
 import type {
   CallStateEvent,
+  InboundSms,
+  SendSmsRequest,
+  SmsJournalEntry,
+  SmsReceivedEvent,
+  SmsStatusEvent,
   PlaceCallRequest,
   PlaceCallResult,
   SimInfo,
@@ -23,6 +28,8 @@ import type {
 
 type NativeWithEvents = UpdataTelephonyNativeModule & {
   addListener(eventName: 'onCallStateChanged', listener: (event: CallStateEvent) => void): EventSubscription;
+  addListener(eventName: 'onSmsStatus', listener: (event: SmsStatusEvent) => void): EventSubscription;
+  addListener(eventName: 'onSmsReceived', listener: (event: SmsReceivedEvent) => void): EventSubscription;
 };
 
 let cached: NativeWithEvents | null | undefined;
@@ -71,6 +78,10 @@ export const UNAVAILABLE_CAPABILITIES: TelephonyCapabilities = {
   dialerAvailable: false,
   smsComposerAvailable: false,
   isDefaultDialer: false,
+  smsPermissionsDeclared: false,
+  sendSmsGranted: false,
+  receiveSmsGranted: false,
+  notificationsGranted: false,
   directSmsSupported: false,
 };
 
@@ -167,6 +178,84 @@ export const telephony = {
   addCallStateListener(listener: (event: CallStateEvent) => void): EventSubscription | null {
     return native()?.addListener('onCallStateChanged', listener) ?? null;
   },
+
+  // ---- SIM SMS agent (private build) ----
+  /** Throws TelephonyError; never retry a call that may have reached the modem. */
+  async sendSms(request: SendSmsRequest): Promise<{ parts: number }> {
+    const module = native();
+    if (!module) throw new TelephonyError('SMS_NOT_SUPPORTED', 'Native telephony module not available');
+    try {
+      return await module.sendSms(request);
+    } catch (error) {
+      throw toTelephonyError(error);
+    }
+  },
+
+  async getSmsJournal(): Promise<SmsJournalEntry[]> {
+    return (
+      (await native()
+        ?.getSmsJournal()
+        .catch(() => [])) ?? []
+    );
+  },
+
+  async ackSmsJournal(messageIds: string[]): Promise<void> {
+    if (messageIds.length) await native()?.ackSmsJournal(messageIds);
+  },
+
+  async setWatchedNumbers(numbers: string[]): Promise<void> {
+    await native()?.setWatchedNumbers(numbers);
+  },
+
+  async getInboundSms(): Promise<InboundSms[]> {
+    return (
+      (await native()
+        ?.getInboundSms()
+        .catch(() => [])) ?? []
+    );
+  },
+
+  async ackInboundSms(keys: string[]): Promise<void> {
+    if (keys.length) await native()?.ackInboundSms(keys);
+  },
+
+  async startSmsAgentService(title: string, text: string): Promise<boolean> {
+    return (
+      (await native()
+        ?.startSmsAgentService(title, text)
+        .catch(() => false)) ?? false
+    );
+  },
+
+  async stopSmsAgentService(): Promise<void> {
+    await native()
+      ?.stopSmsAgentService()
+      .catch(() => undefined);
+  },
+
+  async isIgnoringBatteryOptimizations(): Promise<boolean> {
+    return (
+      (await native()
+        ?.isIgnoringBatteryOptimizations()
+        .catch(() => false)) ?? false
+    );
+  },
+
+  async requestIgnoreBatteryOptimizations(): Promise<boolean> {
+    return (
+      (await native()
+        ?.requestIgnoreBatteryOptimizations()
+        .catch(() => false)) ?? false
+    );
+  },
+
+  addSmsStatusListener(listener: (event: SmsStatusEvent) => void): EventSubscription | null {
+    return native()?.addListener('onSmsStatus', listener) ?? null;
+  },
+
+  addSmsReceivedListener(listener: (event: SmsReceivedEvent) => void): EventSubscription | null {
+    return native()?.addListener('onSmsReceived', listener) ?? null;
+  },
 };
 
 /**
@@ -184,4 +273,23 @@ export async function requestCallingPermissions(rationale: {
   );
   const callPhone = await ensurePermission(PermissionsAndroid.PERMISSIONS.CALL_PHONE, rationale.callPhone);
   return { callPhone, phoneState };
+}
+
+/**
+ * Private build: SEND_SMS sends the agent's messages from this SIM, RECEIVE_SMS lets
+ * the app see replies from active conversation numbers, POST_NOTIFICATIONS (Android 13+)
+ * shows the "agent running" notification. The Play build never asks for these.
+ */
+export async function requestSmsAgentPermissions(rationale: {
+  sendSms: PermissionRationale;
+  receiveSms: PermissionRationale;
+  notifications: PermissionRationale;
+}): Promise<{ sendSms: PermissionStatus; receiveSms: PermissionStatus; notifications: PermissionStatus }> {
+  const sendSms = await ensurePermission(PermissionsAndroid.PERMISSIONS.SEND_SMS, rationale.sendSms);
+  const receiveSms = await ensurePermission(PermissionsAndroid.PERMISSIONS.RECEIVE_SMS, rationale.receiveSms);
+  const notifications =
+    Number(Platform.Version) >= 33
+      ? await ensurePermission(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS, rationale.notifications)
+      : ('granted' as PermissionStatus);
+  return { sendSms, receiveSms, notifications };
 }

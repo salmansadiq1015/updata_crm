@@ -325,6 +325,14 @@ export const proposeResponseSchema = z.object({
 });
 export type ProposeResponse = z.infer<typeof proposeResponseSchema>;
 
+export const transcribeResponseSchema = z.object({
+  available: z.boolean(),
+  reason: z.string().optional(),
+  text: z.string().default(''),
+  confidence: z.number().nullable().optional(),
+});
+export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
+
 export const smsTemplateSchema = z
   .object({
     _id: z.string().optional(),

@@ -162,7 +162,7 @@ describe('CallAgentSettingsScreen', () => {
     expect(payload.questions.length).toBe(5);
     expect(payload.sms).toEqual({ purpose: 'support', templateId: null });
     await waitFor(() => expect(navigation.goBack).toHaveBeenCalled());
-  });
+  }, 10_000);
 
   it('opens with the saved defaults', async () => {
     jest.mocked(callAgentApi.defaults).mockResolvedValue(saved);

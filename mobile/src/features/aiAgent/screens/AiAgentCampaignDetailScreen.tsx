@@ -1,4 +1,4 @@
-import { Pause, Play, XCircle } from 'lucide-react-native';
+import { Pause, Play, RotateCcw, XCircle } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -32,6 +32,7 @@ import {
   useCallCampaign,
   useCallRecipients,
   useCampaignAction,
+  useRetryFailedCalls,
   useMessagingHealth,
   useSmsCampaign,
   useSmsRecipients,
@@ -87,6 +88,10 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
   const readiness = kind === 'call' ? callReadiness(telephony) : smsReadiness(messaging);
 
   const action = useCampaignAction();
+  const retry = useRetryFailedCalls();
+  const retryOnce = useSingleFlight(async () => {
+    await retry.mutateAsync(campaignId);
+  });
   const start = useStartCampaign();
   const [confirmingStart, setConfirmingStart] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -210,6 +215,16 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
             leftIcon={Play}
             disabled={!startable}
             onPress={() => setConfirmingStart(true)}
+          />
+        ) : null}
+        {kind === 'call' && ['completed', 'running', 'paused'].includes(campaign.status) ? (
+          <AppButton
+            title={t('aiAgent.detail.retryFailed')}
+            leftIcon={RotateCcw}
+            variant="outline"
+            loading={retry.isPending}
+            disabled={retry.isPending || action.isPending}
+            onPress={() => retryOnce()}
           />
         ) : null}
         {actions.includes('cancel') ? (

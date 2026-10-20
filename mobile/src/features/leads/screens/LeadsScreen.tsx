@@ -16,12 +16,12 @@ import { LeadSelectionBar } from '@/features/aiAgent/components/LeadSelectionBar
 import { useStartAiAgent } from '@/features/aiAgent/hooks/useAiAgent';
 import { ActiveQueueBanner } from '@/features/callQueue/components/ActiveQueueBanner';
 import { useStartCallQueue } from '@/features/callQueue/hooks/useCallQueue';
-import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { useDebouncedValue } from '@/hooks/useDebounce';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 import { useTheme } from '@/theme/ThemeProvider';
 
 import { LeadFiltersModal } from '../components/LeadFiltersModal';
+import { LeadBulkActionsSheet } from '../components/LeadBulkActionsSheet';
 import { LeadListItem } from '../components/LeadListItem';
 import { LeadListSkeleton } from '../components/LeadListSkeleton';
 import { useLeadList } from '../hooks/useLeads';
@@ -34,7 +34,6 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { search, status, advanced, setSearch, setStatus, setAdvanced, reset } = useLeadFiltersStore();
-  const userId = useSessionStore((state) => state.user?.id);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const q = useDebouncedValue(search.trim());
   const filters = useMemo(
@@ -43,11 +42,11 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
       status,
       source: advanced.source,
       type: advanced.type,
-      assignedTo: advanced.mine ? userId : undefined,
+      assignedTo: advanced.assignedTo,
       sortBy: advanced.sortBy,
       sortOrder: advanced.sortOrder,
     }),
-    [q, status, advanced, userId],
+    [q, status, advanced],
   );
   const advancedCount = countAdvanced(advanced);
   const query = useLeadList(filters);
@@ -59,6 +58,7 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
   // Multi-select (hand leads to the AI agent). `null` = not selecting. Only explicit,
   // visible rows are ever selected; the server re-validates each id at start.
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const selecting = selection !== null;
   const startAiAgent = useStartAiAgent();
   const toggle = useCallback(
@@ -101,6 +101,7 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
     setSelection(null);
     startAiAgent(ids);
   };
+  const selectedLeads = useMemo(() => leads.filter((lead) => selection?.has(lead.id)), [leads, selection]);
   // Spinner only for a user pull; background refetches never flash the refresh disc.
   const pull = usePullRefresh(query.isRefetching && !query.isFetchingNextPage, () => void query.refetch());
   const loadMore = () => {
@@ -273,6 +274,18 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
           onDone={() => setSelection(null)}
           onGiveToAgent={giveToAgent}
           onCallOneByOne={callOneByOne}
+          onManage={() => setBulkOpen(true)}
+        />
+      ) : null}
+      {bulkOpen ? (
+        <LeadBulkActionsSheet
+          visible
+          leads={selectedLeads}
+          onClose={() => setBulkOpen(false)}
+          onComplete={(failedIds) => {
+            setBulkOpen(false);
+            setSelection(failedIds.length > 0 ? new Set(failedIds) : null);
+          }}
         />
       ) : null}
       {callQueue.dialog}

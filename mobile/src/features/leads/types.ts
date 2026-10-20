@@ -130,6 +130,33 @@ export const leadSchema = z
 
 export type Lead = z.infer<typeof leadSchema>;
 
+export const leadDirectoryUserSchema = z
+  .object({
+    _id: z.string().optional(),
+    id: z.string().optional(),
+    firstName: nullableString,
+    lastName: nullableString,
+    email: z.string(),
+    avatarUrl: nullableString,
+  })
+  .transform((raw, ctx) => {
+    const id = raw.id ?? raw._id;
+    if (!id) {
+      ctx.addIssue({ code: 'custom', message: 'Directory user has no id' });
+      return z.NEVER;
+    }
+    const name = [raw.firstName, raw.lastName].filter(Boolean).join(' ').trim();
+    return { id, name: name || raw.email, email: raw.email, avatarUrl: raw.avatarUrl };
+  });
+
+export type LeadDirectoryUser = z.infer<typeof leadDirectoryUserSchema>;
+
+export type BulkLeadResult = {
+  requested: number;
+  succeededIds: string[];
+  failedIds: string[];
+};
+
 /**
  * Same parameters and semantics as the web CRM's lead list (lead-list-view.tsx →
  * buildLeadFilterParams): server-side search and filters, never a filter over loaded pages.

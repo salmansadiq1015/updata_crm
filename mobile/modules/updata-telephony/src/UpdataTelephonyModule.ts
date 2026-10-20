@@ -17,6 +17,19 @@ declare class UpdataTelephonyModule
   stopCallStateMonitoring: UpdataTelephonyNativeModule['stopCallStateMonitoring'];
   getCallStateEvents: UpdataTelephonyNativeModule['getCallStateEvents'];
   clearCallStateEvents: UpdataTelephonyNativeModule['clearCallStateEvents'];
+  sendSms: UpdataTelephonyNativeModule['sendSms'];
+  getSmsJournal: UpdataTelephonyNativeModule['getSmsJournal'];
+  ackSmsJournal: UpdataTelephonyNativeModule['ackSmsJournal'];
+  setWatchedNumbers: UpdataTelephonyNativeModule['setWatchedNumbers'];
+  getInboundSms: UpdataTelephonyNativeModule['getInboundSms'];
+  ackInboundSms: UpdataTelephonyNativeModule['ackInboundSms'];
+  startSmsAgentService: UpdataTelephonyNativeModule['startSmsAgentService'];
+  stopSmsAgentService: UpdataTelephonyNativeModule['stopSmsAgentService'];
+  isIgnoringBatteryOptimizations: UpdataTelephonyNativeModule['isIgnoringBatteryOptimizations'];
+  requestIgnoreBatteryOptimizations: UpdataTelephonyNativeModule['requestIgnoreBatteryOptimizations'];
+  probeCallAudio: UpdataTelephonyNativeModule['probeCallAudio'];
+  setCallSpeaker: UpdataTelephonyNativeModule['setCallSpeaker'];
+  probeToneLoop: UpdataTelephonyNativeModule['probeToneLoop'];
 }
 
 export type UpdataTelephonyModuleType = UpdataTelephonyModule;

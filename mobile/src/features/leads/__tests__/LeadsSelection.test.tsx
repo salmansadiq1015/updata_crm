@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 import { renderWithProviders } from '@/test/renderWithProviders';
@@ -101,5 +101,24 @@ describe('LeadsScreen multi-select', () => {
     await renderLeads();
     await fireEvent.press(screen.getByRole('button', { name: 'AI agent campaigns' }));
     expect(navigation.navigate).toHaveBeenCalledWith('AiAgentCampaigns');
+  });
+
+  it('keeps only failed leads selected after a partial bulk delete', async () => {
+    jest.mocked(leadsApi.bulkDelete).mockResolvedValue({
+      requested: 3,
+      succeededIds: [LEADS[0]!.id, LEADS[1]!.id],
+      failedIds: [LEADS[2]!.id],
+    });
+    await renderLeads();
+    await screen.findByText('Acme AG');
+    await fireEvent.press(screen.getByRole('button', { name: 'Select leads for the AI agent' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Select all shown' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'More lead actions' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete leads' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete 3 leads' }));
+
+    await waitFor(() => expect(screen.getByText('1 lead selected')).toBeTruthy());
+    expect(leadsApi.bulkDelete).toHaveBeenCalledWith(LEADS.map((item) => item.id));
+    expect(screen.getByRole('checkbox', { name: /^Gamma SA/ })).toBeChecked();
   });
 });

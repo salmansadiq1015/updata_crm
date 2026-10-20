@@ -22,6 +22,19 @@ export function formatDate(value: string | Date | null | undefined, language: st
   }).format(date);
 }
 
+/** Localized calendar date and exact local time for persisted event timestamps. */
+export function formatDateTime(value: string | Date | null | undefined, language: string): string | null {
+  const date = toDate(value);
+  if (!date) return null;
+  return new Intl.DateTimeFormat(intlLocale(language), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],

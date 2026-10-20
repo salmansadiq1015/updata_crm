@@ -1,23 +1,62 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "local" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
-      "env": { "EXPO_PUBLIC_APP_ENV": "development" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_DISTRIBUTION": "play"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "staging": {
       "distribution": "internal",
       "environment": "preview",
-      "env": { "EXPO_PUBLIC_APP_ENV": "staging" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_DISTRIBUTION": "play"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "environment": "production",
-      "env": { "EXPO_PUBLIC_APP_ENV": "production" },
-      "android": { "buildType": "app-bundle" }
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_DISTRIBUTION": "play"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "staging-private": {
+      "extends": "staging",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_DISTRIBUTION": "private"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production-private": {
+      "distribution": "internal",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_DISTRIBUTION": "private"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   }
 }

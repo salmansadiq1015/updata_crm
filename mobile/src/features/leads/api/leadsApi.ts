@@ -4,12 +4,34 @@ import { api } from '@/services/api/apiClient';
 import type { CursorPage } from '@/services/api/apiTypes';
 import { ENDPOINTS } from '@/services/api/endpoints';
 
-import { leadSchema, type AssignableLeadStatus, type Lead, type LeadListFilters } from '../types';
+import {
+  leadDirectoryUserSchema,
+  leadSchema,
+  type AssignableLeadStatus,
+  type BulkLeadResult,
+  type Lead,
+  type LeadListFilters,
+} from '../types';
 import type { LeadCreateInput, LeadPatch } from '../utils/leadForm';
 
 export const LEADS_PAGE_SIZE = 25;
 
 const leadListSchema = z.array(leadSchema);
+const directorySchema = z.array(leadDirectoryUserSchema);
+
+const bulkDeleteSchema = z.object({
+  requested: z.number().int().nonnegative(),
+  deleted: z.number().int().nonnegative(),
+  deletedIds: z.array(z.string()).catch([]),
+  notDeletedIds: z.array(z.string()).catch([]),
+});
+
+const bulkAssignSchema = z.object({
+  requested: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  updatedIds: z.array(z.string()).catch([]),
+  notUpdatedIds: z.array(z.string()).catch([]),
+});
 
 /** POST /crm/leads returns the lead plus a non-blocking `duplicateWarning` flag. */
 const createdLeadSchema = z
@@ -75,5 +97,54 @@ export const leadsApi = {
   async updateStatus(id: string, status: AssignableLeadStatus): Promise<Lead> {
     const { data } = await api.patch(ENDPOINTS.leads.detail(id), { status }, leadSchema);
     return data;
+  },
+
+  async directory(signal?: AbortSignal) {
+    const { data } = await api.get(ENDPOINTS.users.directory, directorySchema, {
+      signal,
+      params: { limit: 100 },
+    });
+    return data;
+  },
+
+  /** One audited server operation for the entire explicit selection. */
+  async bulkDelete(ids: string[]): Promise<BulkLeadResult> {
+    const { data } = await api.post(ENDPOINTS.leads.bulkDelete, { leadIds: ids }, bulkDeleteSchema);
+    return {
+      requested: data.requested,
+      succeededIds: data.deletedIds,
+      failedIds: data.notDeletedIds,
+    };
+  },
+
+  /** One audited server operation for the entire explicit selection. `null` unassigns. */
+  async bulkAssign(ids: string[], assignedTo: string | null): Promise<BulkLeadResult> {
+    const { data } = await api.post(
+      ENDPOINTS.leads.bulkAssign,
+      { leadIds: ids, assignedTo },
+      bulkAssignSchema,
+    );
+    return {
+      requested: data.requested,
+      succeededIds: data.updatedIds,
+      failedIds: data.notUpdatedIds,
+    };
+  },
+
+  /**
+   * There is no server bulk-status route. Preserve the existing PATCH contract and
+   * account for each result independently so a partial failure is never hidden.
+   */
+  async bulkUpdateStatus(ids: string[], status: AssignableLeadStatus): Promise<BulkLeadResult> {
+    const results = await Promise.allSettled(ids.map((id) => leadsApi.updateStatus(id, status)));
+    const succeededIds: string[] = [];
+    const failedIds: string[] = [];
+    results.forEach((result, index) => {
+      const id = ids[index];
+      if (!id) return;
+      if (result.status === 'fulfilled') succeededIds.push(id);
+      else failedIds.push(id);
+    });
+    return { requested: ids.length, succeededIds, failedIds };
   },
 };

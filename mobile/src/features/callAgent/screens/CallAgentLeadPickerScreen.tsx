@@ -66,6 +66,7 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
   const proceed = () => {
     if (selected.length === 0) return;
     if (purpose === 'test') navigation.replace('CallAgentTest', { leadId: selected[0]! });
+    else if (purpose === 'campaign') navigation.replace('CallCampaignCreate', { leadIds: selected });
     else if (purpose === 'queue')
       callQueue.start(selected.map((id) => ({ id, name: names.current.get(id) ?? '' })));
     else navigation.navigate('AiAgentLaunch', { leadIds: selected, initialChannel: purpose });
@@ -74,7 +75,11 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
   const header = (
     <View className="gap-3 pb-3">
       <AppText tone="muted">
-        {purpose === 'queue' ? t('callQueue.picker.intro') : t(`callAgent.picker.intro.${purpose}`)}
+        {purpose === 'queue'
+          ? t('callQueue.picker.intro')
+          : purpose === 'campaign'
+            ? t('callCampaign.picker.intro')
+            : t(`callAgent.picker.intro.${purpose}`)}
       </AppText>
       <AppSearchInput
         value={search}

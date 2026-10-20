@@ -15,4 +15,5 @@ export const STORAGE_KEYS = {
   preferences: 'updata.preferences',
   communicationOperations: 'updata.communication.operations.v1',
   callQueue: 'updata.callQueue.v1',
+  callCampaignOutbox: 'updata.callCampaign.outbox.v1',
 } as const;

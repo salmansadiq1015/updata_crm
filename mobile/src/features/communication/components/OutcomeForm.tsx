@@ -31,7 +31,10 @@ import {
 } from '../types';
 import { tKey } from '../i18n';
 import { ProposalReviewModal } from './ProposalReviewModal';
+import { CallGuideCard } from './CallGuideCard';
+import { NextStepsCard } from './NextStepsCard';
 import { QualificationEditor, useFieldLabel } from './QualificationEditor';
+import { VoiceNoteButton } from './VoiceNoteButton';
 
 const FOLLOW_UP_PRESETS = [
   { key: 'tomorrow', days: 1 },
@@ -189,8 +192,14 @@ export function OutcomeForm({ op, leadStatus }: { op: LocalOperation; leadStatus
     label: tKey(t, `communication.disposition.${value}`),
   }));
 
+  const setAnswer = (fieldKey: string, answer: OutcomeDraft['answers'][string]) =>
+    setDraft((current) => ({ ...current, answers: { ...current.answers, [fieldKey]: answer } }));
+
   return (
     <View className="gap-4">
+      {!isSms && qualification.data ? (
+        <CallGuideCard schema={qualification.data.schema} answers={draft.answers} onAnswer={setAnswer} />
+      ) : null}
       <AppCard className="gap-3">
         <SectionHeader
           title={isSms ? t('communication.outcome.smsTitle') : t('communication.outcome.title')}
@@ -245,6 +254,10 @@ export function OutcomeForm({ op, leadStatus }: { op: LocalOperation; leadStatus
           maxLength={5000}
           accessibilityLabel={t('communication.notes.title')}
         />
+        <VoiceNoteButton
+          leadId={op.leadId}
+          onText={(text) => update({ notes: draft.notes.trim() ? `${draft.notes.trim()}\n${text}` : text })}
+        />
         {!isSms ? (
           <AppButton
             title={t('communication.proposals.suggest')}
@@ -278,6 +291,10 @@ export function OutcomeForm({ op, leadStatus }: { op: LocalOperation; leadStatus
             />
           )}
         </AppCard>
+      ) : null}
+
+      {!isSms ? (
+        <NextStepsCard leadId={op.leadId} draft={draft} followUpIn={followUpDate} onChange={update} />
       ) : null}
 
       <AppCard className="gap-3">

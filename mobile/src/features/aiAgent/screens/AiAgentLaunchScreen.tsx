@@ -1,9 +1,10 @@
-import { ChevronLeft, ChevronRight, MessageSquare, PhoneCall } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, MessageSquare, PhoneCall, Smartphone } from 'lucide-react-native';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { AppAlert } from '@/components/feedback/AppAlert';
+import { getEnv } from '@/config/env';
 import { Screen } from '@/components/layout/Screen';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
@@ -12,6 +13,7 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppRadioGroup } from '@/components/ui/AppRadioGroup';
 import { AppText } from '@/components/ui/AppText';
+import { AppTimeField } from '@/components/ui/AppTimeField';
 import { analyzeSms } from '@/features/communication/domain/smsEncoding';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
@@ -279,6 +281,17 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
           >
             <ReadinessNotice channel="sms" readiness={smsReady} />
           </ChannelCard>
+          {getEnv().distribution === 'private' ? (
+            // Company build: the AI converses by SMS from THIS phone's SIM (own flow).
+            <ChannelCard
+              icon={Smartphone}
+              title={t('smsAgent.channelTitle')}
+              body={t('smsAgent.channelBody')}
+              note={t('smsAgent.channelNote')}
+              selected={false}
+              onPress={() => navigation.replace('SimSmsLaunch', { leadIds })}
+            />
+          ) : null}
           <AppText variant="caption" tone="muted">
             {t('aiAgent.leadsExplain')}
           </AppText>
@@ -364,23 +377,17 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
           <AppCard className="gap-3">
             <AppText variant="title">{t('aiAgent.call.scheduleSection')}</AppText>
             <View className="flex-row gap-3">
-              <AppInput
-                containerClassName="flex-1"
+              <AppTimeField
                 label={t('aiAgent.call.windowStart')}
+                accessibilityLabel={t('aiAgent.call.windowStart')}
                 value={windowStart}
-                maxLength={5}
-                keyboardType="numbers-and-punctuation"
-                onChangeText={setWindowStart}
-                error={showErrors && !isValidTime(windowStart) ? t('aiAgent.call.invalidTime') : undefined}
+                onChange={setWindowStart}
               />
-              <AppInput
-                containerClassName="flex-1"
+              <AppTimeField
                 label={t('aiAgent.call.windowEnd')}
+                accessibilityLabel={t('aiAgent.call.windowEnd')}
                 value={windowEnd}
-                maxLength={5}
-                keyboardType="numbers-and-punctuation"
-                onChangeText={setWindowEnd}
-                error={showErrors && !isValidTime(windowEnd) ? t('aiAgent.call.invalidTime') : undefined}
+                onChange={setWindowEnd}
               />
             </View>
             <AppInput

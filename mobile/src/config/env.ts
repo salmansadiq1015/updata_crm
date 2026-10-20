@@ -13,6 +13,7 @@ function load(): EnvResult {
           EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
           EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
           EXPO_PUBLIC_ENABLE_DEBUG_LOGS: process.env.EXPO_PUBLIC_ENABLE_DEBUG_LOGS,
+          EXPO_PUBLIC_DISTRIBUTION: process.env.EXPO_PUBLIC_DISTRIBUTION,
         },
         { releaseBuild: !__DEV__ },
       ),
@@ -35,4 +36,4 @@ export function getEnv(): Env {
   return envResult.env;
 }
 
-export type { AppEnv, Env } from './envSchema';
+export type { AppEnv, Distribution, Env } from './envSchema';

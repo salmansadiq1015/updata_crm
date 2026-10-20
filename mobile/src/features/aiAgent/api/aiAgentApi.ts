@@ -10,6 +10,8 @@ import { ENDPOINTS } from '@/services/api/endpoints';
 import {
   agentSmsTemplateSchema,
   callCampaignSchema,
+  callAnalyticsSchema,
+  callRecordSchema,
   callPreviewSchema,
   callRecipientSchema,
   languageListSchema,
@@ -111,6 +113,42 @@ export const aiAgentApi = {
   },
   async cancelCallCampaign(id: string) {
     const { data } = await api.post(ENDPOINTS.aiCalling.cancel(id), undefined, callCampaignSchema);
+    return data;
+  },
+  /** Re-queue failed/exhausted recipients (never ambiguous ones automatically — a human chose this). */
+  async retryFailedCalls(id: string) {
+    const { data } = await api.post(
+      ENDPOINTS.aiCalling.retry(id),
+      { recipientIds: [] },
+      z.object({ retried: z.number() }),
+    );
+    return data;
+  },
+  async callHistory(leadId: string, page: number, signal?: AbortSignal) {
+    const { data, pagination } = await api.get(
+      ENDPOINTS.aiCalling.leadHistory(leadId),
+      z.array(callRecordSchema),
+      { signal, params: { page, limit: 20 } },
+    );
+    const paging = pagination as unknown as
+      | { page?: number; pages?: number; total?: number; limit?: number }
+      | undefined;
+    return {
+      items: data,
+      page: paging?.page ?? page,
+      pages: paging?.pages ?? page,
+      total: paging?.total ?? data.length,
+    };
+  },
+  async getCall(id: string, signal?: AbortSignal) {
+    const { data } = await api.get(ENDPOINTS.aiCalling.call(id), callRecordSchema, { signal });
+    return data;
+  },
+  async callAnalytics(filters: { from?: string; to?: string } = {}, signal?: AbortSignal) {
+    const { data } = await api.get(ENDPOINTS.aiCalling.analytics, callAnalyticsSchema, {
+      signal,
+      params: filters,
+    });
     return data;
   },
   /** Text-only conversation with the agent's question engine. No phone call is placed. */

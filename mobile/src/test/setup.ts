@@ -53,3 +53,21 @@ jest.mock('sonner-native', () => ({
 import { initI18n } from '@/i18n';
 
 void initI18n('en');
+
+jest.mock('expo-speech', () => ({ speak: jest.fn(), stop: jest.fn(async () => undefined) }));
+jest.mock('expo-audio', () => ({
+  RecordingPresets: { HIGH_QUALITY: {} },
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  setAudioModeAsync: jest.fn(async () => undefined),
+  useAudioRecorder: () => ({
+    prepareToRecordAsync: jest.fn(async () => undefined),
+    record: jest.fn(),
+    stop: jest.fn(async () => undefined),
+    uri: 'file:///voice.m4a',
+  }),
+}));
+jest.mock('@react-native-community/datetimepicker', () => ({
+  __esModule: true,
+  default: () => null,
+  DateTimePickerAndroid: { open: jest.fn(), dismiss: jest.fn() },
+}));

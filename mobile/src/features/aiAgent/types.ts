@@ -227,6 +227,84 @@ export const callRecipientSchema = z
   .transform((raw) => ({ ...raw, id: idOf(raw), lead: raw.leadId }));
 export type CallRecipient = z.infer<typeof callRecipientSchema>;
 
+const populatedRefSchema = z
+  .union([
+    z.string(),
+    z.object({
+      _id: z.string().optional(),
+      id: z.string().optional(),
+      name: z.string().nullish(),
+      leadNumber: z.string().nullish(),
+    }),
+  ])
+  .nullish()
+  .transform((ref) => {
+    if (!ref) return { id: '', name: null, leadNumber: null };
+    if (typeof ref === 'string') return { id: ref, name: null, leadNumber: null };
+    return { id: idOf(ref), name: ref.name ?? null, leadNumber: ref.leadNumber ?? null };
+  });
+
+export const callAnswerSchema = z.object({
+  questionFieldKey: z.string(),
+  label: str,
+  rawAnswer: str,
+  normalizedValue: z.unknown().nullish().catch(null),
+  validation: str,
+  confirmed: bool,
+  confidence: z.number().nullish().catch(null),
+  reviewStatus: str,
+});
+
+/** Authoritative persisted AI call attempt returned by /ai-calling/calls and lead history. */
+export const callRecordSchema = z
+  .object({
+    _id: z.string().optional(),
+    id: z.string().optional(),
+    campaignId: populatedRefSchema,
+    recipientId: z
+      .union([z.string(), z.object({ _id: z.string().optional(), id: z.string().optional() })])
+      .nullish()
+      .transform((value) => (typeof value === 'string' ? value : value ? idOf(value) : '')),
+    leadId: populatedRefSchema,
+    internalCallId: str,
+    attemptNumber: num,
+    isTest: bool,
+    state: z.string(),
+    disposition: str,
+    qualification: str,
+    initiatedAt: str,
+    answeredAt: str,
+    endedAt: str,
+    durationSeconds: num,
+    answers: z.array(callAnswerSchema).catch([]),
+    transcriptRef: str,
+    recordingRef: str,
+    reviewRequired: bool,
+    failureCode: str,
+    failureMessage: str,
+    createdAt: str,
+  })
+  .transform((raw) => ({
+    ...raw,
+    id: idOf(raw),
+    campaign: raw.campaignId,
+    lead: raw.leadId,
+  }));
+export type CallRecord = z.infer<typeof callRecordSchema>;
+
+export const callAnalyticsSchema = z.object({
+  campaigns: num,
+  totalCalls: num,
+  answered: num,
+  answerRate: z.number().nullable().catch(null),
+  qualified: num,
+  qualificationRate: z.number().nullable().catch(null),
+  callbacks: num,
+  avgCallSeconds: num,
+  reviews: num,
+});
+export type CallAnalytics = z.infer<typeof callAnalyticsSchema>;
+
 // Simulation (POST /ai-calling/campaigns/:id/simulate): text only, no telephony.
 export const simulateResultSchema = z.object({
   // Opaque conversation state: sent back unchanged on the next turn.

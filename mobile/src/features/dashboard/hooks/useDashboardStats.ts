@@ -12,3 +12,11 @@ export function useDashboardStats() {
     staleTime: 60_000,
   });
 }
+
+export function useMobileCrmStats() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.mobileCrm,
+    queryFn: ({ signal }) => dashboardApi.mobileCrm(signal),
+    staleTime: 60_000,
+  });
+}

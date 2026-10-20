@@ -10,7 +10,7 @@ import { Icon } from '@/components/ui/Icon';
 import { IconContainer } from '@/components/ui/IconContainer';
 import { brand } from '@/theme/colors';
 
-import { agentInitial } from '../domain/agentSettings';
+import { AiAgentAvatar } from './AiAgentAvatar';
 
 type Props = {
   name: string;
@@ -29,13 +29,8 @@ export function AgentHero({ name, languageLabel, voice, configured, onEdit }: Pr
   return (
     <GradientSurface className="gap-5 rounded-4xl p-5">
       <View className="flex-row items-center gap-4">
-        <View
-          accessibilityLabel={t('callAgent.hero.avatarA11y', { name })}
-          className="h-16 w-16 items-center justify-center rounded-full border-2 border-white/30 bg-white/15"
-        >
-          <AppText variant="h2" className="text-white">
-            {agentInitial(name)}
-          </AppText>
+        <View className="h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-white/25 bg-white/10">
+          <AiAgentAvatar size={68} accessibilityLabel={t('callAgent.hero.avatarA11y', { name })} />
           <View className="absolute -bottom-1 -end-1">
             <IconContainer icon={Sparkles} tone="inverse" size="sm" round />
           </View>

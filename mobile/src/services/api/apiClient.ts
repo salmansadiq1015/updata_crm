@@ -108,6 +108,10 @@ type RequestOptions = {
   params?: Record<string, string | number | boolean | undefined>;
   signal?: AbortSignal;
   skipAuth?: boolean;
+  /** Extra headers, e.g. multipart uploads. */
+  headers?: Record<string, string>;
+  /** Per-request timeout override in ms (e.g. audio transcription). */
+  timeout?: number;
 };
 
 /** Strip `undefined` so optional filters never reach the query string. */
@@ -155,6 +159,12 @@ export function createApi(client: AxiosInstance) {
     },
     async patch<T>(url: string, body: unknown, schema?: z.ZodType<T>, options: RequestOptions = {}) {
       return send(() => client.patch(url, body, options), schema);
+    },
+    async put<T>(url: string, body: unknown, schema?: z.ZodType<T>, options: RequestOptions = {}) {
+      return send(() => client.put(url, body, options), schema);
+    },
+    async delete<T>(url: string, schema?: z.ZodType<T>, options: RequestOptions = {}) {
+      return send(() => client.delete(url, options), schema);
     },
   };
 }

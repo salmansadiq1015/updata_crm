@@ -123,6 +123,13 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
             onPress={() => pick('call')}
           />
           <ActionTile
+            icon={PhoneCall}
+            tone="success"
+            title={t('callCampaign.action.title')}
+            hint={t('callCampaign.action.hint')}
+            onPress={() => navigation.navigate('CallCampaigns')}
+          />
+          <ActionTile
             icon={ListOrdered}
             tone="warning"
             title={t('callQueue.action.title')}

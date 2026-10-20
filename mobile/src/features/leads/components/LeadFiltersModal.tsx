@@ -6,7 +6,9 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppChip } from '@/components/ui/AppChip';
 import { AppModal } from '@/components/ui/AppModal';
 import { AppText } from '@/components/ui/AppText';
+import { useSessionStore } from '@/features/auth/store/sessionStore';
 
+import { useLeadDirectory } from '../hooks/useLeads';
 import { DEFAULT_ADVANCED, type LeadAdvancedFilters } from '../store/leadFiltersStore';
 import { LEAD_SOURCES, LEAD_TYPES, type LeadSortField, type SortOrder } from '../types';
 
@@ -35,6 +37,8 @@ export function LeadFiltersModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const myUserId = useSessionStore((state) => state.user?.id);
+  const directory = useLeadDirectory(visible);
   const [draft, setDraft] = useState(value);
   const set = (change: Partial<LeadAdvancedFilters>) => setDraft((current) => ({ ...current, ...change }));
 
@@ -67,12 +71,28 @@ export function LeadFiltersModal({
           ))}
         </Group>
         <Group label={t('leads.assignedTo')}>
-          <AppChip label={t('leads.all')} selected={!draft.mine} onPress={() => set({ mine: false })} />
           <AppChip
-            label={t('leads.filters.mine')}
-            selected={draft.mine}
-            onPress={() => set({ mine: true })}
+            label={t('leads.all')}
+            selected={!draft.assignedTo}
+            onPress={() => set({ assignedTo: undefined })}
           />
+          {myUserId ? (
+            <AppChip
+              label={t('leads.filters.mine')}
+              selected={draft.assignedTo === myUserId}
+              onPress={() => set({ assignedTo: myUserId })}
+            />
+          ) : null}
+          {directory.data
+            ?.filter((user) => user.id !== myUserId)
+            .map((user) => (
+              <AppChip
+                key={user.id}
+                label={user.name}
+                selected={draft.assignedTo === user.id}
+                onPress={() => set({ assignedTo: user.id })}
+              />
+            ))}
         </Group>
         <Group label={t('leads.sourceLabel')}>
           <AppChip

@@ -9,6 +9,16 @@ import { z } from 'zod';
 export const APP_ENVS = ['development', 'staging', 'production'] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
 
+/**
+ * - play:    Google Play build. No SMS permissions at all (Play restricts SEND_SMS /
+ *            RECEIVE_SMS to default SMS apps); SMS goes through the system composer.
+ * - private: directly installed APK for company phones. Adds SEND_SMS + RECEIVE_SMS,
+ *            the SMS receivers and the agent foreground service, enabling the
+ *            automatic AI SMS agent over the phone's own SIM.
+ */
+export const DISTRIBUTIONS = ['play', 'private'] as const;
+export type Distribution = (typeof DISTRIBUTIONS)[number];
+
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '10.0.2.2', '0.0.0.0']);
 
 const booleanFlag = z
@@ -26,9 +36,19 @@ const rawEnvSchema = z.object({
     .min(1, 'EXPO_PUBLIC_API_URL is required (e.g. https://crm.example.com/api/v1)')
     .pipe(z.url({ protocol: /^https?$/, error: 'EXPO_PUBLIC_API_URL must be an http(s) URL' })),
   EXPO_PUBLIC_ENABLE_DEBUG_LOGS: booleanFlag,
+  // Omitted → 'play': a build never gains SMS permissions by accident.
+  EXPO_PUBLIC_DISTRIBUTION: z
+    .enum(DISTRIBUTIONS, { error: `EXPO_PUBLIC_DISTRIBUTION must be one of: ${DISTRIBUTIONS.join(', ')}` })
+    .optional()
+    .transform((value) => value ?? 'play'),
 });
 
-export type RawEnv = Record<keyof z.input<typeof rawEnvSchema>, string | undefined>;
+export type RawEnv = Record<
+  Exclude<keyof z.input<typeof rawEnvSchema>, 'EXPO_PUBLIC_DISTRIBUTION'>,
+  string | undefined
+> & {
+  EXPO_PUBLIC_DISTRIBUTION?: string | undefined;
+};
 
 export type Env = {
   appEnv: AppEnv;
@@ -36,6 +56,8 @@ export type Env = {
   apiUrl: string;
   /** Verbose, redacted request logging. Always false in production. */
   debugLogs: boolean;
+  /** Which store/channel this binary is built for (see DISTRIBUTIONS). */
+  distribution: Distribution;
 };
 
 export class EnvConfigError extends Error {
@@ -92,5 +114,6 @@ export function parseEnv(raw: RawEnv, { releaseBuild = false }: ParseEnvOptions 
     appEnv,
     apiUrl,
     debugLogs: appEnv !== 'production' && debugFlag,
+    distribution: parsed.data.EXPO_PUBLIC_DISTRIBUTION,
   };
 }

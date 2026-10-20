@@ -11,6 +11,7 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppIconButton } from '@/components/ui/AppIconButton';
 import { LeadListSkeleton } from '@/features/leads/components/LeadListSkeleton';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 
 import { NotificationItem } from '../components/NotificationItem';
 import {
@@ -19,11 +20,11 @@ import {
   useNotificationFeed,
   useUnreadCount,
 } from '../hooks/useNotifications';
-import type { AppNotification } from '../types';
+import { notificationTarget, type AppNotification } from '../types';
 
 const RowGap = () => <View className="h-2" />;
 
-export function NotificationsScreen() {
+export function NotificationsScreen({ navigation }: MainTabScreenProps<'Notifications'>) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const feed = useNotificationFeed();
@@ -37,8 +38,10 @@ export function NotificationsScreen() {
   const open = useCallback(
     (notification: AppNotification) => {
       if (!notification.isRead) markOneRead(notification.id);
+      const target = notificationTarget(notification);
+      if (target) navigation.navigate(target.screen, target.params as never);
     },
-    [markOneRead],
+    [markOneRead, navigation],
   );
 
   // Spinner only for a user pull; background refetches never flash the refresh disc.
@@ -81,7 +84,10 @@ export function NotificationsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <Appear index={index} variant="fade">
-            <NotificationItem notification={item} onPress={open} />
+            <NotificationItem
+              notification={item}
+              onPress={!item.isRead || notificationTarget(item) ? open : undefined}
+            />
           </Appear>
         )}
         ListEmptyComponent={empty}

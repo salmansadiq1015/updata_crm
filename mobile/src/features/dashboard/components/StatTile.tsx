@@ -10,7 +10,7 @@ import { cn } from '@/utils/cn';
 
 type Props = {
   label: string;
-  value: number | undefined;
+  value: number | string | undefined;
   icon: LucideIcon;
   loading?: boolean;
   /** Tint of the icon tile; tiles in a grid each get their own. */

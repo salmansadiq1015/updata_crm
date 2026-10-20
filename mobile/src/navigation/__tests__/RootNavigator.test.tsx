@@ -59,6 +59,14 @@ beforeEach(() => {
   jest
     .mocked(dashboardApi.stats)
     .mockResolvedValue({ customers: 12, projects: 3, openQuotes: 4, todayTasks: 2 });
+  jest.mocked(dashboardApi.mobileCrm).mockResolvedValue({
+    leads: { total: 1, new: 1, contacted: 0, qualified: 0, unqualified: 0, converted: 0 },
+    qualificationRate: 0,
+    conversionRate: 0,
+    activeCampaigns: 0,
+    callsCompletedToday: 0,
+    updatedAt: '2026-10-19T10:00:00Z',
+  });
   jest.mocked(leadsApi.list).mockResolvedValue({
     items: [lead],
     pagination: { hasNext: false, nextCursor: null, limit: 25, total: 1 },
@@ -70,6 +78,7 @@ beforeEach(() => {
     .mockResolvedValue({ items: [], pagination: { hasNext: false, nextCursor: null, limit: 30 } });
   jest.mocked(callAgentApi.defaults).mockResolvedValue(null);
   jest.mocked(aiAgentApi.languages).mockResolvedValue({ languages: [], defaultLanguage: 'en' });
+  jest.mocked(aiAgentApi.smsTemplates).mockResolvedValue([]);
   jest
     .mocked(aiAgentApi.telephonyHealth)
     .mockResolvedValue({ configured: false, livekitReady: false, reason: 'no_sip_trunk' });
@@ -135,6 +144,7 @@ describe('RootNavigator', () => {
     const tabs = screen.getAllByRole('tab');
     expect(tabs).toHaveLength(5);
     expect(tabs[2]).toHaveAccessibleName('Updata Call Agent');
+    expect(screen.getByTestId('ai-agent-tab-logo', { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByTestId('tab-call-agent')).not.toBeSelected();
     // The unread badge stays on Notifications.
     expect(await screen.findByRole('tab', { name: 'Notifications, 3 unread notifications' })).toBeTruthy();

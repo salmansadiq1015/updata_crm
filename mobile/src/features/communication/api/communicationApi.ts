@@ -10,6 +10,7 @@ import {
   createdCommunicationSchema,
   eligibilitySchema,
   proposeResponseSchema,
+  transcribeResponseSchema,
   qualificationSchema,
   smsTemplateSchema,
   type Channel,
@@ -110,6 +111,27 @@ export const communicationApi = {
       ENDPOINTS.communications.propose(leadId),
       { notes, language },
       proposeResponseSchema,
+    );
+    return data;
+  },
+
+  /**
+   * Voice note → text on the CRM (OpenAI speech-to-text). The audio is only held in
+   * memory on the server; `available:false` when no AI provider is configured.
+   */
+  async transcribe(leadId: string, file: { uri: string; mimeType: string }, language: string) {
+    const form = new FormData();
+    // React Native's FormData accepts a { uri, name, type } file descriptor.
+    form.append('audio', { uri: file.uri, name: 'voice-note.m4a', type: file.mimeType } as unknown as Blob);
+    form.append('language', language);
+    const { data } = await api.post(
+      ENDPOINTS.communications.transcribe(leadId),
+      form,
+      transcribeResponseSchema,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 90_000,
+      },
     );
     return data;
   },

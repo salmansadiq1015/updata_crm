@@ -22,7 +22,16 @@ describe('parseEnv', () => {
       appEnv: 'development',
       apiUrl: 'http://10.0.2.2:9097/api/v1',
       debugLogs: true,
+      distribution: 'play',
     });
+  });
+
+  it('defaults to the Play-safe distribution and accepts the private build flag', () => {
+    expect(parseEnv(base).distribution).toBe('play');
+    expect(parseEnv({ ...base, EXPO_PUBLIC_DISTRIBUTION: 'private' }).distribution).toBe('private');
+    expect(issuesOf({ ...base, EXPO_PUBLIC_DISTRIBUTION: 'sideload' })).toEqual([
+      expect.stringContaining('EXPO_PUBLIC_DISTRIBUTION'),
+    ]);
   });
 
   it('fails clearly when required values are missing', () => {
@@ -67,6 +76,7 @@ describe('parseEnv', () => {
       appEnv: 'production',
       apiUrl: 'https://crm.example.com/api/v1',
       debugLogs: false,
+      distribution: 'play',
     });
     expect(
       parseEnv({

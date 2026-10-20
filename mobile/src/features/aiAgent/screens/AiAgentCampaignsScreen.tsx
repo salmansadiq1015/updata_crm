@@ -1,8 +1,9 @@
-import { Bot, MessageSquare, PhoneCall } from 'lucide-react-native';
+import { Bot, ChevronRight, MessageSquare, PhoneCall, Smartphone } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { FlatList, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
+import { getEnv } from '@/config/env';
 import { usePullRefresh } from '@/components/layout/usePullRefresh';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppPressableCard } from '@/components/ui/AppCard';
@@ -45,6 +46,21 @@ export function AiAgentCampaignsScreen({ navigation }: RootScreenProps<'AiAgentC
         contentContainerClassName="grow px-4 pb-6 pt-3"
         onRefresh={pull.onRefresh}
         refreshing={pull.refreshing}
+        ListHeaderComponent={
+          getEnv().distribution === 'private' ? (
+            <AppPressableCard
+              className="mb-3 flex-row items-center gap-3"
+              accessibilityLabel={t('smsAgent.campaignsTitle')}
+              onPress={() => navigation.navigate('SimSmsCampaigns')}
+            >
+              <Icon icon={Smartphone} color="primary" />
+              <AppText variant="title" className="flex-1">
+                {t('smsAgent.campaignsTitle')}
+              </AppText>
+              <Icon icon={ChevronRight} color="mutedForeground" flipRtl />
+            </AppPressableCard>
+          ) : null
+        }
         ListEmptyComponent={
           query.isPending ? (
             <Loading label={t('common.loading')} />

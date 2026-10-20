@@ -25,6 +25,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
         },
       },
       LeadDetail: 'leads/:leadId',
+      AiCallHistory: 'leads/:leadId/ai-calls',
+      AiCallDetail: 'ai-calls/:callId',
       CallAgentSettings: 'call-agent/settings',
     },
   },

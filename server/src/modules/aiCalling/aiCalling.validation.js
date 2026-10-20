@@ -5,6 +5,11 @@ import {
   QUALIFICATION_RESULTS, ANSWER_VALIDATION,
 } from './aiCalling.constants.js';
 import { canonicalAgentLanguage, isSupportedAgentLanguage } from './aiCalling.languages.js';
+import { isValidTimezone } from './engine/callWindow.js';
+
+const ianaTimezone = Joi.string().max(80).custom((value, helpers) => (
+  isValidTimezone(value) ? value : helpers.message('"timezone" must be a valid IANA timezone (e.g. Europe/Zurich)')
+));
 
 const page = Joi.number().integer().min(1).default(1);
 const limit = Joi.number().integer().min(1).max(100).default(25);
@@ -73,7 +78,7 @@ const agentConfig = Joi.object({
 });
 
 const schedule = Joi.object({
-  timezone: Joi.string().max(80).default('UTC'),
+  timezone: ianaTimezone.default('UTC'),
   callWindow: Joi.object({
     start: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).default('09:00'),
     end: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).default('18:00'),
@@ -110,7 +115,7 @@ export const createCampaign = { body: Joi.object({
   schedule: schedule.default({}),
   selection: Joi.alternatives().try(explicitSelection, filterSelection).required(),
   scheduledAt: Joi.date().iso().greater('now').allow(null),
-  timezone: Joi.string().max(80),
+  timezone: ianaTimezone,
   isTest: Joi.boolean().default(false),
 }) };
 
@@ -148,11 +153,12 @@ export const retryRecipients = { params: Joi.object({ id: objectId.required() })
 }).default({}) };
 export const analytics = { query: Joi.object({ from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')), campaignId: objectId }) };
 export const suppress = { body: Joi.object({
-  phone: Joi.string().max(50).required(),
+  // Either a number, or a lead whose stored number is suppressed (resolved server-side).
+  phone: Joi.string().max(50),
   leadId: objectId.allow(null),
   reason: Joi.string().valid('do_not_contact', 'invalid', 'complaint', 'admin').default('admin'),
   note: Joi.string().max(500).allow('', null),
-}) };
+}).or('phone', 'leadId') };
 export const callConsentRead = { params: Joi.object({ leadId: objectId.required() }) };
 export const callConsentUpdate = {
   params: Joi.object({ leadId: objectId.required() }),
@@ -182,8 +188,12 @@ export const agentCallback = { params: Joi.object({ callId: Joi.string().max(120
   when: Joi.string().max(200).allow('', null), note: Joi.string().max(1000).allow('', null),
 }).default({}) };
 export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
-  disposition: Joi.string().max(40).allow(null),
+  // Telephony-level outcomes only; business outcomes are derived server-side.
+  disposition: Joi.string().valid('voicemail', 'no_answer', 'busy', 'failed').allow(null),
   durationSeconds: Joi.number().min(0).allow(null),
   transcriptRef: Joi.string().max(500).allow(null, ''),
   cost: Joi.object({ amount: Joi.number().min(0), currency: Joi.string().max(3), breakdown: Joi.any() }).allow(null),
 }).default({}) };
+
+// Shared with the SIM SMS agent (same questionnaire / rule shapes).
+export { question as questionSchema, statusRule as statusRuleSchema };

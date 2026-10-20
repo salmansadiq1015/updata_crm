@@ -11,7 +11,7 @@ import { requestLogger } from './shared/middleware/requestLogger.js';
 import { securityHeaders } from './shared/middleware/securityHeaders.js';
 import { corsMiddleware } from './shared/middleware/cors.js';
 import { compressionMiddleware } from './shared/middleware/compression.js';
-import { globalLimiter } from './shared/middleware/rateLimiter.js';
+import { globalLimiter, agentToolLimiter, providerWebhookLimiter } from './shared/middleware/rateLimiter.js';
 import { mongoSanitizeMiddleware } from './shared/utils/sanitize.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { notFoundHandler } from './shared/middleware/notFound.js';
@@ -66,6 +66,8 @@ import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.ro
 import extensionRoutes from './modules/extension/extension.routes.js';
 import messagingRoutes, { messagingWebhookRoutes } from './modules/messaging/messaging.routes.js';
 import aiCallingRoutes, { agentToolRoutes, aiCallingWebhookRoutes } from './modules/aiCalling/aiCalling.routes.js';
+import simSmsRoutes from './modules/simSms/simSms.routes.js';
+import simCallRoutes from './modules/simCall/simCall.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -122,6 +124,8 @@ export function createApp() {
   // Global rate limiting — skip Socket.IO polling (it would hit 100 req/min instantly)
   app.use((req, res, next) => {
     if (req.path.startsWith('/socket.io')) return next();
+    // AI-calling worker + provider webhooks have dedicated limiters (mounted below).
+    if (req.path.startsWith('/api/v1/ai-calling/agent/') || req.path.startsWith('/api/v1/webhooks/ai-calling/')) return next();
     return globalLimiter(req, res, next);
   });
 
@@ -156,8 +160,11 @@ export function createApp() {
   app.use("/api/v1/messaging", messagingRoutes);
   app.use("/api/v1/webhooks/messaging", messagingWebhookRoutes);
   app.use("/api/v1/ai-calling", aiCallingRoutes);
-  app.use("/api/v1/ai-calling/agent", agentToolRoutes);
-  app.use("/api/v1/webhooks/ai-calling", aiCallingWebhookRoutes);
+  app.use("/api/v1/ai-calling/agent", agentToolLimiter, agentToolRoutes);
+  app.use("/api/v1/webhooks/ai-calling", providerWebhookLimiter, aiCallingWebhookRoutes);
+  // AI SMS agent over the user's own phone SIM (Android private build).
+  app.use("/api/v1/sim-sms", simSmsRoutes);
+  app.use("/api/v1/sim-calls", simCallRoutes);
   // Lead Generation / Business Discovery — discovery sessions/results + lead import.
   // Two routers share the prefix (disjoint paths/methods): discovery first, then import.
   app.use("/api/v1/business-discovery", discoveryRoutes);

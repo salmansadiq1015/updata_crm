@@ -182,7 +182,12 @@ async function ensureCanonicalIndex(leads) {
     'address.geography.cityId': 1,
     'address.geography.areaId': 1,
   };
-  const existing = await leads.listIndexes().toArray();
+  // A fresh database has no leads collection yet (NamespaceNotFound, code 26):
+  // it has no indexes, and createIndex below creates the collection.
+  const existing = await leads.listIndexes().toArray().catch((error) => {
+    if (error?.code === 26) return [];
+    throw error;
+  });
   if (existing.some((index) => sameIndexKeys(index.key, keys))) return;
   await leads.createIndex(keys, { name: CANONICAL_INDEX });
 }

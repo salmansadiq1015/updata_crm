@@ -2,7 +2,7 @@ import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { LEAD_STATUS } from './lead.model.js';
 import {
-  COMM_CHANNELS, PHONE_ROUTES, SMS_ROUTES, COMM_MODES, DESTINATION_FIELDS,
+  COMM_CHANNELS, PHONE_ROUTES, SMS_ROUTES, CLIENT_COMM_MODES, DESTINATION_FIELDS,
   COMM_EVENT_TYPES, COMM_EVENT_SOURCES, MAX_EVENTS_PER_REQUEST, DISPOSITIONS, CONNECTED_VALUES,
   SMS_ENCODINGS, SMS_SEND_STATUSES, ANSWER_STATUSES, ANSWER_SOURCES,
 } from './leadCommunication.constants.js';
@@ -67,7 +67,7 @@ export const createCommunication = {
       then: Joi.string().valid(...PHONE_ROUTES).required(),
       otherwise: Joi.string().valid(...SMS_ROUTES).required(),
     }),
-    mode: Joi.string().valid(...COMM_MODES).default('manual'),
+    mode: Joi.string().valid(...CLIENT_COMM_MODES).default('manual'),
     destinationField: Joi.string().valid(...DESTINATION_FIELDS).required(),
     sim: simSchema.allow(null),
     device: deviceSchema.allow(null),
@@ -97,7 +97,8 @@ export const qualificationAnswer = Joi.object({
   label: Joi.string().trim().max(200).allow(null, ''),
   value: answerValue.default(null),
   status: Joi.string().valid(...ANSWER_STATUSES).required(),
-  source: Joi.string().valid(...ANSWER_SOURCES).default('user'),
+  // 'sms_agent' answers are written only server-side by the SIM SMS agent.
+  source: Joi.string().valid(...ANSWER_SOURCES.filter((v) => v !== 'sms_agent')).default('user'),
   evidence: Joi.string().max(2000).allow(null, '').default(null),
   confidence: Joi.number().min(0).max(1).allow(null).default(null),
 });
@@ -123,7 +124,7 @@ export const completeCommunication = {
       body: Joi.string().max(1600).allow('').required(),
       encoding: Joi.string().valid(...SMS_ENCODINGS).required(),
       segments: Joi.number().integer().min(0).max(20).required(),
-      sendStatus: Joi.string().valid(...SMS_SEND_STATUSES).required(),
+      sendStatus: Joi.string().valid(...SMS_SEND_STATUSES.filter((v) => v !== 'sent_by_app')).required(),
     }).allow(null),
     qualification: Joi.object({
       answers: Joi.array().items(qualificationAnswer).max(50).unique('fieldKey').default([]),
@@ -140,6 +141,8 @@ export const listCommunications = {
 };
 
 export const getQualification = { params: leadParams };
+
+export const transcribeVoiceNote = { params: leadParams };
 
 export const proposeQualification = {
   params: leadParams,

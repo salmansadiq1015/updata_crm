@@ -3,6 +3,7 @@ import {
   calculateDelta,
   fillTimeline,
   getAnalyticsSnapshot,
+  getMobileCrmStats,
   normalizeAnalyticsFilters,
 } from '../../src/modules/dashboard/dashboard.service.js';
 
@@ -51,6 +52,35 @@ function buildModels(overrides = {}) {
 }
 
 describe('dashboard analytics service', () => {
+  test('builds a permission-scoped mobile CRM snapshot from real model counts', async () => {
+    const Lead = aggregateModel([
+      { _id: 'new', count: 7 },
+      { _id: 'contacted', count: 4 },
+      { _id: 'qualified', count: 3 },
+      { _id: 'converted', count: 1 },
+    ]);
+    const CallCampaign = { countDocuments: jest.fn().mockResolvedValue(2) };
+    const CallRecord = { countDocuments: jest.fn().mockResolvedValue(9) };
+
+    const snapshot = await getMobileCrmStats('64b7f0c2a1b2c3d4e5f60701', {
+      now: new Date('2026-10-19T12:00:00.000Z'),
+      models: { Lead, CallCampaign, CallRecord },
+    });
+
+    expect(snapshot).toEqual(expect.objectContaining({
+      leads: { total: 15, new: 7, contacted: 4, qualified: 3, unqualified: 0, converted: 1 },
+      qualificationRate: 0.2,
+      conversionRate: 0.067,
+      activeCampaigns: 2,
+      callsCompletedToday: 9,
+    }));
+    expect(CallCampaign.countDocuments).toHaveBeenCalledWith(expect.objectContaining({
+      isTest: false,
+      status: { $in: ['scheduled', 'running', 'paused'] },
+    }));
+    expect(CallRecord.countDocuments).toHaveBeenCalledWith(expect.objectContaining({ isTest: false }));
+  });
+
   test('normalizes analytics filters with safe defaults', () => {
     const filters = normalizeAnalyticsFilters(
       { range: 'unknown', granularity: 'hour' },

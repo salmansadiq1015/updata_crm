@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import service from './aiCalling.service.js';
 import { telephonyHealth } from './providers/telephonyRouter.js';
+import { mapLiveKitWebhook } from './providers/livekitWebhook.js';
 import { AI_AGENT_LANGUAGES, defaultAgentLanguage } from './aiCalling.languages.js';
 
 const meta = (req) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') });
@@ -30,8 +31,16 @@ class AiCallingController {
   async simulate(req, res, next) { try { return res.success({ data: await service.simulate(req.params.id, req.user._id, req.body) }); } catch (e) { next(e); } }
   async webTest(req, res, next) { try { return res.success({ data: await service.startWebTest(req.params.id, req.user._id, req.body || {}), message: 'Browser voice test started' }); } catch (e) { next(e); } }
   async getCall(req, res, next) { try { return res.success({ data: await service.getCall(req.params.id, req.user._id) }); } catch (e) { next(e); } }
-  async reviewAnswers(req, res, next) { try { return res.success({ data: await service.reviewAnswers(req.params.id, req.user._id, req.body), message: 'Answers reviewed' }); } catch (e) { next(e); } }
-  async history(req, res, next) { try { return res.success(await service.historyForLead(req.params.leadId, req.user._id, req._validatedQuery || req.query)); } catch (e) { next(e); } }
+  async reviewAnswers(req, res, next) { try { return res.success({ data: await service.reviewAnswers(req.params.id, req.user._id, req.body, meta(req)), message: 'Answers reviewed' }); } catch (e) { next(e); } }
+  async history(req, res, next) {
+    try {
+      // data stays an array of calls (installed mobile builds parse it that way);
+      // status transitions have their own endpoint.
+      const { calls, pagination } = await service.historyForLead(req.params.leadId, req.user._id, req._validatedQuery || req.query);
+      return res.success({ data: calls, pagination });
+    } catch (e) { next(e); }
+  }
+  async transitions(req, res, next) { try { return res.success({ data: await service.leadTransitions(req.params.leadId, req.user._id) }); } catch (e) { next(e); } }
   async analytics(req, res, next) { try { return res.success({ data: await service.analytics(req.user._id, req._validatedQuery || req.query) }); } catch (e) { next(e); } }
   async analyticsExport(req, res, next) {
     try {
@@ -45,10 +54,16 @@ class AiCallingController {
   async getConsent(req, res, next) { try { return res.success({ data: await service.getConsent(req.params.leadId, req.user._id) }); } catch (e) { next(e); } }
   async updateConsent(req, res, next) { try { return res.success({ data: await service.updateConsent(req.params.leadId, req.body, req.user._id, meta(req)), message: 'Call consent updated' }); } catch (e) { next(e); } }
   async languages(req, res, next) { try { return res.success({ data: { languages: AI_AGENT_LANGUAGES, defaultLanguage: defaultAgentLanguage().code } }); } catch (e) { next(e); } }
-  async telephonyHealth(req, res, next) { try { return res.success({ data: await telephonyHealth() }); } catch (e) { next(e); } }
+  async telephonyHealth(req, res, next) {
+    try {
+      const [telephony, operations] = await Promise.all([telephonyHealth(), service.operationalHealth()]);
+      return res.success({ data: { ...telephony, operations } });
+    } catch (e) { next(e); }
+  }
 
   // ---- agent tool API (worker-authenticated via req.agentCall.callId) ----
   async agentContext(req, res, next) { try { return res.success({ data: await service.getCallContext(req.agentCall.callId) }); } catch (e) { next(e); } }
+  async agentAnswered(req, res, next) { try { return res.success({ data: await service.agentAnswered(req.agentCall.callId) }); } catch (e) { next(e); } }
   async agentDisclose(req, res, next) { try { return res.success({ data: await service.agentDisclose(req.agentCall.callId) }); } catch (e) { next(e); } }
   async agentRecordAnswer(req, res, next) { try { return res.success({ data: await service.agentRecordAnswer(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async agentMarkUnknown(req, res, next) { try { return res.success({ data: await service.agentMarkUnknown(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
@@ -63,19 +78,16 @@ class AiCallingController {
     try {
       if (!verifyLiveKitSignature(req)) return res.status(401).send('Invalid signature');
       const body = req.body || {};
-      // LiveKit webhook: { event, room, participant, ... }. We match by room name
-      // (which embeds the internalCallId) or a provider call id.
-      const roomName = body.room?.name || body.room_name || '';
-      const internalCallId = roomName.replace(/^crm-call-/, '') || body.internalCallId || null;
-      const eventType = body.event || body.type || '';
+      const mapped = mapLiveKitWebhook(body);
+      if (!mapped.internalCallId || mapped.eventType === 'ignored') return res.status(200).json({ received: true, ignored: true });
       await service.applyWebhookEvent({
         provider: 'livekit_sip',
-        providerCallId: body.participant?.sid || body.sipCallId || null,
-        internalCallId,
-        eventType,
-        occurredAt: body.createdAt ? new Date(body.createdAt * 1000) : new Date(),
+        providerCallId: mapped.providerCallId,
+        internalCallId: mapped.internalCallId,
+        eventType: mapped.eventType,
+        occurredAt: body.createdAt ? new Date(Number(body.createdAt) * 1000) : new Date(),
         providerEventId: body.id || null,
-        payload: body,
+        payload: { event: body.event, room: body.room?.name, participant: body.participant?.identity, disconnectReason: body.participant?.disconnectReason },
       });
       return res.status(200).json({ received: true });
     } catch (e) { next(e); }

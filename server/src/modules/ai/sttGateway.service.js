@@ -278,6 +278,11 @@ class SttGatewayService {
       'audio/mp3': { fileName: 'audio.mp3', fileType: 'audio/mpeg' },
       'audio/ogg': { fileName: 'audio.ogg', fileType: 'audio/ogg' },
       'audio/webm': { fileName: 'audio.webm', fileType: 'audio/webm' },
+      // Android / iOS recorders produce AAC in an MPEG-4 container.
+      'audio/mp4': { fileName: 'audio.m4a', fileType: 'audio/mp4' },
+      'audio/m4a': { fileName: 'audio.m4a', fileType: 'audio/mp4' },
+      'audio/x-m4a': { fileName: 'audio.m4a', fileType: 'audio/mp4' },
+      'audio/aac': { fileName: 'audio.m4a', fileType: 'audio/mp4' },
     };
     return info[normalized] || { fileName: 'audio.bin', fileType: normalized || 'application/octet-stream' };
   }

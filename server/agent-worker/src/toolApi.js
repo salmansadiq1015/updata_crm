@@ -34,6 +34,7 @@ export class ToolApi {
     return json.data ?? json;
   }
 
+  answered() { return this._post('/answered'); }
   disclose() { return this._post('/disclose'); }
   recordAnswer(fieldKey, rawAnswer) { return this._post('/record-answer', { fieldKey, rawAnswer }); }
   markUnknown(fieldKey) { return this._post('/mark-unknown', { fieldKey }); }
@@ -45,11 +46,17 @@ export class ToolApi {
 }
 
 /** Render the engine's next action into a short instruction for the model. */
+/** Standing instructions + the step the backend wants now (refreshed after every tool call). */
+export function withCurrentStep(base, instruction) {
+  return `${base}\n\nCURRENT STEP (follow exactly; nothing else): ${instruction}`;
+}
+
 export function actionToInstruction(action) {
   if (!action) return 'Wait for the backend.';
   switch (action.type) {
     case 'disclose':
-      return 'Give the AI disclosure and ask if they have a moment. Then call the disclose tool once they agree.';
+      return 'Say the disclosure (above) and ask if they have a moment. As soon as they agree (yes, sure, okay, go ahead), ' +
+        'call the disclose tool before saying anything else. Do not ask any other question first.';
     case 'ask':
       return `Ask this question naturally (you may rephrase, keep the meaning): "${action.question.text}". ` +
         `When they answer, call record_answer with fieldKey="${action.question.fieldKey}" and their exact words.`;

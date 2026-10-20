@@ -103,6 +103,30 @@ export const geocodeLimiter = createLimiter({
   message: 'Too many geocoding requests, please try again later',
 });
 
+/**
+ * AI calling: the voice-agent worker calls the tool API from ONE IP for many
+ * concurrent calls, so a per-IP budget would 429 live conversations. Budget per
+ * call instead (a real call needs a few dozen tool calls; 120/min is a runaway
+ * guard). Requests are also bearer-token authenticated per call.
+ */
+export const agentToolLimiter = createLimiter({
+  windowMs: 60_000,
+  max: 120,
+  message: 'Too many agent tool calls for this call',
+  keyGenerator: (req, res) => {
+    const callId = /^\/([^/]{1,120})\//.exec(req.path)?.[1];
+    return callId ? `ai-agent:${callId}` : `ai-agent-ip:${ipKeyGenerator(req, res)}`;
+  },
+});
+
+/** Signed provider webhooks: bursty at call end, so a larger per-IP budget. */
+export const providerWebhookLimiter = createLimiter({
+  windowMs: 60_000,
+  max: 1200,
+  message: 'Too many webhook requests',
+  keyGenerator: (req, res) => `webhook:${ipKeyGenerator(req, res)}`,
+});
+
 export { createLimiter };
 export default {
   globalLimiter, authLimiter, uploadLimiter, enrichLimiter, geocodeLimiter, createLimiter,

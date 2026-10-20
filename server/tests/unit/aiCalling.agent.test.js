@@ -92,12 +92,13 @@ async function dispatchCall(input = campaignInput(), leadOverrides = {}) {
   const campaign = await service.createCampaign(input, actor);
   const recipient = await CampaignRecipient.findOne({ campaignId: campaign._id });
   const internalCallId = `call_${recipient._id}_1`;
-  await CallRecord.create({
+  const call = await CallRecord.create({
     campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
     internalCallId, attemptNumber: 1, provider: 'livekit_sip', roomName: `crm-call-${internalCallId}`,
     state: 'ringing', initiatedAt: new Date(), conversationState: null, createdBy: actor,
   });
-  await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { attemptCount: 1 } });
+  // Mirrors _dispatchCall: the recipient points at its current attempt.
+  await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { attemptCount: 1, state: 'dialing', lastCallId: call._id } });
   return { lead, campaign, recipient, internalCallId };
 }
 
@@ -136,8 +137,16 @@ describe('agent call context', () => {
     expect(ctx.leadContext).not.toHaveProperty('mobile'); // no phone leaked to the model
     expect(ctx.nextAction).toEqual({ type: 'disclose', reason: null });
 
-    // Context marks the call connected (ringing → in_progress).
-    const call = await CallRecord.findOne({ internalCallId }).lean();
+    // Fetching context is NOT an answer for a phone call: the agent joins the
+    // room while the SIP leg is still ringing.
+    let call = await CallRecord.findOne({ internalCallId }).lean();
+    expect(call.state).toBe('ringing');
+    expect(call.answeredAt).toBeNull();
+
+    // The worker reports the answer once SIP callStatus becomes "active".
+    expect(await service.agentAnswered(internalCallId)).toMatchObject({ changed: true });
+    expect(await service.agentAnswered(internalCallId)).toMatchObject({ changed: false }); // idempotent
+    call = await CallRecord.findOne({ internalCallId }).lean();
     expect(call.state).toBe('in_progress');
     expect(call.answeredAt).toBeTruthy();
     const recipient = await CampaignRecipient.findOne({ campaignId: campaign._id }).lean();

@@ -29,6 +29,7 @@ const SUBJECT_ROUTE = {
   telecom_direct: 'SIM call (in-app)',
   dialer_handoff: 'SIM call via dialer',
   sms_composer: 'SMS composer',
+  sim_call_campaign: 'SIM call (campaign)',
 };
 const CREATOR_FIELDS = 'firstName lastName email';
 
@@ -47,7 +48,7 @@ function conflict(message, code, details = [], data = null) {
  * modules may have used (lead-country aware like aiCalling, CH-default like
  * messaging) so suppression lookups match whichever wrote the hash.
  */
-function resolveDestination(lead, field) {
+export function resolveDestination(lead, field) {
   const raw = typeof lead[field] === 'string' ? lead[field].trim() : '';
   if (!raw) return { raw: null, valid: false, e164: null, candidates: [], masked: null };
   const primary = normalizePhone(raw, lead.address?.country || 'CH');
@@ -267,8 +268,13 @@ class LeadCommunicationService {
     }
   }
 
-  /** Start (or idempotently re-fetch) an operation. Returns { communication, dialNumber, created }. */
-  async create(leadId, input, userId, meta = {}) {
+  /**
+   * Start (or idempotently re-fetch) an operation. Returns { communication, dialNumber, created }.
+   * `options.skipEligibility` is for server-side recorders only (the SIM SMS agent
+   * logging a conversation that already happened, e.g. one that ended in STOP);
+   * it is never reachable from HTTP.
+   */
+  async create(leadId, input, userId, meta = {}, { skipEligibility = false } = {}) {
     const lead = await this._loadLead(leadId);
     const existing = await LeadCommunication.findOne({ createdBy: userId, operationId: input.operationId }).lean();
     if (existing) this._assertSameOperation(existing, leadId, input.channel);
@@ -278,10 +284,10 @@ class LeadCommunicationService {
     if (existing) {
       // A replayed create for an operation that was never completed must not
       // hand out a number that has since been suppressed.
-      if (existing.state !== 'completed' && !result.eligible) throw this._notEligible(result);
+      if (existing.state !== 'completed' && !result.eligible && !skipEligibility) throw this._notEligible(result);
       return { communication: serializeCommunication(existing), dialNumber, created: false };
     }
-    if (!result.eligible) throw this._notEligible(result);
+    if (!result.eligible && !skipEligibility) throw this._notEligible(result);
 
     const startedAt = input.startedAt ? new Date(input.startedAt) : new Date();
     let doc;

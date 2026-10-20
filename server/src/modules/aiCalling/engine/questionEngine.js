@@ -27,6 +27,14 @@ export function initConversationState() {
   return { disclosed: false, endedReason: null, answers: {} };
 }
 
+/**
+ * Normalise a persisted state. Mongoose `minimize` drops empty objects, so a
+ * freshly stored state comes back without `answers`; never trust the shape.
+ */
+export function normalizeState(state) {
+  return { ...initConversationState(), ...(state || {}), answers: { ...(state?.answers || {}) } };
+}
+
 /** Compare one condition clause against the resolved answers. */
 function clauseMatches(clause, answers) {
   const entry = answers[clause.field];
@@ -101,7 +109,8 @@ export function nextAction(questionnaire, state) {
 }
 
 /** Immutably record an answer (validation result) for a question. */
-export function applyAnswer(state, fieldKey, result) {
+export function applyAnswer(rawState, fieldKey, result) {
+  const state = normalizeState(rawState);
   const prev = state.answers[fieldKey] || { clarifications: 0 };
   const clarifications = result.validation === 'invalid'
     ? (prev.clarifications ?? 0) + 1
@@ -126,7 +135,8 @@ export function markDisclosed(state) {
   return { ...state, disclosed: true };
 }
 
-export function markConfirmed(state, fieldKey) {
+export function markConfirmed(rawState, fieldKey) {
+  const state = normalizeState(rawState);
   const entry = state.answers[fieldKey];
   if (!entry) return state;
   return { ...state, answers: { ...state.answers, [fieldKey]: { ...entry, confirmed: true } } };

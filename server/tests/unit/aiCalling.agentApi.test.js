@@ -122,6 +122,21 @@ describe('agent tool API over HTTP', () => {
     expect(updatedLead.status).toBe('qualified');
   });
 
+  it('/answered marks the call connected; /end only accepts telephony-level dispositions', async () => {
+    const { internalCallId } = await setupCall();
+    const token = issueAgentToken(internalCallId);
+    const auth = { Authorization: `Bearer ${token}` };
+    const answered = await request(app).post(`/agent/${internalCallId}/answered`).set(auth).expect(200);
+    expect(answered.body.data.changed).toBe(true);
+    expect((await CallRecord.findOne({ internalCallId }).lean()).state).toBe('in_progress');
+    // The worker cannot assert a business outcome.
+    await request(app).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'answered_completed' }).expect(400);
+    const end = await request(app).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'voicemail' }).expect(200);
+    expect(end.body.data.disposition).toBe('voicemail');
+    // Tool calls after the end are refused.
+    await request(app).post(`/agent/${internalCallId}/disclose`).set(auth).expect(409);
+  });
+
   it('validates the body (missing fieldKey → 400)', async () => {
     const { internalCallId } = await setupCall();
     const token = issueAgentToken(internalCallId);
@@ -133,9 +148,11 @@ describe('agent tool API over HTTP', () => {
     const a = await setupCall();
     const b = await setupCall();
     const tokenForA = issueAgentToken(a.internalCallId);
-    // Token is bound to call A; using it on B's path authenticates as A, so B is untouched.
-    const res = await request(app).get(`/agent/${b.internalCallId}/context`).set('Authorization', `Bearer ${tokenForA}`).expect(200);
-    // The controller reads req.agentCall.callId (A), not the URL param (B).
-    expect(res.body.data.callId).toBe(a.internalCallId);
+    // Token is bound to call A; naming call B in the path is refused outright.
+    await request(app).get(`/agent/${b.internalCallId}/context`).set('Authorization', `Bearer ${tokenForA}`).expect(403);
+    await request(app).post(`/agent/${b.internalCallId}/record-answer`).set('Authorization', `Bearer ${tokenForA}`)
+      .send({ fieldKey: 'active', rawAnswer: 'yes' }).expect(403);
+    // A token in the query string is not accepted (it would leak into access logs).
+    await request(app).get(`/agent/${a.internalCallId}/context?agentToken=${tokenForA}`).expect(401);
   });
 });

@@ -55,7 +55,16 @@ export function languageInstruction(code, { defaultLanguage = defaultAgentLangua
  * This is text only — the actual tool-call contract that governs the flow lives
  * in the agent tool API, not in this prompt.
  */
-export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, objective = '', defaultLanguage } = {}) {
+/** Disclosure spoken first: the campaign's own text, else a truthful default. */
+export function disclosureText(agentConfig = {}, company = {}) {
+  const companyName = agentConfig.organizationName || company.name || 'our company';
+  const custom = String(agentConfig.disclosure || '').trim();
+  if (custom) return custom.replace(/\{company\}/g, companyName);
+  return `Hello, this is ${agentConfig.agentName || 'an assistant'}, an AI assistant calling on behalf of ${companyName}.` +
+    (agentConfig.recordCall ? ' This call is recorded.' : '');
+}
+
+export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, objective = '', defaultLanguage, questions = [] } = {}) {
   const ctx = leadContext(lead);
   const companyName = agentConfig.organizationName || company.name || 'our company';
   const style = {
@@ -73,7 +82,10 @@ export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, o
     style,
     languageInstruction(agentConfig.language, defaultLanguage ? { defaultLanguage } : undefined),
     'Rules you must always follow:',
-    '- Disclose that you are an AI at the start, and that the call may be recorded if recording is enabled.',
+    '- Disclose that you are an AI at the start.',
+    agentConfig.recordCall
+      ? '- Tell the person the call is recorded.'
+      : '- The call is NOT recorded: never say it is or may be recorded.',
     '- Keep spoken turns short (1–2 sentences). Ask one question at a time.',
     '- Never invent facts, prices, promises, or commitments about the business or our offering.',
     '- If the person asks to stop being called, acknowledge, stop asking questions, and use the do-not-contact tool.',
@@ -81,6 +93,10 @@ export function buildSystemPrompt({ agentConfig = {}, lead = {}, company = {}, o
     '- If the person does not know an answer, accept that; do not pressure or guess.',
     '- Do NOT decide qualification yourself. Call the provided tools; the backend decides outcomes.',
     '- Always ask the backend for the next question via the tools rather than improvising the sequence.',
+    '- Follow the CURRENT STEP exactly. Ask ONLY the questionnaire questions below — never ask anything else',
+    '  (not their name, role, company size, products, or any question you made up).',
+    questions.length ? 'Questionnaire (the only questions you may ask; the backend gives you them one at a time):' : '',
+    ...questions.map((q, i) => `  ${i + 1}. [${q.fieldKey}] ${q.text}`),
   ].filter(Boolean).join('\n');
 }
 

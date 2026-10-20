@@ -37,5 +37,7 @@ recipientSchema.index({ campaignId: 1, leadId: 1 }, { unique: true });
 recipientSchema.index({ leadId: 1, createdAt: -1 });
 recipientSchema.index({ campaignId: 1, state: 1 });
 recipientSchema.index({ state: 1, nextAttemptAt: 1 });
+recipientSchema.index({ state: 1, leaseUntil: 1 }); // expired dispatch-lease recovery
+recipientSchema.index({ phoneHash: 1, state: 1 });  // DNC / consent fan-out
 
 export default mongoose.model('CampaignRecipient', recipientSchema);

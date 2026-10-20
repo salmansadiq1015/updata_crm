@@ -106,6 +106,7 @@ const campaignSchema = new mongoose.Schema({
     doNotContact: { type: Number, default: 0 },
     suppressed: { type: Number, default: 0 },
     missingPhone: { type: Number, default: 0 },
+    consentRequired: { type: Number, default: 0 },
     totalCallSeconds: { type: Number, default: 0 },
     actualCost: { type: Number, default: 0 },
   },
@@ -118,11 +119,20 @@ const campaignSchema = new mongoose.Schema({
   cancelledAt: { type: Date, default: null },
   isTest: { type: Boolean, default: false, index: true },
 
+  // Tick-chain control. Every enqueue mints a new tickToken; a tick whose token
+  // is stale exits, so at most one chain drives a campaign. tickLeaseUntil stops
+  // two ticks running at once; nextTickAt lets the watchdog revive a lost chain.
+  tickToken: { type: String, default: null },
+  tickLeaseUntil: { type: Date, default: null },
+  nextTickAt: { type: Date, default: null },
+  lastTickAt: { type: Date, default: null },
+
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-}, { timestamps: true });
+}, { timestamps: true, minimize: false });
 
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
 campaignSchema.index({ status: 1, scheduledAt: 1 });
+campaignSchema.index({ status: 1, nextTickAt: 1 }); // tick-chain watchdog
 
 export default mongoose.model('CallCampaign', campaignSchema);

@@ -50,6 +50,9 @@ jest.unstable_mockModule('../../src/shared/ai/llmFactory.js', () => ({
   createOpenAiClient: async () => ({ chat: { completions: { create: ai.create } } }),
 }));
 
+const stt = { transcribe: jest.fn() };
+jest.unstable_mockModule('../../src/modules/ai/sttGateway.service.js', () => ({ default: stt }));
+
 let mongod;
 let app;
 let Lead; let User; let Role; let Permission;
@@ -590,5 +593,36 @@ describe('qualification propose', () => {
     const res = await request(app).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
       .send({ notes: 'anything' }).expect(200);
     expect(res.body.data).toMatchObject({ available: false, reason: 'ai_unavailable', proposals: [] });
+  });
+});
+
+describe('voice note transcription (after the call)', () => {
+  const audio = Buffer.from('fake-m4a-bytes');
+
+  it('reports unavailable without an AI key, transcribes with one, and rejects non-audio uploads', async () => {
+    const lead = await makeLead();
+    const url = `${base(lead._id)}/qualification/transcribe`;
+    let res = await request(app).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    expect(res.body.data).toMatchObject({ available: false, reason: 'ai_not_configured' });
+
+    ai.configured = true;
+    stt.transcribe.mockResolvedValueOnce({ text: ' Interested, budget about 20k, call back Friday. ', confidence: 0.9 });
+    res = await request(app).post(url).set(auth(tokenA)).field('language', 'en').attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    expect(res.body.data).toEqual({ available: true, text: 'Interested, budget about 20k, call back Friday.', confidence: 0.9 });
+    expect(stt.transcribe).toHaveBeenCalledWith(expect.any(Buffer), { mimeType: 'audio/mp4', language: 'en' });
+
+    await request(app).post(url).set(auth(tokenA)).attach('audio', Buffer.from('x'), { filename: 'evil.exe', contentType: 'application/octet-stream' }).expect(400);
+
+    stt.transcribe.mockRejectedValueOnce(new Error('provider down'));
+    res = await request(app).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    expect(res.body.data).toMatchObject({ available: false, reason: 'ai_unavailable' });
+  });
+
+  it('requires lead:write', async () => {
+    const lead = await makeLead();
+    const reader = await makeUser([]);
+    await request(app).post(`${base(lead._id)}/qualification/transcribe`)
+      .set(auth(generateAccessToken({ sub: String(reader._id) })))
+      .attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(403);
   });
 });

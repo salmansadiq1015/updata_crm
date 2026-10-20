@@ -7,10 +7,14 @@
 
 export const COMM_CHANNELS = Object.freeze(['phone', 'sms']);
 export const COMM_DIRECTIONS = Object.freeze(['outbound']);
-export const COMM_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff', 'sms_composer']);
+// 'sim_sms_agent' and 'sim_call_campaign' records are written only server-side (never claimable over HTTP).
+export const COMM_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff', 'sms_composer', 'sim_sms_agent', 'sim_call_campaign']);
 export const PHONE_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff']);
 export const SMS_ROUTES = Object.freeze(['sms_composer']);
-export const COMM_MODES = Object.freeze(['manual', 'assisted']);
+export const COMM_MODES = Object.freeze(['manual', 'assisted', 'ai_agent']);
+// Modes a device may claim over HTTP. 'ai_agent' records (route sim_sms_agent)
+// are created only server-side by the SIM SMS agent.
+export const CLIENT_COMM_MODES = Object.freeze(['manual', 'assisted']);
 export const DESTINATION_FIELDS = Object.freeze(['phone', 'mobile']);
 export const COMM_STATES = Object.freeze(['started', 'dispatched', 'dispatch_failed', 'completed']);
 
@@ -33,10 +37,11 @@ export const CONNECTED_VALUES = Object.freeze(['yes', 'no', 'unknown']);
 export const SMS_ENCODINGS = Object.freeze(['GSM-7', 'UCS-2']);
 export const SMS_SEND_STATUSES = Object.freeze([
   'composer_opened', 'user_reported_sent', 'user_reported_not_sent', 'unknown',
+  'sent_by_app', // SIM SMS agent: SmsManager confirmed transmission
 ]);
 
 export const ANSWER_STATUSES = Object.freeze(['answered', 'unknown', 'refused', 'not_applicable']);
-export const ANSWER_SOURCES = Object.freeze(['user', 'ai_proposed_user_confirmed']);
+export const ANSWER_SOURCES = Object.freeze(['user', 'ai_proposed_user_confirmed', 'sms_agent']);
 
 export const RECEIPT_STEPS = Object.freeze([
   'outcome', 'contactLog', 'leadContact', 'statusChange', 'qualification', 'suppression',

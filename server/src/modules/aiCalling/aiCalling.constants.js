@@ -159,7 +159,6 @@ export const normalizeTelephonyStatus = (value) => {
   return ({
     created: 'initiating', dialing: 'ringing', ringing: 'ringing',
     active: 'in_progress', answered: 'in_progress', 'in-progress': 'in_progress',
-    participant_joined: 'in_progress',
     completed: 'completed', hangup: 'completed', ended: 'completed',
     'no-answer': 'no_answer', no_answer: 'no_answer', noanswer: 'no_answer',
     busy: 'busy', voicemail: 'voicemail', machine: 'voicemail',

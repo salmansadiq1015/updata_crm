@@ -317,14 +317,36 @@ export class LiveKitSipProvider {
   /** Public URL a browser client connects to. */
   get wsUrl() { return this.url; }
 
-  /** Force-terminate a room (used to hang up / cancel an in-flight call). */
+  /**
+   * Hang up: delete the room, which disconnects every participant including the
+   * SIP leg. Needs only LiveKit (browser tests have no trunk). 404 = already gone.
+   */
   async endCall({ roomName }) {
-    if (!this.configured || !roomName) return { ended: false };
+    if (!this.livekitReady || !roomName) return { ended: false };
     try {
-      await this._twirp('RoomService', 'DeleteRoom', { room: roomName }, roomName);
-      return { ended: true };
+      const { response } = await this._twirp('RoomService', 'DeleteRoom', { room: roomName }, roomName);
+      return { ended: response.ok || response.status === 404 };
     } catch {
       return { ended: false };
+    }
+  }
+
+  /**
+   * Provider-side truth for reconciliation: 'live' when the room still holds a
+   * SIP participant, 'gone' when the room (or the SIP leg) no longer exists,
+   * 'unknown' when LiveKit can't be asked. Never guesses.
+   */
+  async roomStatus({ roomName }) {
+    if (!this.livekitReady || !roomName) return 'unknown';
+    try {
+      const { response, json } = await this._twirp('RoomService', 'ListParticipants', { room: roomName }, roomName);
+      if (response.status === 404 || json?.code === 'not_found') return 'gone';
+      if (!response.ok) return 'unknown';
+      const participants = json.participants || [];
+      const sipLive = participants.some((p) => p.kind === 'SIP' || p.kind === 3 || String(p.identity || '').startsWith('sip-'));
+      return sipLive ? 'live' : 'gone';
+    } catch {
+      return 'unknown';
     }
   }
 }

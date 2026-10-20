@@ -56,7 +56,7 @@ const leadQualificationFieldSchema = new mongoose.Schema(
     label: { type: String, trim: true, maxlength: 200, default: null },
     value: { type: mongoose.Schema.Types.Mixed, default: null },
     status: { type: String, enum: ['answered', 'unknown', 'refused', 'not_applicable'], required: true },
-    source: { type: String, enum: ['user', 'ai_proposed_user_confirmed'], default: 'user' },
+    source: { type: String, enum: ['user', 'ai_proposed_user_confirmed', 'sms_agent'], default: 'user' },
     evidence: { type: String, maxlength: 2000, default: null },
     communicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadCommunication', default: null },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

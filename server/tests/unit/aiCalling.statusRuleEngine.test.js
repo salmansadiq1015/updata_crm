@@ -53,4 +53,9 @@ describe('aiCalling statusRuleEngine', () => {
     const out = evaluateOutcome({ statusRules: [], answers: {}, disposition: 'declined' });
     expect(out).toMatchObject({ qualification: 'unqualified', action: 'mark_not_interested' });
   });
+
+  it('an explicit decline is not parked for review even with required questions still open', () => {
+    const out = evaluateOutcome({ statusRules: [], answers: {}, disposition: 'declined', hasUnresolvedRequired: true });
+    expect(out).toMatchObject({ qualification: 'unqualified', action: 'mark_not_interested', requiresReview: false });
+  });
 });

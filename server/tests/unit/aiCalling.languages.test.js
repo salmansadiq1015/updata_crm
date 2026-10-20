@@ -155,3 +155,26 @@ describe('GET /ai-calling/languages', () => {
     expect(res.body.data.languages).toContainEqual({ code: 'de', name: 'German', nativeName: 'Deutsch', support: 'full', rtl: false });
   });
 });
+
+describe('buildSystemPrompt questionnaire + recording honesty', () => {
+  const lead = { name: 'Acme' };
+  it('lists the campaign questions as the only ones allowed', () => {
+    const text = prompt.buildSystemPrompt({
+      agentConfig: {}, lead,
+      questions: [{ fieldKey: 'need', text: 'What do you need?' }, { fieldKey: 'budget', text: 'What is your budget?' }],
+    });
+    expect(text).toContain('1. [need] What do you need?');
+    expect(text).toContain('2. [budget] What is your budget?');
+    expect(text).toMatch(/never ask anything else/);
+  });
+  it('never claims recording unless recording is on', () => {
+    expect(prompt.buildSystemPrompt({ agentConfig: { recordCall: false }, lead })).toContain('never say it is or may be recorded');
+    expect(prompt.buildSystemPrompt({ agentConfig: { recordCall: true }, lead })).toContain('the call is recorded');
+  });
+  it('falls back to a truthful default disclosure', () => {
+    expect(prompt.disclosureText({ agentName: 'Mia', organizationName: 'Updata' }))
+      .toBe('Hello, this is Mia, an AI assistant calling on behalf of Updata.');
+    expect(prompt.disclosureText({ agentName: 'Mia', organizationName: 'Updata', recordCall: true })).toMatch(/recorded\.$/);
+    expect(prompt.disclosureText({ disclosure: 'Hi from {company}', organizationName: 'X' })).toBe('Hi from X');
+  });
+});

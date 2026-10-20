@@ -50,9 +50,16 @@ const callRecordSchema = new mongoose.Schema({
 
   // Live conversation state (the deterministic engine's state for THIS call).
   conversationState: { type: mongoose.Schema.Types.Mixed, default: null },
+  // Optimistic-concurrency counter for conversationState: the realtime model can
+  // issue parallel tool calls, and a read-modify-write without it loses answers.
+  stateVersion: { type: Number, default: 0 },
 
   queuedAt: { type: Date, default: Date.now },
   initiatedAt: { type: Date, default: null },
+  // Set immediately BEFORE the provider request leaves the process. A crashed
+  // dispatch with this unset provably never dialled (safe to requeue); with it
+  // set the outcome is ambiguous and must be reconciled, never blindly redialled.
+  dispatchStartedAt: { type: Date, default: null },
   answeredAt: { type: Date, default: null },
   endedAt: { type: Date, default: null },
   durationSeconds: { type: Number, default: 0 },
@@ -67,6 +74,9 @@ const callRecordSchema = new mongoose.Schema({
   },
 
   resultsProcessedAt: { type: Date, default: null }, // idempotency guard for post-call processing
+  // Atomic claim so concurrent finishers (agent end, webhook, reconciler) can't
+  // both apply outcomes; an expired claim (crashed processor) may be re-taken.
+  processingLeaseUntil: { type: Date, default: null },
   reviewRequired: { type: Boolean, default: false },
   failureCode: { type: String, maxlength: 100, default: null },
   failureMessage: { type: String, maxlength: 500, default: null },
@@ -77,10 +87,16 @@ const callRecordSchema = new mongoose.Schema({
   },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-}, { timestamps: true });
+}, { timestamps: true, minimize: false });
 
 callRecordSchema.index({ leadId: 1, createdAt: -1 });
 callRecordSchema.index({ campaignId: 1, state: 1 });
 callRecordSchema.index({ recipientId: 1, attemptNumber: 1 }, { unique: true });
+// Reconciliation sweep (every 2 min): unprocessed calls by state/age, and
+// crashed processing claims. Partial so processed history doesn't bloat them.
+callRecordSchema.index({ state: 1, initiatedAt: 1 }, { partialFilterExpression: { resultsProcessedAt: null }, name: 'reconcile_state_initiatedAt' });
+callRecordSchema.index({ processingLeaseUntil: 1 }, { partialFilterExpression: { resultsProcessedAt: null }, name: 'reconcile_processing_lease' });
+// Daily-cap count per campaign.
+callRecordSchema.index({ campaignId: 1, initiatedAt: 1 });
 
 export default mongoose.model('CallRecord', callRecordSchema);

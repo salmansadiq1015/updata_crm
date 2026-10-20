@@ -7,10 +7,14 @@ import {
 // Existing workflow fixtures predate the consent ledger; dedicated consent
 // tests exercise enforcement, while these retain their original focus.
 process.env.AI_CALLING_REQUIRE_CONSENT = 'false';
+// Pin the recipient's local calling window so the tests do not depend on the wall clock.
+process.env.AI_CALLING_RECIPIENT_HOURS = '00:00-23:59';
+process.env.AI_CALLING_RECIPIENT_DAYS = '0,1,2,3,4,5,6';
 
 const addJob = jest.fn();
 const logEvent = jest.fn();
 const notify = jest.fn(async () => ({}));
+const roomStatusMock = jest.fn(async () => 'unknown');
 
 jest.unstable_mockModule('../../src/shared/queue/QueueManager.js', () => ({
   default: { addJob, getQueueStats: jest.fn(async () => ({})) },
@@ -29,6 +33,7 @@ jest.unstable_mockModule('../../src/modules/aiCalling/providers/livekitSip.provi
     health: async () => ({ configured: false, eligible: false, reason: 'not_configured' }),
     createOutboundCall: async () => ({ provider: 'livekit_sip', outcome: 'rejected', errorCode: 'NOT_CONFIGURED', errorMessage: 'not configured', safeToRetry: false }),
     endCall: async () => ({ ended: false }),
+    roomStatus: (...args) => roomStatusMock(...args),
   },
 }));
 
@@ -39,6 +44,7 @@ let CallRecord;
 let CallSuppression;
 let LeadCallTransition;
 let Lead;
+let CallCampaign;
 
 const actor = new mongoose.Types.ObjectId();
 
@@ -82,6 +88,7 @@ beforeAll(async () => {
   CallSuppression = (await import('../../src/modules/aiCalling/callSuppression.model.js')).default;
   LeadCallTransition = (await import('../../src/modules/aiCalling/leadCallEvent.model.js')).LeadCallTransition;
   Lead = (await import('../../src/modules/crm/lead.model.js')).default;
+  CallCampaign = (await import('../../src/modules/aiCalling/callCampaign.model.js')).default;
 }, 60000);
 
 afterAll(async () => {
@@ -92,6 +99,7 @@ afterAll(async () => {
 beforeEach(async () => {
   for (const key in mongoose.connection.collections) await mongoose.connection.collections[key].deleteMany({});
   addJob.mockClear(); logEvent.mockClear(); notify.mockClear();
+  roomStatusMock.mockReset(); roomStatusMock.mockResolvedValue('unknown');
 });
 
 describe('aiCalling campaign creation + eligibility', () => {
@@ -296,13 +304,17 @@ describe('aiCalling dispatch / tick', () => {
     );
     await service.startCampaign(campaign._id, actor, {});
     // Provider mock is offline → createOutboundCall returns a permanent rejection.
-    const res = await service.tickCampaign(campaign._id);
+    // The worker passes the chain token the start minted (stale tokens exit).
+    const { tickToken } = await CallCampaign.findById(campaign._id).lean();
+    expect(await service.tickCampaign(campaign._id, 'stale-token')).toEqual({ superseded: true });
+    const res = await service.tickCampaign(campaign._id, tickToken);
     expect(res.dispatched).toBe(1);
 
     const call = await CallRecord.findOne({ campaignId: campaign._id });
     expect(call).toBeTruthy();
     expect(call.attemptNumber).toBe(1);
     expect(call.state).toBe('failed');
+    expect(call.dispatchStartedAt).toBeTruthy(); // marked before the provider request
 
     const recipient = await CampaignRecipient.findOne({ campaignId: campaign._id });
     expect(recipient.state).toBe('failed'); // permanent reject → terminal, not retry_scheduled
@@ -320,11 +332,13 @@ describe('aiCalling reconciliation sweep', () => {
     return { lead, campaign, recipient };
   }
 
-  it('turns a long-ringing, never-answered call into no_answer', async () => {
+  it('turns a long-ringing call into no_answer once the provider confirms the room is gone', async () => {
+    roomStatusMock.mockResolvedValueOnce('gone');
     const { campaign, recipient } = await campaignWithRecipient();
     const call = await CallRecord.create({
       campaignId: campaign._id, recipientId: recipient._id, leadId: recipient.leadId,
       internalCallId: `rc_ring_${recipient._id}`, attemptNumber: 1, state: 'ringing',
+      roomName: `crm-call-rc_ring_${recipient._id}`,
       initiatedAt: new Date(Date.now() - 6 * 60_000), createdBy: actor,
     });
     const res = await service.reconcileStuckCalls();
@@ -350,21 +364,53 @@ describe('aiCalling reconciliation sweep', () => {
     expect(updated.resultsProcessedAt).toBeTruthy();
   });
 
-  it('conservatively fails an ambiguous dispatch left unresolved', async () => {
+  it('parks (never redials) a long-ringing call when the provider state is unknown', async () => {
+    roomStatusMock.mockResolvedValueOnce('unknown');
+    const { campaign, recipient } = await campaignWithRecipient();
+    await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { state: 'dialing', attemptCount: 1 } });
+    const call = await CallRecord.create({
+      campaignId: campaign._id, recipientId: recipient._id, leadId: recipient.leadId,
+      internalCallId: `rc_unknown_${recipient._id}`, attemptNumber: 1, state: 'ringing',
+      roomName: `crm-call-rc_unknown_${recipient._id}`,
+      initiatedAt: new Date(Date.now() - 6 * 60_000), dispatchStartedAt: new Date(Date.now() - 6 * 60_000), createdBy: actor,
+    });
+    await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { lastCallId: call._id } });
+    const res = await service.reconcileStuckCalls();
+    expect(res.parked).toBe(1);
+    const updated = await CallRecord.findById(call._id).lean();
+    expect(updated.state).toBe('needs_reconcile');
+    const r = await CampaignRecipient.findById(recipient._id).lean();
+    expect(r.state).toBe('failed'); // NOT retry_scheduled: a human decides
+    expect(r.finalDisposition).toBe('needs_reconcile');
+  });
+
+  it('leaves a long-ringing call alone while the provider still reports the SIP leg live', async () => {
+    roomStatusMock.mockResolvedValueOnce('live');
     const { campaign, recipient } = await campaignWithRecipient();
     const call = await CallRecord.create({
       campaignId: campaign._id, recipientId: recipient._id, leadId: recipient.leadId,
+      internalCallId: `rc_live_${recipient._id}`, attemptNumber: 1, state: 'ringing',
+      roomName: `crm-call-rc_live_${recipient._id}`,
+      initiatedAt: new Date(Date.now() - 6 * 60_000), createdBy: actor,
+    });
+    const res = await service.reconcileStuckCalls();
+    expect(res.stillLive).toBe(1);
+    expect((await CallRecord.findById(call._id).lean()).state).toBe('ringing');
+  });
+
+  it('does not auto-retry an ambiguous needs_reconcile attempt', async () => {
+    const { campaign, recipient } = await campaignWithRecipient();
+    await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { state: 'failed', finalDisposition: 'needs_reconcile', attemptCount: 1 } });
+    await CallRecord.create({
+      campaignId: campaign._id, recipientId: recipient._id, leadId: recipient.leadId,
       internalCallId: `rc_amb_${recipient._id}`, attemptNumber: 1, state: 'needs_reconcile',
       reconciliation: { needed: true, note: 'ambiguous' }, createdBy: actor,
-      createdAt: new Date(Date.now() - 11 * 60_000),
     });
-    // createdAt is set by timestamps; force it old.
-    await CallRecord.updateOne({ _id: call._id }, { $set: { createdAt: new Date(Date.now() - 11 * 60_000) } });
-    const res = await service.reconcileStuckCalls();
-    expect(res.failed).toBeGreaterThanOrEqual(1);
-    const updated = await CallRecord.findById(call._id).lean();
-    expect(updated.state).toBe('failed');
-    expect(updated.reconciliation.resolvedAt).toBeTruthy();
+    await CallRecord.updateMany({}, { $set: { createdAt: new Date(Date.now() - 60 * 60_000) } });
+    await service.reconcileStuckCalls();
+    const r = await CampaignRecipient.findById(recipient._id).lean();
+    expect(r.state).toBe('failed');
+    expect(r.nextAttemptAt == null).toBe(true);
   });
 });
 
@@ -426,7 +472,7 @@ describe('aiCalling human review', () => {
     const call = await CallRecord.create({
       campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
       internalCallId: `review_${recipient._id}`, attemptNumber: 1, state: 'completed',
-      disposition: 'answered_partial', reviewRequired: true,
+      disposition: 'answered_partial', reviewRequired: true, resultsProcessedAt: new Date(),
       answers: [{ questionFieldKey: 'employees', label: 'Employees', type: 'integer', rawAnswer: 'a lot', normalizedValue: null, validation: 'invalid' }],
       createdBy: actor,
     });
@@ -479,7 +525,7 @@ describe('aiCalling webhook idempotency', () => {
       internalCallId: 'crm-webhook-1', attemptNumber: 1, state: 'ringing', providerCallId: 'pc1',
       createdBy: actor,
     });
-    const evt = { provider: 'livekit_sip', providerCallId: 'pc1', internalCallId: 'crm-webhook-1', eventType: 'participant_joined', occurredAt: new Date() };
+    const evt = { provider: 'livekit_sip', providerCallId: 'pc1', internalCallId: 'crm-webhook-1', eventType: 'answered', occurredAt: new Date() };
     const first = await service.applyWebhookEvent(evt);
     const second = await service.applyWebhookEvent(evt);
     expect(first.matched).toBe(true);

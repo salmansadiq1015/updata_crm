@@ -328,6 +328,57 @@ async function getLegacyStats(models) {
   return { customers, projects, openQuotes, todayTasks };
 }
 
+/**
+ * Compact mobile CRM snapshot. Lead totals are company-wide (the same scope as
+ * GET /crm/leads); AI campaign/call totals are scoped to the authenticated
+ * creator, exactly like the AI Calling read APIs.
+ */
+export async function getMobileCrmStats(actor, dependencies = {}) {
+  const models = dependencies.models || {
+    Lead: mongoose.model('Lead'),
+    CallCampaign: mongoose.model('CallCampaign'),
+    CallRecord: mongoose.model('CallRecord'),
+  };
+  const now = dependencies.now || new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const actorId = new mongoose.Types.ObjectId(actor);
+
+  const [leadRows, activeCampaigns, callsCompletedToday] = await Promise.all([
+    models.Lead.aggregate([
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    models.CallCampaign.countDocuments({
+      createdBy: actorId,
+      isTest: false,
+      status: { $in: ['scheduled', 'running', 'paused'] },
+    }),
+    models.CallRecord.countDocuments({
+      createdBy: actorId,
+      isTest: false,
+      endedAt: { $gte: todayStart, $lte: todayEnd },
+      state: { $in: ['completed', 'no_answer', 'busy', 'voicemail', 'failed', 'cancelled'] },
+    }),
+  ]);
+
+  const leads = { total: 0, new: 0, contacted: 0, qualified: 0, unqualified: 0, converted: 0 };
+  for (const row of leadRows) {
+    const count = Number(row?.count) || 0;
+    if (Object.hasOwn(leads, row?._id)) leads[row._id] = count;
+    leads.total += count;
+  }
+
+  return {
+    leads,
+    qualificationRate: leads.total ? Number((leads.qualified / leads.total).toFixed(3)) : null,
+    conversionRate: leads.total ? Number((leads.converted / leads.total).toFixed(3)) : null,
+    activeCampaigns: Number(activeCampaigns) || 0,
+    callsCompletedToday: Number(callsCompletedToday) || 0,
+    updatedAt: now.toISOString(),
+  };
+}
+
 async function getCustomerAnalytics(Customer, filters) {
   const match = { isDeleted: false };
   const facet = await runFacet(Customer, {
@@ -1001,5 +1052,6 @@ export async function getAnalyticsSnapshot(rawFilters = {}, dependencies = {}) {
 export default {
   normalizeAnalyticsFilters,
   getLegacyStats: (dependencies = {}) => getLegacyStats(dependencies.models || getDashboardModels()),
+  getMobileCrmStats,
   getAnalyticsSnapshot,
 };

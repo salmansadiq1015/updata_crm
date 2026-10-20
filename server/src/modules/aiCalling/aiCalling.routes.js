@@ -29,6 +29,7 @@ router.get('/calls/:id', authenticate, requirePermission('ai-calling:read'), val
 router.post('/calls/:id/review', authenticate, requirePermission('ai-calling:write'), validate(schemas.reviewAnswers), (req, res, next) => controller.reviewAnswers(req, res, next));
 
 // Lead history + analytics + admin
+router.get('/leads/:leadId/transitions', authenticate, requirePermission('ai-calling:read'), validate(schemas.callConsentRead), (req, res, next) => controller.transitions(req, res, next));
 router.get('/leads/:leadId/history', authenticate, requirePermission('ai-calling:read'), validate(schemas.leadHistory), (req, res, next) => controller.history(req, res, next));
 router.get('/analytics', authenticate, requirePermission('ai-calling:read'), validate(schemas.analytics), (req, res, next) => controller.analytics(req, res, next));
 router.get('/analytics/export', authenticate, requirePermission('ai-calling:read'), validate(schemas.analytics), (req, res, next) => controller.analyticsExport(req, res, next));
@@ -46,6 +47,7 @@ router.get('/telephony/health', authenticate, requirePermission('ai-calling:read
  */
 export const agentToolRoutes = Router();
 agentToolRoutes.get('/:callId/context', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentContext(req, res, next));
+agentToolRoutes.post('/:callId/answered', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentAnswered(req, res, next));
 agentToolRoutes.post('/:callId/disclose', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDisclose(req, res, next));
 agentToolRoutes.post('/:callId/record-answer', authenticateAgentCall, validate(schemas.agentRecordAnswer), (req, res, next) => controller.agentRecordAnswer(req, res, next));
 agentToolRoutes.post('/:callId/mark-unknown', authenticateAgentCall, validate(schemas.agentFieldOnly), (req, res, next) => controller.agentMarkUnknown(req, res, next));

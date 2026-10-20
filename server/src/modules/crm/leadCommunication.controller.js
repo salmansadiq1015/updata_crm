@@ -62,6 +62,15 @@ class LeadCommunicationController {
     } catch (err) { next(err); }
   }
 
+  async transcribeVoiceNote(req, res, next) {
+    try {
+      const data = await leadQualificationService.transcribe(req.params.leadId, req.file, {
+        language: typeof req.body?.language === 'string' ? req.body.language : null,
+      });
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async proposeQualification(req, res, next) {
     try {
       const data = await leadQualificationService.propose(req.params.leadId, req.body);

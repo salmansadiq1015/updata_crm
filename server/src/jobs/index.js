@@ -50,6 +50,8 @@ import { OutboundMessagingRecoveryWorker } from './outboundMessagingRecovery.job
 import { OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE } from '../modules/messaging/messaging.constants.js';
 import { OutboundCallingWorker } from './outboundCalling.job.js';
 import { registerAiCallReconciliationJob } from './aiCallReconciliation.job.js';
+import { registerSimSmsSweepJob } from './simSmsSweep.job.js';
+import { registerSimCallSweepJob } from './simCallSweep.job.js';
 import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
 import { registerAiAgentJob } from './aiAgent.job.js';
 import { registerAiAgentTimeoutJob } from './aiAgentTimeout.job.js';
@@ -703,12 +705,16 @@ export function registerJobs() {
   // recipient documents; crash recovery happens via lease expiry on the next tick).
   const outboundCalling = new OutboundCallingWorker();
   queueManager.registerQueue(OUTBOUND_CALL_QUEUE, outboundCalling.getHandler(), {
-    concurrency: Number(process.env.AI_CALLING_WORKER_CONCURRENCY || 5),
+    concurrency: Math.min(25, Math.max(1, Number(process.env.AI_CALLING_WORKER_CONCURRENCY) || 5)),
     jobOptions: { attempts: 1, removeOnComplete: { age: 86400, count: 5000 } },
   });
 
   // AI call reconciliation — recover calls stuck after a crash / lost webhook.
   registerAiCallReconciliationJob(queueManager);
+
+  // SIM SMS agent — reply timeouts / reminders / lease recovery for SMS sent from users' phones.
+  registerSimSmsSweepJob(queueManager);
+  registerSimCallSweepJob(queueManager);
 
   // AI agent — agentic orchestration (execute + resume with confirmation)
   registerAiAgentJob(queueManager);

@@ -222,6 +222,11 @@ const configSchema = Joi.object({
   AI_CALLING_AGENT_SECRET: Joi.string().allow('').default(''),   // signs per-call agent tokens
   AI_CALLING_PHONE_HASH_SECRET: Joi.string().allow('').default(''),
   AI_CALLING_REQUIRE_CONSENT: Joi.boolean().default(true),
+  // Recipient-local quiet hours + optional cost estimate (all optional; blank = defaults).
+  AI_CALLING_RECIPIENT_HOURS: Joi.string().pattern(/^\d{2}:\d{2}-\d{2}:\d{2}$/).allow('').default('08:00-20:00'),
+  AI_CALLING_RECIPIENT_DAYS: Joi.string().pattern(/^[0-6](\s*,\s*[0-6])*$/).allow('').default('1,2,3,4,5,6'),
+  AI_CALLING_COST_PER_MINUTE: Joi.number().min(0).empty('').default(0),
+  AI_CALLING_COST_CURRENCY: Joi.string().length(3).uppercase().allow('').default('USD'),
   AI_CALLING_TWILIO_FALLBACK_ENABLED: Joi.boolean().default(false),
   AI_CALLING_TWILIO_FALLBACK_COUNTRIES: Joi.string().allow('').default(''),
   OPENAI_REALTIME_MODEL: Joi.string().default('gpt-realtime'),

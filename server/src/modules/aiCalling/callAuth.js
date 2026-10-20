@@ -49,9 +49,14 @@ export function phoneHash(e164) {
  */
 export function authenticateAgentCall(req, res, next) {
   const header = req.get('authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.body?.agentToken || req.query?.agentToken);
-  const payload = verifyAgentToken(token);
+  // Header only: a token in a query string would end up in access logs.
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const payload = token ? verifyAgentToken(token) : null;
   if (!payload) return res.status(401).json({ success: false, error: { message: 'Invalid or expired agent call token' } });
+  // The token is bound to exactly one call: the path must name that call.
+  if (req.params?.callId && req.params.callId !== payload.callId) {
+    return res.status(403).json({ success: false, error: { message: 'Agent token is not valid for this call' } });
+  }
   req.agentCall = { callId: payload.callId };
   return next();
 }

@@ -69,6 +69,12 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
   if (disposition === 'callback_requested') {
     return verdict('callback', 'schedule_callback', 'disposition:callback_requested', false, control);
   }
+  // An explicit refusal is a statement, not missing data: someone who declines
+  // mid-conversation always leaves required questions open, and must not be
+  // parked for review as if the answers were merely unclear.
+  if (disposition === 'declined') {
+    return verdict('unqualified', 'mark_not_interested', 'disposition:declined', false, control);
+  }
 
   // 2. Uncertain data never qualifies — it goes to a human (Rule G).
   if (hasUnresolvedRequired) {
@@ -85,11 +91,6 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
       }
       return verdict(ACTION_QUALIFICATION[action] ?? 'none', action, `rule:${rule.id}`, false, control, rule.id);
     }
-  }
-
-  // 4. Declined to participate but no rule matched → not interested, not "lost".
-  if (disposition === 'declined') {
-    return verdict('unqualified', 'mark_not_interested', 'disposition:declined', false, control);
   }
 
   // 5. Default: the lead was reached and spoke — record contact, nothing more.

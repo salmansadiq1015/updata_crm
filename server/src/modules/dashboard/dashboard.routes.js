@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../../shared/middleware/authenticate.js';
+import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import dashboardService, { normalizeAnalyticsFilters } from './dashboard.service.js';
 
@@ -13,6 +13,20 @@ router.get('/stats', authenticate, async (req, res, next) => {
       { l1Ttl: 30, l2Ttl: 60 },
     );
 
+    return res.success({ data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/mobile-crm', authenticate, requirePermission('lead:read'), async (req, res, next) => {
+  try {
+    const userId = String(req.user._id);
+    const data = await cacheManager.getOrSet(
+      `app:dashboard:mobile-crm:${userId}`,
+      () => dashboardService.getMobileCrmStats(userId),
+      { l1Ttl: 30, l2Ttl: 60 },
+    );
     return res.success({ data });
   } catch (err) {
     next(err);

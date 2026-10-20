@@ -138,6 +138,27 @@ class LeadQualificationService {
   }
 
   /**
+   * Transcribe a voice note (the user's own summary after a call). Nothing is
+   * stored: the text is returned for the user to review in the notes field.
+   * Without an AI key the feature reports itself unavailable instead of failing.
+   */
+  async transcribe(leadId, file, { language = null } = {}) {
+    await this._loadLead(leadId);
+    if (!file?.buffer?.length) throw new ValidationError('An audio file (field "audio", m4a/mp3/wav/ogg/webm, ≤ 10 MB) is required');
+    if (!isAiConfigured()) return { available: false, reason: 'ai_not_configured', text: '' };
+    try {
+      const { default: sttGateway } = await import('../ai/sttGateway.service.js');
+      const result = await withTimeout(sttGateway.transcribe(file.buffer, {
+        mimeType: file.mimetype, language: language && /^[a-z]{2}(-[A-Z]{2})?$/.test(language) ? language : undefined,
+      }), 60_000);
+      return { available: true, text: String(result.text || '').trim().slice(0, 5000), confidence: result.confidence ?? null };
+    } catch (err) {
+      logger.warn('Voice note transcription unavailable', { module: 'crm', action: 'leadQualification.transcribe', leadId: String(leadId), error: { message: err.message } });
+      return { available: false, reason: 'ai_unavailable', text: '' };
+    }
+  }
+
+  /**
    * Ask the configured LLM to PROPOSE qualification answers from free-text
    * notes. Never writes anything. Every proposal must carry a verbatim quote
    * from the notes and a value the deterministic validator accepts; anything

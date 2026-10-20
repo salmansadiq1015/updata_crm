@@ -10,6 +10,13 @@ import type {
 import { ConditionEditor, type ConditionValue, type FieldOption } from './condition-editor';
 import { LanguageSelect } from './language-select';
 
+/** Number inputs: an emptied field is NaN/0 — snap back into the server's accepted range. */
+function clampInt(value: number | undefined, min: number, max: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < min) return min;
+  return Math.min(n, max);
+}
+
 const QUESTION_TYPES: QuestionType[] = [
   'short_text', 'long_text', 'boolean', 'single_choice', 'multiple_choice', 'integer',
   'decimal', 'currency', 'date', 'time', 'email', 'phone', 'url', 'address', 'rating',
@@ -195,7 +202,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                 <p className="mt-1 text-[11px] text-muted-foreground">{'{company}'} is replaced with the company name. Disclosing AI involvement is required in many jurisdictions.</p>
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Max call duration (seconds)"><input type="number" className={inputCls} value={agent.maxCallSeconds} onChange={(e) => setAgent({ ...agent, maxCallSeconds: Number(e.target.value) })} /></Field>
+                <Field label="Max call duration (seconds)"><input type="number" min={30} max={1800} className={inputCls} value={agent.maxCallSeconds} onChange={(e) => setAgent({ ...agent, maxCallSeconds: Number(e.target.value) })} onBlur={() => setAgent((a) => ({ ...a, maxCallSeconds: clampInt(a.maxCallSeconds, 30, 1800) }))} /></Field>
                 <label className="flex items-center gap-2 self-end pb-2 text-sm">
                   <input type="checkbox" checked={agent.recordCall} onChange={(e) => setAgent({ ...agent, recordCall: e.target.checked })} />
                   Record calls <span className="text-[11px] text-amber-600">(needs legal disclosure/consent)</span>
@@ -308,9 +315,9 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <Field label="Concurrency"><input type="number" min={1} className={inputCls} value={schedule.maxConcurrency} onChange={(e) => setSchedule({ ...schedule, maxConcurrency: Number(e.target.value) })} /></Field>
-                <Field label="Max attempts/lead"><input type="number" min={1} className={inputCls} value={schedule.maxAttemptsPerLead} onChange={(e) => setSchedule({ ...schedule, maxAttemptsPerLead: Number(e.target.value) })} /></Field>
-                <Field label="Max calls/day"><input type="number" min={1} className={inputCls} value={schedule.maxCallsPerDay} onChange={(e) => setSchedule({ ...schedule, maxCallsPerDay: Number(e.target.value) })} /></Field>
+                <Field label="Concurrency"><input type="number" min={1} max={25} className={inputCls} value={schedule.maxConcurrency} onChange={(e) => setSchedule({ ...schedule, maxConcurrency: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxConcurrency: clampInt(x.maxConcurrency, 1, 25) }))} /></Field>
+                <Field label="Max attempts/lead"><input type="number" min={1} max={10} className={inputCls} value={schedule.maxAttemptsPerLead} onChange={(e) => setSchedule({ ...schedule, maxAttemptsPerLead: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxAttemptsPerLead: clampInt(x.maxAttemptsPerLead, 1, 10) }))} /></Field>
+                <Field label="Max calls/day"><input type="number" min={1} className={inputCls} value={schedule.maxCallsPerDay} onChange={(e) => setSchedule({ ...schedule, maxCallsPerDay: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxCallsPerDay: clampInt(x.maxCallsPerDay, 1, 100000) }))} /></Field>
                 <Field label="Window start"><input type="time" className={inputCls} value={schedule.callWindow?.start} onChange={(e) => setSchedule({ ...schedule, callWindow: { ...schedule.callWindow!, start: e.target.value } })} /></Field>
                 <Field label="Window end"><input type="time" className={inputCls} value={schedule.callWindow?.end} onChange={(e) => setSchedule({ ...schedule, callWindow: { ...schedule.callWindow!, end: e.target.value } })} /></Field>
                 <Field label="Timezone"><input className={inputCls} value={schedule.timezone} onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })} /></Field>

@@ -8,6 +8,7 @@ import {
 import { PremiumStatCard as PremiumStatCardRaw } from '@/shared/components/premium-stat-card';
 import { EmptyState as EmptyStateRaw } from '@/shared/components/empty-state';
 import { useCampaigns, useTelephonyHealth } from '../hooks/use-ai-calling';
+import type { TelephonyHealth } from '../types/ai-calling-types';
 import { useAiCallingRealtime } from '../hooks/use-ai-calling-realtime';
 import { AnalyticsPanel } from './analytics-panel';
 
@@ -33,8 +34,8 @@ function fmtDuration(seconds: number): string {
 export function AiCallingWorkspace() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: campaignsPage, isLoading } = useCampaigns();
-  const { data: telephony } = useTelephonyHealth();
+  const { data: campaignsPage, isLoading, isError, refetch } = useCampaigns();
+  const { data: telephony, isError: telephonyError } = useTelephonyHealth();
   useAiCallingRealtime(); // live dashboard updates via socket
 
   const campaigns = campaignsPage?.data ?? [];
@@ -78,7 +79,7 @@ export function AiCallingWorkspace() {
       </div>
 
       {/* Telephony status — honest about whether real calls are possible */}
-      <TelephonyBanner telephony={telephony} />
+      <TelephonyBanner telephony={telephony} failed={telephonyError} />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
@@ -98,10 +99,16 @@ export function AiCallingWorkspace() {
       <div className="min-h-0 flex-1 rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Campaigns</h2>
-          <span className="text-xs text-muted-foreground">{campaigns.length} total</span>
+          <span className="text-xs text-muted-foreground">{campaignsPage?.pagination?.total ?? campaigns.length} total</span>
         </div>
         {isLoading ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+        ) : isError && !campaignsPage ? (
+          <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-muted-foreground">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Campaigns could not be loaded.
+            <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
+          </div>
         ) : campaigns.length === 0 ? (
           <div className="p-8">
             <EmptyState
@@ -158,13 +165,34 @@ export function AiCallingWorkspace() {
   );
 }
 
-function TelephonyBanner({ telephony }: { telephony?: { configured: boolean; livekitReady?: boolean; reason: string | null } }) {
-  if (!telephony) return null;
+function TelephonyBanner({ telephony, failed }: { telephony?: TelephonyHealth; failed?: boolean }) {
+  if (!telephony) {
+    if (!failed) return null;
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>Telephony status could not be checked. Real calls may not be possible until it can be verified.</span>
+      </div>
+    );
+  }
+  const warnings = telephony.operations?.warnings ?? [];
+  const ops = warnings.length ? (
+    <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-400">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <p className="font-semibold">Calling pipeline needs attention</p>
+        <ul className="mt-1 list-disc pl-4 text-xs">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+      </div>
+    </div>
+  ) : null;
   if (telephony.configured) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
-        <CheckCircle2 className="h-4 w-4 shrink-0" />
-        <span>Telephony is fully configured (LiveKit + SIP trunk). Real outbound phone calls and the browser voice test are available.</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>Telephony is configured (LiveKit + SIP trunk). Real outbound calls are possible once a SIP test call has been verified end to end.</span>
+        </div>
+        {ops}
       </div>
     );
   }

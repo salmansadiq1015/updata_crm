@@ -471,10 +471,12 @@ function ComposerBody({
     setSubject(template.subject || '');
     setBody(template.bodyText || '');
     setBodyHtml(template.bodyHtml || '');
+    // Keep what the user typed; an untouched default is replaced by the template's own value.
+    const edited = (value: string | undefined, untouched: string) => (value && value !== untouched ? value : '');
     setFallbackValues((current) => ({
       ...(template.fallbackValues || {}),
-      companyName: current.companyName || template.fallbackValues?.companyName || COMPANY_NAME,
-      senderName: current.senderName || template.fallbackValues?.senderName || defaultSenderName,
+      companyName: edited(current.companyName, COMPANY_NAME) || template.fallbackValues?.companyName || COMPANY_NAME,
+      senderName: edited(current.senderName, defaultSenderName) || template.fallbackValues?.senderName || defaultSenderName,
     }));
     setShowHtmlEditor(false);
     setHtmlEditorMode('rendered');

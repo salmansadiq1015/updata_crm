@@ -157,6 +157,31 @@ async function selectAll(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('lead outreach campaigns', () => {
+  it('keeps a company name the user typed when a template is chosen', async () => {
+    server.use(
+      http.get(`${BASE}/messaging/templates`, ({ request }) => {
+        const channel = new URL(request.url).searchParams.get('channel');
+        return HttpResponse.json(ok(channel === 'email' ? [{
+          _id: 'template-introduction', name: 'Business Introduction', channel: 'email',
+          purpose: 'promotional', category: 'business-introduction', description: 'Intro',
+          subject: 'Hi', bodyText: 'Hello from {{companyName}}.', bodyHtml: '',
+          requiredVariables: ['companyName'], fallbackValues: { companyName: 'Updata', senderName: 'Updata team' }, isShared: true,
+        }] : []));
+      }),
+    );
+    const user = renderLeadList();
+    await user.click(within(await row('Alpine Bakery AG')).getByRole('checkbox'));
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' });
+    await user.click(within(bar).getByRole('button', { name: 'Email' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('1 ready');
+    await user.clear(within(dialog).getByLabelText('Your company name'));
+    await user.type(within(dialog).getByLabelText('Your company name'), 'Acme Sales');
+    await user.click(within(dialog).getByRole('button', { name: 'Use Business Introduction template' }));
+    expect(within(dialog).getByLabelText('Your company name')).toHaveValue('Acme Sales'); // user's edit wins
+    expect(within(dialog).getByLabelText('Sender name')).toHaveValue('Updata team'); // untouched default → template
+  });
+
   it('loads the shared email template library and applies a selected template to every editor and preview', async () => {
     server.use(
       http.get(`${BASE}/messaging/templates`, ({ request }) => {

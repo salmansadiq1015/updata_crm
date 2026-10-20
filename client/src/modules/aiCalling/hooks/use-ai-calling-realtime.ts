@@ -32,15 +32,23 @@ export function useAiCallingRealtime(campaignId?: string | null) {
       }, 800);
     };
 
+    // Track the socket(s) we attached to so cleanup removes OUR listeners —
+    // otherwise every drawer open adds another set that is never released.
+    const attached = new Set<Socket>();
     const unsubscribe = onSocketConnect((socket: Socket) => {
       for (const event of AI_CALLING_EVENTS) {
         socket.off(event, scheduleRefresh);
         socket.on(event, scheduleRefresh);
       }
+      attached.add(socket);
     });
 
     return () => {
       unsubscribe();
+      for (const socket of attached) {
+        for (const event of AI_CALLING_EVENTS) socket.off(event, scheduleRefresh);
+      }
+      attached.clear();
       if (timer.current) clearTimeout(timer.current);
     };
   }, [qc, campaignId]);

@@ -1,7 +1,7 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import type {
-  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallRecord, CreateCampaignInput, SimResult, SimState, TelephonyHealth,
+  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallRecord, CreateCampaignInput, LeadTransition, SimResult, SimState, TelephonyHealth,
 } from '../types/ai-calling-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
@@ -42,8 +42,8 @@ export const aiCallingApi = {
   async cancel(id: string): Promise<Campaign> {
     return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.CANCEL(id)));
   },
-  async retry(id: string, recipientIds: string[] = []) {
-    return unwrap(await apiClient.post(ENDPOINTS.AI_CALLING.RETRY(id), { recipientIds }));
+  async retry(id: string, recipientIds: string[] = []): Promise<{ retried: number }> {
+    return unwrap<{ retried: number }>(await apiClient.post(ENDPOINTS.AI_CALLING.RETRY(id), { recipientIds }));
   },
   async recipients(id: string, params: { page?: number; limit?: number; state?: string } = {}) {
     return paged<Record<string, unknown>>(await apiClient.get(ENDPOINTS.AI_CALLING.RECIPIENTS(id), { params }));
@@ -74,10 +74,15 @@ export const aiCallingApi = {
   ): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.post(ENDPOINTS.AI_CALLING.CALL_REVIEW(id), payload));
   },
-  async leadHistory(leadId: string): Promise<{ data: CallRecord[]; transitions: unknown[] }> {
-    const res = await apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { limit: 50 } });
-    const r = res as { data?: CallRecord[]; _raw?: { transitions?: unknown[] } };
-    return { data: r.data ?? [], transitions: r._raw?.transitions ?? [] };
+  async leadHistory(leadId: string): Promise<{ data: CallRecord[]; transitions: LeadTransition[] }> {
+    const [history, transitions] = await Promise.all([
+      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { limit: 50 } }),
+      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_TRANSITIONS(leadId)),
+    ]);
+    return { data: paged<CallRecord>(history).data, transitions: unwrap<LeadTransition[]>(transitions) ?? [] };
+  },
+  async suppress(input: { phone?: string; leadId?: string | null; reason?: 'do_not_contact' | 'invalid' | 'complaint' | 'admin'; note?: string }) {
+    return unwrap<{ suppressed: boolean }>(await apiClient.post(ENDPOINTS.AI_CALLING.SUPPRESSIONS, input));
   },
   async callConsent(leadId: string): Promise<CallConsentProfile> {
     return unwrap<CallConsentProfile>(await apiClient.get(ENDPOINTS.AI_CALLING.LEAD_CONSENT(leadId)));

@@ -37,11 +37,12 @@ export function useCampaign(id: string | null) {
   });
 }
 
-export function useRecipients(id: string | null, state?: string) {
+export function useRecipients(id: string | null, state?: string, page = 1) {
   return useQuery({
-    queryKey: [...keys.recipients(id || ''), state],
-    queryFn: () => aiCallingApi.recipients(id as string, { limit: 100, state }),
+    queryKey: [...keys.recipients(id || ''), state, page],
+    queryFn: () => aiCallingApi.recipients(id as string, { limit: 100, state, page }),
     enabled: Boolean(id),
+    placeholderData: (previous) => previous, // keep the table steady while paging
   });
 }
 
@@ -59,6 +60,7 @@ export function useAnalytics(params: { from?: string; to?: string; campaignId?: 
     queryKey: [...keys.analytics(), params],
     queryFn: () => aiCallingApi.analytics(params),
     refetchInterval: 20000,
+    placeholderData: (previous) => previous, // keep the panel (and its date inputs) mounted while refetching
   });
 }
 
@@ -86,9 +88,14 @@ export function useReviewCall() {
       aiCallingApi.reviewCall(id, payload),
     onSuccess: (_data, vars) => {
       showSuccess('Review saved');
+      // A review can change the lead's status and the campaign's qualification counts.
       qc.invalidateQueries({ queryKey: ['ai-calling', 'call', vars.id] });
       qc.invalidateQueries({ queryKey: ['ai-calling', 'lead-history'] });
       qc.invalidateQueries({ queryKey: ['ai-calling', 'campaigns'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'campaign'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'recipients'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'analytics'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
     },
     onError: (e: unknown) => showError(e),
   });
@@ -112,7 +119,16 @@ export function useCallConsent(leadId: string | null) {
     onSuccess: () => { showSuccess('Call consent updated'); void qc.invalidateQueries({ queryKey: keys.consent(leadId || '') }); },
     onError: (error: unknown) => showError(error),
   });
-  return { ...query, update };
+  const suppress = useMutation({
+    mutationFn: (input: { note?: string } = {}) => aiCallingApi.suppress({ ...input, leadId, reason: 'do_not_contact' }),
+    onSuccess: () => {
+      showSuccess('Number added to the do-not-call list');
+      void qc.invalidateQueries({ queryKey: keys.consent(leadId || '') });
+      void qc.invalidateQueries({ queryKey: ['ai-calling', 'recipients'] });
+    },
+    onError: (error: unknown) => showError(error),
+  });
+  return { ...query, update, suppress };
 }
 
 export function useCampaignMutations() {
@@ -148,7 +164,11 @@ export function useCampaignMutations() {
   });
   const retry = useMutation({
     mutationFn: (id: string) => aiCallingApi.retry(id),
-    onSuccess: () => { showSuccess('Failed recipients re-queued'); invalidate(); },
+    onSuccess: (res) => {
+      const n = res?.retried ?? 0;
+      showSuccess(n ? `${n} recipient${n === 1 ? '' : 's'} re-queued` : 'No failed or exhausted recipients to retry');
+      invalidate();
+    },
     onError: (e: unknown) => showError(e),
   });
 

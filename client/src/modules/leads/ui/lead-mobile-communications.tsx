@@ -19,6 +19,7 @@ const ROUTE_FALLBACK: Record<string, string> = {
   telecom_direct: 'SIM call (in app)',
   dialer_handoff: 'SIM call via dialer',
   sms_composer: 'SMS via composer',
+  sim_sms_agent: 'AI SMS agent (from the agent phone SIM)',
 };
 
 const DISPOSITION_FALLBACK: Record<string, string> = {
@@ -42,6 +43,7 @@ const SEND_STATUS_FALLBACK: Record<string, string> = {
   composer_opened: 'Composer opened',
   user_reported_sent: 'Sent (user-reported)',
   user_reported_not_sent: 'Not sent (user-reported)',
+  sent_by_app: 'Sent by the app (confirmed by the phone)',
   unknown: 'Unknown',
 };
 
@@ -55,6 +57,7 @@ const ANSWER_STATUS_FALLBACK: Record<string, string> = {
 const SOURCE_FALLBACK: Record<string, string> = {
   user: 'Entered by user',
   ai_proposed_user_confirmed: 'AI-suggested, user-confirmed',
+  sms_agent: 'Lead reply via AI SMS agent (validated)',
 };
 
 const label = (t: TranslateFn, group: string, key: string, fallbacks: Record<string, string>) =>

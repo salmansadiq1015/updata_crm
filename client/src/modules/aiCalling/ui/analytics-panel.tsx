@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart3, Download } from 'lucide-react';
+import { BarChart3, Download, Loader2 } from 'lucide-react';
 import { showError } from '@/lib/toast';
 import { downloadBlob } from '@/lib/api/download';
 import { aiCallingApi } from '../services/ai-calling-api';
@@ -18,7 +18,7 @@ export function AnalyticsPanel() {
   const [to, setTo] = useState('');
   const [exporting, setExporting] = useState(false);
   const params = { ...(from ? { from: `${from}T00:00:00.000Z` } : {}), ...(to ? { to: `${to}T23:59:59.999Z` } : {}) };
-  const { data } = useAnalytics(params);
+  const { data, isError, refetch } = useAnalytics(params);
 
   async function exportCsv() {
     setExporting(true);
@@ -28,7 +28,17 @@ export function AnalyticsPanel() {
     } catch (e) { showError(e); } finally { setExporting(false); }
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+        {isError ? (
+          <>Analytics could not be loaded. <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button></>
+        ) : (
+          <><Loader2 className="h-4 w-4 animate-spin" /> Loading analytics…</>
+        )}
+      </div>
+    );
+  }
   const dispositions = [...data.byDisposition].filter((d) => d._id).sort((a, b) => b.count - a.count);
   const maxDisp = Math.max(1, ...dispositions.map((d) => d.count));
 

@@ -33,11 +33,16 @@ const display = (v: unknown): string => {
  * the backend records the correction (source: human_review) and clears the flag.
  */
 export function CallReviewDrawer({ callId, onClose }: { callId: string; onClose: () => void }) {
-  const { data: call, isLoading } = useCall(callId);
+  const { data: call, isLoading, isError, refetch } = useCall(callId);
   return (
     <div className="fixed inset-0 z-60 flex justify-end bg-black/40" onMouseDown={onClose}>
       <div className="flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-theme-lg" onMouseDown={(e) => e.stopPropagation()}>
-        {isLoading || !call ? (
+        {isError && !call ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+            This call could not be loaded.
+            <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
+          </div>
+        ) : isLoading || !call ? (
           <div className="flex flex-1 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <ReviewForm callId={callId} call={call} onClose={onClose} />
@@ -64,13 +69,27 @@ function ReviewForm({ callId, call, onClose }: { callId: string; call: CallRecor
   }
 
   async function save() {
-    const answers = (call.answers || []).map((a) => ({
-      questionFieldKey: a.questionFieldKey,
-      normalizedValue: coerce(edits[a.questionFieldKey]?.normalizedValue ?? ''),
-      validation: edits[a.questionFieldKey]?.validation || a.validation,
-    }));
-    await review.mutateAsync({ id: callId, answers, qualification: qualification || null });
-    onClose();
+    // Send only what the reviewer changed; the server re-validates each value
+    // against its question, so untouched (possibly empty/invalid) answers stay as captured.
+    const answers = (call.answers || []).flatMap((a) => {
+      const edit = edits[a.questionFieldKey];
+      if (!edit) return [];
+      const valueChanged = (edit.normalizedValue ?? '') !== display(a.normalizedValue);
+      const validationChanged = Boolean(edit.validation) && edit.validation !== a.validation;
+      if (!valueChanged && !validationChanged) return [];
+      const value = (edit.normalizedValue ?? '').trim();
+      return [{
+        questionFieldKey: a.questionFieldKey,
+        ...(value ? { normalizedValue: coerce(value) } : {}),
+        ...(edit.validation === 'unknown' ? { validation: 'unknown' } : {}),
+      }];
+    });
+    try {
+      await review.mutateAsync({ id: callId, answers, qualification: qualification || null });
+      onClose();
+    } catch {
+      // useReviewCall already shows the server's message (e.g. an invalid value); keep the form open.
+    }
   }
 
   return (
@@ -130,7 +149,7 @@ function ReviewForm({ callId, call, onClose }: { callId: string; call: CallRecor
 
             <div className="border-t border-border px-5 py-3">
               <label className="mb-2 flex items-center justify-between gap-2 text-sm">
-                <span className="text-muted-foreground">Qualification</span>
+                <span className="text-muted-foreground" title="Qualified / unqualified / do-not-contact / callback is applied to the lead (a status set by a person after the call is never overwritten)">Qualification</span>
                 <select className="rounded-md border border-border bg-card px-2 py-1.5 text-sm" value={qualification} onChange={(e) => setQualification(e.target.value)}>
                   <option value="">(unchanged)</option>
                   {QUALIFICATIONS.map((q) => <option key={q} value={q}>{q.replace(/_/g, ' ')}</option>)}

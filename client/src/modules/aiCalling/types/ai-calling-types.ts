@@ -79,7 +79,7 @@ export interface CampaignSummary {
   total: number; eligible: number; ineligible: number; queued: number; inProgress: number;
   completed: number; answered: number; noAnswer: number; failed: number; retryScheduled: number;
   qualified: number; unqualified: number; callbacks: number; needsReview: number;
-  doNotContact: number; suppressed: number; missingPhone: number;
+  doNotContact: number; suppressed: number; missingPhone: number; consentRequired?: number;
   totalCallSeconds: number; actualCost: number;
 }
 
@@ -172,8 +172,20 @@ export interface AgentLanguageList { languages: AgentLanguage[]; defaultLanguage
 
 export interface TelephonyHealth {
   configured: boolean; livekitReady?: boolean; reachable: boolean; eligible: boolean; reason: string | null;
-  primary?: Omit<TelephonyHealth, 'primary' | 'fallback'>;
-  fallback?: Omit<TelephonyHealth, 'primary' | 'fallback'> & { enabled?: boolean; allowedCountries?: string[] };
+  primary?: Omit<TelephonyHealth, 'primary' | 'fallback' | 'operations'>;
+  fallback?: Omit<TelephonyHealth, 'primary' | 'fallback' | 'operations'> & { enabled?: boolean; allowedCountries?: string[] };
+  operations?: {
+    status: 'ok' | 'attention';
+    runningCampaigns: number; stuckRinging: number; needsReconcile: number; expiredProcessingClaims: number;
+    overdueTicks: number; callsLastHour: number; failedLastHour: number; warnings: string[];
+  };
+}
+
+export interface LeadTransition {
+  _id: string;
+  previousStatus: string | null; newStatus: string | null; qualification: string | null;
+  ruleId: string | null; reason: string | null; actorType: 'system' | 'user' | 'provider_webhook';
+  callId: string | null; campaignId: string | null; createdAt: string;
 }
 
 export interface CallConsentProfile {
@@ -181,6 +193,7 @@ export interface CallConsentProfile {
     _id: string; status: 'granted' | 'denied' | 'revoked'; evidence: string; source: string;
     capturedAt: string; expiresAt?: string | null; revokedAt?: string | null;
   };
+  status?: 'granted' | 'expired' | 'missing' | 'revoked';
   destinationAvailable: boolean;
 }
 

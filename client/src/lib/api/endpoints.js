@@ -896,6 +896,18 @@ export const ENDPOINTS = Object.freeze({
     HEALTH: '/messaging/settings/health',
     SETTINGS: '/messaging/settings',
   },
+  // SIM call campaigns: AI-assisted calling from the user's own phone (server/src/modules/simCall).
+  SIM_CALLS: {
+    CAMPAIGNS: '/sim-calls/campaigns',
+    CAMPAIGN: (id) => `/sim-calls/campaigns/${id}`,
+    ACTION: (id, action) => `/sim-calls/campaigns/${id}/${action}`,
+    TASKS: (id) => `/sim-calls/campaigns/${id}/tasks`,
+    EVENTS: (id) => `/sim-calls/campaigns/${id}/events`,
+    TASK_SYNC: (id) => `/sim-calls/tasks/${id}/sync`,
+    CALLBACK: (id) => `/sim-calls/tasks/${id}/callback`,
+    CALLBACKS: '/sim-calls/callbacks',
+    LEAD_TASKS: (leadId) => `/sim-calls/leads/${leadId}/tasks`,
+  },
   AI_CALLING: {
     CAMPAIGNS: '/ai-calling/campaigns',
     CAMPAIGN: (id) => `/ai-calling/campaigns/${id}`,
@@ -913,6 +925,7 @@ export const ENDPOINTS = Object.freeze({
     CALL: (id) => `/ai-calling/calls/${id}`,
     CALL_REVIEW: (id) => `/ai-calling/calls/${id}/review`,
     LEAD_HISTORY: (leadId) => `/ai-calling/leads/${leadId}/history`,
+    LEAD_TRANSITIONS: (leadId) => `/ai-calling/leads/${leadId}/transitions`,
     LEAD_CONSENT: (leadId) => `/ai-calling/leads/${leadId}/consent`,
     ANALYTICS: '/ai-calling/analytics',
     ANALYTICS_EXPORT: '/ai-calling/analytics/export',

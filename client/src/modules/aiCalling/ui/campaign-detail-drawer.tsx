@@ -24,7 +24,7 @@ const ConfirmDialog = ConfirmDialogRaw as (props: {
 type Tab = 'overview' | 'recipients' | 'simulate' | 'webtest';
 
 export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
-  const { data: campaign, isLoading } = useCampaign(campaignId);
+  const { data: campaign, isLoading, isError, refetch } = useCampaign(campaignId);
   const { start, pause, resume, cancel, retry } = useCampaignMutations();
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -42,13 +42,24 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
   }
 
   const s = campaign?.summary;
-  const canStart = campaign && ['draft', 'paused', 'scheduled'].includes(campaign.status);
-  const canPause = campaign && ['running', 'queued'].includes(campaign.status);
+  const canStart = campaign && ['draft', 'scheduled'].includes(campaign.status);
+  const canPause = campaign && ['running', 'queued', 'scheduled'].includes(campaign.status);
+  // One lifecycle request at a time: a double click must not fire two transitions.
+  const busy = start.isPending || pause.isPending || resume.isPending || cancel.isPending || retry.isPending;
+  const btn = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60';
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onMouseDown={onClose}>
       <div className="flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-theme-lg" onMouseDown={(e) => e.stopPropagation()}>
-        {isLoading || !campaign ? (
+        {isError && !campaign ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm text-muted-foreground">This campaign could not be loaded.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => refetch()} className={`${btn} border border-border hover:bg-muted`}>Try again</button>
+              <button type="button" onClick={onClose} className={`${btn} border border-border hover:bg-muted`}>Close</button>
+            </div>
+          </div>
+        ) : isLoading || !campaign ? (
           <div className="flex flex-1 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <>
@@ -69,27 +80,33 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
               {/* lifecycle actions */}
               <div className="mt-3 flex flex-wrap gap-2">
                 {canStart ? (
-                  <button type="button" onClick={() => start.mutate({ id: campaignId })} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600">
-                    <Play className="h-3.5 w-3.5" /> {campaign.status === 'paused' ? 'Resume' : 'Start'}
-                  </button>
-                ) : null}
-                {canPause ? (
-                  <button type="button" onClick={() => pause.mutate(campaignId)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                    <Pause className="h-3.5 w-3.5" /> Pause
+                  <button type="button" disabled={busy} onClick={() => start.mutate({ id: campaignId })} className={`${btn} bg-brand-500 text-white hover:bg-brand-600`}>
+                    {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start
                   </button>
                 ) : null}
                 {campaign.status === 'paused' ? (
-                  <button type="button" onClick={() => resume.mutate(campaignId)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                    <Play className="h-3.5 w-3.5" /> Resume
+                  <button type="button" disabled={busy} onClick={() => resume.mutate(campaignId)} className={`${btn} bg-brand-500 text-white hover:bg-brand-600`}>
+                    {resume.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Resume
+                  </button>
+                ) : null}
+                {canPause ? (
+                  <button type="button" disabled={busy} onClick={() => pause.mutate(campaignId)} className={`${btn} border border-border hover:bg-muted`}>
+                    {pause.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />} Pause
                   </button>
                 ) : null}
                 {['completed', 'running', 'paused'].includes(campaign.status) ? (
-                  <button type="button" onClick={() => retry.mutate(campaignId)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                    <RotateCcw className="h-3.5 w-3.5" /> Retry failed
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => retry.mutate(campaignId)}
+                    title={campaign.status === 'paused' ? 'Re-queues failed/exhausted leads; the campaign stays paused until you resume it' : 'Re-queue failed and exhausted leads'}
+                    className={`${btn} border border-border hover:bg-muted`}
+                  >
+                    {retry.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Retry failed
                   </button>
                 ) : null}
                 {!['completed', 'cancelled'].includes(campaign.status) ? (
-                  <button type="button" onClick={() => setConfirmCancel(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-500/10">
+                  <button type="button" disabled={busy} onClick={() => setConfirmCancel(true)} className={`${btn} border border-border text-rose-600 hover:bg-rose-500/10`}>
                     <Square className="h-3.5 w-3.5" /> Cancel
                   </button>
                 ) : null}
@@ -124,6 +141,9 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
                     <Metric label="Needs review" value={s.needsReview} accent="rose" />
                     <Metric label="Do not contact" value={s.doNotContact} accent="rose" />
                     <Metric label="Missing phone" value={s.missingPhone} />
+                    <Metric label="Needs consent" value={s.consentRequired ?? 0} accent="amber" />
+                    <Metric label="Failed" value={s.failed} accent="rose" />
+                    <Metric label="Retry scheduled" value={s.retryScheduled} />
                   </div>
                   <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
                     <p><strong className="text-foreground">{campaign.questionnaire.questions.length}</strong> questions · <strong className="text-foreground">{campaign.statusRules.length}</strong> rules · agent <strong className="text-foreground">{campaign.agentConfig.agentName}</strong> ({campaign.agentConfig.voice})</p>
@@ -149,7 +169,8 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
         cancelText="Keep running"
         variant="destructive"
         isLoading={cancel.isPending}
-        onConfirm={() => { cancel.mutate(campaignId); setConfirmCancel(false); }}
+        // Keep the dialog (and its spinner) up until the server confirms.
+        onConfirm={() => cancel.mutate(campaignId, { onSettled: () => setConfirmCancel(false) })}
       />
     </div>
   );
@@ -184,10 +205,20 @@ function LiveCallsPanel({ campaignId, active }: { campaignId: string; active: bo
 }
 
 function RecipientsTab({ campaignId }: { campaignId: string }) {
-  const { data, isLoading } = useRecipients(campaignId);
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch, isFetching } = useRecipients(campaignId, undefined, page);
   const [reviewCallId, setReviewCallId] = useState<string | null>(null);
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  if (isError && !data) {
+    return (
+      <div className="p-4 text-center text-sm text-muted-foreground">
+        Recipients could not be loaded.{' '}
+        <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
+      </div>
+    );
+  }
   const rows = (data?.data ?? []) as Array<Record<string, any>>;
+  const pages = data?.pagination?.pages ?? 1;
   if (!rows.length) return <p className="p-4 text-center text-sm text-muted-foreground">No recipients.</p>;
   return (
     <>
@@ -221,6 +252,15 @@ function RecipientsTab({ campaignId }: { campaignId: string }) {
           })}
         </tbody>
       </table>
+      {pages > 1 ? (
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Page {page} of {pages} · {data?.pagination?.total ?? 0} recipients{isFetching ? ' · updating…' : ''}</span>
+          <div className="flex gap-1">
+            <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded border border-border px-2 py-1 font-semibold hover:bg-muted disabled:opacity-50">Previous</button>
+            <button type="button" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="rounded border border-border px-2 py-1 font-semibold hover:bg-muted disabled:opacity-50">Next</button>
+          </div>
+        </div>
+      ) : null}
       {reviewCallId ? <CallReviewDrawer callId={reviewCallId} onClose={() => setReviewCallId(null)} /> : null}
     </>
   );

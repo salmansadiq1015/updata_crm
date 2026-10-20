@@ -110,6 +110,7 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.leadGeneration', href: '/lead-generation', icon: Radar, permission: 'discovery:read' },
       { type: 'leaf', labelKey: 'sidebar.leads', href: '/leads', icon: UserPlus, permission: 'lead:read' },
       { type: 'leaf', labelKey: 'sidebar.aiCalling', href: '/ai-calling', icon: PhoneCall, permission: 'lead:read' },
+      { type: 'leaf', labelKey: 'sidebar.simCalls', href: '/sim-calls', icon: Smartphone, permission: 'ai-calling:read' },
       { type: 'leaf', labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, permission: 'quotations:read' },
       { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
       { type: 'leaf', labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },

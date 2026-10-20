@@ -71,10 +71,36 @@ npm run build
 say "Redémarrage"
 pm2 restart updata-api --update-env
 pm2 restart updata-client --update-env
+
+# The voice-agent worker (server/agent-worker) is a separate process that talks
+# to the API's agent tool routes, so it must move with the API — after it, never
+# before (a new worker calls routes an old API doesn't have). Only touched when
+# the operator has registered it with pm2; see LEAD-VOICE-CALLING.md.
+if pm2 describe updata-voice-agent >/dev/null 2>&1; then
+  say "Agent vocal"
+  cd "$ROOT/server/agent-worker"
+  npm ci --omit=dev
+  pm2 restart updata-voice-agent --update-env
+fi
 sleep 5
 
 say "Vérification"
-pm2 list | grep -E 'updata-(api|client)' || true
+pm2 list | grep -E 'updata-(api|client|voice-agent)' || true
+# The API must answer /health/ready (DB + dependencies) after the restart, otherwise the
+# deployment is reported as failed instead of "Terminé".
+API_PORT=$(grep -E '^PORT=' "$ROOT/server/.env" 2>/dev/null | tail -1 | cut -d= -f2 | cut -d'#' -f1 | tr -d "\"' " || true)
+API_PORT=${API_PORT:-9097}
+for i in $(seq 1 12); do
+  if curl -fsS -m 5 "http://127.0.0.1:${API_PORT}/health/ready" >/dev/null 2>&1; then
+    echo "  API prête (/health/ready sur le port ${API_PORT})"
+    break
+  fi
+  if [ "$i" -eq 12 ]; then
+    echo "  API NON PRÊTE après 60 s — voir: pm2 logs updata-api --lines 100"
+    exit 1
+  fi
+  sleep 5
+done
 cd "$ROOT/server"
 node -e "
 require('dotenv').config();

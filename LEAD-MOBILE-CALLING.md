@@ -74,6 +74,7 @@ never redials.
 | GET | `/communications` | lead:read | history, newest first |
 | GET | `/qualification` | lead:read | 12-field schema + the lead's reviewed answers |
 | POST | `/qualification/propose` | lead:write | AI suggestions from the user's notes; **never writes**; `available:false` when no provider |
+| POST | `/qualification/transcribe` | lead:write | multipart `audio` (≤10 MB, audio/* only) → `{available, text}` via the CRM's STT provider (OpenAI Whisper); audio held in memory and discarded, never stored; `available:false` when no provider |
 
 Writes reuse existing CRM pieces: `ContactLog` (channel `phone`/`sms`), `lastContactedAt` /
 `lastContactChannel`, the guarded lead status update (its `lead.updated` audit fires; `converted`
@@ -95,15 +96,65 @@ is protected), and the existing suppression ledgers (`CallSuppression`, messagin
 | Call-state evidence (idle/ringing/off-hook) | Implemented, **emulator-verified** | idle→offhook→idle stored and synced | READ_PHONE_STATE |
 | "Lead answered" / talk time | **Unsupported by design** | Android exposes no answer signal to non-dialer apps; user reports it | — |
 | SMS via system composer | Implemented, **emulator-verified** | Messages opened with CRM number + exact text | — |
-| Direct SMS sending / delivery reports | **Not built** (no `SEND_SMS`) | Play policy; composer only | — |
-| Inbound SMS / STOP monitoring on phone | **Not built** | opt-outs via outcome "do not contact" or CRM messaging webhooks | — |
+| Direct SMS sending / delivery reports | **Private build only**, **emulator-verified** (multipart, delivery, radio-off) | Play build: composer only (no SMS permissions) | SEND_SMS |
+| AI SMS agent over this phone's SIM (send, read replies, STOP, answers → lead) | **Private build only**, **emulator-verified end to end, screen off** | see [AI SMS agent](#ai-sms-agent-from-this-phones-sim-private-build) | SEND_SMS, RECEIVE_SMS |
+| Inbound SMS / STOP monitoring on phone | **Private build only**: replies from active conversation numbers only; STOP → SMS suppression + consent revoked | emulator-verified | RECEIVE_SMS |
 | Mode A — assisted calling (questions, notes, manual qualification) | Implemented, **emulator-verified incl. no-AI path** | "AI suggestions are not set up" shown, form fully usable | — |
+| Mode A — "ask next" guide with branching + suggested next steps (follow-up, status, follow-up SMS) | Implemented, unit + render tests; not device-run | answers go into the same draft; suggestions apply only on tap | — |
 | AI suggestions from notes | Implemented, mocked-provider tests only | real provider not exercised | OpenAI key on server |
 | Mode B — live transcription/copilot on SIM audio | **Disabled / unsupported** | no supported, permitted SIM-audio route; `RECORD_AUDIO` blocked | — |
 | Mode C — autonomous AI on SIM | **Disabled / unsupported** | same; the cloud route is the separate `aiCalling` module (LiveKit/SIP, different number) | — |
 | Offline | Read cached screens; **no new call/SMS offline** (CRM must authorise); outcomes queue and sync later | unit/flow tests | — |
 | Give leads to the AI agent (AI call / AI SMS campaigns) from the phone | Implemented on the CRM's existing campaign APIs; mocked tests; **not launched against a real backend** | see [In-app AI agent](#in-app-ai-agent) | ai-calling:write / crm:write |
 | AI agent languages | 73 languages + `auto` (mirror the callee), validated server-side, named in the agent prompt | server tests | — |
+
+## AI SMS agent from this phone's SIM (private build)
+
+The AI converses with leads **by SMS from the user's own SIM**. There is no cloud SMS provider and no
+LiveKit in this path. The CRM server is the brain: it writes every message (sender identity + STOP
+instruction in the first one), interprets every reply with the same deterministic engines as AI
+calling (an LLM may help classify a free-text reply, but its value must pass the deterministic
+validator), and stores everything on the lead. The phone is only the transport.
+
+**Flow:** Leads → select → AI agent → "AI SMS from this phone (SIM)" → questions + company name →
+*Check leads* (draft: eligible / excluded with reasons) → *Start sending* (explicit confirmation).
+A foreground service ("AI SMS agent running" notification) runs a Headless JS loop, so sending and
+reply handling continue with the screen off. Each cycle: report finished sends → upload replies →
+refresh the watch list → lease ≤ 1 message → confirm `attempting` → `SmsManager` → report result.
+
+**Safety rules (each covered by tests):**
+- At most once: a message is journaled natively *before* `SmsManager` is called; a message id is
+  never handed to the modem twice; a send whose result was lost becomes `unknown` and is parked
+  for a human ("Did this SMS reach the lead?" → *It was sent* / *Send again* / *Stop*).
+- Multipart: all parts OK → sent; none → failed (safe to retry); some → unknown (never auto-resend).
+- Offline (airplane mode / no SIM): nothing is leased. Transient radio failures retry with backoff
+  (2 → 10 → 30 → 60 min), never immediately.
+- Pacing ≥ 20 s between sends, ≤ `maxMessagesPerDay` per campaign, campaign send window + the lead's
+  local quiet hours, one reminder after 48 h without reply, then expiry.
+- Consent/opt-out: SMS consent required (`AI_SMS_REQUIRE_CONSENT`, default true); SMS suppression and
+  "do not contact" block enrolment and every send; a bare STOP/STOPP/ARRÊT/توقف… reply suppresses
+  the number, revokes SMS consent, stops the lead's other SMS campaigns, and sends one confirmation.
+- Privacy: the receiver keeps only replies from numbers in the user's active conversations; every
+  other SMS is ignored natively and never stored or uploaded. `READ_SMS` is never requested.
+- Results sync to the lead through the existing communication pipeline (contact log, last contacted,
+  audited status change, `Lead.qualification` with `source: sms_agent` + the lead's words as
+  evidence), visible on the web lead drawer under "Mobile calls & SMS" with the full transcript.
+
+**Two builds** (`EXPO_PUBLIC_DISTRIBUTION`): `play` (default; no SMS permissions, `tools:node=remove`
+on all SMS permissions) and `private` (company phones, direct APK install). EAS profiles:
+`production` (Play, AAB) and `production-private` / `staging-private` (APK).
+
+**Emulator evidence (2026-10-19, isolated API + local Mongo, fake numbers, no real leads):** opening
+sent as 2-part SMS; app backgrounded + screen asleep; injected reply "High!" captured, interpreted
+(`interest=high`), next question sent in < 1 s; an unrelated SMS from another number was ignored;
+final reply → closing SMS, lead `qualified`, `budget=25000` / `interest=high` with evidence, timeline
+entry + contact log; STOP → one confirmation, suppression, consent revoked, DNC on the lead;
+airplane mode → zero attempts while offline, single successful send after. Found and fixed during
+this run: missing `WAKE_LOCK` (service crash), immediate retry burning attempts while offline.
+
+**Still needs the physical phone (TECNO KJ5, dual SIM):** real carrier delivery reports, SIM choice
+on Jazz vs Telenor, HiOS background killing with the battery exemption, notification permission
+prompt on Android 13. Use your own second number only.
 
 ## Call queue (call selected leads one by one on your SIM)
 
@@ -170,10 +221,38 @@ on sign-out (the Settings dialog warns when unsynced work would be lost). Auto B
 `CALL_PHONE` and `READ_PHONE_STATE` are standard runtime permissions outside Play's restricted
 SMS/Call-Log groups. The app requests them only on the call screen, with an explanation, and works
 without them. The merged **debug** manifest was checked (release manifest: re-check at release) for the absence of `SEND_SMS`, `READ_SMS`,
-`RECEIVE_SMS`, `READ_CALL_LOG`, `PROCESS_OUTGOING_CALLS`, `RECORD_AUDIO`, `ANSWER_PHONE_CALLS`,
+`RECEIVE_SMS`, `READ_CALL_LOG`, `PROCESS_OUTGOING_CALLS`, `ANSWER_PHONE_CALLS`,
 `MANAGE_OWN_CALLS` and foreground-service permissions. `android.hardware.telephony` is declared
-`required=false`. Distribution route (public Play vs managed) is still to be decided; the Play
-Data-safety form must declare phone-state use.
+`required=false`. Decided (2026-10-19): **both** routes.
+- **Play build** (`EXPO_PUBLIC_DISTRIBUTION=play`, EAS `production`): the above still holds; SMS
+  permissions are additionally marked `tools:node="remove"`, so no library can add them. Data-safety
+  form: declare phone-state use and that call outcomes/notes are sent to the CRM.
+- **Private build** (`private`, EAS `production-private`, direct APK on company phones, never uploaded
+  to Play): adds `SEND_SMS`, `RECEIVE_SMS`, `FOREGROUND_SERVICE(_DATA_SYNC)`, `POST_NOTIFICATIONS`,
+  `WAKE_LOCK`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, the SMS receivers and the agent service. Still
+  never `READ_SMS`, `READ_CALL_LOG`. Verified in the regenerated manifest.
+
+**Microphone (both builds, 2026-10-19):** `RECORD_AUDIO` is declared for opt-in post-call voice
+notes ("Dictate notes" on the outcome form). It is requested on first tap, recording happens only
+while the user holds the session open (max 120 s), and Android does not give the app the call's
+audio anyway: if a call is still active the recorder fails and the app says so. Play data-safety:
+declare audio recorded on request, sent to the CRM for transcription, not stored.
+
+## Voice features
+
+- **Voice → text (OpenAI Whisper, server-side):** `VoiceNoteButton` records `.m4a` with
+  `expo-audio`, uploads it to `/qualification/transcribe`, and appends the text to the call notes
+  for the user to review (then "Suggest answers" can turn notes into qualification proposals).
+  The OpenAI key stays on the server. Verified 2026-10-19 against the isolated API with a real
+  spoken clip (5 s round trip, exact transcript).
+- **Text → voice (free, on-device):** the call guide's speaker button reads the current question
+  with `expo-speech` (Android TTS, app language, no network or cost). The SIM call's audio stays
+  human: it is useful on speakerphone or to rehearse; Android does not let an app inject audio
+  into a cellular call.
+- **Time selection:** call/SMS windows use the native 24-hour picker (`AppTimeField`) instead of
+  typed `HH:MM`.
+- `expo-audio` declares `expo-asset` as a `*` peer, which npm resolved to the next SDK (58) and
+  broke Gradle settings evaluation; `expo-asset` is pinned to `~57.0.20` as a direct dependency.
 
 ## Test evidence (2026-10-16)
 
@@ -212,6 +291,18 @@ test added).
   Urdu are not provided.
 
 ## Release status
+
+AI SMS agent release checklist:
+1. Server: deploy (migrations through `027_sim_sms_indexes` run in `deploy.sh`); the `sim-sms-sweep`
+   job registers automatically. Keep `AI_SMS_REQUIRE_CONSENT=true` unless the legal basis is settled.
+2. Build: `eas build -p android --profile production-private` (APK, own upload keystore kept
+   off-repo); distribute to company phones only (MDM or direct install).
+3. On each agent phone: sign in, open AI agent → "AI SMS from this phone", grant SMS + notifications,
+   tap "Allow running in the background" (battery exemption), choose the SIM.
+4. Pilot: one campaign to your own second number; confirm delivery reports, a STOP reply and the
+   lead record on the web before messaging real leads.
+5. Legal: SMS consent evidence per lead, sender identification and STOP wording per country,
+   carrier fair-use limits for personal SIMs (pacing/daily cap are configurable per campaign).
 
 Ready for an **internal test build** on real phones. Before production:
 

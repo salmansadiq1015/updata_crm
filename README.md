@@ -142,3 +142,4 @@ cd lead_extention && npm test && npm run typecheck
   changing App Router internals (see `client/AGENTS.md`).
 - The `requirements/` folder holds design docs (e.g. the Lead Generation design);
   when docs and code disagree, trust the code.
+

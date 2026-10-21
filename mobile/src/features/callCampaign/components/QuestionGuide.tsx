@@ -34,13 +34,21 @@ const NUMERIC = new Set(['integer', 'decimal', 'currency', 'rating']);
 export function QuestionGuide({ questions, answers, onAnswer, readAloud }: Props) {
   const { t, i18n } = useTranslation();
   const shown = visibleQuestions(questions, answers);
+  // The first question without an answer is the one to ask next.
+  const next = shown.find((q) => !['answered', 'unknown'].includes(answers[q.fieldKey]?.status ?? ''));
   useEffect(() => () => void Speech.stop(), []);
   return (
     <View className="gap-3">
+      {readAloud ? (
+        <AppText variant="caption" tone="muted">
+          {t('callCampaign.guide.readAloudNote')}
+        </AppText>
+      ) : null}
       {shown.map((q, index) => (
         <QuestionRow
           key={q.fieldKey}
           index={index + 1}
+          isNext={q.fieldKey === next?.fieldKey}
           question={q}
           answer={answers[q.fieldKey]}
           onAnswer={(a) => onAnswer(q.fieldKey, a)}
@@ -61,6 +69,7 @@ export function QuestionGuide({ questions, answers, onAnswer, readAloud }: Props
 
 function QuestionRow({
   index,
+  isNext,
   question: q,
   answer,
   onAnswer,
@@ -68,6 +77,7 @@ function QuestionRow({
   unknownLabel,
 }: {
   index: number;
+  isNext: boolean;
   question: CampaignQuestion;
   answer: Answer | undefined;
   onAnswer: (a: Answer) => void;
@@ -83,15 +93,20 @@ function QuestionRow({
   const multi = q.type === 'multiple_choice';
   const selectedList = Array.isArray(answer?.value) ? (answer.value as string[]) : [];
   const commitText = () => {
-    if (text.trim()) onAnswer({ status: 'answered', value: text.trim() });
+    onAnswer(text.trim() ? { status: 'answered', value: text.trim() } : { status: 'unknown' });
   };
   return (
-    <AppCard className="gap-2">
+    <AppCard className={isNext ? 'gap-2 border-2 border-primary' : 'gap-2'}>
       <View className="flex-row items-start gap-2">
         <AppText variant="caption" tone="muted">
           {index}.
         </AppText>
         <View className="flex-1 gap-1">
+          {isNext ? (
+            <AppText variant="caption" tone="primary">
+              {t('callCampaign.guide.askNext')}
+            </AppText>
+          ) : null}
           <AppText variant="title">
             {q.label}
             {q.required ? ' *' : ''}
@@ -157,7 +172,13 @@ function QuestionRow({
             onSubmitEditing={commitText}
             multiline={q.type === 'long_text'}
             keyboardType={NUMERIC.has(q.type) ? 'numeric' : q.type === 'email' ? 'email-address' : 'default'}
-            placeholder={t('callCampaign.guide.placeholder')}
+            placeholder={
+              q.type === 'date'
+                ? 'YYYY-MM-DD'
+                : q.type === 'time'
+                  ? 'HH:MM'
+                  : t('callCampaign.guide.placeholder')
+            }
             accessibilityLabel={q.label}
           />
           <View className="flex-row flex-wrap gap-2">

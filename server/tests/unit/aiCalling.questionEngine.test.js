@@ -15,6 +15,13 @@ const questionnaire = {
 };
 
 describe('aiCalling questionEngine', () => {
+  it('supports the contains operator exposed by the web condition editor', () => {
+    const condition = { all: [{ field: 'services', contains: 'repairs' }] };
+    expect(conditionMet(condition, { services: { validation: 'valid', normalizedValue: ['sales', 'repairs'] } })).toBe(true);
+    expect(conditionMet(condition, { services: { validation: 'valid', normalizedValue: 'Needs repairs' } })).toBe(true);
+    expect(conditionMet(condition, { services: { validation: 'unknown', normalizedValue: ['repairs'] } })).toBe(false);
+    expect(conditionMet(condition, {})).toBe(false);
+  });
   it('discloses before anything else', () => {
     const s = initConversationState();
     expect(nextAction(questionnaire, s)).toEqual({ type: 'disclose' });

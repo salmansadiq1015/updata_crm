@@ -78,6 +78,7 @@ export interface SimCallTask {
 export interface SimCallEvent { _id: string; type: string; at: string; leadId?: { name?: string } | null; details?: Record<string, unknown> | null }
 
 export interface CreateSimCallCampaignInput {
+  creationKey?: string;
   name: string;
   description?: string;
   leadIds: string[];

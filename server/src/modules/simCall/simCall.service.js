@@ -1,9 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import SimCallCampaign from './simCallCampaign.model.js';
 import SimCallTask from './simCallTask.model.js';
 import SimCallEvent from './simCallEvent.model.js';
 import Lead from '../crm/lead.model.js';
+import CallSuppression from '../aiCalling/callSuppression.model.js';
+import { phoneHash } from '../aiCalling/callAuth.js';
 import leadCommunicationService, { resolveDestination } from '../crm/leadCommunication.service.js';
+import { normalizeConfirmedAnswer } from '../crm/leadQualification.service.js';
 import { conditionMet } from '../aiCalling/engine/questionEngine.js';
 import { validateAnswer } from '../aiCalling/engine/answerValidation.js';
 import { windowState, isValidTimezone } from '../aiCalling/engine/callWindow.js';
@@ -13,13 +16,19 @@ import logger from '../../shared/logger/index.js';
 import { AppError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import {
   CALLABLE_TASK_STATES, CAMPAIGN_TRANSITIONS, DEFAULT_SETTINGS, LOCK_MS, MAX_LEADS, NO_CONTACT_OUTCOMES,
-  OPEN_TASK_STATES, RETRY_OUTCOMES, RETRYABLE_TASK_STATES, SIM_CALL_ERROR_CODES,
+  RETRYABLE_TASK_STATES, SIM_CALL_ERROR_CODES,
 } from './simCall.constants.js';
 
 const MAX_SYNC_ATTEMPTS = 5;
 const MAX_FAILED_DIALS = 3;          // "could not place the call" before the task is closed as failed
 const CANCELLED_DIAL_DELAY_MS = 5 * 60_000;
 const MAX_CALLBACK_AHEAD_MS = 366 * 24 * 3600_000;
+const canonical = (value) => {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  return value;
+};
 
 const conflict = (message, code, details) => {
   const err = new AppError(message, 409, code);
@@ -48,6 +57,18 @@ function assertQuestionnaire(questionnaire) {
       }
     }
   }
+  const dependencies = new Map(questions.map((q) => [q.fieldKey,
+    [...(q.condition?.all || []), ...(q.condition?.any || [])].map((c) => c.field)]));
+  const visited = new Set();
+  const visiting = new Set();
+  const visit = (key) => {
+    if (visiting.has(key)) throw new ValidationError('Conditional questions must not contain a dependency cycle');
+    if (visited.has(key)) return;
+    visiting.add(key);
+    for (const dependency of dependencies.get(key) || []) visit(dependency);
+    visiting.delete(key); visited.add(key);
+  };
+  for (const key of keys) visit(key);
 }
 
 const destinationField = (lead) => (lead.mobile ? 'mobile' : 'phone');
@@ -56,6 +77,11 @@ const destinationField = (lead) => (lead.mobile ? 'mobile' : 'phone');
 async function phoneEligibility(lead) {
   const field = destinationField(lead);
   const r = await leadCommunicationService.eligibility(String(lead._id), { channel: 'phone', destinationField: field });
+  // A confirmed opt-out must block calls even after a crash before the CRM sync.
+  const dest = resolveDestination(lead, field);
+  const hashes = (dest.candidates || []).map((number) => phoneHash(number));
+  const optedOut = await SimCallTask.exists({ attempts: { $elemMatch: { doNotContact: true, destinationHash: { $in: hashes } } } });
+  if (optedOut) return { field, eligible: false, reasons: [...new Set([...r.reasons, 'PHONE_SUPPRESSED'])], destinationMasked: r.destinationMasked };
   return { field, eligible: r.eligible, reasons: r.reasons, destinationMasked: r.destinationMasked };
 }
 
@@ -134,6 +160,7 @@ function serializeTask(task, { lead = null, includeAttempts = true } = {}) {
         attemptId: a.attemptId, claimedAt: a.claimedAt, dialedAt: a.dialedAt, outcome: a.outcome, interest: a.interest,
         evidence: a.evidence, offhookAt: a.offhookAt, endedAt: a.endedAt, durationSec: a.durationSec,
         offhookDurationSec: a.offhookDurationSec, notes: a.notes, transcript: a.transcript, completedAt: a.completedAt,
+        qualificationAnswers: a.qualificationAnswers || [],
         sync: { status: a.sync?.status, error: a.sync?.error ?? null, at: a.sync?.at ?? null },
       })),
     } : {}),
@@ -187,7 +214,16 @@ class SimCallService {
         questionsVersion: campaign.questionsVersion || 1,
       });
     }
-    if (docs.length) await SimCallTask.insertMany(docs, { ordered: false });
+    if (docs.length) {
+      try {
+        await SimCallTask.bulkWrite(docs.map((doc) => ({ updateOne: {
+          filter: { campaignId: doc.campaignId, leadId: doc.leadId }, update: { $setOnInsert: doc }, upsert: true,
+        } })), { ordered: false });
+      } catch (error) {
+        // Concurrent creation retries can race on the same unique campaign/lead key.
+        if (error.code !== 11000 || error.writeErrors?.some((e) => e.code !== 11000)) throw error;
+      }
+    }
     return docs.length;
   }
 
@@ -201,7 +237,10 @@ class SimCallService {
     const available = await Lead.countDocuments({ _id: { $in: leadIds }, isDeleted: false });
     if (!available) throw new ValidationError('Selected leads are unavailable');
 
-    const campaign = await SimCallCampaign.create({
+    const creationHash = createHash('sha256').update(JSON.stringify(canonical(input))).digest('hex');
+    let campaign = input.creationKey
+      ? await SimCallCampaign.findOne({ createdBy: actor, creationKey: input.creationKey }) : null;
+    const fields = {
       name: input.name,
       description: input.description || '',
       questionnaire: input.questionnaire,
@@ -211,11 +250,28 @@ class SimCallService {
       startsAt: input.startsAt || null,
       createdBy: actor,
       lastActivityAt: new Date(),
-    });
-    await this._buildTasks(campaign, leadIds, actor);
-    await this.refreshSummary(campaign._id);
-    await this._event(campaign._id, 'campaign.created', { actor, details: { leads: leadIds.length } });
-    this._audit('sim_call.campaign.created', actor, meta, { campaignId: campaign._id, leads: leadIds.length });
+      creationKey: input.creationKey || null, creationHash,
+    };
+    if (!campaign) {
+      try { campaign = await SimCallCampaign.create(fields); }
+      catch (error) {
+        if (error.code !== 11000 || !input.creationKey) throw error;
+        campaign = await SimCallCampaign.findOne({ createdBy: actor, creationKey: input.creationKey });
+        if (!campaign) throw error;
+      }
+    }
+    if (campaign.creationHash !== creationHash) throw conflict('Creation key was already used for different campaign content', 'SIM_CALL_CREATION_CONFLICT');
+    // Repairs interruption between creating the draft and creating its tasks.
+    if (!campaign.creationInitializedAt && campaign.status === 'draft') {
+      await this._buildTasks(campaign, leadIds, actor);
+      await this.refreshSummary(campaign._id);
+      const initialized = await SimCallCampaign.updateOne({ _id: campaign._id, creationInitializedAt: null },
+        { $set: { creationInitializedAt: new Date() } });
+      if (initialized.modifiedCount) {
+        await this._event(campaign._id, 'campaign.created', { actor, details: { leads: leadIds.length } });
+        this._audit('sim_call.campaign.created', actor, meta, { campaignId: campaign._id, leads: leadIds.length });
+      }
+    }
     return this.getCampaign(campaign._id, actor);
   }
 
@@ -223,6 +279,7 @@ class SimCallService {
   async updateCampaign(id, input, actor, meta = {}) {
     const campaign = await this._ownedCampaign(id, actor);
     if (campaign.status !== 'draft') throw conflict('Only a draft campaign can be edited', SIM_CALL_ERROR_CODES.NOT_EDITABLE);
+    if (campaign.creationHash && !campaign.creationInitializedAt) throw conflict('Campaign creation is still being reconciled', SIM_CALL_ERROR_CODES.NOT_EDITABLE);
     const set = {};
     for (const key of ['name', 'description', 'instructions', 'subscriptionId', 'startsAt']) {
       if (input[key] !== undefined) set[key] = input[key];
@@ -290,7 +347,8 @@ class SimCallService {
   }
 
   async startCampaign(id, actor, meta = {}) {
-    await this._ownedCampaign(id, actor);
+    const campaign = await this._ownedCampaign(id, actor);
+    if (campaign.creationHash && !campaign.creationInitializedAt) throw conflict('Campaign creation is still being reconciled', SIM_CALL_ERROR_CODES.INVALID_TRANSITION);
     const callable = await SimCallTask.countDocuments({ campaignId: id, state: { $in: CALLABLE_TASK_STATES } });
     if (!callable) throw conflict('This campaign has no lead that can be called', SIM_CALL_ERROR_CODES.INVALID_TRANSITION);
     await this._transition(id, actor, 'start', { status: 'running', startedAt: new Date() }, meta);
@@ -334,6 +392,8 @@ class SimCallService {
     if (taskIds.length) filter._id = { $in: taskIds };
     // Never retry a lead that was answered, refused, a wrong number, or whose callback is pending.
     filter.outcome = { $nin: ['answered', 'rejected', 'wrong_number', 'callback_requested'] };
+    // An unknown dialed outcome is reconciliation work, never permission to retry.
+    filter.attempts = { $not: { $elemMatch: { dialedAt: { $ne: null }, completedAt: null } } };
     const tasks = await SimCallTask.find(filter).populate('leadId', '_id phone mobile address isDeleted').lean();
     let retried = 0;
     for (const t of tasks) {
@@ -511,13 +571,17 @@ class SimCallService {
     const dest = resolveDestination(lead, e.field);
     const now = new Date();
     const attempt = task.attempts.find((a) => a.attemptId === attemptId);
-    await SimCallTask.updateOne(
-      { _id: task._id, 'lock.attemptId': attemptId, 'attempts.attemptId': attemptId },
+    if (attempt?.dialedAt) throw conflict('This attempt was already authorized; reconcile its outcome instead of dialing again', SIM_CALL_ERROR_CODES.ALREADY_DIALED);
+    const result = await SimCallTask.updateOne(
+      { _id: task._id, state: 'in_progress', 'lock.deviceId': deviceId, 'lock.attemptId': attemptId, 'lock.until': { $gt: now },
+        attempts: { $elemMatch: { attemptId, dialedAt: null, completedAt: null } } },
       { $set: {
-        'attempts.$.dialedAt': attempt?.dialedAt || now, 'attempts.$.subscriptionId': subscriptionId,
+        'attempts.$.dialedAt': now, 'attempts.$.subscriptionId': subscriptionId,
+        'attempts.$.destinationHash': phoneHash(dest.candidates[0]), 'attempts.$.destinationField': e.field,
         'lock.until': new Date(now.getTime() + LOCK_MS), lastActivityAt: now,
       } },
     );
+    if (!result.modifiedCount) throw conflict('Dial authorization changed or expired; reconcile this attempt', SIM_CALL_ERROR_CODES.ALREADY_DIALED);
     if (!attempt?.dialedAt) {
       await this._event(task.campaignId, 'task.dialed', { taskId: task._id, leadId: task.leadId, actor, details: { subscriptionId } });
       this._audit('sim_call.task.dialed', actor, meta, { campaignId: task.campaignId, taskId: task._id });
@@ -533,10 +597,12 @@ class SimCallService {
       throw conflict('This lead is not claimed by this device for this attempt', SIM_CALL_ERROR_CODES.TASK_LOCKED);
     }
     if (attempt?.dialedAt) throw conflict('This lead was already dialled; record the outcome instead', SIM_CALL_ERROR_CODES.TASK_NOT_ACTIVE);
-    await SimCallTask.updateOne({ _id: task._id, 'lock.attemptId': attemptId }, {
+    const released = await SimCallTask.updateOne({ _id: task._id, state: 'in_progress', 'lock.attemptId': attemptId,
+      attempts: { $elemMatch: { attemptId, dialedAt: null, completedAt: null } } }, {
       $set: { state: task.callback?.status === 'pending' ? 'scheduled' : 'pending', lock: { deviceId: null, attemptId: null, until: null } },
       $pull: { attempts: { attemptId } },
     });
+    if (!released.modifiedCount) throw conflict('This attempt changed; reconcile it before releasing', SIM_CALL_ERROR_CODES.TASK_NOT_ACTIVE);
     await this._event(task.campaignId, 'task.released', { taskId: task._id, leadId: task.leadId, actor });
     await this.refreshSummary(task.campaignId);
     return this.getTask(taskId, actor);
@@ -551,29 +617,36 @@ class SimCallService {
       throw conflict('This lead is being called on another device', SIM_CALL_ERROR_CODES.TASK_LOCKED);
     }
     const attempt = task.attempts.find((a) => a.attemptId === attemptId);
-    if (attempt?.dialedAt && !attempt.completedAt) {
+    if (task.attempts.some((a) => a.dialedAt && !a.completedAt)) {
       throw conflict('This lead was already dialled; record the outcome instead', SIM_CALL_ERROR_CODES.TASK_NOT_ACTIVE);
     }
-    await SimCallTask.updateOne({ _id: task._id, state: task.state }, {
+    const skipped = await SimCallTask.updateOne({ _id: task._id, state: task.state,
+      attempts: { $not: { $elemMatch: { dialedAt: { $ne: null }, completedAt: null } } } }, {
       $set: { state: 'skipped', notBefore: null, lock: { deviceId: null, attemptId: null, until: null }, lastActivityAt: new Date(), ...(task.callback?.status === 'pending' ? { 'callback.status': 'cancelled' } : {}) },
       ...(attempt && !attempt.dialedAt ? { $pull: { attempts: { attemptId } } } : {}),
     });
+    if (!skipped.modifiedCount) throw conflict('This attempt changed; reconcile it before skipping', SIM_CALL_ERROR_CODES.TASK_NOT_ACTIVE);
     await this._event(task.campaignId, 'task.skipped', { taskId: task._id, leadId: task.leadId, actor, details: { reason: String(reason).slice(0, 200) } });
     await this.refreshSummary(task.campaignId);
     return this.getTask(taskId, actor);
   }
 
   /** Validate + merge answers. Only the keys sent are touched; earlier answers are kept. */
-  _mergeAnswers(campaign, existing, incoming, attemptId) {
+  _mergeAnswers(campaign, existing, incoming, attemptId, actor) {
     const questions = new Map((campaign.questionnaire?.questions || []).map((q) => [q.fieldKey, q]));
     const errors = [];
     const merged = new Map((existing || []).map((a) => [a.fieldKey, a.toObject ? a.toObject() : a]));
     for (const a of incoming || []) {
       const q = questions.get(a.fieldKey);
       if (!q) { errors.push({ field: a.fieldKey, code: 'UNKNOWN_QUESTION', message: `Unknown question: ${a.fieldKey}` }); continue; }
-      const base = { fieldKey: a.fieldKey, attemptId, questionsVersion: campaign.questionsVersion || 1, updatedAt: new Date() };
+      const base = { fieldKey: a.fieldKey, attemptId, questionsVersion: campaign.questionsVersion || 1, updatedAt: new Date(),
+        questionText: q.text, source: 'manual', updatedBy: actor };
       if (a.status !== 'answered') {
-        merged.set(a.fieldKey, { ...base, status: a.status, value: null, normalizedValue: null });
+        if (a.status === 'skipped' && q.required) {
+          errors.push({ field: a.fieldKey, code: 'REQUIRED', message: `${q.label}: answer or mark unknown` });
+          continue;
+        }
+        merged.set(a.fieldKey, { ...base, status: a.status, validation: a.status, value: null, normalizedValue: null });
         continue;
       }
       const raw = Array.isArray(a.value) ? a.value.join(', ') : a.value;
@@ -581,13 +654,33 @@ class SimCallService {
         errors.push({ field: a.fieldKey, code: 'EMPTY', message: `${q.label}: an answer is required (or mark it unknown)` });
         continue;
       }
-      const v = validateAnswer(q, raw);
+      // Assisted answers are explicit form values; do not silently coerce a partial choice.
+      const options = (q.options || []).map((o) => String(o.value ?? o));
+      let v;
+      if (['single_choice', 'enum', 'multiple_choice'].includes(q.type)) {
+        const values = Array.isArray(a.value) ? a.value : [a.value];
+        v = values.length && (q.type === 'multiple_choice' || !Array.isArray(a.value)) && values.every((value) => options.includes(String(value)))
+          ? { validation: 'valid', normalizedValue: q.type === 'multiple_choice' ? values : values[0] }
+          : { validation: 'invalid', reason: 'no_matching_option' };
+      } else if (['integer', 'decimal', 'currency', 'rating'].includes(q.type) &&
+        (!/^-?\d+(\.\d+)?$/.test(String(a.value).trim()) || (q.type === 'integer' && !Number.isInteger(Number(a.value))))) {
+        v = { validation: 'invalid', reason: 'not_a_number' };
+      } else if (q.type === 'date' && (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.value)) ||
+        !Number.isFinite(Date.parse(a.value)) || new Date(a.value).toISOString().slice(0, 10) !== a.value)) {
+        v = { validation: 'invalid', reason: 'unparseable_date' };
+      } else if (q.type === 'time' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(a.value))) {
+        v = { validation: 'invalid', reason: 'unparseable_time' };
+      } else if (q.type === 'boolean' && typeof a.value === 'boolean') {
+        v = { validation: 'valid', normalizedValue: a.value };
+      } else {
+        v = validateAnswer(q, raw);
+      }
       if (v.validation === 'invalid') {
         errors.push({ field: a.fieldKey, code: v.reason || 'INVALID', message: `${q.label}: ${v.reason || 'invalid answer'}` });
         continue;
       }
       merged.set(a.fieldKey, {
-        ...base, status: v.validation === 'unknown' ? 'unknown' : 'answered', value: a.value, normalizedValue: v.validation === 'unknown' ? null : v.normalizedValue,
+        ...base, validation: v.validation, status: v.validation === 'unknown' ? 'unknown' : 'answered', value: a.value, normalizedValue: v.validation === 'unknown' ? null : v.normalizedValue,
       });
     }
     if (errors.length) {
@@ -605,10 +698,10 @@ class SimCallService {
       throw conflict('Answers can only be saved for the attempt that holds this lead', SIM_CALL_ERROR_CODES.ATTEMPT_MISMATCH);
     }
     const campaign = await SimCallCampaign.findById(task.campaignId).lean();
-    const merged = this._mergeAnswers(campaign, task.answers, answers, attemptId);
+    const merged = this._mergeAnswers(campaign, task.answers, answers, attemptId, actor);
     const now = new Date();
     const res = await SimCallTask.updateOne(
-      { _id: task._id, 'lock.attemptId': attemptId, __v: task.__v },
+      { _id: task._id, state: { $in: ['in_progress', 'needs_review'] }, 'lock.attemptId': attemptId, __v: task.__v },
       { $set: { answers: merged, lastActivityAt: now, ...(task.state === 'in_progress' && task.lock?.deviceId === deviceId ? { 'lock.until': new Date(now.getTime() + LOCK_MS) } : {}) }, $inc: { __v: 1 } },
     );
     if (!res.modifiedCount) throw conflict('Answers changed concurrently; reload and retry', SIM_CALL_ERROR_CODES.ATTEMPT_MISMATCH);
@@ -640,6 +733,15 @@ class SimCallService {
     const campaign = await SimCallCampaign.findById(task.campaignId).lean();
     const now = new Date();
 
+    const qualificationAnswers = (body.qualification?.answers || []).map((answer, index) => {
+      const result = normalizeConfirmedAnswer(answer, index);
+      if (result.source === 'ai_proposed_user_confirmed' &&
+        (!result.evidence || !`${body.notes || ''}\n${body.transcript || ''}`.includes(result.evidence))) {
+        throw new ValidationError('Reviewed extraction must quote the saved notes or transcript');
+      }
+      return result;
+    });
+
     let callbackAt = null;
     if (body.outcome === 'callback_requested') {
       if (!body.callback?.at || !body.callback?.timezone) throw new ValidationError('A callback needs a date, time and timezone');
@@ -648,12 +750,25 @@ class SimCallService {
       if (callbackAt.getTime() < now.getTime() - 60_000) throw new ValidationError('The callback time is in the past');
       if (callbackAt.getTime() > now.getTime() + MAX_CALLBACK_AHEAD_MS) throw new ValidationError('The callback time is more than a year away');
     }
-    const answers = body.answers?.length ? this._mergeAnswers(campaign, task.answers, body.answers, body.attemptId) : task.answers;
+    const answers = body.answers?.length ? this._mergeAnswers(campaign, task.answers, body.answers, body.attemptId, actor) : task.answers;
+    if (body.outcome === 'answered') {
+      const missing = this.visibleQuestions(campaign, { answers }).filter((q) => q.required &&
+        !answers.some((a) => a.fieldKey === q.fieldKey && ['answered', 'unknown'].includes(a.status)));
+      if (missing.length) {
+        const err = new ValidationError('Answer required questions or mark them unknown');
+        err.details = missing.map((q) => ({ field: q.fieldKey, code: 'REQUIRED', message: `${q.label}: answer or mark unknown` }));
+        throw err;
+      }
+    }
 
     const counted = !NO_CONTACT_OUTCOMES.includes(body.outcome);
     const attemptCount = (task.attemptCount || 0) + (counted ? 1 : 0);
     const failedDials = task.attempts.filter((a) => a.outcome === 'failed').length + (body.outcome === 'failed' ? 1 : 0);
     const next = nextTaskState({ outcome: body.outcome, attemptCount, failedDials, settings: campaign.settings, callbackAt, now });
+    if (body.doNotContact) { next.state = 'completed'; next.notBefore = null; }
+    if (campaign.status === 'cancelled' && ['pending', 'scheduled'].includes(next.state)) {
+      next.state = 'cancelled'; next.notBefore = null;
+    }
     const callbackWasPending = task.callback?.status === 'pending';
     const set = {
       state: next.state,
@@ -673,6 +788,11 @@ class SimCallService {
       'attempts.$.offhookDurationSec': body.call?.offhookDurationSec ?? null,
       'attempts.$.notes': body.notes || '',
       'attempts.$.transcript': body.transcript || '',
+      'attempts.$.doNotContact': Boolean(body.doNotContact),
+      'attempts.$.answers': answers,
+      'attempts.$.qualificationAnswers': qualificationAnswers,
+      'attempts.$.callbackSnapshot': body.outcome === 'callback_requested' && !body.doNotContact
+        ? { at: callbackAt, timezone: body.callback.timezone, reason: body.callback.reason || '' } : null,
       'attempts.$.completedAt': now,
       'attempts.$.sync': { status: counted ? 'pending' : 'skipped', operationId: null, error: null, attempts: 0, at: null },
     };
@@ -681,12 +801,13 @@ class SimCallService {
         at: callbackAt, timezone: body.callback.timezone, reason: body.callback.reason || '', status: 'pending',
         attemptId: body.attemptId, notifiedAt: null,
       };
+      if (campaign.status === 'cancelled' || body.doNotContact) set.callback.status = 'cancelled';
     } else if (callbackWasPending && body.outcome !== 'cancelled') {
       set['callback.status'] = 'done';
     }
     const res = await SimCallTask.updateOne(
-      { _id: task._id, 'lock.attemptId': body.attemptId, attempts: { $elemMatch: { attemptId: body.attemptId, completedAt: null } } },
-      { $set: set },
+      { _id: task._id, __v: task.__v, 'lock.attemptId': body.attemptId, attempts: { $elemMatch: { attemptId: body.attemptId, completedAt: null } } },
+      { $set: set, $inc: { __v: 1 } },
     );
     if (!res.modifiedCount) {
       // Lost a race with a concurrent completion of the same attempt: return the stored result.
@@ -701,7 +822,15 @@ class SimCallService {
       details: { outcome: body.outcome, evidence: body.call?.evidence || 'user', nextState: next.state, callbackAt },
     });
     this._audit('sim_call.task.completed', actor, meta, { campaignId: task.campaignId, taskId: task._id, outcome: body.outcome });
-    if (counted) await this._syncAttempt(task._id, body.attemptId, { doNotContact: Boolean(body.doNotContact) });
+    if (counted) await this._syncAttempt(task._id, body.attemptId);
+    // Cancellation may have committed while this outcome was being validated/synced.
+    const latestCampaign = await SimCallCampaign.findById(task.campaignId).select('status').lean();
+    if (latestCampaign?.status === 'cancelled') {
+      await SimCallTask.updateOne({ _id: task._id, state: { $in: ['pending', 'scheduled'] } }, {
+        $set: { state: 'cancelled', notBefore: null },
+      });
+      await SimCallTask.updateOne({ _id: task._id, 'callback.status': 'pending' }, { $set: { 'callback.status': 'cancelled' } });
+    }
     await SimCallCampaign.updateOne({ _id: task.campaignId }, { $set: { lastActivityAt: now } });
     await this.refreshSummary(task.campaignId);
     emit(actor, 'sim-call:task', { campaignId: String(task.campaignId), taskId: String(task._id) });
@@ -712,10 +841,11 @@ class SimCallService {
    * Write one completed attempt into the CRM through leadCommunication (contact log,
    * lastContactedAt, follow-up, do-not-contact). Idempotent: operationId = simcall-<attemptId>.
    */
-  async _syncAttempt(taskId, attemptId, { doNotContact = false } = {}) {
+  async _syncAttempt(taskId, attemptId) {
     const task = await SimCallTask.findById(taskId).lean();
     const attempt = task?.attempts.find((a) => a.attemptId === attemptId);
     if (!attempt?.completedAt) return null;
+    const doNotContact = Boolean(attempt.doNotContact);
     const mapped = communicationOutcome(attempt, { doNotContact });
     if (!mapped) {
       await SimCallTask.updateOne({ _id: taskId, 'attempts.attemptId': attemptId }, { $set: { 'attempts.$.sync.status': 'skipped' } });
@@ -724,29 +854,39 @@ class SimCallService {
     const campaign = await SimCallCampaign.findById(task.campaignId).select('name questionnaire').lean();
     const operationId = `simcall-${attemptId}`;
     const labels = new Map((campaign.questionnaire?.questions || []).map((q) => [q.fieldKey, q.label]));
-    const answerLines = (task.answers || [])
+    const answerLines = (attempt.answers || task.answers || [])
       .map((a) => `- ${labels.get(a.fieldKey) || a.fieldKey}: ${a.status === 'answered' ? (Array.isArray(a.value) ? a.value.join(', ') : a.value) : a.status}`);
-    const notes = [
+    const callback = attempt.callbackSnapshot !== undefined ? attempt.callbackSnapshot
+      : task.callback?.attemptId === attemptId ? task.callback : null;
+    const notes = attempt.crmNotes ?? [
       `SIM call campaign "${campaign.name}". Outcome confirmed by the caller: ${attempt.outcome}${attempt.interest ? ` (${attempt.interest})` : ''}.`,
       answerLines.length ? `Answers:\n${answerLines.join('\n')}` : '',
       attempt.notes ? `Notes: ${attempt.notes}` : '',
       attempt.transcript ? `Voice note (transcribed, reviewed by the caller): ${attempt.transcript}` : '',
-      task.callback?.status === 'pending' && task.callback.attemptId === attemptId ? `Callback requested: ${new Date(task.callback.at).toISOString()} (${task.callback.timezone})${task.callback.reason ? ` — ${task.callback.reason}` : ''}` : '',
+      callback ? `Callback requested: ${new Date(callback.at).toISOString()} (${callback.timezone})${callback.reason ? ` — ${callback.reason}` : ''}` : '',
     ].filter(Boolean).join('\n').slice(0, 5000);
     try {
+      // Snapshot the original CRM payload before any side effects; retries remain identical
+      // after callback edits, subsequent answers or partial communication receipts.
+      await SimCallTask.updateOne({ _id: taskId, 'attempts.attemptId': attemptId }, { $set: { 'attempts.$.crmNotes': notes } });
+      if (doNotContact && attempt.destinationHash) {
+        await CallSuppression.updateOne({ phoneHash: attempt.destinationHash }, {
+          $setOnInsert: { leadId: task.leadId, reason: 'do_not_contact', source: 'mobile_app', suppressedAt: new Date(), createdBy: task.createdBy },
+        }, { upsert: true });
+      }
       await leadCommunicationService.create(String(task.leadId), {
-        operationId, channel: 'phone', route: 'sim_call_campaign', mode: 'assisted', destinationField: task.destinationField,
+        operationId, channel: 'phone', route: 'sim_call_campaign', mode: 'assisted', destinationField: attempt.destinationField || task.destinationField,
         startedAt: attempt.dialedAt || attempt.claimedAt, sim: attempt.subscriptionId != null ? { subscriptionId: attempt.subscriptionId } : undefined,
       }, task.createdBy, {}, { skipEligibility: true });
-      const callback = task.callback?.status === 'pending' && task.callback.attemptId === attemptId ? task.callback : null;
-      await leadCommunicationService.complete(String(task.leadId), operationId, {
+      const result = await leadCommunicationService.complete(String(task.leadId), operationId, {
         outcome: {
           ...mapped, notes,
           followUpAt: callback ? callback.at : null, followUpTimezone: callback ? callback.timezone : null,
           statusChange: null, doNotContact,
         },
-        qualification: { answers: [] },
+        qualification: { answers: attempt.qualificationAnswers || [] },
       }, task.createdBy, {});
+      if (!result.receipt?.completedAt) throw new Error('CRM persistence is incomplete; retry synchronization');
       await SimCallTask.updateOne({ _id: taskId, 'attempts.attemptId': attemptId }, {
         $set: { 'attempts.$.sync.status': 'ok', 'attempts.$.sync.operationId': operationId, 'attempts.$.sync.error': null, 'attempts.$.sync.at': new Date() },
         $inc: { 'attempts.$.sync.attempts': 1 },
@@ -869,7 +1009,8 @@ class SimCallService {
       const dialled = Boolean(attempt?.dialedAt);
       const campaignStatus = (await SimCallCampaign.findById(task.campaignId).select('status').lean())?.status;
       const release = campaignStatus === 'cancelled' ? 'cancelled' : (task.callback?.status === 'pending' ? 'scheduled' : 'pending');
-      const res = await SimCallTask.updateOne({ _id: task._id, state: 'in_progress', 'lock.attemptId': task.lock.attemptId }, dialled
+      const res = await SimCallTask.updateOne({ _id: task._id, state: 'in_progress', 'lock.attemptId': task.lock.attemptId,
+        'lock.until': { $lt: now }, attempts: { $elemMatch: { attemptId: task.lock.attemptId, dialedAt: attempt?.dialedAt || null } } }, dialled
         ? { $set: { state: 'needs_review', 'lock.until': null } } // keep attemptId so the device can still record the outcome
         : { $set: { state: release, lock: { deviceId: null, attemptId: null, until: null } }, $pull: { attempts: { attemptId: task.lock.attemptId } } });
       if (res.modifiedCount) {

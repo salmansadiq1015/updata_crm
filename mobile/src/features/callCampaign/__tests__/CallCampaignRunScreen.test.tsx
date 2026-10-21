@@ -3,6 +3,7 @@
 // callbacks. These tests are simulations, not SIM-call verification.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { AppState, PermissionsAndroid, type AppStateStatus } from 'react-native';
 
 import { useSessionStore } from '@/features/auth/store/sessionStore';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
@@ -16,10 +17,17 @@ import { CallCampaignRunScreen } from '../screens/CallCampaignRunScreen';
 import { useCampaignOutbox } from '../store/campaignOutbox';
 import { callCampaignSchema, callTaskSchema, type CallTask, type ClaimResult } from '../types';
 
+let mockFocused = true;
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => mockFocused,
+}));
+
 jest.mock('../api/callCampaignApi', () => ({
   callCampaignApi: {
     campaign: jest.fn(),
     next: jest.fn(),
+    task: jest.fn(),
     dial: jest.fn(),
     skip: jest.fn(),
     saveAnswers: jest.fn(),
@@ -43,6 +51,19 @@ const native = {
     listener = cb;
     return { remove: jest.fn() };
   }),
+};
+
+// Android permission dialogs and app foreground/background, driven by each test.
+const checkPermission = jest.spyOn(PermissionsAndroid, 'check');
+const requestPermission = jest.spyOn(PermissionsAndroid, 'request');
+let appStateHandlers: ((state: AppStateStatus) => void)[] = [];
+jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
+  appStateHandlers.push(handler as (state: AppStateStatus) => void);
+  return { remove: () => undefined } as ReturnType<typeof AppState.addEventListener>;
+});
+const setAppState = async (state: AppStateStatus) => {
+  Object.defineProperty(AppState, 'currentState', { value: state, configurable: true });
+  await act(async () => appStateHandlers.forEach((h) => h(state)));
 };
 
 const campaign = (overrides: object = {}) =>
@@ -104,9 +125,18 @@ const emit = async (state: CallStateEvent['state'], at: number) => {
 };
 
 beforeEach(async () => {
+  mockFocused = true;
   jest.clearAllMocks();
   Object.values(api).forEach((fn) => fn.mockReset()); // drop queued once-values from other tests
   listener = null;
+  appStateHandlers = [];
+  Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true });
+  checkPermission.mockResolvedValue(true);
+  requestPermission.mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
+  native.placeCall.mockResolvedValue({ route: 'telecom_direct', subscriptionApplied: false });
+  native.startCallStateMonitoring.mockResolvedValue(true);
+  native.getCallStateEvents.mockResolvedValue([]);
+  native.getActiveSims.mockResolvedValue([]);
   await AsyncStorage.clear();
   __setNativeTelephonyForTests(native as never);
   useSessionStore.getState().setAuthenticated({
@@ -133,6 +163,84 @@ afterEach(() => {
 });
 
 describe('CallCampaignRunScreen', () => {
+  it('lets the caller correct a server-rejected outcome without dialing again', async () => {
+    api.next.mockResolvedValueOnce(claimed(task()));
+    api.task.mockResolvedValue(
+      task({ attempts: [{ attemptId: 'att-1', dialedAt: new Date().toISOString() }] } as Partial<CallTask>),
+    );
+    api.complete
+      .mockRejectedValueOnce(new ApiError({ kind: 'http', status: 400, message: 'Invalid answer' }))
+      .mockResolvedValueOnce({ task: task({ state: 'completed' }), replayed: false });
+    await renderRun();
+    await fireEvent.press(await screen.findByText('Call'));
+    await fireEvent.press(await screen.findByText('The call has ended'));
+    await fireEvent.press(screen.getByText('No answer'));
+    await fireEvent.press(screen.getByText('Save outcome'));
+    await fireEvent.press(await screen.findByText('Correct rejected outcome'));
+    expect(await screen.findByText('What happened?')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Busy'));
+    await fireEvent.press(screen.getByText('Save outcome'));
+    expect(await screen.findByText('Saved to the campaign')).toBeTruthy();
+    expect(api.complete).toHaveBeenCalledTimes(2);
+    expect(native.placeCall).toHaveBeenCalledTimes(1);
+  });
+  it('reconciles a locally remembered dial after server cancellation without claiming or redialing', async () => {
+    api.campaign.mockResolvedValue(campaign({ status: 'cancelled' }));
+    useCampaignOutbox
+      .getState()
+      .setRun('c1', { taskId: 't1', attemptId: 'att-1', dialedAt: Date.now(), recorded: false });
+    api.task.mockResolvedValue(
+      task({ attempts: [{ attemptId: 'att-1', dialedAt: new Date().toISOString() }] } as Partial<CallTask>),
+    );
+    await renderRun();
+    expect(await screen.findByText('What happened?')).toBeTruthy();
+    expect(api.next).not.toHaveBeenCalled();
+    expect(native.placeCall).not.toHaveBeenCalled();
+  });
+
+  it('does not claim another lead on restart while a completion is still offline', async () => {
+    api.complete.mockRejectedValue(new ApiError({ kind: 'network', message: 'offline' }));
+    useCampaignOutbox.getState().enqueue({
+      kind: 'complete',
+      taskId: 't1',
+      campaignId: 'c1',
+      attemptId: 'att-1',
+      body: { attemptId: 'att-1', outcome: 'no_answer' },
+    });
+    await renderRun();
+    expect(await screen.findByText('Saved on this phone — syncing')).toBeTruthy();
+    expect(api.next).not.toHaveBeenCalled();
+    expect(native.placeCall).not.toHaveBeenCalled();
+  });
+
+  it('does not launch native dialing if the app backgrounds during authorization', async () => {
+    api.next.mockResolvedValueOnce(claimed(task()));
+    let authorize!: (value: { dialNumber: string }) => void;
+    api.dial.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          authorize = resolve;
+        }),
+    );
+    await renderRun();
+    await fireEvent.press(await screen.findByText('Call'));
+    await waitFor(() => expect(api.dial).toHaveBeenCalledTimes(1));
+    await setAppState('background');
+    await act(async () => authorize({ dialNumber: '+41796661001' }));
+    expect(await screen.findByText('What happened?')).toBeTruthy();
+    expect(native.placeCall).not.toHaveBeenCalled();
+  });
+
+  it('holds automatic dialing while another app screen covers the caller', async () => {
+    mockFocused = false;
+    api.campaign.mockResolvedValue(campaign({ settings: { autoDial: true, countdownSeconds: 3 } }));
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText('Automatic calling waits while Updata is not on screen.')).toBeTruthy();
+    await act(async () => new Promise((r) => setTimeout(r, 3500)));
+    expect(native.placeCall).not.toHaveBeenCalled();
+  }, 10000);
+
   it('claims, dials on the SIM, follows the call state, saves the confirmed outcome, then counts down to the next lead', async () => {
     api.next.mockResolvedValueOnce(claimed(task())).mockResolvedValueOnce(empty);
     await renderRun();
@@ -171,7 +279,7 @@ describe('CallCampaignRunScreen', () => {
         call: expect.objectContaining({ evidence: 'call_state', offhookDurationSec: 42 }),
       }),
     );
-    expect(await screen.findByText('Saved to the CRM')).toBeTruthy();
+    expect(await screen.findByText('Saved to the campaign')).toBeTruthy();
     expect(await screen.findByText(/Next lead in \d s/)).toBeTruthy();
 
     // Pause stops the sequence; nothing is claimed while paused.
@@ -186,7 +294,10 @@ describe('CallCampaignRunScreen', () => {
     expect(native.placeCall).toHaveBeenCalledTimes(1); // auto-dial is off
   }, 15000);
 
-  it('after a restart it reconciles a dialled lead instead of redialling', async () => {
+  it('after a restart it reconciles a dialled lead instead of redialling, even with auto-call on', async () => {
+    api.campaign.mockResolvedValue(
+      campaign({ settings: { timezone: 'UTC', countdownSeconds: 3, autoDial: true, readAloud: false } }),
+    );
     api.next.mockResolvedValueOnce(
       claimed(
         task({
@@ -203,9 +314,10 @@ describe('CallCampaignRunScreen', () => {
     expect(await screen.findByText('What happened?')).toBeTruthy();
     expect(screen.getByText(/off-hook for 28 s/)).toBeTruthy();
     expect(screen.queryByText('Call')).toBeNull();
+    await act(async () => new Promise((r) => setTimeout(r, 3500)));
     expect(native.placeCall).not.toHaveBeenCalled();
     expect(api.dial).not.toHaveBeenCalled();
-  });
+  }, 10000);
 
   it('requires an explicit callback date and time before saving', async () => {
     api.next.mockResolvedValueOnce(
@@ -266,5 +378,248 @@ describe('CallCampaignRunScreen', () => {
     await fireEvent.press(await screen.findByText('Call'));
     expect(await screen.findByText('What happened?')).toBeTruthy();
     expect(screen.getByText('Phone permission is needed to place calls.')).toBeTruthy();
+  });
+});
+
+// Bug A (2026-10-20): the caller waited for a tap on every lead. Auto-call is a visible,
+// stoppable countdown on a claimed, never-dialled lead; the phone permissions are asked for.
+describe('CallCampaignRunScreen — automatic calling', () => {
+  const autoCampaign = () =>
+    campaign({ settings: { timezone: 'UTC', countdownSeconds: 3, autoDial: true, readAloud: false } });
+
+  it('calls the first lead after a visible countdown, without a tap', async () => {
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText(/Calling Acme AG in \d s/)).toBeTruthy();
+    expect(native.placeCall).not.toHaveBeenCalled(); // the countdown is visible first
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1), { timeout: 6000 });
+    expect(api.dial).toHaveBeenCalledWith('t1', expect.objectContaining({ attemptId: 'att-1' }));
+    expect(await screen.findByText('Call in progress')).toBeTruthy();
+    expect(screen.getByText(/The lead hears only you/)).toBeTruthy();
+  }, 15000);
+
+  it('dual SIM: waits for a SIM, then remembers it for this campaign', async () => {
+    native.getActiveSims.mockResolvedValue([
+      { subscriptionId: 3, slotIndex: 0, displayName: 'Jazz', carrierName: 'Jazz' },
+      { subscriptionId: 2, slotIndex: 1, displayName: 'Telenor', carrierName: 'Telenor' },
+    ] as never);
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    const first = await renderRun();
+    expect(await screen.findByText('Choose the SIM to call from to start automatic calling.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Telenor'));
+    expect(useCampaignOutbox.getState().sims.c1).toBe(2);
+    expect(await screen.findByText(/Calling Acme AG in \d s/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Stop — I will tap Call'));
+    await first.unmount();
+
+    // Opened again later: the SIM is already chosen, so the countdown starts by itself.
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    await waitFor(
+      () => expect(native.placeCall).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: 2 })),
+      {
+        timeout: 6000,
+      },
+    );
+  }, 20000);
+
+  it('Stop leaves the lead waiting for a tap', async () => {
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText(/Calling Acme AG in \d s/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Stop — I will tap Call'));
+    expect(await screen.findByText('Stopped for this lead. Tap Call when you are ready.')).toBeTruthy();
+    await act(async () => new Promise((r) => setTimeout(r, 3500)));
+    expect(native.placeCall).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Call'));
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1));
+  }, 15000);
+
+  it('the switch turns auto-call on for this campaign on this phone', async () => {
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun(); // campaign default: autoDial off
+    await screen.findByText('Acme AG');
+    await act(async () => new Promise((r) => setTimeout(r, 1200)));
+    expect(screen.queryByText(/Calling Acme AG in/)).toBeNull();
+    await fireEvent.press(screen.getByText('Call automatically'));
+    expect(useCampaignOutbox.getState().autoCall.c1).toBe(true);
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1), { timeout: 6000 });
+  }, 15000);
+
+  it('waits while the app is in the background and restarts the countdown on return', async () => {
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText(/Calling Acme AG in \d s/)).toBeTruthy();
+    await setAppState('background');
+    expect(await screen.findByText('Automatic calling waits while Updata is not on screen.')).toBeTruthy();
+    await act(async () => new Promise((r) => setTimeout(r, 3500)));
+    expect(native.placeCall).not.toHaveBeenCalled();
+    await setAppState('active');
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1), { timeout: 6000 });
+  }, 20000);
+
+  it('without phone permission it never auto-calls; a tap asks for it and falls back to the dialer', async () => {
+    checkPermission.mockResolvedValue(false);
+    requestPermission.mockResolvedValue(PermissionsAndroid.RESULTS.DENIED);
+    native.placeCall.mockResolvedValueOnce({ route: 'dialer_handoff', subscriptionApplied: false });
+    native.startCallStateMonitoring.mockResolvedValueOnce(false);
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText(/needs the Phone permission/)).toBeTruthy();
+    expect(screen.getByText('Automatic calling needs phone access (see above).')).toBeTruthy();
+    await act(async () => new Promise((r) => setTimeout(r, 3500)));
+    expect(native.placeCall).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByText('Call'));
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1));
+    expect(requestPermission).toHaveBeenCalled();
+    expect(
+      await screen.findByText("Press the call button in your phone's dialer, then come back to Updata."),
+    ).toBeTruthy();
+    expect(screen.getByText(/can't see this call's state/)).toBeTruthy();
+  }, 15000);
+
+  it('after the call the next lead is called automatically once the outcome is saved', async () => {
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task())).mockResolvedValueOnce(
+      claimed(
+        task({
+          id: 't2',
+          leadId: 'l2',
+          lead: { id: 'l2', name: 'Beta GmbH', city: 'Zug' },
+          lock: { deviceId: 'd', attemptId: 'att-2', until: null },
+          attempts: [{ attemptId: 'att-2' }],
+        } as Partial<CallTask>),
+      ),
+    );
+    await renderRun();
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1), { timeout: 6000 });
+    await emit('offhook', Date.now());
+    await emit('idle', Date.now() + 5_000);
+    await fireEvent.press(await screen.findByText('No answer'));
+    await fireEvent.press(screen.getByText('Save outcome'));
+    expect(await screen.findByText(/Calling Beta GmbH in \d s/, {}, { timeout: 4000 })).toBeTruthy();
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(2), { timeout: 6000 });
+    expect(api.dial).toHaveBeenLastCalledWith('t2', expect.objectContaining({ attemptId: 'att-2' }));
+  }, 20000);
+
+  it('pausing during the countdown stops the next call', async () => {
+    api.campaign.mockResolvedValue(autoCampaign());
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    await waitFor(() => expect(native.placeCall).toHaveBeenCalledTimes(1), { timeout: 6000 });
+    await emit('offhook', Date.now());
+    await emit('idle', Date.now() + 5_000);
+    await fireEvent.press(await screen.findByText('No answer'));
+    await fireEvent.press(screen.getByText('Save outcome'));
+    await fireEvent.press(await screen.findByText('Pause'));
+    await act(async () => new Promise((r) => setTimeout(r, 1500)));
+    expect(api.next).toHaveBeenCalledTimes(1);
+    expect(native.placeCall).toHaveBeenCalledTimes(1);
+  }, 15000);
+});
+
+describe('CallCampaignRunScreen — retries due later', () => {
+  it('with auto-call it fetches the retry when it is due; without auto-call it waits for a tap', async () => {
+    const waiting: ClaimResult = {
+      task: null,
+      resumed: false,
+      reason: 'waiting',
+      nextAt: new Date(Date.now() + 1_500).toISOString(),
+    };
+    api.campaign.mockResolvedValue(
+      campaign({ settings: { timezone: 'UTC', countdownSeconds: 3, autoDial: true, readAloud: false } }),
+    );
+    api.next.mockResolvedValueOnce(waiting).mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    expect(await screen.findByText('Remaining leads are scheduled for later.')).toBeTruthy();
+    await waitFor(() => expect(api.next).toHaveBeenCalledTimes(2), { timeout: 5000 });
+    expect(await screen.findByText(/Calling Acme AG in \d s/)).toBeTruthy();
+  }, 15000);
+
+  it('does not re-check by itself when auto-call is off', async () => {
+    api.next.mockResolvedValueOnce({
+      task: null,
+      resumed: false,
+      reason: 'waiting',
+      nextAt: new Date(Date.now() + 1_000).toISOString(),
+    });
+    await renderRun();
+    expect(await screen.findByText('Remaining leads are scheduled for later.')).toBeTruthy();
+    await act(async () => new Promise((r) => setTimeout(r, 3000)));
+    expect(api.next).toHaveBeenCalledTimes(1);
+  }, 10000);
+});
+
+describe('CallCampaignRunScreen — claim lapsed while the lead sat on screen', () => {
+  it('after an app restart, answers typed under the lapsed claim appear on the new one', async () => {
+    useCampaignOutbox.getState().saveDraft('att-0', {
+      taskId: 't1',
+      campaignId: 'c1',
+      answers: { interest: { status: 'answered', value: 'low' } },
+    });
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    await screen.findByText('Acme AG');
+    expect(useCampaignOutbox.getState().drafts['att-1']?.answers.interest?.value).toBe('low');
+    await waitFor(() =>
+      expect(api.saveAnswers).toHaveBeenCalledWith('t1', expect.objectContaining({ attemptId: 'att-1' })),
+    );
+    expect(screen.queryByText(/released after a long pause/)).toBeNull();
+  });
+
+  it('claims again on the dial refusal and keeps the typed answers for the new attempt', async () => {
+    const renewed = task({
+      lock: { deviceId: 'd', attemptId: 'att-2', until: null },
+      attempts: [{ attemptId: 'att-2' }],
+    } as Partial<CallTask>);
+    api.next.mockResolvedValueOnce(claimed(task())).mockResolvedValueOnce(claimed(renewed));
+    api.dial
+      .mockRejectedValueOnce(
+        new ApiError({ kind: 'http', status: 409, code: 'SIM_CALL_TASK_LOCKED', message: 'not claimed' }),
+      )
+      .mockResolvedValue({ dialNumber: '+41796661001', destinationMasked: '•••• 1001' });
+    await renderRun();
+    await fireEvent.press(await screen.findByText('High'));
+    await fireEvent.press(screen.getByText('Call'));
+    expect(await screen.findByText(/released after a long pause/)).toBeTruthy();
+    expect(api.next).toHaveBeenCalledTimes(2);
+    expect(native.placeCall).not.toHaveBeenCalled(); // never dials on the refused attempt
+    expect(useCampaignOutbox.getState().drafts['att-2']?.answers.interest).toEqual({
+      status: 'answered',
+      value: 'high',
+    });
+    await waitFor(() =>
+      expect(api.saveAnswers).toHaveBeenCalledWith('t1', expect.objectContaining({ attemptId: 'att-2' })),
+    );
+    await fireEvent.press(screen.getByText('Call'));
+    await waitFor(() =>
+      expect(native.placeCall).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'att-2' })),
+    );
+  });
+});
+
+// Returning from Android's call screen: JS may have missed the hang-up while in the
+// background, so the runner reads the call-state events the native module persisted.
+describe('CallCampaignRunScreen — back from the dialer', () => {
+  it('shows the outcome when the phone recorded the hang-up while Updata was in the background', async () => {
+    api.next.mockResolvedValueOnce(claimed(task()));
+    await renderRun();
+    await fireEvent.press(await screen.findByText('Call'));
+    expect(await screen.findByText('Call in progress')).toBeTruthy();
+    await setAppState('background');
+    const now = Date.now();
+    native.getCallStateEvents.mockResolvedValue([
+      { operationId: 'att-1', state: 'offhook', at: now, source: 'telephony_callback' },
+      { operationId: 'att-1', state: 'idle', at: now + 20_000, source: 'telephony_callback' },
+    ]);
+    await setAppState('active');
+    expect(await screen.findByText('What happened?')).toBeTruthy();
+    expect(screen.getByText(/off-hook for 20 s/)).toBeTruthy();
   });
 });

@@ -34,9 +34,10 @@ internal class SmsStore(context: Context) {
 
   /** Records one part's result; returns the entry once its final status is known. */
   @Synchronized
-  fun journalPartResult(messageId: String, part: Int, result: String, now: Long): JSONObject? {
+  fun journalPartResult(messageId: String, part: Int, result: String, now: Long, radioErrorCode: Int? = null): JSONObject? {
     val all = readObject(KEY_JOURNAL)
     val entry = all.optJSONObject(messageId) ?: return null
+    if (radioErrorCode != null && !entry.has("radioErrorCode")) entry.put("radioErrorCode", radioErrorCode)
     val results = entry.optJSONObject("results") ?: JSONObject()
     results.put(part.toString(), result)
     entry.put("results", results)

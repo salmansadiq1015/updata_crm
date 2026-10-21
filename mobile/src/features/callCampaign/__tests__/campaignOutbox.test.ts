@@ -36,6 +36,103 @@ beforeEach(async () => {
 });
 
 describe('campaign outbox', () => {
+  it('exposes durable-write failure and clears it only after a successful retry', async () => {
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+    store().enqueue(complete('a1'));
+    await flushCampaignOutboxWrites();
+    expect(store().storageError).toBe(true);
+    expect(store().items['complete:a1']).toBeDefined();
+    await store().retryStorage();
+    expect(store().storageError).toBe(false);
+    await store().activate('u1');
+    expect(store().items['complete:a1']).toBeDefined();
+  });
+
+  it('does not overwrite unreadable stored work and can retry loading', async () => {
+    store().enqueue(complete('a1'));
+    await flushCampaignOutboxWrites();
+    jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('storage unavailable'));
+    await store().activate('u1');
+    expect(store().loaded).toBe(false);
+    expect(store().storageError).toBe(true);
+    await store().retryStorage();
+    expect(store().loaded).toBe(true);
+    expect(store().items['complete:a1']).toBeDefined();
+  });
+  it.each(['success', 'failure'])('keeps newer answers after an older in-flight %s', async (result) => {
+    store().enqueue(answers('a1'));
+    let settle!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const send = sender({
+      answers: jest.fn(async () => {
+        await pending;
+        if (result === 'failure') throw new Error('offline');
+      }),
+    });
+    const flight = store().flush(send);
+    store().enqueue({
+      ...answers('a1'),
+      body: { answers: [{ fieldKey: 'interest', status: 'answered', value: 'low' }] },
+    });
+    settle();
+    await flight;
+    expect(store().items['answers:a1']).toMatchObject({
+      status: 'pending',
+      tries: 0,
+      body: { answers: [{ value: 'low' }] },
+    });
+    const next = sender();
+    await store().flush(next);
+    expect(next.answers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { answers: [{ fieldKey: 'interest', status: 'answered', value: 'low' }] },
+      }),
+    );
+  });
+
+  it.each(['success', 'failure'])(
+    'cannot leak an old queue or mutate a new account after %s',
+    async (result) => {
+      store().enqueue(complete('a1'));
+      store().enqueue(complete('a2'));
+      let settle!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        settle = resolve;
+      });
+      const send = sender({
+        complete: jest.fn(async () => {
+          await pending;
+          if (result === 'failure') throw new Error('offline');
+        }),
+      });
+      const flight = store().flush(send);
+      store().deactivate();
+      await store().activate('u2');
+      store().enqueue(complete('a1'));
+      settle();
+      await flight;
+      expect(send.complete).toHaveBeenCalledTimes(1);
+      expect(store().items['complete:a1']).toMatchObject({ status: 'pending', tries: 0 });
+      expect(store().items['complete:a2']).toBeUndefined();
+      await store().activate('u1');
+      expect(Object.keys(store().items)).toHaveLength(2);
+    },
+  );
+
+  it('does not resurrect answers superseded by a completion while the request fails', async () => {
+    store().enqueue(answers('a1'));
+    let fail!: (reason: Error) => void;
+    const pending = new Promise<void>((_resolve, reject) => {
+      fail = reject;
+    });
+    const flight = store().flush(sender({ answers: () => pending }));
+    store().enqueue(complete('a1'));
+    fail(new Error('offline'));
+    await flight;
+    expect(Object.keys(store().items)).toEqual(['complete:a1']);
+  });
   it('persists per user and survives a restart', async () => {
     store().enqueue(complete('a1'));
     store().saveDraft('a2', { taskId: 't2', campaignId: 'c1', notes: 'half typed' });

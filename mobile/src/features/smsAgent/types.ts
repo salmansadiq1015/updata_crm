@@ -67,7 +67,10 @@ export const simCampaignSchema = z
     status: z.string(),
     isTest: z.boolean().optional().default(false),
     summary: simSummarySchema.optional(),
-    settings: z.object({ timezone: z.string().optional() }).passthrough().optional(),
+    settings: z
+      .object({ timezone: z.string().optional(), minSecondsBetweenSends: z.number().optional() })
+      .passthrough()
+      .optional(),
     createdAt: z.string().optional(),
   })
   .passthrough()

@@ -2,7 +2,7 @@ import Lead from './lead.model.js';
 import config from '../../config/index.js';
 import { isAiConfigured, createOpenAiClient } from '../../shared/ai/llmFactory.js';
 import { validateAnswer } from '../aiCalling/engine/answerValidation.js';
-import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+import { AppError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import {
   LEAD_QUALIFICATION_FIELDS,
@@ -96,7 +96,7 @@ async function withTimeout(promise, ms) {
 
 class LeadQualificationService {
   async _loadLead(leadId) {
-    const lead = await Lead.findById(leadId).select('_id status qualification').lean();
+    const lead = await Lead.findById(leadId).select('_id status qualification __v').lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     return lead;
   }
@@ -115,26 +115,31 @@ class LeadQualificationService {
   async mergeAnswers(leadId, answers, { communicationId, userId }) {
     const writable = (answers || []).filter((a) => a.status !== 'unknown');
     if (!writable.length) return 0;
-    const lead = await this._loadLead(leadId);
     const now = new Date();
-    const byKey = new Map((lead.qualification?.fields ?? []).map((f) => [f.fieldKey, f]));
-    for (const answer of writable) {
-      byKey.set(answer.fieldKey, {
-        fieldKey: answer.fieldKey,
-        label: answer.label,
-        value: answer.value ?? null,
-        status: answer.status,
-        source: answer.source || 'user',
-        evidence: answer.evidence ?? null,
-        communicationId: communicationId || null,
-        updatedBy: userId,
-        updatedAt: now,
-      });
+    for (let retry = 0; retry < 5; retry += 1) {
+      const lead = await this._loadLead(leadId);
+      const byKey = new Map((lead.qualification?.fields ?? []).map((f) => [f.fieldKey, f]));
+      for (const answer of writable) {
+        byKey.set(answer.fieldKey, {
+          fieldKey: answer.fieldKey,
+          label: answer.label,
+          value: answer.value ?? null,
+          status: answer.status,
+          source: answer.source || 'user',
+          evidence: answer.evidence ?? null,
+          communicationId: communicationId || null,
+          updatedBy: userId,
+          updatedAt: now,
+        });
+      }
+      const order = new Map(LEAD_QUALIFICATION_FIELDS.map((f, i) => [f.fieldKey, i]));
+      const fields = [...byKey.values()].sort((a, b) => (order.get(a.fieldKey) ?? 99) - (order.get(b.fieldKey) ?? 99));
+      const result = await Lead.updateOne({ _id: leadId,
+        ...(lead.__v == null ? { __v: { $exists: false } } : { __v: lead.__v }),
+      }, { $set: { qualification: { fields, updatedAt: now } }, $inc: { __v: 1 } }, { runValidators: true });
+      if (result.modifiedCount) return writable.length;
     }
-    const order = new Map(LEAD_QUALIFICATION_FIELDS.map((f, i) => [f.fieldKey, i]));
-    const fields = [...byKey.values()].sort((a, b) => (order.get(a.fieldKey) ?? 99) - (order.get(b.fieldKey) ?? 99));
-    await Lead.updateOne({ _id: leadId }, { $set: { qualification: { fields, updatedAt: now } } }, { runValidators: true });
-    return writable.length;
+    throw new AppError('Qualification changed concurrently; retry synchronization', 409, 'QUALIFICATION_CONFLICT');
   }
 
   /**

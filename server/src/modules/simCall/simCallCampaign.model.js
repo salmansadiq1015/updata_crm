@@ -23,6 +23,9 @@ const questionSchema = new mongoose.Schema({
 
 const campaignSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 160 },
+  creationKey: { type: String, default: null },
+  creationHash: { type: String, default: null },
+  creationInitializedAt: { type: Date, default: null },
   description: { type: String, trim: true, maxlength: 1000, default: '' },
   status: { type: String, enum: CAMPAIGN_STATUSES, default: 'draft', index: true },
 
@@ -79,4 +82,7 @@ const campaignSchema = new mongoose.Schema({
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
 campaignSchema.index({ createdBy: 1, status: 1, lastActivityAt: -1 });
 
+campaignSchema.index({ createdBy: 1, creationKey: 1 }, {
+  unique: true, partialFilterExpression: { creationKey: { $type: 'string' } }, name: 'sim_call_creation_key',
+});
 export default mongoose.model('SimCallCampaign', campaignSchema);

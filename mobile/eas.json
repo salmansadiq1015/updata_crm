@@ -37,6 +37,13 @@
         "buildType": "app-bundle"
       }
     },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "staging-private": {
       "extends": "staging",
       "env": {

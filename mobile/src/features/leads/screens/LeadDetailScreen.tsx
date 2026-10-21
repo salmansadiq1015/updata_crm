@@ -159,32 +159,38 @@ function LeadDetail({
     <>
       {/* Hero: identity, status and the three contact actions in one compact block. */}
       <Appear>
-        <GradientSurface className="gap-4 rounded-3xl p-4">
+        <GradientSurface className="gap-3 rounded-3xl p-4">
           <View className="flex-row items-start gap-3">
-            <IconContainer icon={lead.type === 'private' ? UserRound : Building2} tone="inverse" size="lg" />
-            <View className="flex-1 gap-1">
-              <AppText variant="h2" className="text-white" numberOfLines={2} selectable>
+            <IconContainer icon={lead.type === 'private' ? UserRound : Building2} tone="inverse" size="md" />
+            <View className="min-w-0 flex-1 gap-1">
+              <AppText variant="h3" className="text-white" numberOfLines={2} selectable>
                 {lead.name}
               </AppText>
-              <AppText
-                variant="label"
-                className="font-geist text-white/70"
-                style={{ fontVariant: ['tabular-nums'] }}
-                numberOfLines={1}
-              >
-                {[lead.leadNumber, t(`leads.type.${lead.type}`), number].filter(Boolean).join(' · ')}
+              <AppText variant="caption" className="font-geist text-white/60">
+                {[lead.leadNumber, t(`leads.type.${lead.type}`)].filter(Boolean).join(' · ')}
               </AppText>
+              {number ? (
+                <AppText
+                  variant="caption"
+                  className="text-white/80"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                  selectable
+                >
+                  {number}
+                </AppText>
+              ) : null}
             </View>
           </View>
 
           {/* Status and its action on their own row: nothing here may wrap or clip. */}
-          <View className="flex-row items-center justify-between gap-2">
+          <View className="flex-row flex-wrap items-center justify-between gap-2">
             <HeroStatus status={lead.status} />
             {lead.status === 'converted' ? null : (
               <AppButton
                 title={t('leads.changeStatus')}
                 variant="inverse"
                 size="sm"
+                className="rounded-full border-white/10 bg-white/5"
                 loading={update.isPending}
                 onPress={() => setPicking(true)}
               />
@@ -192,12 +198,12 @@ function LeadDetail({
           </View>
 
           {hasNumber ? (
-            <View className="flex-row gap-2">
+            <View className="flex-row items-stretch gap-2 border-t border-white/10 pt-3">
               <HeroAction
                 icon={Phone}
                 label={t('leads.call')}
                 accessibilityLabel={t('leads.callA11y', { name: lead.name })}
-                primary
+                variant="primary"
                 onPress={() => navigation.navigate('CallSession', { leadId: lead.id })}
               />
               <HeroAction
@@ -208,8 +214,9 @@ function LeadDetail({
               />
               <HeroAction
                 icon={Bot}
-                label={t('aiAgent.entry')}
+                label={t('aiAgent.entryShort')}
                 accessibilityLabel={t('aiAgent.entryA11y', { name: lead.name })}
+                variant="ai"
                 onPress={() => navigation.navigate('AiAgentLaunch', { leadIds: [lead.id] })}
               />
             </View>
@@ -362,7 +369,7 @@ function LeadDetail({
 function HeroStatus({ status }: { status: Lead['status'] }) {
   const { t } = useTranslation();
   return (
-    <View className="h-7 flex-row items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2.5">
+    <View className="min-h-7 flex-row items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1">
       <Icon icon={LEAD_STATUS_META[status].icon} size="xs" color="primaryForeground" />
       <AppText
         variant="caption"
@@ -376,23 +383,24 @@ function HeroStatus({ status }: { status: Lead['status'] }) {
   );
 }
 
-/** Equal-width contact action on the hero: icon over label, ≥ 56dp tall. */
+/** Equal-width actions grow with translated/scaled labels instead of truncating them. */
 function HeroAction({
   icon: Glyph,
   label,
   accessibilityLabel,
-  primary,
+  variant = 'secondary',
   onPress,
 }: {
   icon: LucideIcon;
   label: string;
   accessibilityLabel: string;
-  primary?: boolean;
+  variant?: 'primary' | 'secondary' | 'ai';
   onPress: () => void;
 }) {
   const press = usePressScale(motion.pressScale.button);
+  const foreground = variant === 'primary' ? brand.navy : '#FFFFFF';
   return (
-    <Animated.View style={[press.style, { flex: 1 }]}>
+    <Animated.View style={[press.style, { flex: 1, minWidth: 0 }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
@@ -400,20 +408,16 @@ function HeroAction({
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         className={cn(
-          'h-14 items-center justify-center gap-1 rounded-2xl',
-          primary ? 'bg-white active:opacity-90' : 'border border-white/20 bg-white/15 active:bg-white/25',
+          'min-h-[72px] flex-1 items-center justify-center gap-2 rounded-2xl border px-2 py-3 active:opacity-80',
+          variant === 'primary' ? 'border-transparent bg-white' : 'border-white/15 bg-white/10',
         )}
+        style={variant === 'ai' ? { backgroundColor: brand[600], borderColor: brand[400] } : undefined}
       >
-        {primary ? (
-          <Glyph size={iconSizes.sm} color={brand.navy} strokeWidth={2} />
-        ) : (
-          <Icon icon={Glyph} size="sm" color="primaryForeground" />
-        )}
+        <Glyph size={iconSizes.md} color={foreground} strokeWidth={1.75} />
         <AppText
-          variant="label"
-          numberOfLines={1}
-          style={primary ? { color: brand.navy } : undefined}
-          className={cn('font-geist-semibold', !primary && 'text-white')}
+          variant="caption"
+          style={{ color: foreground, includeFontPadding: false }}
+          className="w-full text-center font-geist-semibold"
         >
           {label}
         </AppText>
@@ -435,7 +439,7 @@ function LeadDetailSkeleton() {
         </View>
         <View className="flex-row gap-2">
           {Array.from({ length: 3 }, (_, index) => (
-            <AppSkeleton key={index} className="h-14 flex-1 rounded-2xl" />
+            <AppSkeleton key={index} className="h-[72px] flex-1 rounded-2xl" />
           ))}
         </View>
       </View>

@@ -65,6 +65,10 @@ function clauseMatches(clause: Clause, values: Record<string, unknown>): boolean
   const value = values[clause.field];
   if ('exists' in clause) return clause.exists ? value !== undefined : value === undefined;
   if (value === undefined) return false;
+  if ('contains' in clause)
+    return Array.isArray(value)
+      ? value.includes(clause.contains)
+      : typeof value === 'string' && typeof clause.contains === 'string' && value.includes(clause.contains);
   if ('equals' in clause) return value === clause.equals;
   if ('notEquals' in clause) return value !== clause.notEquals;
   if ('in' in clause) return Array.isArray(clause.in) && clause.in.includes(value);
@@ -135,13 +139,28 @@ export function zonedWallTimeToIso(date: string, time: string, timeZone: string)
   if (!d || !t) return null;
   const guess = Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), Number(t[1]), Number(t[2]));
   try {
-    let instant = guess - zoneOffsetMs(guess, timeZone);
-    // Second pass settles DST transitions.
-    instant = guess - zoneOffsetMs(instant, timeZone);
-    return new Date(instant).toISOString();
+    // Test offsets on both sides of a transition. Zero matches means invalid date / DST
+    // gap; two matches means ambiguous repeated time. Neither may be silently moved.
+    const offsets = new Set([-36, 0, 36].map((h) => zoneOffsetMs(guess + h * 3600_000, timeZone)));
+    const matches = [...offsets]
+      .map((offset) => guess - offset)
+      .filter((instant) => {
+        const wall = new Date(instant + zoneOffsetMs(instant, timeZone)).toISOString();
+        return wall.slice(0, 16) === `${date}T${time}`;
+      });
+    return matches.length === 1 ? new Date(matches[0]!).toISOString() : null;
   } catch {
     return null;
   }
+}
+
+export function missingRequiredQuestions(
+  questions: readonly CampaignQuestion[],
+  answers: LocalAnswers,
+): string[] {
+  return visibleQuestions(questions, answers)
+    .filter((q) => q.required && !['answered', 'unknown'].includes(answers[q.fieldKey]?.status ?? ''))
+    .map((q) => q.fieldKey);
 }
 
 /** YYYY-MM-DD of an instant in a timezone (for date pickers and display). */

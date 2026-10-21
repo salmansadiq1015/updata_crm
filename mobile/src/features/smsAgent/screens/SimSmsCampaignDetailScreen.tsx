@@ -110,7 +110,7 @@ export function SimSmsCampaignDetailScreen({ navigation, route }: RootScreenProp
               rows={rows.filter((r) => r.eligibility).map((r) => ({ eligibility: r.eligibility! }))}
             />
             <AppText variant="caption" tone="muted">
-              {t('smsAgent.review.costs', { seconds: 20 })}
+              {t('smsAgent.review.costs', { seconds: c?.settings?.minSecondsBetweenSends ?? 20 })}
             </AppText>
           </View>
         ) : (

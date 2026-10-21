@@ -1,5 +1,11 @@
 # Updata Mobile (Android)
 
+Current calling reliability, architecture, API additions, test evidence and release gates:
+[`AI_CALLING_AUDIT.md`](../docs/AI_CALLING_AUDIT.md). Deploy backend migration 029 before this
+mobile revision. SIM calling is human-assisted; question read-aloud is local playback.
+Reviewed qualification extraction runs only after the caller requests suggestions and confirms
+them. There is no bidirectional AI audio path into a SIM call.
+
 React Native app for the Updata CRM. It talks to the same `/api/v1` backend as the web client
 (`../client`) and uses the same design tokens, translations (de/en/fr/ar, RTL for Arabic) and
 error envelope.
@@ -79,6 +85,39 @@ npx eas-cli@latest build --profile staging --platform android
 `eas.json` defines `development`, `staging` and `production` profiles; the API URL for
 staging/production lives in the EAS environment variables, not in the repository.
 
+### APKs shared through WhatsApp or a browser
+
+Use **`production-apk`**, which builds a signed APK with `EXPO_PUBLIC_DISTRIBUTION=play`:
+
+```bash
+npx eas-cli@latest build --profile production-apk --platform android
+npm run verify:apk -- /path/to/downloaded.apk
+```
+
+The `play` distribution supports both Play Store and directly shared APKs. It keeps CRM,
+SIM calling, voice notes, and the system SMS composer. Automatic SIM SMS campaigns are
+available only in the separate `private` distribution.
+
+Do **not** share `production-private` or `staging-private` APKs as the general app.
+They declare `RECEIVE_SMS` for automatic replies. Google Play Protect can block these APKs
+when opened from messaging apps or browsers with “App blocked to protect your device.”
+This is a permission/distribution restriction, not a corrupt download or a missing runtime
+permission. See [Google's developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
+Changing the signing key does not resolve that restriction.
+
+For local builds, set `EXPO_PUBLIC_DISTRIBUTION=play` for **both** prebuild and Gradle/JS
+bundling, regenerate native configuration, and sign with the existing release key.
+Set `EXPO_NO_DOTENV=1` when providing all release environment values explicitly, so
+local development settings cannot leak into the bundle. Keep the existing package id
+and signing certificate for upgrades. `npm run verify:apk` checks the final APK for
+SMS/accessibility/notification-listener declarations, private SMS components, debug
+signing, signature validity, and ZIP alignment. Run `npm run test:build-config` to
+verify profile selection and private-to-shared manifest cleanup.
+
+The exported `Updata-0.1.0.apk` contained `RECEIVE_SMS`; version 0.1.1 (versionCode 2)
+provides the shared APK configuration. Play Protect acceptance still needs checking
+on the affected phone; an emulator install does not reproduce its scanning verdict.
+
 > Everything prefixed `EXPO_PUBLIC_` is compiled into the APK and can be extracted. Never put
 > API keys, JWT secrets or provider credentials in the app; they stay on the server.
 
@@ -140,12 +179,14 @@ double taps before the re-render disables a button.
 
 ### Permissions and native code
 
-Requested: `INTERNET`, plus `CALL_PHONE` and `READ_PHONE_STATE` for SIM calling (place the call
+In the shared/Play build, requested: `INTERNET`, plus `CALL_PHONE` and `READ_PHONE_STATE` for SIM calling (place the call
 on the SIM the user picks; list SIMs; observe idle/ringing/off-hook). Both are ordinary runtime
 permissions, asked only from the call screen, and the app still works without them (the number
 opens in the phone app). **Not requested, on purpose:** `SEND_SMS`/`READ_SMS`/`RECEIVE_SMS`,
-`READ_CALL_LOG`, `RECORD_AUDIO`, `ANSWER_PHONE_CALLS`, foreground services — Google Play restricts
-the SMS/Call-Log groups and no shipped feature needs them. SMS goes through the system composer.
+`READ_CALL_LOG`, `ANSWER_PHONE_CALLS` — Google Play restricts the SMS/Call-Log groups.
+`RECORD_AUDIO` supports opt-in voice notes; the audio library also declares media playback
+service permissions. SMS goes through the system composer. Only the separate private
+build adds SMS permissions, receivers, and the SMS agent foreground service.
 Details, capability matrix and test evidence: [`../LEAD-MOBILE-CALLING.md`](../LEAD-MOBILE-CALLING.md).
 
 Native telephony lives in the local Expo module `modules/updata-telephony` (Kotlin, survives

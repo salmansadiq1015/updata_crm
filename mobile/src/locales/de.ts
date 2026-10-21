@@ -713,6 +713,7 @@ export const de: Translations = {
   },
   aiAgent: {
     entry: 'An KI-Agent übergeben',
+    entryShort: 'KI-Agent',
     entryA11y: '{{name}} an den KI-Agenten übergeben',
     campaignsTitle: 'KI-Agent',
     campaignsA11y: 'Kampagnen des KI-Agenten',
@@ -1251,6 +1252,30 @@ export const de: Translations = {
     todayCount_other: '{{count}} heute',
   },
   callCampaign: {
+    editor: {
+      configure: 'Antworteinstellungen bearbeiten',
+      up: 'Nach oben',
+      down: 'Nach unten',
+      type: 'Antworttyp',
+      options: 'Optionen, durch Kommas getrennt',
+      showWhen: 'Bei passender Antwort anzeigen',
+      always: 'Immer anzeigen',
+      equals: 'Passende Antwort',
+      types: {
+        short_text: 'Text',
+        long_text: 'Notizen',
+        boolean: 'Ja / nein',
+        single_choice: 'Eine Auswahl',
+        multiple_choice: 'Mehrfachauswahl',
+        integer: 'Ganzzahl',
+        decimal: 'Dezimalzahl',
+        currency: 'Budget',
+        date: 'Datum',
+        time: 'Uhrzeit',
+        email: 'E-Mail',
+        phone: 'Telefon',
+      },
+    },
     title: 'Anrufkampagnen',
     intro:
       'Rufen Sie eine Liste von Leads über die SIM dieses Telefons an. Sie sprechen; die App zeigt die Fragen, erfasst die Antworten und aktualisiert das CRM. Die KI kann bei einem SIM-Anruf weder sprechen noch zuhören (Android erlaubt das nicht).',
@@ -1382,6 +1407,10 @@ export const de: Translations = {
       history: 'Aktivität',
     },
     run: {
+      editResult: 'Abgelehntes Ergebnis korrigieren',
+      resultChanged: 'Dieser Versuch wurde auf dem Server geändert. Prüfen Sie das gespeicherte Ergebnis.',
+      storageError:
+        'Speichern auf dem Telefon fehlgeschlagen. Nicht bestätigte Daten sind nur im Arbeitsspeicher. Vor dem Schließen erneut versuchen.',
       title: 'Anrufen',
       offline:
         'Offline. Ergebnisse bleiben auf diesem Telefon und werden später synchronisiert; für den nächsten Lead ist eine Verbindung nötig.',
@@ -1395,13 +1424,39 @@ export const de: Translations = {
       inCallHint:
         'Stellen Sie die Fragen unten und tippen Sie die Antworten an. Kehren Sie nach dem Gespräch hierher zurück.',
       callEnded: 'Das Gespräch ist beendet',
-      saved: 'Im CRM gespeichert',
+      saved: 'In der Kampagne gespeichert',
       savedLocal: 'Auf diesem Telefon gespeichert — wird synchronisiert',
       countdown: 'Nächster Lead in {{seconds}} s',
       countdownDial: 'Nächster Anruf in {{seconds}} s',
       pauseSequence: 'Pausieren',
       resumeSequence: 'Weiter',
       nextNow: 'Nächster Lead jetzt',
+      autoCall: 'Automatisch anrufen',
+      preDial: '{{name}} wird in {{seconds}} s angerufen',
+      stopAutoCall: 'Stopp — ich tippe selbst auf Anrufen',
+      autoCallHold: {
+        storage:
+          'Speichern auf dem Telefon fehlgeschlagen. Nicht bestätigte Daten sind nur im Arbeitsspeicher. Vor dem Schließen erneut versuchen.',
+        permission: 'Automatisches Anrufen braucht den Telefonzugriff (siehe oben).',
+        sim: 'Wählen Sie die SIM, um automatisch anzurufen.',
+        background: 'Automatisches Anrufen wartet, solange Updata nicht im Vordergrund ist.',
+        paused: 'Pausiert. Fortsetzen, wenn Sie bereit sind.',
+        offline: 'Automatisches Anrufen wartet auf eine Verbindung.',
+        not_running: 'Die Kampagne läuft nicht.',
+        stopped: 'Für diesen Lead gestoppt. Tippen Sie auf Anrufen, wenn Sie bereit sind.',
+      },
+      permissionTitle: 'Telefonzugriff erlauben',
+      permissionBody:
+        'Updata braucht die Telefon-Berechtigung, um über Ihre SIM anzurufen und das Gesprächsende zu erkennen. Ohne sie öffnet sich die Telefon-App und Sie müssen dort jedes Mal auf Anrufen tippen.',
+      permissionAllow: 'Telefonzugriff erlauben',
+      permissionSettings: 'In den Einstellungen erlauben',
+      dialerHandoff: 'Tippen Sie in der Telefon-App auf Anrufen und kehren Sie dann zu Updata zurück.',
+      noCallState:
+        'Updata sieht den Status dieses Anrufs nicht. Tippen Sie nach dem Auflegen auf „Der Anruf ist beendet“.',
+      claim_renewed:
+        'Dieser Lead wurde nach einer langen Pause freigegeben und erneut übernommen. Ihre Antworten bleiben erhalten.',
+      whoHears:
+        'Der Lead hört nur Sie. Vorlesen läuft auf diesem Telefon, nicht im Anruf; die KI spricht und hört bei SIM-Anrufen nicht mit.',
     },
     idle: {
       queue_empty: 'Keine Leads mehr anzurufen.',
@@ -1427,6 +1482,9 @@ export const de: Translations = {
       unknown: 'Weiß nicht',
       placeholder: 'Antwort eingeben',
       readAloud: 'Frage vorlesen',
+      askNext: 'Als Nächstes fragen',
+      readAloudNote:
+        'Vorlesen läuft über den Lautsprecher dieses Telefons, damit Sie die Frage hören; der Lead hört es nicht im Anruf.',
     },
     callback: {
       date: 'Datum',
@@ -1467,6 +1525,8 @@ export const de: Translations = {
       syncFailed: 'Noch nicht im CRM (Synchronisierung fehlgeschlagen).',
     },
     errors: {
+      required_answers: 'Bitte Pflichtfragen beantworten oder als unbekannt markieren.',
+      SIM_CALL_ALREADY_DIALED: 'Dieser Anruf wurde bereits freigegeben. Bitte zuerst das Ergebnis prüfen.',
       outcome: 'Bitte ein Ergebnis wählen.',
       callback_time: 'Bitte Datum und Uhrzeit des Rückrufs wählen.',
       callback_past: 'Der Rückrufzeitpunkt liegt in der Vergangenheit.',

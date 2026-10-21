@@ -72,7 +72,8 @@ describe('CallCampaignsScreen', () => {
     await waitFor(() =>
       expect(api.campaigns).toHaveBeenLastCalledWith({ status: 'paused', q: undefined }, expect.anything()),
     );
-    await fireEvent.press(screen.getByText('Bakeries'));
+    // The filtered list renders after the request resolves; wait for it, not just the call.
+    await fireEvent.press(await screen.findByText('Bakeries'));
     expect(navigation.navigate).toHaveBeenCalledWith('CallCampaignDetail', { campaignId: 'c2' });
   });
 

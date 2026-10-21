@@ -66,7 +66,12 @@ export function RootNavigator() {
             <Stack.Screen
               name="LeadDetail"
               component={LeadDetailScreen}
-              options={{ headerShown: true, title: t('leads.details'), headerBackTitle: t('common.back') }}
+              options={{
+                headerShown: true,
+                title: t('leads.details'),
+                headerBackTitle: t('common.back'),
+                headerTitleStyle: { fontFamily: 'Geist-SemiBold', fontSize: 17 },
+              }}
             />
             <Stack.Screen
               name="LeadForm"

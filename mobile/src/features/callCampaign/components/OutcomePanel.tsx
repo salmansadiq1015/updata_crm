@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useState } from 'react';
 
 import { AppAlert } from '@/components/feedback/AppAlert';
 import { AppButton } from '@/components/ui/AppButton';
@@ -8,6 +9,10 @@ import { AppChip } from '@/components/ui/AppChip';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppText } from '@/components/ui/AppText';
 import { VoiceNoteButton } from '@/features/communication/components/VoiceNoteButton';
+import { ProposalReviewModal } from '@/features/communication/components/ProposalReviewModal';
+import { communicationApi } from '@/features/communication/api/communicationApi';
+import type { Proposal } from '@/features/communication/types';
+import { useSingleFlight } from '@/hooks/useSingleFlight';
 
 import { OUTCOMES_AFTER_DIAL, OUTCOMES_WITHOUT_DIAL, type CallEvidence } from '../domain/campaignDomain';
 import type { AttemptDraft } from '../store/campaignOutbox';
@@ -42,7 +47,33 @@ export function OutcomePanel({
   saving,
   onSubmit,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const [stored, setStored] = useState<{ fieldKey: string; value: unknown }[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const suggest = useSingleFlight(async () => {
+    setExtracting(true);
+    setExtractionError(null);
+    try {
+      const current = await communicationApi.qualification(leadId);
+      setStored(current.fields);
+      const result = await communicationApi.propose(
+        leadId,
+        `${draft.notes}\n${draft.transcript}`.trim().slice(0, 5000),
+        i18n.language,
+      );
+      if (!result.available) {
+        setExtractionError(t('communication.proposals.unavailable.failed'));
+        return;
+      }
+      setProposals(result.proposals);
+    } catch {
+      setExtractionError(t('communication.proposals.unavailable.failed'));
+    } finally {
+      setExtracting(false);
+    }
+  });
   const outcomes: readonly CallOutcome[] = dialled
     ? [...OUTCOMES_AFTER_DIAL, 'failed']
     : OUTCOMES_WITHOUT_DIAL;
@@ -136,6 +167,55 @@ export function OutcomePanel({
           selected={draft.doNotContact}
           onPress={() => onChange({ doNotContact: !draft.doNotContact })}
         />
+      ) : null}
+      {dialled ? (
+        <View className="gap-2">
+          <AppButton
+            title={t('communication.proposals.suggest')}
+            variant="outline"
+            loading={extracting}
+            disabled={extracting || !`${draft.notes}${draft.transcript}`.trim()}
+            onPress={() => void suggest()}
+          />
+          {extractionError ? <AppAlert tone="warning" message={extractionError} /> : null}
+          {(draft.qualificationAnswers ?? []).map((answer) => (
+            <AppChip
+              key={answer.fieldKey}
+              label={`${answer.label}: ${String(answer.value ?? '—')}`}
+              selected
+              onPress={() =>
+                onChange({
+                  qualificationAnswers: (draft.qualificationAnswers ?? []).filter(
+                    (a) => a.fieldKey !== answer.fieldKey,
+                  ),
+                })
+              }
+            />
+          ))}
+          {proposals ? (
+            <ProposalReviewModal
+              key={JSON.stringify(proposals)}
+              visible
+              proposals={proposals}
+              stored={stored}
+              onClose={() => setProposals(null)}
+              onApply={(accepted) => {
+                onChange({
+                  qualificationAnswers: accepted.map((proposal) => ({
+                    fieldKey: proposal.fieldKey,
+                    label: proposal.label,
+                    value: proposal.proposedValue,
+                    status: proposal.status,
+                    source: 'ai_proposed_user_confirmed',
+                    evidence: proposal.evidence,
+                    confidence: proposal.confidence,
+                  })),
+                });
+                setProposals(null);
+              }}
+            />
+          ) : null}
+        </View>
       ) : null}
       {error ? <AppAlert tone="destructive" message={error} /> : null}
       <AppButton

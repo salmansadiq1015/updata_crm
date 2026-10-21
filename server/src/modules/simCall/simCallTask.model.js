@@ -11,6 +11,10 @@ const answerSchema = new mongoose.Schema({
   normalizedValue: { type: mongoose.Schema.Types.Mixed, default: null }, // validated form
   attemptId: { type: String, default: null },
   questionsVersion: { type: Number, default: 1 },
+  questionText: { type: String, default: null },
+  source: { type: String, enum: ['manual', 'transcription', 'ai_extracted'], default: 'manual' },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  validation: { type: String, enum: ['valid', 'unknown', 'skipped'], default: 'valid' },
   updatedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
@@ -20,6 +24,13 @@ const attemptSchema = new mongoose.Schema({
   deviceId: { type: String, maxlength: 80, default: null },
   claimedAt: { type: Date, default: Date.now },
   dialedAt: { type: Date, default: null },
+  destinationHash: { type: String, default: null },
+  destinationField: { type: String, enum: ['mobile', 'phone', null], default: null },
+  doNotContact: { type: Boolean, default: false },
+  answers: { type: [answerSchema], default: undefined },
+  callbackSnapshot: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  crmNotes: { type: String, default: null },
+  qualificationAnswers: { type: [mongoose.Schema.Types.Mixed], default: [] },
   subscriptionId: { type: Number, default: null },
   outcome: { type: String, enum: [...CALL_OUTCOMES, null], default: null },
   interest: { type: String, enum: [...INTEREST_VALUES, null], default: null },
@@ -82,5 +93,6 @@ taskSchema.index({ campaignId: 1, state: 1, notBefore: 1, order: 1 });
 taskSchema.index({ createdBy: 1, 'callback.status': 1, 'callback.at': 1 });
 taskSchema.index({ state: 1, 'lock.until': 1 });
 taskSchema.index({ 'attempts.attemptId': 1 });
+taskSchema.index({ 'attempts.destinationHash': 1, 'attempts.doNotContact': 1 }, { name: 'sim_call_opt_out_recovery' });
 
 export default mongoose.model('SimCallTask', taskSchema);

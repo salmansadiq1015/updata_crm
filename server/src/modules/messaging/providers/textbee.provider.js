@@ -84,6 +84,11 @@ export class TextBeeSmsProvider {
     }
 
     const message = data?.error || data?.message || json?.error || json?.message || `TextBee rejected the request (${response.status})`;
+    if (response.ok && data?.success !== false) {
+      // 2xx without a batch id (or an unreadable body): TextBee may have queued the SMS.
+      // Reconcile instead of retrying or falling back, which could send it twice.
+      return ambiguous(PROVIDER, 'TextBee accepted the request without a message id', `HTTP_${response.status}_NO_ID`);
+    }
     if ([408, 409, 500, 502, 503, 504].includes(response.status)) {
       // These responses do not provide strong enough evidence that submission
       // was never accepted. Treat them like a network ambiguity and reconcile

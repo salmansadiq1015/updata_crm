@@ -41,6 +41,9 @@ function clauseMatches(clause, answers) {
   const value = entry && entry.validation === 'valid' ? entry.normalizedValue : undefined;
   if ('exists' in clause) return clause.exists ? value !== undefined : value === undefined;
   if (value === undefined) return false;
+  if ('contains' in clause) return Array.isArray(value)
+    ? value.includes(clause.contains)
+    : typeof value === 'string' && typeof clause.contains === 'string' && value.includes(clause.contains);
   if ('equals' in clause) return value === clause.equals;
   if ('notEquals' in clause) return value !== clause.notEquals;
   if ('in' in clause) return Array.isArray(clause.in) && clause.in.includes(value);

@@ -682,6 +682,8 @@ export function registerJobs() {
   const outboundMessaging = new OutboundMessagingWorker();
   queueManager.registerQueue(OUTBOUND_QUEUE, outboundMessaging.getHandler(), {
     concurrency: Number(process.env.MESSAGING_CONCURRENCY || 3),
+    // Paces bulk sends so one SIM gateway (TextBee) or sender number is not flooded.
+    limiter: { max: Number(process.env.MESSAGING_RATE_PER_MINUTE || 30), duration: 60_000 },
     jobOptions: { attempts: 1, removeOnComplete: { age: 86400, count: 5000 } },
   });
 

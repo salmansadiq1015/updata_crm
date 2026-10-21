@@ -55,7 +55,8 @@ export const STOP_KEYWORDS = Object.freeze([
   'abmelden', 'abbestellen', 'kein interesse',
   'basta', 'alto',
   'توقف', 'الغاء', 'إلغاء',
-  'band karo', 'bas',
+  'band karo', 'bas', 'band', 'stop karo', 'mat bhejo',
+  'بند', 'بند کریں', 'بند کرو', 'رکیں', 'روکیں', 'مت بھیجیں',
 ]);
 
 export const SIM_SMS_ERROR_CODES = Object.freeze({

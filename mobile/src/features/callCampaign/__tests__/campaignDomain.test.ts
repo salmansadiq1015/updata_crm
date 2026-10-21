@@ -4,6 +4,7 @@ import {
   campaignActions,
   campaignProgress,
   clampCountdown,
+  missingRequiredQuestions,
   suggestOutcome,
   visibleQuestions,
   ymdInZone,
@@ -34,6 +35,20 @@ describe('campaign rules', () => {
   });
 
   it('applies skip rules exactly like the server (ordered, condition on earlier answers)', () => {
+    const conditional = [
+      q('tags', 1, { type: 'multiple_choice' }),
+      q('detail', 2, {
+        condition: { all: [{ field: 'tags', contains: 'repairs' }] },
+      }),
+    ];
+    expect(
+      visibleQuestions(conditional, { tags: { status: 'answered', value: ['repairs'] } }).map(
+        (q) => q.fieldKey,
+      ),
+    ).toEqual(['tags', 'detail']);
+    expect(visibleQuestions(conditional, { tags: { status: 'unknown' } }).map((q) => q.fieldKey)).toEqual([
+      'tags',
+    ]);
     const questions = [
       q('budget', 3, { condition: { all: [{ field: 'interest', in: ['high', 'medium'] }] } }),
       q('owner', 1, { type: 'boolean' }),
@@ -54,6 +69,10 @@ describe('campaign rules', () => {
   });
 
   it('converts an explicit wall-clock time in a timezone, never guessing', () => {
+    expect(zonedWallTimeToIso('2026-02-30', '10:00', 'UTC')).toBeNull();
+    expect(zonedWallTimeToIso('2026-10-20', '24:00', 'UTC')).toBeNull();
+    expect(zonedWallTimeToIso('2026-03-29', '02:30', 'Europe/Zurich')).toBeNull();
+    expect(zonedWallTimeToIso('2026-10-25', '02:30', 'Europe/Zurich')).toBeNull();
     expect(zonedWallTimeToIso('2026-10-20', '10:00', 'Asia/Karachi')).toBe('2026-10-20T05:00:00.000Z');
     expect(zonedWallTimeToIso('2026-10-20', '10:00', 'Europe/Zurich')).toBe('2026-10-20T08:00:00.000Z');
     // Across the Zurich DST switch (25 Oct 2026): winter time is UTC+1.
@@ -61,6 +80,18 @@ describe('campaign rules', () => {
     expect(zonedWallTimeToIso('2026-10-20', '10', 'UTC')).toBeNull();
     expect(zonedWallTimeToIso('2026-10-20', '10:00', 'Not/AZone')).toBeNull();
     expect(ymdInZone(new Date('2026-10-20T20:30:00Z'), 'Asia/Karachi')).toBe('2026-10-21');
+  });
+
+  it('requires visible required answers and permits explicit unknown', () => {
+    const questions = [
+      q('owner', 1, { required: true }),
+      q('followup', 2, { required: true, condition: { all: [{ field: 'owner', equals: 'yes' }] } }),
+    ];
+    expect(missingRequiredQuestions(questions, {})).toEqual(['owner']);
+    expect(missingRequiredQuestions(questions, { owner: { status: 'unknown' } })).toEqual([]);
+    expect(missingRequiredQuestions(questions, { owner: { status: 'answered', value: 'yes' } })).toEqual([
+      'followup',
+    ]);
   });
 
   it('treats off-hook → idle as "call over", never as "answered"', () => {

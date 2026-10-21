@@ -28,6 +28,7 @@ const twilioSecret = 'twilio-route-test-secret-2026';
 const twilioPublicUrl = 'https://crm.example.test/api/v1/webhooks/messaging/twilio';
 
 let app;
+let server;
 
 beforeAll(async () => {
   process.env.META_APP_SECRET = metaSecret;
@@ -46,9 +47,13 @@ beforeAll(async () => {
   app.use(responseEnvelope);
   app.use('/api/v1/messaging', messagingRoutes);
   app.use('/api/v1/webhooks/messaging', messagingWebhookRoutes);
+  // One long-lived server for the suite: request(server) listens on a fresh ephemeral port per
+  // request, and under parallel load a just-freed port can be reused by another process.
+  server = app.listen(0);
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await new Promise((resolve) => server.close(resolve));
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -63,7 +68,7 @@ beforeEach(() => {
 
 describe('messaging webhook HTTP security boundary', () => {
   it('requires authentication before entering protected messaging routes', async () => {
-    const response = await request(app).get('/api/v1/messaging/campaigns');
+    const response = await request(server).get('/api/v1/messaging/campaigns');
 
     expect(response.status).toBe(401);
     expect(response.body).toMatchObject({
@@ -73,7 +78,7 @@ describe('messaging webhook HTTP security boundary', () => {
   });
 
   it('rejects an invalid Meta signature before processing provider events', async () => {
-    const response = await request(app)
+    const response = await request(server)
       .post('/api/v1/webhooks/messaging/meta')
       .set('x-hub-signature-256', 'sha256=invalid')
       .send({ object: 'whatsapp_business_account', entry: [] });
@@ -90,7 +95,7 @@ describe('messaging webhook HTTP security boundary', () => {
     });
     const signature = `sha256=${crypto.createHmac('sha256', metaSecret).update(rawBody).digest('hex')}`;
 
-    const response = await request(app)
+    const response = await request(server)
       .post('/api/v1/webhooks/messaging/meta')
       .set('content-type', 'application/json')
       .set('x-hub-signature-256', signature)
@@ -111,7 +116,7 @@ describe('messaging webhook HTTP security boundary', () => {
     });
     const signature = crypto.createHmac('sha256', textBeeSecret).update(rawBody).digest('hex');
 
-    const rejected = await request(app)
+    const rejected = await request(server)
       .post('/api/v1/webhooks/messaging/textbee')
       .set('content-type', 'application/json')
       .set('x-signature', 'invalid')
@@ -119,7 +124,7 @@ describe('messaging webhook HTTP security boundary', () => {
     expect(rejected.status).toBe(401);
     expect(applyProviderEvent).not.toHaveBeenCalled();
 
-    const accepted = await request(app)
+    const accepted = await request(server)
       .post('/api/v1/webhooks/messaging/textbee')
       .set('content-type', 'application/json')
       .set('x-signature', signature)
@@ -139,7 +144,7 @@ describe('messaging webhook HTTP security boundary', () => {
     };
     const signature = twilioSdk.getExpectedTwilioSignature(twilioSecret, twilioPublicUrl, params);
 
-    const rejected = await request(app)
+    const rejected = await request(server)
       .post('/api/v1/webhooks/messaging/twilio')
       .type('form')
       .set('x-twilio-signature', 'invalid')
@@ -147,7 +152,7 @@ describe('messaging webhook HTTP security boundary', () => {
     expect(rejected.status).toBe(401);
     expect(applyProviderEvent).not.toHaveBeenCalled();
 
-    const accepted = await request(app)
+    const accepted = await request(server)
       .post('/api/v1/webhooks/messaging/twilio')
       .type('form')
       .set('x-twilio-signature', signature)

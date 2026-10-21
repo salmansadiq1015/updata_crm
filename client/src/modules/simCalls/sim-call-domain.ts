@@ -43,9 +43,10 @@ export function zonedLocalToIso(local: string, timeZone: string): string | null 
     return Date.UTC(p.year!, p.month! - 1, p.day!, p.hour!, p.minute!, p.second!) - Math.floor(instant / 1000) * 1000;
   };
   try {
-    let t = guess - offset(guess);
-    t = guess - offset(t);
-    return new Date(t).toISOString();
+    const offsets = new Set([-36, 0, 36].map((h) => offset(guess + h * 3600_000)));
+    const matches = [...offsets].map((o) => guess - o).filter((t) =>
+      new Date(t + offset(t)).toISOString().slice(0, 16) === local);
+    return matches.length === 1 ? new Date(matches[0]!).toISOString() : null;
   } catch {
     return null;
   }

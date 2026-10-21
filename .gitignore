@@ -14,7 +14,8 @@ build/
 Thumbs.db
 
 .claude/
-docs/
+docs/*
+!docs/AI_CALLING_AUDIT.md
 .superpowers/
 .screenshots/
 client/start-local.sh

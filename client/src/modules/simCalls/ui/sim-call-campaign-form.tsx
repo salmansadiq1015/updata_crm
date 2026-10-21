@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Plus, Trash2, Search, Loader2 } from 'lucide-react';
 import { leadApi } from '@/modules/leads/services/lead-api';
@@ -30,6 +30,7 @@ export function SimCallCampaignForm({ onClose, onCreated, initialLeadIds = [] }:
   onClose: () => void; onCreated: (c: SimCallCampaign) => void; initialLeadIds?: string[];
 }) {
   const { create } = useSimCallMutations();
+  const creation = useRef<{ payload: string; key: string } | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -71,13 +72,20 @@ export function SimCallCampaignForm({ onClose, onCreated, initialLeadIds = [] }:
   const submit = async () => {
     setError(null);
     if (errors.length) return setError(errors[0]!);
-    const campaign = await create.mutateAsync({
+    const input = {
       name: name.trim(), description: description.trim(), instructions: instructions.trim(),
       leadIds: [...selected.keys()],
       questionnaire: { questions: questions.map((q, i) => ({ ...q, order: i + 1, condition: q.condition ?? null })) },
       settings: { timezone, callWindow: { start, end }, daysOfWeek: days, countdownSeconds: countdown, autoDial, maxAttempts, retryDelayMinutes: retryDelay, readAloud },
-    });
-    onCreated(campaign);
+    };
+    const payload = JSON.stringify(input);
+    if (creation.current?.payload !== payload) creation.current = { payload, key: crypto.randomUUID() };
+    try {
+      const campaign = await create.mutateAsync({ ...input, creationKey: creation.current.key });
+      onCreated(campaign);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Campaign could not be saved. Retry when connected.');
+    }
   };
 
   return (

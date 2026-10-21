@@ -79,6 +79,8 @@ function body(leads, overrides = {}) {
   };
 }
 
+const UNKNOWN_REQUIRED = ['right_contact', 'interest'].map((fieldKey) => ({ fieldKey, status: 'unknown' }));
+
 async function create(leads, overrides, token = tokenA) {
   const res = await request(server).post(`${BASE}/campaigns`).set(auth(token)).send(body(leads, overrides)).expect(201);
   return res.body.data;
@@ -127,7 +129,7 @@ beforeAll(async () => {
   for (const model of ['crm/contact', 'crm/site', 'pm/project', 'qop/order', 'deploy/assignment', 'tasks/task']) {
     await import(`../../src/modules/${model}.model.js`);
   }
-  await Promise.all([LeadCommunication.init(), SimCallTask.init()]);
+  await Promise.all([LeadCommunication.init(), SimCallTask.init(), SimCallCampaign.init()]);
 
   app = express();
   app.use((req, _res, next) => { req.requestId = 'test'; next(); });
@@ -190,6 +192,35 @@ describe('pure rules', () => {
 });
 
 describe('campaign creation, editing and authorization', () => {
+  it('creates once for concurrent retries, repairs interrupted task creation, and rejects changed payloads', async () => {
+    const lead = await makeLead();
+    const payload = body([lead], { creationKey: randomUUID() });
+    const responses = await Promise.all([1, 2].map(() => request(server).post(`${BASE}/campaigns`).set(auth(tokenA)).send(payload).expect(201)));
+    const id = responses[0].body.data._id;
+    expect(responses[1].body.data._id).toBe(id);
+    expect(await SimCallCampaign.countDocuments()).toBe(1);
+    expect(await SimCallTask.countDocuments({ campaignId: id })).toBe(1);
+    await SimCallTask.deleteMany({ campaignId: id }); // interruption before tasks were persisted
+    await SimCallCampaign.updateOne({ _id: id }, { $set: { creationInitializedAt: null } });
+    await request(server).post(`${BASE}/campaigns`).set(auth(tokenA)).send(payload).expect(201);
+    expect(await SimCallTask.countDocuments({ campaignId: id })).toBe(1);
+    const other = await makeLead();
+    await request(server).patch(`${BASE}/campaigns/${id}`).set(auth(tokenA)).send({ leadIds: [String(other._id)] }).expect(200);
+    await request(server).post(`${BASE}/campaigns`).set(auth(tokenA)).send(payload).expect(201);
+    expect((await SimCallTask.find({ campaignId: id }).lean()).map((t) => String(t.leadId))).toEqual([String(other._id)]);
+    await request(server).post(`${BASE}/campaigns`).set(auth(tokenA)).send({ ...payload, name: 'Different' }).expect(409);
+    await request(server).post(`${BASE}/campaigns`).set(auth(tokenB)).send(payload).expect(201);
+    expect(await SimCallCampaign.countDocuments()).toBe(2);
+  });
+
+  it('applies reliability indexes idempotently and preserves evidence on rollback', async () => {
+    const migration = await import('../../src/migrations/029_sim_call_reliability.js');
+    await create([await makeLead()]);
+    await migration.up(); await migration.up(); await migration.down();
+    const indexes = await SimCallCampaign.collection.indexes();
+    expect(indexes.find((i) => i.name === 'sim_call_creation_key').unique).toBe(true);
+    expect(await SimCallCampaign.countDocuments()).toBe(1);
+  });
   it('requires auth and permission; validates questions', async () => {
     await request(server).get(`${BASE}/campaigns`).expect(401);
     const noPerm = await makeUser([]);
@@ -321,7 +352,7 @@ describe('state transitions', () => {
     await request(server).post(`${BASE}/campaigns/${c._id}/cancel`).set(auth(tokenA)).expect(200);
     await claim(c._id).expect(409);
     await dial(data.task).expect(409); // no new dial after cancel
-    await complete(data.task, { outcome: 'answered', interest: 'interested' }).expect(200);
+    await complete(data.task, { outcome: 'answered', interest: 'interested', answers: UNKNOWN_REQUIRED }).expect(200);
     const camp = (await request(server).get(`${BASE}/campaigns/${c._id}`).set(auth(tokenA))).body.data;
     expect(camp.summary).toMatchObject({ completed: 1, cancelled: 1, answered: 1, attempts: 1 });
   });
@@ -375,7 +406,7 @@ describe('task queue, locking and dialling safeguards', () => {
     const again = (await claim(c._id).expect(200)).body.data.task;
     await dial(again).expect(200);
     await request(server).post(`${BASE}/tasks/${again.id}/release`).set(auth(tokenA)).send({ attemptId: attemptOf(again), deviceId: DEVICE }).expect(409);
-    await complete(again, { outcome: 'answered' }).expect(200);
+    await complete(again, { outcome: 'answered', answers: UNKNOWN_REQUIRED }).expect(200);
   });
 
   it('skips a lead and moves on', async () => {
@@ -388,6 +419,55 @@ describe('task queue, locking and dialling safeguards', () => {
 });
 
 describe('answers', () => {
+  it('validates conditional required answers against the latest normalized values', async () => {
+    const questionnaire = { questions: QUESTIONS.map((q) => ({ ...q, required: true })) };
+    const c = await createRunning([await makeLead()], { questionnaire });
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    await complete(task, { outcome: 'answered', answers: [
+      { fieldKey: 'right_contact', status: 'answered', value: true },
+      { fieldKey: 'interest', status: 'answered', value: 'high' },
+    ] }).expect(400);
+    await complete(task, { outcome: 'answered', answers: [
+      { fieldKey: 'right_contact', status: 'answered', value: true },
+      { fieldKey: 'interest', status: 'answered', value: 'low' },
+    ] }).expect(200);
+  });
+
+  it('rejects cyclic dependencies and invalid explicit numeric/date/time answers', async () => {
+    await request(server).post(`${BASE}/campaigns`).set(auth(tokenA)).send(body([await makeLead()], {
+      questionnaire: { questions: [{ ...QUESTIONS[0], condition: { all: [{ field: 'right_contact', equals: true }] } }] },
+    })).expect(400);
+    const c = await createRunning([await makeLead()], { questionnaire: { questions: [
+      { ...QUESTIONS[0], type: 'date' }, { ...QUESTIONS[1], type: 'integer' }, { ...QUESTIONS[2], type: 'time', condition: null },
+    ] } });
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    for (const [fieldKey, value] of [['right_contact', '2026-02-30'], ['interest', '1.5'], ['budget', '25:00']]) {
+      await request(server).put(`${BASE}/tasks/${task.id}/answers`).set(auth(tokenA))
+        .send({ attemptId: attemptOf(task), answers: [{ fieldKey, status: 'answered', value }] }).expect(400);
+    }
+  });
+  it('enforces visible required answers and stores actor/source/question provenance', async () => {
+    const c = await createRunning([await makeLead()]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    await complete(task, { outcome: 'answered' }).expect(400);
+    await request(server).put(`${BASE}/tasks/${task.id}/answers`).set(auth(tokenA))
+      .send({ attemptId: attemptOf(task), answers: [{ fieldKey: 'right_contact', status: 'skipped' }] }).expect(400);
+    const saved = (await complete(task, { outcome: 'answered', answers: UNKNOWN_REQUIRED }).expect(200)).body.data.task;
+    expect(saved.answers[0]).toMatchObject({ source: 'manual', updatedBy: String(userA._id), validation: 'unknown', questionText: QUESTIONS[0].text, questionsVersion: 1 });
+    const persisted = await SimCallTask.findById(task.id).lean();
+    expect(persisted.attempts[0].answers).toHaveLength(2);
+  });
+
+  it('rejects partially matched or invalid choices instead of silently discarding them', async () => {
+    const c = await createRunning([await makeLead()]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await request(server).put(`${BASE}/tasks/${task.id}/answers`).set(auth(tokenA)).send({ attemptId: attemptOf(task),
+      answers: [{ fieldKey: 'interest', status: 'answered', value: 'highly unlikely' }] }).expect(400);
+    await request(server).put(`${BASE}/tasks/${task.id}/answers`).set(auth(tokenA)).send({ attemptId: attemptOf(task),
+      answers: [{ fieldKey: 'interest', status: 'answered', value: ['high', 'low'] }] }).expect(400);
+  });
   it('validates answers and merges partial saves without overwriting earlier ones', async () => {
     const c = await createRunning([await makeLead()]);
     const { task } = (await claim(c._id).expect(200)).body.data;
@@ -407,6 +487,143 @@ describe('answers', () => {
 });
 
 describe('completion, CRM sync and idempotency', () => {
+  it('preserves independent qualification fields when multiple CRM operations merge concurrently', async () => {
+    const lead = await makeLead();
+    const svc = (await import('../../src/modules/crm/leadQualification.service.js')).default;
+    await Promise.all(['need', 'role', 'current_solution'].map((fieldKey) => svc.mergeAnswers(String(lead._id), [
+      { fieldKey, label: fieldKey, value: fieldKey, status: 'answered', source: 'user' },
+    ], { userId: userA._id })));
+    const fresh = await Lead.findById(lead._id).lean();
+    expect(fresh.qualification.fields.map((f) => f.fieldKey).sort()).toEqual(['current_solution', 'need', 'role']);
+  });
+  it('saves reviewed extraction with evidence and preserves unrelated CRM qualification', async () => {
+    const lead = await makeLead();
+    await Lead.updateOne({ _id: lead._id }, { $set: { qualification: { fields: [
+      { fieldKey: 'budget', label: 'Budget', value: 900, status: 'answered', source: 'user' },
+    ] } } });
+    const c = await createRunning([lead]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    const payload = { outcome: 'answered', answers: UNKNOWN_REQUIRED, notes: 'Needs stock tracking',
+      qualification: { answers: [{ fieldKey: 'need', label: 'Need', status: 'answered', value: 'stock tracking',
+        source: 'ai_proposed_user_confirmed', evidence: 'Needs stock tracking', confidence: null }] },
+    };
+    await complete(task, { ...payload, notes: 'Different note' }).expect(400);
+    await complete(task, payload).expect(200);
+    await complete(task, payload).expect(200);
+    const fresh = await Lead.findById(lead._id).lean();
+    expect(fresh.qualification.fields.find((f) => f.fieldKey === 'budget').value).toBe(900);
+    expect(fresh.qualification.fields.find((f) => f.fieldKey === 'need')).toMatchObject({
+      value: 'stock tracking', source: 'ai_proposed_user_confirmed', evidence: 'Needs stock tracking', updatedBy: userA._id,
+    });
+    const persisted = await SimCallTask.findById(task.id).lean();
+    expect(persisted.attempts[0].qualificationAnswers).toHaveLength(1);
+    expect(await ContactLog.countDocuments({ leadId: lead._id })).toBe(1);
+  });
+
+  it('requires lead write permission to merge reviewed extraction', async () => {
+    const perms = await Permission.find({ module: 'ai-calling' });
+    const user = await makeUser(perms.map((p) => p._id));
+    const token = generateAccessToken({ sub: String(user._id) });
+    const lead = await makeLead();
+    const c = await create([lead], undefined, token);
+    await request(server).post(`${BASE}/campaigns/${c._id}/start`).set(auth(token)).expect(200);
+    const { task } = (await claim(c._id, DEVICE, token).expect(200)).body.data;
+    await complete(task, { outcome: 'failed', qualification: { answers: [
+      { fieldKey: 'need', value: 'test', status: 'answered', source: 'user' },
+    ] } }, token).expect(403);
+    expect((await SimCallTask.findById(task.id)).attempts[0].completedAt).toBeNull();
+  });
+
+  it('closes callback work when the caller records an opt-out', async () => {
+    const c = await createRunning([await makeLead()]);
+    const t = await callOnce(c._id, { outcome: 'callback_requested', doNotContact: true,
+      callback: { at: new Date(Date.now() + 86400_000).toISOString(), timezone: 'UTC' },
+    });
+    const saved = await SimCallTask.findById(t.id).lean();
+    expect(saved.state).toBe('completed');
+    expect(saved.callback.status).toBe('cancelled');
+    const comm = await LeadCommunication.findOne({ operationId: `simcall-${attemptOf(t)}` }).lean();
+    expect(comm.outcome.followUpAt).toBeNull();
+  });
+  it('authorizes at most one concurrent or replayed dial and rejects an expired lease', async () => {
+    const c = await createRunning([await makeLead()]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    const responses = await Promise.all([dial(task), dial(task)]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await dial(task).expect(409)).body.error.code).toBe('SIM_CALL_ALREADY_DIALED');
+    const campaign = await createRunning([await makeLead()]);
+    const expired = (await claim(campaign._id).expect(200)).body.data.task;
+    await SimCallTask.updateOne({ _id: expired.id }, { $set: { 'lock.until': new Date(Date.now() - 1) } });
+    await dial(expired).expect(409);
+    expect((await SimCallTask.findById(expired.id)).attempts[0].dialedAt).toBeNull();
+  });
+
+  it('cannot skip or retry an unresolved dial after its lease expires', async () => {
+    const c = await createRunning([await makeLead()]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    await SimCallTask.updateOne({ _id: task.id }, { $set: { 'lock.until': new Date(Date.now() - 1) } });
+    await service.sweep();
+    await request(server).post(`${BASE}/tasks/${task.id}/skip`).set(auth(tokenA)).send({}).expect(409);
+    const retried = await request(server).post(`${BASE}/campaigns/${c._id}/retry`).set(auth(tokenA)).send({}).expect(200);
+    expect(retried.body.data.retried).toBe(0);
+    expect((await SimCallTask.findById(task.id)).state).toBe('needs_review');
+  });
+
+  it('keeps opt-out through CRM failure/retry and blocks a second campaign immediately', async () => {
+    const lead = await makeLead();
+    const c = await createRunning([lead]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    const svc = (await import('../../src/modules/crm/leadCommunication.service.js')).default;
+    const spy = jest.spyOn(svc, 'create').mockRejectedValueOnce(new Error('CRM down'));
+    try {
+      const saved = (await complete(task, { outcome: 'rejected', doNotContact: true }).expect(200)).body.data;
+      expect(saved.task.attempts[0].sync.status).toBe('failed');
+      // Simulate crash before suppression ledger write: durable attempt still blocks eligibility.
+      await CallSuppression.deleteMany({});
+      expect((await create([lead])).summary.ineligible).toBe(1);
+      await request(server).post(`${BASE}/tasks/${task.id}/sync`).set(auth(tokenA)).expect(200);
+      const comm = await LeadCommunication.findOne({ operationId: `simcall-${attemptOf(task)}` }).lean();
+      expect(comm.outcome.doNotContact).toBe(true);
+      expect(await CallSuppression.countDocuments()).toBeGreaterThan(0);
+    } finally { spy.mockRestore(); }
+  });
+
+  it('reports a failed CRM receipt as retryable and keeps the original answer snapshot', async () => {
+    const lead = await makeLead();
+    const c = await createRunning([lead]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    const svc = (await import('../../src/modules/crm/leadCommunication.service.js')).default;
+    const spy = jest.spyOn(svc, 'complete').mockResolvedValueOnce({ receipt: { completedAt: null, steps: { contactLog: { status: 'failed' } } } });
+    try {
+      const result = (await complete(task, { outcome: 'answered', answers: [
+        { fieldKey: 'right_contact', status: 'unknown' }, { fieldKey: 'interest', status: 'answered', value: 'high' },
+      ] }).expect(200)).body.data;
+      expect(result.task.attempts[0].sync.status).toBe('failed');
+    } finally { spy.mockRestore(); }
+    await SimCallTask.updateOne({ _id: task.id }, { $set: { 'answers.1.value': 'low' } });
+    await request(server).post(`${BASE}/tasks/${task.id}/sync`).set(auth(tokenA)).expect(200);
+    const log = await ContactLog.findOne({ leadId: lead._id }).lean();
+    expect(log.note).toContain('Interest: high');
+    expect(log.note).not.toContain('Interest: low');
+  });
+
+  it.each(['no_answer', 'callback_requested', 'failed'])('does not reopen a cancelled campaign after an in-flight %s outcome', async (outcome) => {
+    const c = await createRunning([await makeLead()]);
+    const { task } = (await claim(c._id).expect(200)).body.data;
+    await dial(task).expect(200);
+    await request(server).post(`${BASE}/campaigns/${c._id}/cancel`).set(auth(tokenA)).expect(200);
+    const result = (await complete(task, { outcome,
+      ...(outcome === 'callback_requested' ? { callback: { at: new Date(Date.now() + 86400_000).toISOString(), timezone: 'UTC' } } : {}),
+    }).expect(200)).body.data.task;
+    expect(result.state).toBe('cancelled');
+    expect(result.notBefore).toBeNull();
+    if (result.callback) expect(result.callback.status).toBe('cancelled');
+    await claim(c._id).expect(409);
+  });
   it('records an answered call: answers, notes, transcript → CRM contact log + lead stamp', async () => {
     const lead = await makeLead();
     const c = await createRunning([lead]);
@@ -478,7 +695,7 @@ describe('completion, CRM sync and idempotency', () => {
     const svc = (await import('../../src/modules/crm/leadCommunication.service.js')).default;
     svc.create = jest.fn(async () => { throw new Error('CRM down'); });
     try {
-      const res = (await complete(task, { outcome: 'answered' }).expect(200)).body.data;
+      const res = (await complete(task, { outcome: 'answered', answers: UNKNOWN_REQUIRED }).expect(200)).body.data;
       expect(res.task.attempts[0].sync).toMatchObject({ status: 'failed', error: 'CRM down' });
       expect((await request(server).get(`${BASE}/campaigns/${c._id}`).set(auth(tokenA))).body.data.summary.syncFailed).toBe(1);
     } finally {
@@ -545,7 +762,7 @@ describe('callbacks', () => {
     const due = (await claim(c._id).expect(200)).body.data.task;
     expect(due.id).toBe(cbTask.id);
     await dial(due).expect(200);
-    const done = (await complete(due, { outcome: 'answered' }).expect(200)).body.data.task;
+    const done = (await complete(due, { outcome: 'answered', answers: UNKNOWN_REQUIRED }).expect(200)).body.data.task;
     expect(done.callback.status).toBe('done');
   });
 
@@ -574,7 +791,7 @@ describe('recovery', () => {
     const resumed = (await claim(c._id, DEVICE_2).expect(200)).body.data;
     expect(resumed).toMatchObject({ resumed: true });
     expect(resumed.task.id).toBe(b.id);
-    await complete(b, { outcome: 'answered' }).expect(200);
+    await complete(b, { outcome: 'answered', answers: UNKNOWN_REQUIRED }).expect(200);
     const camp = (await request(server).get(`${BASE}/campaigns/${c._id}`).set(auth(tokenA))).body.data;
     expect(camp.summary).toMatchObject({ needsReview: 0, completed: 1, answered: 1 });
   });
@@ -592,7 +809,7 @@ describe('recovery', () => {
 
   it('retries completed-unreached and skipped leads, never answered ones', async () => {
     const c = await createRunning([await makeLead(), await makeLead()], { settings: { ...ALWAYS_OPEN, maxAttempts: 1 } });
-    const answered = await callOnce(c._id, { outcome: 'answered' });
+    const answered = await callOnce(c._id, { outcome: 'answered', answers: UNKNOWN_REQUIRED });
     const unreached = await callOnce(c._id, { outcome: 'no_answer' });
     expect((await request(server).get(`${BASE}/campaigns/${c._id}`).set(auth(tokenA))).body.data.status).toBe('completed');
     const res = (await request(server).post(`${BASE}/campaigns/${c._id}/retry`).set(auth(tokenA)).send({}).expect(200)).body.data;
@@ -605,7 +822,7 @@ describe('recovery', () => {
   it('records an activity history without phone numbers', async () => {
     const lead = await makeLead();
     const c = await createRunning([lead]);
-    await callOnce(c._id, { outcome: 'answered' });
+    await callOnce(c._id, { outcome: 'answered', answers: UNKNOWN_REQUIRED });
     const events = (await request(server).get(`${BASE}/campaigns/${c._id}/events?limit=50`).set(auth(tokenA)).expect(200)).body.data;
     expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['task.claimed', 'task.dialed', 'task.completed', 'task.synced', 'campaign.completed']));
     expect(JSON.stringify(events)).not.toContain(lead.mobile.slice(-4));
@@ -615,7 +832,7 @@ describe('recovery', () => {
   it('shows a lead its SIM call history', async () => {
     const lead = await makeLead();
     const c = await createRunning([lead]);
-    await callOnce(c._id, { outcome: 'answered', answers: [{ fieldKey: 'interest', status: 'answered', value: 'low' }] });
+    await callOnce(c._id, { outcome: 'answered', answers: [{ fieldKey: 'right_contact', status: 'unknown' }, { fieldKey: 'interest', status: 'answered', value: 'low' }] });
     const res = (await request(server).get(`${BASE}/leads/${lead._id}/tasks`).set(auth(tokenA)).expect(200)).body.data;
     expect(res).toHaveLength(1);
     expect(res[0]).toMatchObject({ outcome: 'answered', campaign: { name: 'Garage outreach' } });

@@ -14,6 +14,10 @@ describe('sim call domain (web)', () => {
     expect(progress({ total: 0, completed: 0, skipped: 0, ineligible: 0, cancelled: 0 }).percent).toBe(0);
   });
   it('converts a local callback time in an explicit timezone', () => {
+    expect(zonedLocalToIso('2026-02-30T10:00', 'UTC')).toBeNull();
+    expect(zonedLocalToIso('2026-10-21T25:00', 'UTC')).toBeNull();
+    expect(zonedLocalToIso('2026-03-29T02:30', 'Europe/Zurich')).toBeNull();
+    expect(zonedLocalToIso('2026-10-25T02:30', 'Europe/Zurich')).toBeNull();
     expect(zonedLocalToIso('2026-10-21T10:00', 'Asia/Karachi')).toBe('2026-10-21T05:00:00.000Z');
     expect(zonedLocalToIso('2026-10-26T10:00', 'Europe/Zurich')).toBe('2026-10-26T09:00:00.000Z');
     expect(zonedLocalToIso('2026-10-21', 'UTC')).toBeNull();

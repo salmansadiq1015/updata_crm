@@ -1,6 +1,6 @@
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Children, createContext, Fragment, isValidElement, use, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/utils/cn';
@@ -21,7 +21,7 @@ export type AppListItemProps = {
   accessibilityHint?: string;
   /**
    * `stacked` (default): small muted label above the value (detail lists).
-   * `inline`: label as the row title, value muted at the trailing edge (settings rows).
+   * `inline`: row title with a muted trailing value; reflows below at large text sizes.
    */
   layout?: 'stacked' | 'inline';
   bordered?: boolean;
@@ -45,22 +45,23 @@ export function AppListItem({
   className,
 }: AppListItemProps) {
   const grouped = use(GroupContext);
+  const { fontScale, width } = useWindowDimensions();
   const inline = layout === 'inline';
+  // Keep words intact when accessibility text sizes or narrow windows leave too
+  // little room for two columns. Icons and navigation affordances stay in place.
+  const twoColumns = inline && fontScale <= 1.15 && width >= 360;
   const content = (
     <>
       {icon ? <IconContainer icon={icon} tone={iconTone} size="sm" /> : null}
-      {inline ? (
+      {twoColumns ? (
         <>
-          <AppText className="flex-1 font-geist-medium" numberOfLines={2}>
-            {label}
-          </AppText>
+          <AppText className="flex-1 font-geist-medium">{label}</AppText>
           {value ? (
             <AppText
               variant="label"
               tone="muted"
-              numberOfLines={1}
               selectable={!onPress}
-              className="max-w-[55%] text-right"
+              className="max-w-[50%] shrink text-right"
             >
               {value}
             </AppText>
@@ -68,11 +69,20 @@ export function AppListItem({
         </>
       ) : (
         <View className="flex-1 gap-0.5">
-          <AppText variant="caption" tone="muted">
+          <AppText
+            variant={inline ? 'body' : 'caption'}
+            tone={inline ? 'default' : 'muted'}
+            className={inline ? 'font-geist-medium' : undefined}
+          >
             {label}
           </AppText>
           {value ? (
-            <AppText selectable={!onPress} className="font-geist-medium">
+            <AppText
+              variant={inline ? 'label' : 'body'}
+              tone={inline ? 'muted' : 'default'}
+              selectable={!onPress}
+              className={inline ? undefined : 'font-geist-medium'}
+            >
               {value}
             </AppText>
           ) : null}

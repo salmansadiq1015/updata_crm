@@ -50,16 +50,23 @@ const AGENT_SERVICE_PERMISSIONS = [
 const PKG = 'expo.modules.updatatelephony';
 
 /**
- * Private build only: register the SMS components of modules/updata-telephony.
- * The Play build never declares them, so its manifest has no SMS surface at all.
+ * Reconcile SMS components on every prebuild, including private -> play switches
+ * without --clean. A shared APK must not retain a private build's SMS receiver.
  *  - SmsResultReceiver   : SENT / DELIVERED PendingIntents (explicit, not exported)
  *  - SmsInboundReceiver  : SMS_RECEIVED, only from the system (BROADCAST_SMS); it keeps
  *                          nothing except replies from numbers in an active conversation
  *  - SmsAgentService     : dataSync foreground service while the agent is running
  */
-const withPrivateSmsComponents: ConfigPlugin = (config) =>
+const withSmsComponents: ConfigPlugin = (config) =>
   withAndroidManifest(config, (mod) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
+    if (!PRIVATE_BUILD) {
+      app.receiver = (app.receiver ?? []).filter(
+        (item) => ![`${PKG}.SmsResultReceiver`, `${PKG}.SmsInboundReceiver`].includes(item.$['android:name']),
+      );
+      app.service = (app.service ?? []).filter((item) => item.$['android:name'] !== `${PKG}.SmsAgentService`);
+      return mod;
+    }
     const named = (list: { $: { 'android:name': string } }[] | undefined, name: string) =>
       (list ?? []).some((item) => item.$['android:name'] === name);
     app.receiver = app.receiver ?? [];
@@ -99,17 +106,14 @@ const VARIANT = {
   production: { name: 'Updata', idSuffix: '' },
 } as const;
 
-const withDistribution: ConfigPlugin = (config) =>
-  PRIVATE_BUILD ? withPrivateSmsComponents(config) : config;
-
 export default ({ config }: ConfigContext): ExpoConfig =>
-  withDistribution(
+  withSmsComponents(
     withGradleMemory({
       ...config,
       name: VARIANT[env.appEnv].name,
       slug: 'updata-mobile',
       scheme: 'updata',
-      version: '0.1.0',
+      version: '0.1.2',
       orientation: 'portrait',
       icon: './assets/icon.png',
       // Follows the device; the user can override it in Settings (light / dark / system).
@@ -118,7 +122,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       android: {
         // Each environment installs side by side, so a dev build never overwrites production.
         package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
-        versionCode: 1,
+        versionCode: 3,
         adaptiveIcon: {
           foregroundImage: './assets/android-icon-foreground.png',
           backgroundColor: BRAND_NAVY,
@@ -134,9 +138,10 @@ export default ({ config }: ConfigContext): ExpoConfig =>
         // Both are ordinary runtime ("dangerous") permissions requested at the moment of use; neither
         // is in Google Play's restricted SMS / Call Log groups, so no core-use declaration is needed.
         // SMS (EXPO_PUBLIC_DISTRIBUTION):
-        // - play    : no SMS permissions (Play restricts the SMS group to default SMS apps);
+        // - play    : for Play AND shared APKs; no SMS permissions;
         //             the app opens the system composer instead.
-        // - private : SEND_SMS + RECEIVE_SMS for the automatic AI SMS agent over the phone's
+        // - private : NOT for WhatsApp/browser sharing (Play Protect blocks RECEIVE_SMS).
+        //             SEND_SMS + RECEIVE_SMS for the automatic AI SMS agent over the phone's
         //             own SIM, plus a dataSync foreground service + notification while it runs.
         //             READ_SMS is never requested: replies arrive via the SMS_RECEIVED broadcast
         //             and only those from active conversation numbers are kept.
@@ -158,9 +163,17 @@ export default ({ config }: ConfigContext): ExpoConfig =>
           'android.permission.SYSTEM_ALERT_WINDOW',
           'android.permission.READ_SMS',
           'android.permission.READ_CALL_LOG',
+          'android.permission.BIND_ACCESSIBILITY_SERVICE',
+          'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE',
           ...(PRIVATE_BUILD
             ? []
-            : [...SMS_PERMISSIONS, 'android.permission.RECEIVE_MMS', 'android.permission.RECEIVE_WAP_PUSH']),
+            : [
+                ...SMS_PERMISSIONS,
+                'android.permission.RECEIVE_MMS',
+                'android.permission.RECEIVE_WAP_PUSH',
+                'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+                'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+              ]),
         ],
       },
       plugins: [

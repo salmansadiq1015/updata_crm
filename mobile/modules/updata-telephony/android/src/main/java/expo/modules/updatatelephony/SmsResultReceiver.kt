@@ -5,9 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.telephony.SmsMessage
+import android.util.Log
 
 /** SENT / DELIVERED results for SmsSender's PendingIntents. Persists first, then emits. */
 class SmsResultReceiver : BroadcastReceiver() {
+  private companion object {
+    const val TAG = "UpdataSms"
+  }
+
   override fun onReceive(context: Context, intent: Intent) {
     val messageId = intent.getStringExtra(SmsSender.EXTRA_MESSAGE_ID) ?: return
     val part = intent.getIntExtra(SmsSender.EXTRA_PART, 0)
@@ -15,10 +20,17 @@ class SmsResultReceiver : BroadcastReceiver() {
     val now = System.currentTimeMillis()
     when (intent.action) {
       SmsSender.ACTION_SENT -> {
-        val entry = store.journalPartResult(messageId, part, SmsLogic.sentResultName(resultCode), now) ?: return
+        // The modem's own cause (e.g. no SMS balance, bad SMS centre) rides along as "errorCode";
+        // without it a GENERIC_FAILURE cannot be told apart. Logged without the number or text.
+        val radioCode = intent.getIntExtra("errorCode", -1).takeIf { it != -1 }
+        if (resultCode != SmsLogic.RESULT_OK) {
+          Log.w(TAG, "sms sent result=${SmsLogic.sentResultName(resultCode)} radioCode=${radioCode ?: "none"} part=$part")
+        }
+        val entry = store.journalPartResult(messageId, part, SmsLogic.sentResultName(resultCode), now, radioCode) ?: return
         SmsEvents.emit(SmsEvents.STATUS, mapOf(
           "messageId" to messageId, "status" to entry.optString("status"),
           "errorCode" to entry.opt("errorCode")?.takeIf { it != org.json.JSONObject.NULL },
+          "radioErrorCode" to entry.opt("radioErrorCode")?.takeIf { it != org.json.JSONObject.NULL },
         ))
       }
       SmsSender.ACTION_DELIVERED -> {

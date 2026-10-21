@@ -1197,3 +1197,34 @@ describe('messaging campaign operations', () => {
     ]));
   });
 });
+
+describe('SMS destinations and STOP (2026-10-21 audit)', () => {
+  it('sends a Pakistani lead with a local number to +92, not +41', async () => {
+    const lead = await Lead.create({
+      leadNumber: 'L-99501', name: 'Lahore Shop', mobile: '0300 1234567', address: { country: 'PK' }, createdBy: actor,
+    });
+    await Consent.create({
+      leadId: lead._id, channel: 'sms', status: 'granted', source: 'form', evidence: 'Opt-in', capturedAt: new Date(), changedBy: actor,
+    });
+    const created = await service.createCampaign({
+      name: 'PK destination', channel: 'sms', purpose: 'support',
+      content: { bodyText: 'Hello' }, selection: { mode: 'explicit', leadIds: [lead._id] },
+    }, actor);
+    const row = await MessageRecipient.findOne({ campaignId: created._id }).lean();
+    expect(row.destination).toBe('+923001234567');
+  });
+
+  it('a TextBee "Stop." reply with a 0092… sender suppresses the +92 lead', async () => {
+    const lead = await Lead.create({
+      leadNumber: 'L-99502', name: 'Karachi Shop', mobile: '+923001234567', normalizedPhone: '+923001234567',
+      address: { country: 'PK' }, createdBy: actor,
+    });
+    const result = await service.suppressInbound({
+      channel: 'sms', from: '0092 300 1234567', provider: 'textbee', messageId: 'sms-pk-stop', text: 'Stop.',
+      payload: { webhookEvent: 'MESSAGE_RECEIVED', message: 'Stop.' },
+    });
+    expect(result).toMatchObject({ received: true, optOut: true });
+    await expect(Suppression.findOne({ channel: 'sms', destinationHash: destinationHash('sms', '+923001234567') }).lean())
+      .resolves.toMatchObject({ leadId: lead._id, reason: 'opt_out' });
+  });
+});

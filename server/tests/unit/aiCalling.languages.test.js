@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeAll, describe, expect, it, jest } from '@jest/globals';
+import { serve } from '../helpers/serve.js';
 
 /**
  * AI agent languages: the allow-list (single source of truth), Joi validation of
@@ -141,12 +142,12 @@ describe('buildSystemPrompt language instruction', () => {
 
 describe('GET /ai-calling/languages', () => {
   it('requires authentication and ai-calling:read', async () => {
-    await request(app).get('/ai-calling/languages').expect(401);
-    await request(app).get('/ai-calling/languages').set('x-test-user', 'u1').set('x-test-perms', 'crm:read').expect(403);
+    await request(serve(app)).get('/ai-calling/languages').expect(401);
+    await request(serve(app)).get('/ai-calling/languages').set('x-test-user', 'u1').set('x-test-perms', 'crm:read').expect(403);
   });
 
   it('returns the list and the default language', async () => {
-    const res = await request(app).get('/ai-calling/languages')
+    const res = await request(serve(app)).get('/ai-calling/languages')
       .set('x-test-user', 'u1').set('x-test-perms', 'ai-calling:read').expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.defaultLanguage).toBe('en');

@@ -5,6 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import {
   afterAll, beforeAll, beforeEach, describe, expect, it, jest,
 } from '@jest/globals';
+import { serve } from '../helpers/serve.js';
 
 process.env.AI_CALLING_REQUIRE_CONSENT = 'false';
 
@@ -94,8 +95,8 @@ beforeEach(async () => {
 describe('agent tool API over HTTP', () => {
   it('rejects a request with no / bad token (401)', async () => {
     const { internalCallId } = await setupCall();
-    await request(app).get(`/agent/${internalCallId}/context`).expect(401);
-    await request(app).get(`/agent/${internalCallId}/context`).set('Authorization', 'Bearer nonsense').expect(401);
+    await request(serve(app)).get(`/agent/${internalCallId}/context`).expect(401);
+    await request(serve(app)).get(`/agent/${internalCallId}/context`).set('Authorization', 'Bearer nonsense').expect(401);
   });
 
   it('runs the full tool flow with a valid per-call token', async () => {
@@ -103,19 +104,19 @@ describe('agent tool API over HTTP', () => {
     const token = issueAgentToken(internalCallId);
     const auth = { Authorization: `Bearer ${token}` };
 
-    const ctx = await request(app).get(`/agent/${internalCallId}/context`).set(auth).expect(200);
+    const ctx = await request(serve(app)).get(`/agent/${internalCallId}/context`).set(auth).expect(200);
     expect(ctx.body.data.nextAction.type).toBe('disclose');
     expect(ctx.body.data.leadContext.businessName).toBe('Acme GmbH');
 
-    const disclosed = await request(app).post(`/agent/${internalCallId}/disclose`).set(auth).send({}).expect(200);
+    const disclosed = await request(serve(app)).post(`/agent/${internalCallId}/disclose`).set(auth).send({}).expect(200);
     expect(disclosed.body.data.nextAction).toMatchObject({ type: 'ask', question: { fieldKey: 'active' } });
 
-    const answered = await request(app).post(`/agent/${internalCallId}/record-answer`).set(auth)
+    const answered = await request(serve(app)).post(`/agent/${internalCallId}/record-answer`).set(auth)
       .send({ fieldKey: 'active', rawAnswer: 'yes we are open' }).expect(200);
     expect(answered.body.data.validation).toBe('valid');
     expect(answered.body.data.nextAction.type).toBe('finish');
 
-    const ended = await request(app).post(`/agent/${internalCallId}/end`).set(auth).send({ durationSeconds: 30 }).expect(200);
+    const ended = await request(serve(app)).post(`/agent/${internalCallId}/end`).set(auth).send({ durationSeconds: 30 }).expect(200);
     expect(ended.body.data).toMatchObject({ processed: true, qualification: 'qualified' });
 
     const updatedLead = await Lead.findById(lead._id).lean();
@@ -126,21 +127,21 @@ describe('agent tool API over HTTP', () => {
     const { internalCallId } = await setupCall();
     const token = issueAgentToken(internalCallId);
     const auth = { Authorization: `Bearer ${token}` };
-    const answered = await request(app).post(`/agent/${internalCallId}/answered`).set(auth).expect(200);
+    const answered = await request(serve(app)).post(`/agent/${internalCallId}/answered`).set(auth).expect(200);
     expect(answered.body.data.changed).toBe(true);
     expect((await CallRecord.findOne({ internalCallId }).lean()).state).toBe('in_progress');
     // The worker cannot assert a business outcome.
-    await request(app).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'answered_completed' }).expect(400);
-    const end = await request(app).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'voicemail' }).expect(200);
+    await request(serve(app)).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'answered_completed' }).expect(400);
+    const end = await request(serve(app)).post(`/agent/${internalCallId}/end`).set(auth).send({ disposition: 'voicemail' }).expect(200);
     expect(end.body.data.disposition).toBe('voicemail');
     // Tool calls after the end are refused.
-    await request(app).post(`/agent/${internalCallId}/disclose`).set(auth).expect(409);
+    await request(serve(app)).post(`/agent/${internalCallId}/disclose`).set(auth).expect(409);
   });
 
   it('validates the body (missing fieldKey → 400)', async () => {
     const { internalCallId } = await setupCall();
     const token = issueAgentToken(internalCallId);
-    await request(app).post(`/agent/${internalCallId}/record-answer`).set('Authorization', `Bearer ${token}`)
+    await request(serve(app)).post(`/agent/${internalCallId}/record-answer`).set('Authorization', `Bearer ${token}`)
       .send({ rawAnswer: 'hi' }).expect(400);
   });
 
@@ -149,10 +150,10 @@ describe('agent tool API over HTTP', () => {
     const b = await setupCall();
     const tokenForA = issueAgentToken(a.internalCallId);
     // Token is bound to call A; naming call B in the path is refused outright.
-    await request(app).get(`/agent/${b.internalCallId}/context`).set('Authorization', `Bearer ${tokenForA}`).expect(403);
-    await request(app).post(`/agent/${b.internalCallId}/record-answer`).set('Authorization', `Bearer ${tokenForA}`)
+    await request(serve(app)).get(`/agent/${b.internalCallId}/context`).set('Authorization', `Bearer ${tokenForA}`).expect(403);
+    await request(serve(app)).post(`/agent/${b.internalCallId}/record-answer`).set('Authorization', `Bearer ${tokenForA}`)
       .send({ fieldKey: 'active', rawAnswer: 'yes' }).expect(403);
     // A token in the query string is not accepted (it would leak into access logs).
-    await request(app).get(`/agent/${a.internalCallId}/context?agentToken=${tokenForA}`).expect(401);
+    await request(serve(app)).get(`/agent/${a.internalCallId}/context?agentToken=${tokenForA}`).expect(401);
   });
 });

@@ -76,6 +76,7 @@ const configSchema = Joi.object({
   MESSAGE_UNSUBSCRIBE_SECRET: Joi.string().min(16).allow('').default(''),
   MESSAGING_PUBLIC_API_URL: Joi.string().uri().allow('').default(''),
   MESSAGING_CONCURRENCY: Joi.number().integer().min(1).max(25).default(3),
+  MESSAGING_RATE_PER_MINUTE: Joi.number().integer().min(1).max(600).default(30),
   MESSAGING_RECOVERY_STALE_MINUTES: Joi.number().integer().min(2).max(1440).default(10),
   MESSAGING_RECOVERY_BATCH_SIZE: Joi.number().integer().min(1).max(5000).default(500),
   MESSAGING_RECONCILIATION_MIN_AGE_MINUTES: Joi.number().integer().min(1).max(1440).default(5),

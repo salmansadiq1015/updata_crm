@@ -141,8 +141,12 @@ refresh the watch list → lease ≤ 1 message → confirm `attempting` → `Sms
   evidence), visible on the web lead drawer under "Mobile calls & SMS" with the full transcript.
 
 **Two builds** (`EXPO_PUBLIC_DISTRIBUTION`): `play` (default; no SMS permissions, `tools:node=remove`
-on all SMS permissions) and `private` (company phones, direct APK install). EAS profiles:
-`production` (Play, AAB) and `production-private` / `staging-private` (APK).
+on all SMS permissions) and `private` (company SMS-agent phones). EAS profiles:
+`production` (Play, AAB), `production-apk` (shared APK, no automatic SIM SMS), and
+`production-private` / `staging-private` (SMS-agent APK).
+The private APK's `RECEIVE_SMS` permission can trigger Google Play Protect's installation
+block when shared through WhatsApp, a browser, or a file manager. Use `production-apk`
+for general distribution; the private profile is not an installability workaround.
 
 **Emulator evidence (2026-10-19, isolated API + local Mongo, fake numbers, no real leads):** opening
 sent as 2-part SMS; app backgrounded + screen asleep; injected reply "High!" captured, interpreted

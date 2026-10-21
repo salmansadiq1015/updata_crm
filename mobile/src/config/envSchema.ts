@@ -10,11 +10,12 @@ export const APP_ENVS = ['development', 'staging', 'production'] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
 
 /**
- * - play:    Google Play build. No SMS permissions at all (Play restricts SEND_SMS /
+ * - play:    Google Play and shared APK build. No SMS permissions (Play restricts SEND_SMS /
  *            RECEIVE_SMS to default SMS apps); SMS goes through the system composer.
- * - private: directly installed APK for company phones. Adds SEND_SMS + RECEIVE_SMS,
+ * - private: dedicated company SMS-agent build. Adds SEND_SMS + RECEIVE_SMS,
  *            the SMS receivers and the agent foreground service, enabling the
- *            automatic AI SMS agent over the phone's own SIM.
+ *            automatic AI SMS agent over the phone's own SIM. Play Protect can block
+ *            installation from messaging apps / browsers; not the shared APK profile.
  */
 export const DISTRIBUTIONS = ['play', 'private'] as const;
 export type Distribution = (typeof DISTRIBUTIONS)[number];

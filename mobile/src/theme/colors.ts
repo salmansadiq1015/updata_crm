@@ -1,7 +1,6 @@
-// Single source of truth for colour. Values are transcribed from the web CRM's
-// `client/src/app/globals.css` (`:root` and `.dark`). Tailwind classes such as
-// `bg-primary` resolve to the CSS variables that `ThemeProvider` derives from
-// these objects, so a token changes in exactly one place.
+// Single source of truth for colour. The brand follows the web CRM; semantic
+// colours are tuned for readable mobile text, including tinted status badges.
+// Tailwind classes and native styles both read these tokens via ThemeProvider.
 
 export const brand = {
   50: '#EEF2FB',
@@ -61,19 +60,19 @@ export const palettes: Record<ColorScheme, SemanticColors> = {
     secondary: brand[600],
     secondaryForeground: '#FFFFFF',
     muted: '#F1F5F9',
-    mutedForeground: '#6B7280',
+    mutedForeground: '#526176',
     accent: brand[50],
     accentForeground: brand[700],
-    destructive: '#EF4444',
+    destructive: '#B91C1C',
     destructiveForeground: '#FFFFFF',
-    success: '#22C55E',
+    success: '#166534',
     successForeground: '#FFFFFF',
-    warning: '#F59E0B',
-    warningForeground: '#111827',
-    info: '#3B82F6',
+    warning: '#92400E',
+    warningForeground: '#FFFFFF',
+    info: '#1D4ED8',
     infoForeground: '#FFFFFF',
-    border: '#E5E7EB',
-    input: '#E5E7EB',
+    border: '#DCE2EC',
+    input: '#B8C2D3',
     ring: brand[700],
   },
   dark: {

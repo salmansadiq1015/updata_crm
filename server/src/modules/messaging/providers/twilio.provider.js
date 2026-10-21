@@ -82,6 +82,11 @@ export class TwilioSmsProvider {
         cost: json.price ? { amount: Math.abs(Number(json.price)), currency: String(json.price_unit || 'USD').toUpperCase() } : undefined,
       });
     }
+    if (response.ok || response.status === 409 || response.status >= 500) {
+      // No proof Twilio did not create the message (2xx without sid, conflict, server
+      // error): reconcile instead of allowing a retry that could send it twice.
+      return ambiguous(PROVIDER, json.message || `Twilio returned ${response.status} without a message sid`, json.code || `HTTP_${response.status}`);
+    }
     return rejected(PROVIDER, {
       message: json.message || `Twilio rejected the request (${response.status})`,
       code: json.code || `HTTP_${response.status}`,

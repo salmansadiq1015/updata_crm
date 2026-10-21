@@ -22,7 +22,7 @@ export type AppRadioGroupProps<T extends string> = {
   disabled?: boolean;
   /**
    * `list` (default): grouped card of full-width rows.
-   * `segmented`: one-line segmented control for 2–4 short options (e.g. theme).
+   * `segmented`: equal-width choices for 2–4 short options (e.g. theme).
    */
   appearance?: 'list' | 'segmented';
   className?: string;
@@ -45,7 +45,7 @@ export function AppRadioGroup<T extends string>({
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel={accessibilityLabel}
-        className={cn('h-12 flex-row gap-1 rounded-2xl border border-border bg-muted/70 p-1', className)}
+        className={cn('min-h-14 flex-row gap-1 rounded-2xl border border-border bg-muted p-1', className)}
       >
         {options.map((option) => {
           const selected = option.value === value;
@@ -62,15 +62,17 @@ export function AppRadioGroup<T extends string>({
               hitSlop={{ top: 4, bottom: 4 }}
               style={selected && scheme === 'light' ? shadows.sm : undefined}
               className={cn(
-                'flex-1 items-center justify-center rounded-xl px-2',
-                selected ? 'border border-border bg-card' : 'active:bg-card/60',
+                'min-h-12 min-w-0 flex-1 items-center justify-center rounded-xl border px-2 py-2',
+                selected ? 'border-primary/30 bg-card' : 'border-transparent active:bg-card/60',
                 inactive && 'opacity-50',
               )}
             >
               <AppText
                 variant="label"
-                numberOfLines={1}
-                className={selected ? 'font-geist-semibold text-foreground' : 'text-muted-foreground'}
+                className={cn(
+                  'text-center',
+                  selected ? 'font-geist-semibold text-accent-foreground' : 'text-muted-foreground',
+                )}
               >
                 {option.label}
               </AppText>
@@ -101,7 +103,8 @@ export function AppRadioGroup<T extends string>({
             disabled={inactive}
             onPress={() => onChange(option.value)}
             className={cn(
-              'min-h-12 flex-row items-center gap-3 px-4 py-2.5 active:bg-muted',
+              'min-h-12 flex-row items-center gap-3 px-4 py-3 active:bg-muted',
+              selected && 'bg-accent',
               inactive && 'opacity-50',
             )}
           >
@@ -109,7 +112,9 @@ export function AppRadioGroup<T extends string>({
               <View className="absolute end-0 start-4 top-0 h-px bg-border" pointerEvents="none" />
             ) : null}
             <View className="flex-1 gap-0.5">
-              <AppText className={selected ? 'font-geist-semibold' : 'font-geist-medium'}>
+              <AppText
+                className={selected ? 'font-geist-semibold text-accent-foreground' : 'font-geist-medium'}
+              >
                 {option.label}
               </AppText>
               {option.description ? (
@@ -121,7 +126,7 @@ export function AppRadioGroup<T extends string>({
             <View
               className={cn(
                 'h-5 w-5 items-center justify-center rounded-full',
-                selected ? 'bg-primary' : 'border-2 border-input',
+                selected ? 'bg-primary' : 'border-2 border-muted-foreground',
               )}
             >
               {selected ? <Icon icon={Check} size="xs" color="primaryForeground" strokeWidth={3} /> : null}

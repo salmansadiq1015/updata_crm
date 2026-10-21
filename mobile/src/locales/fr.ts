@@ -709,6 +709,7 @@ export const fr: Translations = {
   },
   aiAgent: {
     entry: "Confier à l'agent IA",
+    entryShort: 'Agent IA',
     entryA11y: "Confier {{name}} à l'agent IA",
     campaignsTitle: 'Agent IA',
     campaignsA11y: "Campagnes de l'agent IA",
@@ -1246,6 +1247,30 @@ export const fr: Translations = {
     todayCount_other: '{{count}} aujourd’hui',
   },
   callCampaign: {
+    editor: {
+      configure: 'Modifier les réponses',
+      up: 'Monter',
+      down: 'Descendre',
+      type: 'Type de réponse',
+      options: 'Options séparées par des virgules',
+      showWhen: 'Afficher si la réponse correspond',
+      always: 'Toujours afficher',
+      equals: 'Réponse attendue',
+      types: {
+        short_text: 'Texte',
+        long_text: 'Notes',
+        boolean: 'Oui / non',
+        single_choice: 'Un choix',
+        multiple_choice: 'Plusieurs choix',
+        integer: 'Nombre entier',
+        decimal: 'Décimal',
+        currency: 'Budget',
+        date: 'Date',
+        time: 'Heure',
+        email: 'E-mail',
+        phone: 'Téléphone',
+      },
+    },
     title: "Campagnes d'appels",
     intro:
       "Appelez une liste de leads depuis la SIM de ce téléphone. Vous parlez ; l'app affiche les questions, enregistre les réponses et met à jour le CRM. L'IA ne peut ni parler ni écouter pendant un appel SIM (Android ne le permet pas).",
@@ -1377,6 +1402,10 @@ export const fr: Translations = {
       history: 'Activité',
     },
     run: {
+      editResult: 'Corriger le résultat rejeté',
+      resultChanged: 'Cette tentative a changé sur le serveur. Vérifiez le résultat enregistré.',
+      storageError:
+        'Échec du stockage sur le téléphone. Les données non confirmées restent en mémoire. Réessayez avant de fermer.',
       title: 'Appels',
       offline:
         'Hors ligne. Les résultats restent sur ce téléphone et seront synchronisés ; le lead suivant nécessite une connexion.',
@@ -1389,13 +1418,39 @@ export const fr: Translations = {
       inCall: 'Appel en cours',
       inCallHint: "Posez les questions ci-dessous et touchez les réponses. Revenez ici à la fin de l'appel.",
       callEnded: "L'appel est terminé",
-      saved: 'Enregistré dans le CRM',
+      saved: 'Enregistré dans la campagne',
       savedLocal: 'Enregistré sur ce téléphone — synchronisation',
       countdown: 'Lead suivant dans {{seconds}} s',
       countdownDial: 'Appel suivant dans {{seconds}} s',
       pauseSequence: 'Pause',
       resumeSequence: 'Continuer',
       nextNow: 'Lead suivant maintenant',
+      autoCall: 'Appeler automatiquement',
+      preDial: 'Appel de {{name}} dans {{seconds}} s',
+      stopAutoCall: "Arrêter — j'appuierai sur Appeler",
+      autoCallHold: {
+        storage:
+          'Échec du stockage sur le téléphone. Les données non confirmées restent en mémoire. Réessayez avant de fermer.',
+        permission: "L'appel automatique nécessite l'accès au téléphone (voir ci-dessus).",
+        sim: "Choisissez la SIM pour lancer l'appel automatique.",
+        background: "L'appel automatique attend que Updata soit à l'écran.",
+        paused: 'En pause. Reprenez quand vous êtes prêt.',
+        offline: "L'appel automatique attend une connexion.",
+        not_running: "La campagne n'est pas en cours.",
+        stopped: 'Arrêté pour ce lead. Appuyez sur Appeler quand vous êtes prêt.',
+      },
+      permissionTitle: "Autoriser l'accès au téléphone",
+      permissionBody:
+        "Updata a besoin de l'autorisation Téléphone pour appeler depuis votre SIM et détecter la fin de l'appel. Sans elle, le composeur s'ouvre et vous devez appuyer sur Appeler à chaque fois.",
+      permissionAllow: "Autoriser l'accès au téléphone",
+      permissionSettings: 'Autoriser dans les réglages',
+      dialerHandoff: "Appuyez sur le bouton d'appel du composeur, puis revenez dans Updata.",
+      noCallState:
+        "Updata ne voit pas l'état de cet appel. Appuyez sur « L'appel est terminé » après avoir raccroché.",
+      claim_renewed:
+        'Ce lead avait été libéré après une longue pause et a été repris. Vos réponses sont conservées.',
+      whoHears:
+        "Le lead n'entend que vous. La lecture à voix haute se fait sur ce téléphone, pas dans l'appel ; l'IA ne parle ni n'écoute sur les appels SIM.",
     },
     idle: {
       queue_empty: 'Plus aucun lead à appeler.',
@@ -1421,6 +1476,9 @@ export const fr: Translations = {
       unknown: 'Ne sait pas',
       placeholder: 'Saisir la réponse',
       readAloud: 'Lire la question à voix haute',
+      askNext: 'À demander ensuite',
+      readAloudNote:
+        "La lecture à voix haute passe par le haut-parleur de ce téléphone pour vous ; le lead ne l'entend pas dans l'appel.",
     },
     callback: {
       date: 'Date',
@@ -1461,6 +1519,8 @@ export const fr: Translations = {
       syncFailed: 'Pas encore dans le CRM (échec de synchronisation).',
     },
     errors: {
+      required_answers: 'Répondez aux questions obligatoires ou indiquez « inconnu ».',
+      SIM_CALL_ALREADY_DIALED: 'Cet appel a déjà été autorisé. Vérifiez son résultat avant de continuer.',
       outcome: 'Choisissez un résultat.',
       callback_time: "Choisissez la date et l'heure du rappel.",
       callback_past: "L'heure du rappel est passée.",

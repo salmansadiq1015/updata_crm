@@ -122,4 +122,21 @@ describe('SIM call campaigns (web)', () => {
     expect(input).toMatchObject({ name: 'Q4 garages', leadIds: ['l1'] });
     expect(input.questionnaire.questions[2].condition).toEqual({ all: [{ field: 'interest', in: ['high', 'medium'] }] });
   });
+
+  it('keeps the same creation key after a lost response and shows a recoverable error', async () => {
+    api.list.mockResolvedValue(page([]));
+    api.callbacks.mockResolvedValue(page([]));
+    api.create.mockRejectedValueOnce(new Error('Connection lost')).mockResolvedValueOnce(campaign('draft'));
+    api.get.mockResolvedValue(campaign('draft'));
+    wrap(<SimCallsWorkspace />);
+    fireEvent.click(await screen.findByText('New campaign'));
+    fireEvent.change(screen.getByLabelText('Campaign name'), { target: { value: 'Q4 garages' } });
+    fireEvent.click(await screen.findByText('Acme AG'));
+    fireEvent.click(screen.getByText('Create campaign'));
+    expect(await screen.findByText('Connection lost')).toBeTruthy();
+    fireEvent.click(screen.getByText('Create campaign'));
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(2));
+    expect(api.create.mock.calls[0]![0].creationKey).toBeTruthy();
+    expect(api.create.mock.calls[1]![0].creationKey).toBe(api.create.mock.calls[0]![0].creationKey);
+  });
 });

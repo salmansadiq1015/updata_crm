@@ -1,6 +1,7 @@
 import request from 'supertest';
 import express from 'express';
 import { jest, describe, it, beforeAll, afterEach, expect } from '@jest/globals';
+import { serve } from '../../../../tests/helpers/serve.js';
 
 // End-to-end at the HTTP boundary: the real `validate(bulkImport)` gate + the
 // real `importExtensionLeads` service, with only the persistence layer mocked.
@@ -57,7 +58,7 @@ describe('POST /crm/leads/bulk-import (end-to-end path)', () => {
     const leads = Array.from({ length: 9 }, (_, i) => ({ clientId: `c${i}`, businessName: `Hotel ${i}` }));
     leads[7].phone = 'Hôtel Clarisse · Visited link in your Google Maps session';
 
-    const res = await request(app).post('/api/v1/crm/leads/bulk-import').send({ leads });
+    const res = await request(serve(app)).post('/api/v1/crm/leads/bulk-import').send({ leads });
 
     expect(res.status).toBe(200); // was 400 before the fix
     expect(res.body.data).toMatchObject({ total: 9, created: 9, existing: 0, failed: 0 });
@@ -73,7 +74,7 @@ describe('POST /crm/leads/bulk-import (end-to-end path)', () => {
       return { ...doc, _id: '507f1f77bcf86cd799439012', leadNumber: 'L-00051' };
     });
 
-    const res = await request(app).post('/api/v1/crm/leads/bulk-import').send({
+    const res = await request(serve(app)).post('/api/v1/crm/leads/bulk-import').send({
       leads: [
         { clientId: 'a', businessName: 'Good Row' },
         { clientId: 'b', businessName: 'Bad Row' },
@@ -89,7 +90,7 @@ describe('POST /crm/leads/bulk-import (end-to-end path)', () => {
 
   it('still rejects an oversized batch (> 500) at the gate', async () => {
     const leads = Array.from({ length: 501 }, (_, i) => ({ clientId: String(i), businessName: 'X' }));
-    const res = await request(app).post('/api/v1/crm/leads/bulk-import').send({ leads });
+    const res = await request(serve(app)).post('/api/v1/crm/leads/bulk-import').send({ leads });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body.success).toBe(false);
   });

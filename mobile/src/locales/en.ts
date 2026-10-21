@@ -695,6 +695,7 @@ export const en = {
   },
   aiAgent: {
     entry: 'Give to AI agent',
+    entryShort: 'AI agent',
     entryA11y: 'Give {{name}} to the AI agent',
     campaignsTitle: 'AI agent',
     campaignsA11y: 'AI agent campaigns',
@@ -1221,6 +1222,30 @@ export const en = {
     todayCount_other: '{{count}} today',
   },
   callCampaign: {
+    editor: {
+      configure: 'Edit answer settings',
+      up: 'Move up',
+      down: 'Move down',
+      type: 'Answer type',
+      options: 'Options, separated by commas',
+      showWhen: 'Show when an answer matches',
+      always: 'Always show',
+      equals: 'Matching answer',
+      types: {
+        short_text: 'Text',
+        long_text: 'Notes',
+        boolean: 'Yes / no',
+        single_choice: 'Choose one',
+        multiple_choice: 'Choose several',
+        integer: 'Whole number',
+        decimal: 'Decimal',
+        currency: 'Budget',
+        date: 'Date',
+        time: 'Time',
+        email: 'Email',
+        phone: 'Phone',
+      },
+    },
     title: 'Call campaigns',
     intro:
       "Call a list of leads from this phone's SIM. You talk; the app shows the questions, records the answers and updates the CRM. The AI cannot speak or listen on a SIM call (Android does not allow it).",
@@ -1352,6 +1377,10 @@ export const en = {
       history: 'Activity',
     },
     run: {
+      editResult: 'Correct rejected outcome',
+      resultChanged: 'This attempt has changed on the server. Reconcile its stored result before editing.',
+      storageError:
+        'Phone storage failed. Work is kept in memory only until the server confirms it. Retry before closing the app.',
       title: 'Calling',
       offline: 'Offline. Results are kept on this phone and synced later; the next lead needs a connection.',
       unresolved: 'Results that need your attention: {{count}} (see campaign details).',
@@ -1363,13 +1392,38 @@ export const en = {
       inCall: 'Call in progress',
       inCallHint: 'Ask the questions below and tap the answers. Come back here when the call ends.',
       callEnded: 'The call has ended',
-      saved: 'Saved to the CRM',
+      saved: 'Saved to the campaign',
       savedLocal: 'Saved on this phone — syncing',
       countdown: 'Next lead in {{seconds}} s',
       countdownDial: 'Calling the next lead in {{seconds}} s',
       pauseSequence: 'Pause',
       resumeSequence: 'Continue',
       nextNow: 'Next lead now',
+      autoCall: 'Call automatically',
+      preDial: 'Calling {{name}} in {{seconds}} s',
+      stopAutoCall: 'Stop — I will tap Call',
+      autoCallHold: {
+        storage:
+          'Phone storage failed. Work is kept in memory only until the server confirms it. Retry before closing the app.',
+        permission: 'Automatic calling needs phone access (see above).',
+        sim: 'Choose the SIM to call from to start automatic calling.',
+        background: 'Automatic calling waits while Updata is not on screen.',
+        paused: 'Paused. Continue when you are ready.',
+        offline: 'Automatic calling waits for a connection.',
+        not_running: 'The campaign is not running.',
+        stopped: 'Stopped for this lead. Tap Call when you are ready.',
+      },
+      permissionTitle: 'Allow phone access',
+      permissionBody:
+        "Updata needs the Phone permission to place the call on your SIM and to see when it ends. Without it, the phone's dialer opens and you have to press Call there each time.",
+      permissionAllow: 'Allow phone access',
+      permissionSettings: 'Open settings to allow',
+      dialerHandoff: "Press the call button in your phone's dialer, then come back to Updata.",
+      noCallState: "Updata can't see this call's state. Tap “The call has ended” when you hang up.",
+      claim_renewed:
+        'This lead was released after a long pause and has been picked up again. Your answers were kept.',
+      whoHears:
+        'The lead hears only you. Read-aloud plays on this phone, not inside the call; the AI does not speak or listen on SIM calls.',
     },
     idle: {
       queue_empty: 'No more leads to call.',
@@ -1395,6 +1449,9 @@ export const en = {
       unknown: "Don't know",
       placeholder: 'Type the answer',
       readAloud: 'Read the question aloud',
+      askNext: 'Ask next',
+      readAloudNote:
+        "Read-aloud plays on this phone's speaker so you can hear the question; the lead does not hear it through the call.",
     },
     callback: {
       date: 'Date',
@@ -1435,6 +1492,8 @@ export const en = {
       syncFailed: 'Not yet in the CRM (sync failed).',
     },
     errors: {
+      required_answers: 'Answer each required question or mark it unknown.',
+      SIM_CALL_ALREADY_DIALED: 'This attempt was already authorized. Check its outcome before continuing.',
       outcome: 'Choose an outcome.',
       callback_time: 'Pick the callback date and time.',
       callback_past: 'The callback time is in the past.',

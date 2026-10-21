@@ -411,7 +411,19 @@ export const smsRecipientSchema = z
 export type SmsRecipient = z.infer<typeof smsRecipientSchema>;
 
 // ---------------------------------------------------------------- inputs
-export type AgentQuestionType = 'short_text' | 'long_text' | 'single_choice' | 'boolean' | 'currency';
+export type AgentQuestionType =
+  | 'short_text'
+  | 'long_text'
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'boolean'
+  | 'currency'
+  | 'integer'
+  | 'decimal'
+  | 'date'
+  | 'time'
+  | 'email'
+  | 'phone';
 
 export type AgentQuestion = {
   fieldKey: string;
@@ -421,6 +433,7 @@ export type AgentQuestion = {
   required: boolean;
   options: string[];
   mapTo?: string | null;
+  condition?: { all: { field: string; equals: string | boolean | number }[] } | null;
 };
 
 export type CallSchedule = {

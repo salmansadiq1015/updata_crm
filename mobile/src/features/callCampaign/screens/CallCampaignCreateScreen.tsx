@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { randomUUID } from 'expo-crypto';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +72,7 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
   const [createdId, setCreatedId] = useState<string | null>(null);
   // A ref, not state: a tap handled by an older render must still see the created campaign.
   const created = useRef<string | null>(null);
+  const creation = useRef<{ payload: string; key: string } | null>(null);
   const timezone = deviceTimezone();
   const sims = useQuery({
     queryKey: queryKeys.communication.sims,
@@ -97,7 +99,7 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
     if (created.current) return; // never create the same campaign twice
     setSubmitError(null);
     try {
-      const campaign = await create.mutateAsync({
+      const input = {
         name: name.trim(),
         description: description.trim(),
         leadIds,
@@ -111,6 +113,7 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
             required: q.required,
             order: i + 1,
             options: q.options,
+            condition: q.condition ?? null,
           })),
         },
         settings: {
@@ -124,7 +127,10 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
           readAloud,
         },
         subscriptionId: simId,
-      });
+      };
+      const payload = JSON.stringify(input);
+      if (creation.current?.payload !== payload) creation.current = { payload, key: randomUUID() };
+      const campaign = await create.mutateAsync({ ...input, creationKey: creation.current.key });
       created.current = campaign.id;
       setCreatedId(campaign.id);
       navigation.replace('CallCampaignDetail', { campaignId: campaign.id });
@@ -177,6 +183,7 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
         <View className="gap-3">
           <AppText tone="muted">{t('callCampaign.create.questionsHelp')}</AppText>
           <QuestionListEditor
+            campaign
             questions={questions}
             onChange={setQuestions}
             invalid={showErrors ? invalid : []}

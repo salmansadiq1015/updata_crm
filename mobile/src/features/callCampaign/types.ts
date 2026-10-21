@@ -2,6 +2,7 @@
 // talks on their own SIM; the app guides and captures; the server owns the queue, answers
 // and CRM sync. Parsing tolerates extra fields; ids are normalised to `id`.
 import { z } from 'zod';
+import type { QualificationAnswer } from '@/features/communication/types';
 
 const idOf = (value: unknown) =>
   typeof value === 'object' && value !== null
@@ -263,6 +264,7 @@ export type CompleteInput = {
   answers?: AnswerInput[];
   notes?: string;
   transcript?: string;
+  qualification?: { answers: QualificationAnswer[] };
   callback?: { at: string; timezone: string; reason?: string } | null;
   doNotContact?: boolean;
   call?: {
@@ -275,6 +277,7 @@ export type CompleteInput = {
 };
 
 export type CampaignInput = {
+  creationKey?: string;
   name: string;
   description?: string;
   leadIds: string[];
@@ -287,6 +290,7 @@ export type CampaignInput = {
       required: boolean;
       order: number;
       options: string[];
+      condition?: { all: { field: string; equals: string | boolean | number }[] } | null;
     }[];
   };
   instructions?: string;

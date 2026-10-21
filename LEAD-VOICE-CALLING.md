@@ -1,5 +1,9 @@
 # AI Voice Calling
 
+**Current re-audit (2026-10-20): see [AI_CALLING_AUDIT.md](docs/AI_CALLING_AUDIT.md).**
+Earlier readiness labels and device runs below are historical. Current production readiness
+is NOT_PRODUCTION_READY until the release gates in the re-audit are verified.
+
 An outbound AI voice-calling feature for leads: configure questions dynamically, call
 business leads with an AI agent (OpenAI Realtime over LiveKit + SIP), collect structured
 answers, and auto-update the CRM pipeline through validated business rules.
@@ -63,12 +67,12 @@ target device. That needs either system privileges (a platform-signed or rooted 
 custom ROM with `CAPTURE_AUDIO_OUTPUT`), or a telephony provider that bridges the call audio
 to the AI (the cloud path in §1, which the requirement rules out for mobile).
 
-One exception was **not** tested: Android lets an app whose **accessibility service** is enabled
-capture audio during calls (call-recorder apps rely on this). Testing it requires the phone owner
-to enable a diagnostics accessibility service by hand. Even if it worked it would capture only
-through the microphone (speakerphone audio), it is barred on Google Play, it raises
-call-recording consent obligations, and it still provides no way to inject the AI's voice
-cleanly. It is therefore not recommended.
+Accessibility services can have audio-sharing behavior for legitimate accessibility features,
+but this does not grant an ordinary CRM access to protected telephony audio or an uplink
+injection API. Updata has no required accessibility function here. **Do not enable or implement
+an accessibility service to bypass call-audio restrictions or record remote calls.** No such
+service is included. See [Android audio sharing](https://developer.android.com/media/platform/sharing-audio-input)
+and [Google Play AccessibilityService policy](https://support.google.com/googleplay/android-developer/answer/10964491).
 
 ### 0.3 Final architecture (implemented 2026-10-19): AI-assisted SIM call campaigns
 
@@ -345,6 +349,90 @@ Calls only between the phone's own two numbers (user's choice); nobody else was 
 4. Campaign creation has no server idempotency key; the client guard covers double taps, not a
    retry after a lost response. Add an `Idempotency-Key` on create if this shows up in staging.
 5. Legal review per jurisdiction before production use.
+
+### 0.14 Bug fix: campaign calling needed a tap every time; "AI does not talk" (2026-10-20)
+
+**Status: `READY_FOR_STAGING`.** Automatic calling now works on the real TECNO. The AI still
+cannot speak or listen inside a SIM call: that is an Android limit, not a bug (0.1).
+
+#### Bug A — "I have to press Make Call for every lead"
+Traced `Start → claim → eligibility → dial → call state → outcome → sync → countdown → next`.
+Three root causes, in order of impact:
+1. **The campaign caller never asked for the Phone permissions.** Only the single-lead call
+   screen did. On a fresh install (every client APK) `placeCall` had no `CALL_PHONE`, so the
+   native module fell back to `ACTION_DIAL`: Android's dialer opened with the number and the
+   user had to press Call there, every time. Without `READ_PHONE_STATE` the SIM list was empty
+   and the call state was invisible, so the screen could sit on "Call in progress".
+   The developer's own phone had the permissions from another screen, which hid the bug.
+2. **Auto-dial only existed after a saved outcome, and was off by default.** The first lead
+   (and a lead reached by Skip or by reopening the caller) always waited for a tap.
+3. **After a hang-up while Updata was in the background**, the runner relied on the JS
+   listener only; if it missed the idle event the user had to tap "The call has ended".
+   And with only retries left, the caller waited for "Check again" even though the server
+   had given the time.
+
+Fixes (mobile only, no server change, no new permission):
+- `useCampaignRunner`: asks for `READ_PHONE_STATE` + `CALL_PHONE` before the server records
+  the dial; reports the route (`telecom_direct` vs `dialer_handoff`) and whether call state is
+  visible; re-reads the native persisted call events whenever the app returns to the
+  foreground; one **auto-call** mechanism: a visible "Calling <lead> in N s · Stop" countdown
+  on any claimed, never-dialled lead. It runs only while the app is on screen, permissions are
+  granted, a SIM is set, the campaign runs, the phone is online and nothing is paused; any
+  change resets it. A dialled lead (e.g. found again after a restart) is never auto-called.
+  With auto-call, a retry due within an hour is fetched by itself when due.
+- Run screen: permission card ("Allow phone access" / "Open settings"), "Call automatically"
+  switch (per campaign, per phone, persisted in the campaign outbox store; default = the
+  campaign's setting), dialer-handoff and no-call-state hints, outcome shown *above* the
+  questions after a call.
+
+#### Bug B — "the AI agent does not talk to the lead"
+Not fixable on a SIM call. Measured on the TECNO (0.1): during a call Android silences every
+capture source to RMS 0 and refuses the call-audio sources, and an app cannot inject audio
+into the call. What works and is verified:
+
+| Capability | Status |
+|---|---|
+| Show questions in order, skip rules (`condition`) | Works (tests both branches; device) |
+| Highlight the next question to ask | Added ("Ask next") |
+| Read a question aloud **to the phone user** | Works; plays on the phone, labelled as such |
+| Capture answers (chips / text / numbers), kept across retries | Works |
+| Post-call voice note → Whisper transcript, labelled "transcribed" | Works (verified 2026-10-19) |
+| Hear the lead / AI replies / AI speech into the call | **Not possible** on Android 13 without being the dialer or system app |
+
+The caller now says so where it matters: "The lead hears only you. Read-aloud plays on this
+phone, not inside the call; the AI does not speak or listen on SIM calls." The AI-voice
+option that does talk is the cloud route (LiveKit + SIP trunk), which needs a SIP provider
+and per-lead consent and is separate from SIM calling.
+
+#### Tests (all mocks; not proof of a real call)
+New in `CallCampaignRunScreen.test.tsx`: first lead auto-called after a visible countdown;
+Stop keeps the lead for a tap; switch enables auto-call; background holds the countdown and
+it restarts on return; without permission no auto-call, a tap asks and falls back to the
+dialer (with the hint); next lead auto-called after a saved outcome; Pause stops it; a
+dialled lead after restart is never called even with auto-call on; hang-up recorded while in
+the background is reconciled on return; due retry fetched by itself only with auto-call.
+Also fixed a pre-existing race in `CallCampaignScreens.test.tsx` (list test pressed
+"Bakeries" before the filtered list rendered; failed 3/4 under load, 0/5 after).
+
+#### Real device (TECNO KJ5, Android 13, isolated API, test app `ai.updata.crm.dev`)
+Calls only to the phone's own two numbers.
+
+| Check | Result |
+|---|---|
+| Fresh install, no permission: explanation + "Allow phone access", auto-call holds | PASS |
+| Grant both permissions → SIM chips appear, auto-call waits for a SIM | PASS |
+| Pick Jazz → "Calling Device Own Telenor in 8 s · Stop" → call placed with no tap (`telecom_direct`, sub 3) | PASS |
+| Hang up → back in Updata, "What happened?" first, off-hook 19 s from call-state | PASS |
+| Save "No answer" → next lead claimed and auto-called after its countdown | PASS |
+| Server: 2 attempts, `call_state` evidence, SIM 3, CRM sync ok, retries in 5 min | PASS |
+| Retry due → fetched by itself (code added after the device run) | Unit-tested only |
+| Read-aloud heard by the other party; call to a third-party number | NOT DONE (blocked by tooling permission; see report) |
+
+#### Shareable APK
+`Updata-0.1.2.apk` (versionCode 3, release key `1ecf1bde…72fe`, Play-safe: no SMS/call-log/
+accessibility permissions; `npm run verify:apk` passes). Installs as an update over 0.1.0/0.1.1.
+Rollback: install the previous APK after uninstalling (Android forbids downgrades in place);
+no server or database change was made.
 
 ---
 
@@ -713,3 +801,76 @@ Still unverified: a real PSTN call (no SIP trunk; see §10).
   `recordingRef` field exists for it. Transcripts are not stored.
 - Cost is provider-reported or an operator-configured estimate; no live price feed.
 - Campaigns are scoped to their creator; there is no cross-user admin campaign view.
+
+
+## 0.15 Reliability re-audit and remediation (2026-10-20)
+
+The current audit and exact execution evidence are in [docs/AI_CALLING_AUDIT.md](docs/AI_CALLING_AUDIT.md).
+This work preserves the pre-existing dirty mobile changes; the earlier real-device claims are
+not fresh device verification. Only an emulator was attached during this re-audit, and no
+outbound call was placed.
+
+### Calling and recovery
+
+SIM calls remain human-led, provider-independent calls. One attempt receives **one** server dial
+authorization, enforced by an atomic update with active state, device, unexpired lease and an
+undialed attempt. Replaying `/dial` returns 409 `SIM_CALL_ALREADY_DIALED`. **Do not retry dialing
+after a timeout:** read the task and reconcile the possible call. The server records authorization
+before handing off to Android, so `dialedAt` is conservative authorization evidence, not proof a
+carrier call occurred. A pause, background transition or navigation away during authorization
+prevents the local launch. A cancelled/paused campaign still permits outcome reconciliation of
+a locally remembered authorized attempt via the owner-scoped GET task endpoint.
+
+A completed outbox write must reach the server before progression, including after restart.
+In-flight answer responses cannot remove newer edits or resurrect superseded writes. Switching
+accounts cancels the old queue's subsequent work and prevents it from mutating the new account.
+The answer debounce is cleared on completion so a delayed partial save cannot become a false
+conflict after the final save. Unknown dialed attempts cannot be skipped/retried; record the
+outcome first. Cancelling never reopens queued/callback work when an in-flight outcome arrives.
+
+### Questions, extraction and CRM
+
+Required visible questions must be answered or explicitly unknown for an `answered` outcome.
+Unreached/refused calls can still be recorded without forcing invented answers. Typed assisted
+values use exact choice matching, integer/date/time validation, and conditional rules use the
+latest merged values. Cyclic dependencies are rejected. Mobile campaign setup supports answer
+types, custom choices, ordering and one equality condition; complex all/any rules remain in web.
+Callback inputs reject invalid calendar values, DST gaps and repeated ambiguous times.
+
+Answers record question text/version, source, actor, timestamp and validation. Final attempts
+snapshot their answers and callback request so later retries do not use another conversation's
+answers. The final CRM note is fixed before side effects. Partial CRM receipts remain failed and
+retryable instead of falsely reporting success. A confirmed opt-out persists on the attempt,
+blocks later eligibility even before the suppression ledger sync succeeds, and survives retry.
+
+Campaign wrap-up reuses the existing **Suggest answers from notes** service, only after an
+explicit tap. It uses up to 5,000 characters of notes plus reviewed voice-note transcript. It
+proposes the existing CRM qualification fields (needs, budget, interest, role, next steps, etc.),
+not arbitrary changes to contact identity. Review displays the current CRM value, proposed value
+and source quote. Accepted proposals remain local until Save outcome. The server validates the
+field and evidence, requires `lead:write` in addition to `ai-calling:write`, snapshots the accepted
+answers and persists through the same idempotent `simcall-<attemptId>` communication receipt.
+The sweep retries failed CRM work. Concurrent independent qualification merges use version
+checks and bounded retries so unrelated fields are not lost.
+
+This is post-call, user-reviewed extraction. No streaming SIM extraction or unattended transcript
+extraction job is claimed. Voice/STT and suggestion provider failures leave manual entry usable.
+The existing provider key stays server-side; no new credentials or required env variables.
+
+### API additions and deployment order
+
+- `POST /campaigns` accepts optional `creationKey` (8–80 chars). Both clients retain a stable key
+  for retries of identical content. Reuse with different content returns 409
+  `SIM_CALL_CREATION_CONFLICT`. Initialization can recover a partially created draft; replaying
+  creation after a later edit does not rebuild the original lead list.
+- `POST /tasks/:id/complete` accepts optional `qualification: {answers:[...]}` with the existing
+  CRM qualification answer contract. AI-confirmed answers must quote the saved notes/transcript.
+- Saved answers include `questionText`, `source`, `updatedBy`, `validation`, `questionsVersion`.
+- Migration **029_sim_call_reliability** adds partial unique owner/creation-key and opt-out recovery
+  indexes. Existing attempts need no backfill; their unavailable opt-out intent cannot be inferred.
+
+Deploy backend + migration 029 first, then web, then mobile. Take and verify a database backup;
+check migration status, readiness, auth/ownership and queue registration on staging. Install a
+release-signed staging build and execute the device gate in the audit before production review.
+Rollback code without dropping collections/indexes; existing CRM communications remain valid.
+No production deployment, signing or live-provider call was performed by this re-audit.

@@ -21,11 +21,13 @@ export function ProposalReviewModal({
   proposals,
   onClose,
   onApply,
+  stored = [],
 }: {
   visible: boolean;
   proposals: Proposal[];
   onClose: () => void;
   onApply: (accepted: Proposal[]) => void;
+  stored?: { fieldKey: string; value: unknown }[];
 }) {
   const { t } = useTranslation();
   const label = useFieldLabel();
@@ -71,6 +73,13 @@ export function ProposalReviewModal({
               <AppText variant="label" tone="muted">
                 {label(proposal)}
               </AppText>
+              {stored.some((field) => field.fieldKey === proposal.fieldKey) ? (
+                <AppText variant="caption" tone="muted">
+                  {t('communication.qualification.current', {
+                    value: String(stored.find((field) => field.fieldKey === proposal.fieldKey)?.value ?? '—'),
+                  })}
+                </AppText>
+              ) : null}
               <AppText className="font-geist-medium">
                 {proposal.status === 'answered'
                   ? String(proposal.proposedValue ?? '')

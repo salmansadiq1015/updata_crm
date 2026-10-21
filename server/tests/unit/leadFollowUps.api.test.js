@@ -6,6 +6,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import {
   afterAll, beforeAll, beforeEach, describe, expect, it, jest,
 } from '@jest/globals';
+import { serve } from '../helpers/serve.js';
 
 /**
  * GET /api/v1/crm/leads/follow-ups — the follow-ups agenda across leads, served
@@ -132,13 +133,13 @@ beforeEach(async () => {
 
 describe('GET /crm/leads/follow-ups', () => {
   it('requires authentication and lead:read', async () => {
-    await request(app).get(URL).expect(401);
+    await request(serve(app)).get(URL).expect(401);
     const noPerms = await makeUser([]);
-    await request(app).get(URL).set(auth(generateAccessToken({ sub: String(noPerms._id) }))).expect(403);
+    await request(serve(app)).get(URL).set(auth(generateAccessToken({ sub: String(noPerms._id) }))).expect(403);
   });
 
   it('is a named route, not read as a lead id', async () => {
-    const res = await request(app).get(URL).set(auth(tokenA)).expect(200);
+    const res = await request(serve(app)).get(URL).set(auth(tokenA)).expect(200);
     expect(res.body.data).toEqual([]);
   });
 
@@ -152,7 +153,7 @@ describe('GET /crm/leads/follow-ups', () => {
       contactLogId: soon._id, outcome: { followUpTimezone: 'Europe/Zurich' },
     });
 
-    const res = await request(app).get(URL).set(auth(tokenA)).expect(200);
+    const res = await request(serve(app)).get(URL).set(auth(tokenA)).expect(200);
     expect(res.body.data.map((row) => row.contactLogId)).toEqual([
       String(overdue._id), String(soon._id), String(later._id),
     ]);
@@ -180,16 +181,16 @@ describe('GET /crm/leads/follow-ups', () => {
     const onMyBehalf = await makeLog(lead, at, { createdBy: userB._id, employeeId: userA._id });
 
     const ids = (res) => res.body.data.map((row) => row.contactLogId).sort();
-    const resMine = await request(app).get(URL).set(auth(tokenA)).expect(200);
+    const resMine = await request(serve(app)).get(URL).set(auth(tokenA)).expect(200);
     expect(ids(resMine)).toEqual([String(mine._id), String(onMyBehalf._id)].sort());
 
-    const resB = await request(app).get(URL).query({ scope: 'mine' }).set(auth(tokenB)).expect(200);
+    const resB = await request(serve(app)).get(URL).query({ scope: 'mine' }).set(auth(tokenB)).expect(200);
     expect(ids(resB)).toEqual([String(theirs._id), String(onMyBehalf._id)].sort());
 
-    const resAll = await request(app).get(URL).query({ scope: 'all' }).set(auth(tokenA)).expect(200);
+    const resAll = await request(serve(app)).get(URL).query({ scope: 'all' }).set(auth(tokenA)).expect(200);
     expect(resAll.body.data).toHaveLength(3);
 
-    await request(app).get(URL).query({ scope: 'team' }).set(auth(tokenA)).expect(400);
+    await request(serve(app)).get(URL).query({ scope: 'team' }).set(auth(tokenA)).expect(400);
   });
 
   it('honours from/to and rejects to < from', async () => {
@@ -199,15 +200,15 @@ describe('GET /crm/leads/follow-ups', () => {
     const inside = await makeLog(lead, new Date(base + 2 * DAY));
     await makeLog(lead, new Date(base + 10 * DAY));
 
-    const res = await request(app).get(URL)
+    const res = await request(serve(app)).get(URL)
       .query({ from: new Date(base).toISOString(), to: new Date(base + 5 * DAY).toISOString() })
       .set(auth(tokenA)).expect(200);
     expect(res.body.data.map((row) => row.contactLogId)).toEqual([String(inside._id)]);
 
-    await request(app).get(URL)
+    await request(serve(app)).get(URL)
       .query({ from: new Date(base + DAY).toISOString(), to: new Date(base).toISOString() })
       .set(auth(tokenA)).expect(400);
-    await request(app).get(URL).query({ from: 'yesterday' }).set(auth(tokenA)).expect(400);
+    await request(serve(app)).get(URL).query({ from: 'yesterday' }).set(auth(tokenA)).expect(400);
   });
 
   it('excludes soft-deleted leads, soft-deleted entries, customer entries and entries without a follow-up', async () => {
@@ -223,7 +224,7 @@ describe('GET /crm/leads/follow-ups', () => {
       followUpAt: at, employeeId: userA._id, createdBy: userA._id, isDeleted: false,
     });
 
-    const res = await request(app).get(URL).set(auth(tokenA)).expect(200);
+    const res = await request(serve(app)).get(URL).set(auth(tokenA)).expect(200);
     expect(res.body.data.map((row) => row.contactLogId)).toEqual([String(kept._id)]);
   });
 });

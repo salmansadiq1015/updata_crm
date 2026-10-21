@@ -29,7 +29,7 @@ class QueueManager {
    *
    * @param {string} name - Queue name (e.g., 'file-processing')
    * @param {Function} processor - async (job) => result
-   * @param {object} options - { concurrency, jobOptions }
+   * @param {object} options - { concurrency, jobOptions, limiter }
    */
   registerQueue(name, processor, options = {}) {
     const queue = new Queue(name, {
@@ -45,6 +45,8 @@ class QueueManager {
       connection: queueConnection,
       prefix: queueConfig.prefix,
       concurrency: options.concurrency || 3,
+      // Optional throughput cap shared by all workers of this queue: { max, duration (ms) }.
+      ...(options.limiter ? { limiter: options.limiter } : {}),
     });
 
     // Worker event handlers

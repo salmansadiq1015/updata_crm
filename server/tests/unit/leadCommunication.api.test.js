@@ -55,6 +55,7 @@ jest.unstable_mockModule('../../src/modules/ai/sttGateway.service.js', () => ({ 
 
 let mongod;
 let app;
+let server;
 let Lead; let User; let Role; let Permission;
 let LeadCommunication; let ContactLog; let CallSuppression; let MessageSuppression; let LeadChannelConsent;
 let contactLogService; let phoneHash; let destinationHash; let generateAccessToken; let auditService;
@@ -106,7 +107,7 @@ function startBody(overrides = {}) {
 
 async function start(lead, overrides = {}, token = tokenA) {
   const body = startBody(overrides);
-  const res = await request(app).post(`${base(lead._id)}/communications`).set(auth(token)).send(body);
+  const res = await request(server).post(`${base(lead._id)}/communications`).set(auth(token)).send(body);
   return { body, res };
 }
 
@@ -143,9 +144,13 @@ beforeAll(async () => {
   app.use(responseEnvelope);
   app.use('/api/v1/crm/leads', leadRoutes);
   app.use(errorHandler);
+  // One long-lived server for the suite: request(server) listens on a fresh ephemeral port per
+  // request, and under parallel load a just-freed port can be reused by another process.
+  server = app.listen(0);
 }, 120000);
 
 afterAll(async () => {
+  await new Promise((resolve) => server.close(resolve));
   await mongoose.disconnect();
   if (mongod) await mongod.stop();
 });
@@ -174,40 +179,40 @@ afterEach(() => { jest.restoreAllMocks(); });
 describe('auth + permissions', () => {
   it('rejects unauthenticated and under-privileged callers', async () => {
     const lead = await makeLead();
-    await request(app).get(`${base(lead._id)}/communications`).expect(401);
+    await request(server).get(`${base(lead._id)}/communications`).expect(401);
     const reader = await makeUser([]);
     const token = generateAccessToken({ sub: String(reader._id) });
-    await request(app).get(`${base(lead._id)}/communications`).set(auth(token)).expect(403);
+    await request(server).get(`${base(lead._id)}/communications`).set(auth(token)).expect(403);
   });
 
   it('404s for a soft-deleted lead and 400s for a bad leadId', async () => {
     const lead = await makeLead({ isDeleted: true, deletedAt: new Date() });
-    await request(app).get(`${base(lead._id)}/communications`).set(auth(tokenA)).expect(404);
-    await request(app).get(`${base('nope')}/communications`).set(auth(tokenA)).expect(400);
+    await request(server).get(`${base(lead._id)}/communications`).set(auth(tokenA)).expect(404);
+    await request(server).get(`${base('nope')}/communications`).set(auth(tokenA)).expect(400);
   });
 });
 
 describe('eligibility + create', () => {
   it('reports eligibility with a masked destination', async () => {
     const lead = await makeLead();
-    const res = await request(app).get(`${base(lead._id)}/communications/eligibility`)
+    const res = await request(server).get(`${base(lead._id)}/communications/eligibility`)
       .query({ channel: 'phone', destinationField: 'mobile' }).set(auth(tokenA)).expect(200);
     expect(res.body.data).toEqual({ eligible: true, reasons: [], destinationMasked: '•••• 4321' });
 
     const empty = await makeLead({ mobile: null });
-    const none = await request(app).get(`${base(empty._id)}/communications/eligibility`)
+    const none = await request(server).get(`${base(empty._id)}/communications/eligibility`)
       .query({ channel: 'sms', destinationField: 'mobile' }).set(auth(tokenA)).expect(200);
     expect(none.body.data).toMatchObject({ eligible: false, reasons: ['NO_DESTINATION'] });
 
     const bad = await makeLead({ phone: 'call reception' });
-    const invalid = await request(app).get(`${base(bad._id)}/communications/eligibility`)
+    const invalid = await request(server).get(`${base(bad._id)}/communications/eligibility`)
       .query({ channel: 'phone', destinationField: 'phone' }).set(auth(tokenA)).expect(200);
     expect(invalid.body.data.reasons).toEqual(['INVALID_NUMBER']);
   });
 
   it('allows a converted lead (not a block)', async () => {
     const lead = await makeLead({ status: 'converted' });
-    const res = await request(app).get(`${base(lead._id)}/communications/eligibility`)
+    const res = await request(server).get(`${base(lead._id)}/communications/eligibility`)
       .query({ channel: 'phone', destinationField: 'phone' }).set(auth(tokenA)).expect(200);
     expect(res.body.data.eligible).toBe(true);
   });
@@ -229,13 +234,13 @@ describe('eligibility + create', () => {
     const stored = await LeadCommunication.findById(data.id).lean();
     expect(stored.destinationHash).toBe(phoneHash('+41797654321'));
 
-    const again = await request(app).post(`${base(lead._id)}/communications`).set(auth(tokenA)).send(body).expect(200);
+    const again = await request(server).post(`${base(lead._id)}/communications`).set(auth(tokenA)).send(body).expect(200);
     expect(again.body.data.id).toBe(data.id);
     expect(again.body.data.dialNumber).toBe('+41 79 765 43 21');
     expect(await LeadCommunication.countDocuments()).toBe(1);
 
     // A client-sent number is ignored (stripped) — the lead is the only source.
-    const withNumber = await request(app).post(`${base(lead._id)}/communications`).set(auth(tokenA))
+    const withNumber = await request(server).post(`${base(lead._id)}/communications`).set(auth(tokenA))
       .send({ ...startBody({ destinationField: 'phone' }), number: '+41000000000' }).expect(201);
     expect(withNumber.body.data.dialNumber).toBe('044 123 45 67');
   });
@@ -244,9 +249,9 @@ describe('eligibility + create', () => {
     const lead = await makeLead();
     const other = await makeLead();
     const { body } = await start(lead);
-    const res = await request(app).post(`${base(other._id)}/communications`).set(auth(tokenA)).send(body).expect(409);
+    const res = await request(server).post(`${base(other._id)}/communications`).set(auth(tokenA)).send(body).expect(409);
     expect(res.body.error.code).toBe('OPERATION_ID_CONFLICT');
-    const res2 = await request(app).post(`${base(lead._id)}/communications`).set(auth(tokenA))
+    const res2 = await request(server).post(`${base(lead._id)}/communications`).set(auth(tokenA))
       .send({ ...body, channel: 'sms', route: 'sms_composer' }).expect(409);
     expect(res2.body.error.code).toBe('OPERATION_ID_CONFLICT');
   });
@@ -289,7 +294,7 @@ describe('events', () => {
     const t0 = Date.parse('2026-10-16T09:00:00.000Z');
     const at = (s) => new Date(t0 + s * 1000).toISOString();
 
-    const first = await request(app).post(url).set(auth(tokenA)).send({
+    const first = await request(server).post(url).set(auth(tokenA)).send({
       events: [
         { seq: 1, type: 'dispatch_requested', at: at(0), source: 'app' },
         { seq: 2, type: 'dispatched', at: at(1), source: 'native', data: { route: 'dialer_handoff' } },
@@ -300,7 +305,7 @@ describe('events', () => {
     expect(first.body.data.observed).toMatchObject({ evidence: 'telephony_events', offhookDurationSec: null, ringingObserved: false });
 
     // Replayed seq 3 (different payload) is ignored; idle arrives out of order.
-    const second = await request(app).post(url).set(auth(tokenA)).send({
+    const second = await request(server).post(url).set(auth(tokenA)).send({
       events: [
         { seq: 3, type: 'app_backgrounded', at: at(3), source: 'app' },
         { seq: 5, type: 'call_state_idle', at: at(132), source: 'native' },
@@ -315,9 +320,9 @@ describe('events', () => {
     });
 
     // Complete, then a late event is still appended without touching the outcome.
-    await request(app).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+    await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
       .send({ outcome: { disposition: 'no_answer', connected: 'no', notes: '' } }).expect(200);
-    const late = await request(app).post(url).set(auth(tokenA)).send({
+    const late = await request(server).post(url).set(auth(tokenA)).send({
       events: [{ seq: 6, type: 'app_foregrounded', at: at(140), source: 'app' }, { seq: 7, type: 'dispatch_failed', at: at(141), source: 'app' }],
     }).expect(200);
     expect(late.body.data.state).toBe('completed');
@@ -328,7 +333,7 @@ describe('events', () => {
   it('dispatch_failed sets the state', async () => {
     const lead = await makeLead();
     const { body } = await start(lead);
-    const res = await request(app).post(`${base(lead._id)}/communications/${body.operationId}/events`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/events`).set(auth(tokenA))
       .send({ events: [{ seq: 1, type: 'dispatch_requested', at: new Date().toISOString(), source: 'app' }, { seq: 2, type: 'dispatch_failed', at: new Date().toISOString(), source: 'native', data: { reason: 'no_permission' } }] })
       .expect(200);
     expect(res.body.data.state).toBe('dispatch_failed');
@@ -337,10 +342,10 @@ describe('events', () => {
   it("another user cannot append to someone else's operation (404)", async () => {
     const lead = await makeLead();
     const { body } = await start(lead);
-    await request(app).post(`${base(lead._id)}/communications/${body.operationId}/events`).set(auth(tokenB))
+    await request(server).post(`${base(lead._id)}/communications/${body.operationId}/events`).set(auth(tokenB))
       .send({ events: [{ seq: 1, type: 'dispatched', at: new Date().toISOString(), source: 'app' }] })
       .expect(404);
-    await request(app).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenB))
+    await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenB))
       .send({ outcome: { disposition: 'busy', connected: 'no', notes: '' } })
       .expect(404);
   });
@@ -361,7 +366,7 @@ describe('complete', () => {
     const { body, res } = await start(lead, { destinationField: 'phone' });
     const audit = jest.spyOn(auditService, 'logEvent');
     const followUpAt = '2026-10-20T08:00:00.000Z';
-    const done = await request(app).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+    const done = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
       .send({
         outcome: {
           disposition: 'do_not_contact', connected: 'yes', notes: 'Asked not to be called again.',
@@ -420,10 +425,10 @@ describe('complete', () => {
     expect((await start(lead, { destinationField: 'phone', channel: 'sms', route: 'sms_composer' })).res.status).toBe(409);
 
     // GET qualification + lead detail expose the merged fields.
-    const q = await request(app).get(`${base(lead._id)}/qualification`).set(auth(tokenA)).expect(200);
+    const q = await request(server).get(`${base(lead._id)}/qualification`).set(auth(tokenA)).expect(200);
     expect(q.body.data.schema.map((f) => f.fieldKey)).toContain('decision_authority');
     expect(q.body.data.fields).toHaveLength(3);
-    const detail = await request(app).get(base(lead._id)).set(auth(tokenA)).expect(200);
+    const detail = await request(server).get(base(lead._id)).set(auth(tokenA)).expect(200);
     expect(detail.body.data.qualification.fields).toHaveLength(3);
   });
 
@@ -432,11 +437,11 @@ describe('complete', () => {
     const { body } = await start(lead);
     const url = `${base(lead._id)}/communications/${body.operationId}/complete`;
     const payload = { outcome: { disposition: 'interested', connected: 'yes', notes: 'Wants a quote.' } };
-    const first = await request(app).post(url).set(auth(tokenA)).send(payload).expect(200);
-    const again = await request(app).post(url).set(auth(tokenA)).send(payload).expect(200);
+    const first = await request(server).post(url).set(auth(tokenA)).send(payload).expect(200);
+    const again = await request(server).post(url).set(auth(tokenA)).send(payload).expect(200);
     expect(again.body.data.communication.contactLogId).toBe(first.body.data.communication.contactLogId);
     expect(await ContactLog.countDocuments({ leadId: lead._id })).toBe(1);
-    const res = await request(app).post(url).set(auth(tokenA))
+    const res = await request(server).post(url).set(auth(tokenA))
       .send({ outcome: { disposition: 'not_interested', connected: 'yes', notes: 'Wants a quote.' } }).expect(409);
     expect(res.body.error.code).toBe('ALREADY_COMPLETED');
   });
@@ -451,21 +456,21 @@ describe('complete', () => {
       .mockImplementation(original);
     const payload = { outcome: { disposition: 'callback_requested', connected: 'yes', notes: 'Call back Monday.', statusChange: 'contacted' } };
 
-    const first = await request(app).post(url).set(auth(tokenA)).send(payload).expect(200);
+    const first = await request(server).post(url).set(auth(tokenA)).send(payload).expect(200);
     expect(first.body.data.receipt.steps.contactLog).toMatchObject({ status: 'failed', error: 'db hiccup' });
     expect(first.body.data.receipt.steps.leadContact.status).toBe('ok');
     expect(first.body.data.receipt.steps.statusChange.status).toBe('ok');
     expect(first.body.data.receipt.completedAt).toBeNull();
     expect(await ContactLog.countDocuments({ leadId: lead._id })).toBe(0);
 
-    const second = await request(app).post(url).set(auth(tokenA)).send(payload).expect(200);
+    const second = await request(server).post(url).set(auth(tokenA)).send(payload).expect(200);
     expect(second.body.data.receipt.steps.contactLog.status).toBe('ok');
     expect(second.body.data.receipt.completedAt).toBeTruthy();
     // statusChange was not re-run (still the first timestamp).
     expect(second.body.data.receipt.steps.statusChange.at).toBe(first.body.data.receipt.steps.statusChange.at);
     expect(spy).toHaveBeenCalledTimes(2);
 
-    await request(app).post(url).set(auth(tokenA)).send(payload).expect(200);
+    await request(server).post(url).set(auth(tokenA)).send(payload).expect(200);
     expect(spy).toHaveBeenCalledTimes(2);
     expect(await ContactLog.countDocuments({ leadId: lead._id })).toBe(1);
   });
@@ -473,7 +478,7 @@ describe('complete', () => {
   it("protects 'converted' leads from status changes while other steps still run", async () => {
     const lead = await makeLead({ status: 'converted' });
     const { body } = await start(lead);
-    const res = await request(app).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
       .send({ outcome: { disposition: 'interested', connected: 'yes', notes: 'x', statusChange: 'qualified' } }).expect(200);
     expect(res.body.data.receipt.steps.statusChange).toMatchObject({ status: 'failed', error: 'LEAD_CONVERTED_PROTECTED' });
     expect(res.body.data.receipt.steps.contactLog.status).toBe('ok');
@@ -481,7 +486,7 @@ describe('complete', () => {
 
     const lead2 = await makeLead({ status: 'qualified' });
     const { body: b2 } = await start(lead2);
-    const res2 = await request(app).post(`${base(lead2._id)}/communications/${b2.operationId}/complete`).set(auth(tokenA))
+    const res2 = await request(server).post(`${base(lead2._id)}/communications/${b2.operationId}/complete`).set(auth(tokenA))
       .send({ outcome: { disposition: 'interested', connected: 'yes', notes: 'x', statusChange: 'converted' } }).expect(200);
     expect(res2.body.data.receipt.steps.statusChange.error).toBe('LEAD_CONVERTED_PROTECTED');
     expect((await Lead.findById(lead2._id).lean()).status).toBe('qualified');
@@ -490,7 +495,7 @@ describe('complete', () => {
   it('SMS: stores body/sendStatus, skips leadContact when user reports not sent', async () => {
     const lead = await makeLead();
     const { body } = await start(lead, { channel: 'sms', route: 'sms_composer' });
-    const res = await request(app).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
       .send({
         outcome: { disposition: 'not_sent', connected: 'unknown', notes: '' },
         sms: { templateId: null, body: 'Hallo, kurze Rückfrage', encoding: 'GSM-7', segments: 1, sendStatus: 'user_reported_not_sent' },
@@ -510,11 +515,11 @@ describe('complete', () => {
     const lead = await makeLead();
     const { body } = await start(lead);
     const url = `${base(lead._id)}/communications/${body.operationId}/complete`;
-    await request(app).post(url).set(auth(tokenA))
+    await request(server).post(url).set(auth(tokenA))
       .send({ outcome: { disposition: 'interested', connected: 'yes', notes: '', followUpAt: '2026-10-20T08:00:00.000Z' } }).expect(400);
-    await request(app).post(url).set(auth(tokenA))
+    await request(server).post(url).set(auth(tokenA))
       .send({ outcome: { disposition: 'interested', connected: 'yes', notes: '', followUpAt: '2026-10-20T08:00:00.000Z', followUpTimezone: 'Mars/Base' } }).expect(400);
-    await request(app).post(url).set(auth(tokenA))
+    await request(server).post(url).set(auth(tokenA))
       .send({ outcome: { disposition: 'interested', connected: 'yes', notes: '' }, qualification: { answers: [{ fieldKey: 'timeline', value: 'someday maybe', status: 'answered' }] } })
       .expect(400);
     expect((await LeadCommunication.findOne({ operationId: body.operationId }).lean()).outcome).toBeNull();
@@ -527,12 +532,12 @@ describe('list', () => {
     await start(lead);
     await start(lead, {}, tokenB);
     await start(lead, { destinationField: 'phone' });
-    const page1 = await request(app).get(`${base(lead._id)}/communications`).query({ limit: 2 }).set(auth(tokenB)).expect(200);
+    const page1 = await request(server).get(`${base(lead._id)}/communications`).query({ limit: 2 }).set(auth(tokenB)).expect(200);
     expect(page1.body.data).toHaveLength(2);
     expect(page1.body.pagination.hasNext).toBe(true);
     expect(page1.body.data[0].destinationHash).toBeUndefined();
     expect(page1.body.data[0].createdBy).toMatchObject({ firstName: 'Field' });
-    const page2 = await request(app).get(`${base(lead._id)}/communications`)
+    const page2 = await request(server).get(`${base(lead._id)}/communications`)
       .query({ limit: 2, cursor: page1.body.pagination.nextCursor }).set(auth(tokenB)).expect(200);
     expect(page2.body.data).toHaveLength(1);
     const ids = [...page1.body.data, ...page2.body.data].map((c) => c.id);
@@ -545,7 +550,7 @@ describe('list', () => {
 describe('qualification propose', () => {
   it('returns available:false when OpenAI is not configured', async () => {
     const lead = await makeLead();
-    const res = await request(app).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
       .send({ notes: 'Budget is 5000 CHF.' }).expect(200);
     expect(res.body.data).toEqual({ available: false, reason: 'ai_not_configured', proposals: [] });
     expect(ai.create).not.toHaveBeenCalled();
@@ -571,7 +576,7 @@ describe('qualification propose', () => {
       }],
     });
     const lead = await makeLead();
-    const res = await request(app).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
       .send({ notes, language: 'en' }).expect(200);
     expect(res.body.data.available).toBe(true);
     expect(res.body.data.promptVersion).toBeTruthy();
@@ -590,7 +595,7 @@ describe('qualification propose', () => {
     ai.configured = true;
     ai.create.mockRejectedValue(new Error('upstream 500'));
     const lead = await makeLead();
-    const res = await request(app).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
+    const res = await request(server).post(`${base(lead._id)}/qualification/propose`).set(auth(tokenA))
       .send({ notes: 'anything' }).expect(200);
     expect(res.body.data).toMatchObject({ available: false, reason: 'ai_unavailable', proposals: [] });
   });
@@ -602,26 +607,26 @@ describe('voice note transcription (after the call)', () => {
   it('reports unavailable without an AI key, transcribes with one, and rejects non-audio uploads', async () => {
     const lead = await makeLead();
     const url = `${base(lead._id)}/qualification/transcribe`;
-    let res = await request(app).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    let res = await request(server).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
     expect(res.body.data).toMatchObject({ available: false, reason: 'ai_not_configured' });
 
     ai.configured = true;
     stt.transcribe.mockResolvedValueOnce({ text: ' Interested, budget about 20k, call back Friday. ', confidence: 0.9 });
-    res = await request(app).post(url).set(auth(tokenA)).field('language', 'en').attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    res = await request(server).post(url).set(auth(tokenA)).field('language', 'en').attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
     expect(res.body.data).toEqual({ available: true, text: 'Interested, budget about 20k, call back Friday.', confidence: 0.9 });
     expect(stt.transcribe).toHaveBeenCalledWith(expect.any(Buffer), { mimeType: 'audio/mp4', language: 'en' });
 
-    await request(app).post(url).set(auth(tokenA)).attach('audio', Buffer.from('x'), { filename: 'evil.exe', contentType: 'application/octet-stream' }).expect(400);
+    await request(server).post(url).set(auth(tokenA)).attach('audio', Buffer.from('x'), { filename: 'evil.exe', contentType: 'application/octet-stream' }).expect(400);
 
     stt.transcribe.mockRejectedValueOnce(new Error('provider down'));
-    res = await request(app).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
+    res = await request(server).post(url).set(auth(tokenA)).attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(200);
     expect(res.body.data).toMatchObject({ available: false, reason: 'ai_unavailable' });
   });
 
   it('requires lead:write', async () => {
     const lead = await makeLead();
     const reader = await makeUser([]);
-    await request(app).post(`${base(lead._id)}/qualification/transcribe`)
+    await request(server).post(`${base(lead._id)}/qualification/transcribe`)
       .set(auth(generateAccessToken({ sub: String(reader._id) })))
       .attach('audio', audio, { filename: 'note.m4a', contentType: 'audio/mp4' }).expect(403);
   });

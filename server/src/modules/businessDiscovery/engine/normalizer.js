@@ -26,6 +26,13 @@ const COUNTRY_CODES = Object.freeze({
   FR: { code: '33', trunk: '0' },
   IT: { code: '39', trunk: '0' },
   US: { code: '1', trunk: '' },
+  GB: { code: '44', trunk: '0' },
+  PK: { code: '92', trunk: '0' },
+  IN: { code: '91', trunk: '0' },
+  BD: { code: '880', trunk: '0' },
+  AE: { code: '971', trunk: '0' },
+  SA: { code: '966', trunk: '0' },
+  TR: { code: '90', trunk: '0' },
 });
 
 const pick = (...values) => {
@@ -74,7 +81,9 @@ export function normalizePhone(raw, region = 'CH') {
   const trimmed = raw.trim();
   if (!trimmed) return { ...fail };
 
-  const cc = COUNTRY_CODES[region] || COUNTRY_CODES.CH;
+  // An unknown region never borrows another country's code: only numbers that already
+  // carry their country code (`+…` / `00…`) are accepted for it.
+  const cc = COUNTRY_CODES[String(region || 'CH').trim().toUpperCase()] || null;
   const hasLetters = /[A-Za-z]/.test(trimmed);
   // Keep digits and a leading '+'; drop spaces, dots, dashes, parentheses, etc.
   const cleaned = trimmed.replace(/[^\d+]/g, '');
@@ -84,6 +93,8 @@ export function normalizePhone(raw, region = 'CH') {
     e164 = `+${cleaned.slice(1).replace(/\D/g, '')}`;
   } else if (cleaned.startsWith('00')) {
     e164 = `+${cleaned.slice(2)}`;
+  } else if (!cc) {
+    return { ...fail };
   } else if (cleaned.startsWith('0')) {
     e164 = `+${cc.code}${cleaned.slice(1)}`;
   } else if (cleaned.startsWith(cc.code)) {
@@ -104,7 +115,7 @@ export function normalizePhone(raw, region = 'CH') {
   // calling code (prepend the trunk prefix). Otherwise leave null rather than
   // guess the foreign country code length.
   let national = null;
-  if (e164.startsWith(`+${cc.code}`)) {
+  if (cc && e164.startsWith(`+${cc.code}`)) {
     national = `${cc.trunk}${e164.slice(1 + cc.code.length)}`;
   }
 

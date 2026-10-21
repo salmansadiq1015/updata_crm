@@ -13,6 +13,8 @@ import * as schemas from './simCall.validation.js';
 const router = Router();
 const read = [authenticate, requirePermission('ai-calling:read')];
 const write = [authenticate, requirePermission('ai-calling:write')];
+const qualificationWrite = (req, res, next) => req.body.qualification?.answers?.length
+  ? requirePermission('lead:write')(req, res, next) : next();
 
 router.get('/campaigns', ...read, validate(schemas.listCampaigns), controller.listCampaigns);
 router.post('/campaigns', ...write, validate(schemas.createCampaign), controller.createCampaign);
@@ -32,7 +34,7 @@ router.post('/tasks/:id/dial', ...write, validate(schemas.dial), controller.dial
 router.post('/tasks/:id/release', ...write, validate(schemas.release), controller.release);
 router.post('/tasks/:id/skip', ...write, validate(schemas.skip), controller.skip);
 router.put('/tasks/:id/answers', ...write, validate(schemas.saveAnswers), controller.saveAnswers);
-router.post('/tasks/:id/complete', ...write, validate(schemas.complete), controller.complete);
+router.post('/tasks/:id/complete', ...write, validate(schemas.complete), qualificationWrite, controller.complete);
 router.post('/tasks/:id/sync', ...write, validate(schemas.taskId), controller.retrySync);
 router.patch('/tasks/:id/callback', ...write, validate(schemas.reschedule), controller.reschedule);
 router.delete('/tasks/:id/callback', ...write, validate(schemas.taskId), controller.cancelCallback);

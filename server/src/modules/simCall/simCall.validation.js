@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { questionSchema } from '../aiCalling/aiCalling.validation.js';
+import { qualificationAnswer } from '../crm/leadCommunication.validation.js';
 import { isValidTimezone } from '../aiCalling/engine/callWindow.js';
 import {
   ANSWER_STATUSES, CALL_OUTCOMES, CAMPAIGN_STATUSES, INTEREST_VALUES, MAX_LEADS, OUTCOME_EVIDENCE, TASK_STATES,
@@ -27,6 +28,7 @@ const settings = Joi.object({
 const questionnaire = Joi.object({ questions: Joi.array().items(questionSchema).min(1).max(30).required() });
 
 export const createCampaign = { body: Joi.object({
+  creationKey: Joi.string().trim().min(8).max(80),
   name: Joi.string().trim().max(160).required(),
   description: Joi.string().trim().max(1000).allow('').default(''),
   leadIds: Joi.array().items(objectId).min(1).max(MAX_LEADS).unique().required(),
@@ -84,6 +86,7 @@ export const complete = { params: idParams, body: Joi.object({
   answers: Joi.array().items(answer).max(30).unique('fieldKey').default([]),
   notes: Joi.string().max(5000).allow('').default(''),
   transcript: Joi.string().max(10_000).allow('').default(''),
+  qualification: Joi.object({ answers: Joi.array().items(qualificationAnswer).max(50).unique('fieldKey').default([]) }),
   callback: Joi.object({
     at: Joi.date().iso().required(),
     timezone: timezone.required(),

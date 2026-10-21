@@ -20,6 +20,7 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { AppError, NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import { normalizePhone } from '../businessDiscovery/engine/normalizer.js';
+import { isStopRequest } from '../simSms/engine/smsCopy.js';
 import {
   CHANNELS, OUTBOUND_QUEUE, STATUS_RANK,
   normalizeProviderStatus,
@@ -88,7 +89,8 @@ function destinationFor(lead, channel) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : null;
   }
   const raw = lead.mobile || lead.phone || '';
-  const normalized = normalizePhone(raw);
+  // A national number (e.g. 0300…) only makes sense in the lead's own country.
+  const normalized = normalizePhone(raw, lead.address?.country || undefined);
   return normalized.valid ? normalized.e164 : null;
 }
 
@@ -1339,9 +1341,10 @@ class MessagingService {
       await refreshCampaignSummary(campaign._id);
       return { failed: true, reason: 'quota' };
     }
-    campaign.status = 'running';
-    campaign.startedAt ||= now;
-    await campaign.save();
+    // Conditional: a pause/cancel that landed after this campaign was loaded must win
+    // (the message already claimed above is still sent; nothing new is started).
+    await Campaign.updateOne({ _id: campaign._id, status: { $in: ['queued', 'scheduled'] } }, { $set: { status: 'running' } });
+    await Campaign.updateOne({ _id: campaign._id, startedAt: null }, { $set: { startedAt: now } });
 
     let result;
     let fallbackFrom = null;
@@ -1922,9 +1925,13 @@ class MessagingService {
     return { accepted: true, matched: true, status: recipient.status };
   }
 
-  async suppressInbound({ channel, from, provider, messageId, text, payload }) {
+  async suppressInbound({ channel, from: rawFrom, provider, messageId, text, payload }) {
+    // Providers report the sender in different formats; suppressions are keyed by E.164.
+    const parsed = channel === 'email' ? null : normalizePhone(String(rawFrom || ''), undefined);
+    const from = parsed?.valid && /^\s*(\+|00)/.test(String(rawFrom || '')) ? parsed.e164 : rawFrom;
     const hash = destinationHash(channel, from);
-    const isOptOut = /^(stop|stopall|unsubscribe|cancel|end|quit|remove|arr[eê]t)$/i.test(String(text || '').trim());
+    // Whole-message keyword, punctuation/case-insensitive, multilingual (shared with the SIM SMS agent).
+    const isOptOut = isStopRequest(text) || /^(remove)$/i.test(String(text || '').trim());
     const lead = await Lead.findOne({ $or: [{ normalizedPhone: from }, { phone: from }, { mobile: from }] }).select('_id').lean();
     const latestRecipient = lead ? await MessageRecipient.findOne({ leadId: lead._id, channel }).sort({ createdAt: -1 }).select('_id campaignId createdBy').lean() : null;
     const eventKey = `${provider}:inbound:${messageId}`;
@@ -2321,7 +2328,7 @@ class MessagingService {
   }
 
   async updateConsent(leadId, input, actor, meta = {}) {
-    const lead = await Lead.findById(leadId).select('_id email phone mobile').lean();
+    const lead = await Lead.findById(leadId).select('_id email phone mobile address.country').lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     const destination = destinationFor(lead, input.channel);
     const hash = destination ? destinationHash(input.channel, destination) : null;
@@ -2350,7 +2357,7 @@ class MessagingService {
   }
 
   async getConsentProfile(leadId) {
-    const lead = await Lead.findById(leadId).select('_id email phone mobile').lean();
+    const lead = await Lead.findById(leadId).select('_id email phone mobile address.country').lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     const destinations = Object.fromEntries(CHANNELS.map((channel) => [channel, destinationFor(lead, channel)]));
     const hashes = Object.fromEntries(CHANNELS.map((channel) => [
@@ -2391,7 +2398,7 @@ class MessagingService {
   }
 
   async reinstateConsent(leadId, input, actor, meta = {}) {
-    const lead = await Lead.findById(leadId).select('_id email phone mobile').lean();
+    const lead = await Lead.findById(leadId).select('_id email phone mobile address.country').lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     const destination = destinationFor(lead, input.channel);
     if (!destination) throw new ValidationError(`Lead has no valid ${input.channel} destination`);

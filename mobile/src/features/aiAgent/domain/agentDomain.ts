@@ -219,7 +219,7 @@ export function defaultStatusRules(questions: readonly AgentQuestion[]): StatusR
     .map(({ fields: _fields, ...rule }) => rule);
 }
 
-const CHOICE_TYPES = new Set(['single_choice']);
+const CHOICE_TYPES = new Set(['single_choice', 'multiple_choice']);
 
 /** Server-shaped questionnaire (order + {value,label} options). */
 export function toQuestionnaire(questions: readonly AgentQuestion[]): CallCampaignInput['questionnaire'] {
@@ -240,7 +240,10 @@ export function questionErrors(questions: readonly AgentQuestion[]): number[] {
     .map((question, index) =>
       !question.label.trim() ||
       !question.text.trim() ||
-      (CHOICE_TYPES.has(question.type) && question.options.length === 0)
+      (CHOICE_TYPES.has(question.type) &&
+        (question.options.length === 0 ||
+          question.options.some((o) => !o.trim()) ||
+          new Set(question.options).size !== question.options.length))
         ? index
         : -1,
     )

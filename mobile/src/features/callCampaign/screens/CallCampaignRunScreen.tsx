@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Pause, Phone, PhoneOff, Play, SkipForward } from 'lucide-react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { Pause, Phone, PhoneOff, Play, ShieldCheck, SkipForward, Square } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -17,6 +18,7 @@ import { Loading } from '@/features/aiAgent/components/ReviewPanels';
 import { tKey } from '@/features/communication/i18n';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
+import { openAppSettings } from '@/services/permissions/permissionsService';
 import { telephony } from '@/services/telephony/telephonyService';
 import { formatDateTime } from '@/utils/date';
 
@@ -31,18 +33,34 @@ import { emptyDraft, useCampaignOutbox, type AttemptDraft } from '../store/campa
  * shows the lead, the questions (with optional read-aloud) and then asks for the outcome.
  */
 export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRun'>) {
+  const focused = useIsFocused();
   const { t, i18n } = useTranslation();
   const { campaignId } = route.params;
   const campaignQuery = useCallCampaign(campaignId, true);
   const campaign = campaignQuery.data;
-  const runner = useCampaignRunner(campaign);
   const sims = useQuery({
     queryKey: queryKeys.communication.sims,
     queryFn: () => telephony.getActiveSims().catch(() => []),
   });
-  const [pickedSim, setSimId] = useState<number | null>(null);
-  const simId = pickedSim ?? campaign?.subscriptionId ?? null;
+  // Remembered per campaign on this phone, but only while that SIM is still in the phone.
+  const savedSim = useCampaignOutbox((st) => st.sims[campaignId]);
+  const simPresent = (id: number | null | undefined) =>
+    id != null && (sims.data ?? []).some((sim) => sim.subscriptionId === id);
+  const simId = simPresent(savedSim) ? savedSim! : (campaign?.subscriptionId ?? null);
+  const setSimId = (id: number) => useCampaignOutbox.getState().setSim(campaignId, id);
+  const severalSims = (sims.data?.length ?? 0) > 1;
+  const runner = useCampaignRunner(campaign, {
+    focused,
+    subscriptionId: simId,
+    simChosen: !severalSims || simId !== null,
+  });
   const [formError, setFormError] = useState<string | null>(null);
+
+  // The SIM list needs READ_PHONE_STATE: load it again once the permission is granted.
+  const { refetch: refetchSims } = sims;
+  useEffect(() => {
+    if (runner.permission === 'granted') void refetchSims();
+  }, [runner.permission, refetchSims]);
 
   const attemptId = runner.attemptId;
   const storedDraft = useCampaignOutbox((s) => (attemptId ? s.drafts[attemptId] : undefined));
@@ -65,7 +83,8 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
   const answersTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answer = (fieldKey: string, value: AttemptDraft['answers'][string]) => {
     if (!draft) return;
-    const next = { ...draft, answers: { ...draft.answers, [fieldKey]: value } };
+    const latest = useCampaignOutbox.getState().drafts[draft.attemptId];
+    const next = { ...draft, answers: { ...draft.answers, ...latest?.answers, [fieldKey]: value } };
     update({ answers: next.answers });
     if (answersTimer.current) clearTimeout(answersTimer.current);
     answersTimer.current = setTimeout(() => runner.saveAnswers(next), 1500);
@@ -74,13 +93,19 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
     () => () => {
       if (answersTimer.current) clearTimeout(answersTimer.current);
     },
-    [],
+    [attemptId],
   );
 
   const submit = useSingleFlight(async () => {
     if (!draft) return;
+    if (answersTimer.current) clearTimeout(answersTimer.current);
     setFormError(null);
-    const problem = await runner.submit(draft);
+    const latest = useCampaignOutbox.getState().drafts[draft.attemptId];
+    const problem = await runner.submit({
+      ...draft,
+      ...latest,
+      answers: { ...draft.answers, ...latest?.answers },
+    });
     if (problem) setFormError(t(`callCampaign.errors.${problem}` as never));
   });
 
@@ -114,6 +139,16 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
       </View>
 
       {!runner.online ? <AppAlert tone="warning" message={t('callCampaign.run.offline')} /> : null}
+      {runner.storageError ? (
+        <AppCard className="gap-2">
+          <AppAlert tone="destructive" message={t('callCampaign.run.storageError')} />
+          <AppButton
+            title={t('common.retry')}
+            variant="outline"
+            onPress={() => void useCampaignOutbox.getState().retryStorage()}
+          />
+        </AppCard>
+      ) : null}
       {runner.unresolved ? (
         <AppAlert
           tone="destructive"
@@ -129,6 +164,9 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
         />
       ) : null}
 
+      {runner.notice && runner.phase === 'ready' ? (
+        <AppAlert tone="info" message={t(`callCampaign.run.${runner.notice}`)} />
+      ) : null}
       {runner.phase === 'loading' ? <Loading label={t('common.loading')} /> : null}
 
       {runner.phase === 'idle' ? (
@@ -176,9 +214,50 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
         </AppCard>
       ) : null}
 
+      {task && runner.phase === 'ready' && runner.permission && runner.permission !== 'granted' ? (
+        <AppCard className="gap-3">
+          <AppText variant="title">{t('callCampaign.run.permissionTitle')}</AppText>
+          <AppText tone="muted">{t('callCampaign.run.permissionBody')}</AppText>
+          <AppButton
+            title={
+              runner.permission === 'blocked'
+                ? t('callCampaign.run.permissionSettings')
+                : t('callCampaign.run.permissionAllow')
+            }
+            leftIcon={ShieldCheck}
+            variant="outline"
+            onPress={() =>
+              void (runner.permission === 'blocked' ? openAppSettings() : runner.requestPermissions())
+            }
+          />
+        </AppCard>
+      ) : null}
+
       {task && runner.phase === 'ready' ? (
         <AppCard className="gap-3">
-          {(sims.data?.length ?? 0) > 1 ? (
+          <AppChip
+            label={t('callCampaign.run.autoCall')}
+            selected={runner.autoCall}
+            onPress={() => runner.setAutoCall(!runner.autoCall)}
+          />
+          {runner.preDial !== null ? (
+            <View className="gap-2">
+              <AppText variant="h2" accessibilityLiveRegion="polite">
+                {t('callCampaign.run.preDial', { name: task.lead?.name ?? '—', seconds: runner.preDial })}
+              </AppText>
+              <AppButton
+                title={t('callCampaign.run.stopAutoCall')}
+                leftIcon={Square}
+                variant="outline"
+                onPress={runner.stopAutoCall}
+              />
+            </View>
+          ) : runner.autoCallHold ? (
+            <AppText variant="caption" tone="muted">
+              {t(`callCampaign.run.autoCallHold.${runner.autoCallHold}`)}
+            </AppText>
+          ) : null}
+          {severalSims ? (
             <View className="gap-2">
               <AppText variant="label">{t('callCampaign.run.sim')}</AppText>
               <View className="flex-row flex-wrap gap-2">
@@ -197,7 +276,7 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
             title={t('callCampaign.run.call')}
             leftIcon={Phone}
             loading={runner.busy}
-            disabled={runner.busy || ((sims.data?.length ?? 0) > 1 && simId === null)}
+            disabled={runner.busy || runner.storageError || (severalSims && simId === null)}
             onPress={() => void runner.dial(simId)}
           />
           <AppButton
@@ -213,7 +292,18 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
       {runner.phase === 'calling' ? (
         <AppCard className="gap-3">
           <AppText variant="title">{t('callCampaign.run.inCall')}</AppText>
+          {runner.route === 'dialer_handoff' ? (
+            <AppAlert tone="warning" message={t('callCampaign.run.dialerHandoff')} />
+          ) : null}
           <AppText tone="muted">{t('callCampaign.run.inCallHint')}</AppText>
+          {!runner.callStateVisible ? (
+            <AppText variant="caption" tone="muted">
+              {t('callCampaign.run.noCallState')}
+            </AppText>
+          ) : null}
+          <AppText variant="caption" tone="muted">
+            {t('callCampaign.run.whoHears')}
+          </AppText>
           <AppButton
             title={t('callCampaign.run.callEnded')}
             leftIcon={PhoneOff}
@@ -221,15 +311,6 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
             onPress={runner.confirmCallEnded}
           />
         </AppCard>
-      ) : null}
-
-      {task && draft && showGuide ? (
-        <QuestionGuide
-          questions={campaign.questionnaire.questions}
-          answers={draft.answers}
-          onAnswer={answer}
-          readAloud={campaign.settings.readAloud}
-        />
       ) : null}
 
       {task && draft && runner.phase === 'wrap_up' ? (
@@ -246,10 +327,32 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
         />
       ) : null}
 
+      {/* After the call the outcome comes first; the answers stay editable below it. */}
+      {task && draft && showGuide ? (
+        <QuestionGuide
+          questions={campaign.questionnaire.questions}
+          answers={draft.answers}
+          onAnswer={answer}
+          readAloud={campaign.settings.readAloud}
+        />
+      ) : null}
+
       {runner.phase === 'saved' ? (
         <AppCard className="gap-3">
+          {runner.canEditResult ? (
+            <AppButton
+              title={t('callCampaign.run.editResult')}
+              variant="outline"
+              loading={runner.busy}
+              onPress={() => void runner.editResult()}
+            />
+          ) : null}
           <AppText variant="title">
-            {runner.resultSynced ? t('callCampaign.run.saved') : t('callCampaign.run.savedLocal')}
+            {runner.resultSynced
+              ? t('callCampaign.run.saved')
+              : runner.storageError
+                ? t('callCampaign.run.storageError')
+                : t('callCampaign.run.savedLocal')}
           </AppText>
           {runner.countdown !== null ? (
             <AppText variant="h2" accessibilityLiveRegion="polite">

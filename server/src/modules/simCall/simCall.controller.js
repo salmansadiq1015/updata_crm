@@ -6,6 +6,7 @@ const wrap = (fn) => async (req, res, next) => { try { return await fn(req, res)
 const me = (req) => req.user._id;
 
 export default {
+  readiness: wrap(async (_req, res) => res.success({ data: await service.readiness() })),
   listCampaigns: wrap(async (req, res) => res.success(await service.listCampaigns(me(req), q(req)))),
   createCampaign: wrap(async (req, res) => res.success({ data: await service.createCampaign(req.body, me(req), meta(req)), statusCode: 201, message: 'Call campaign created' })),
   getCampaign: wrap(async (req, res) => res.success({ data: await service.getCampaign(req.params.id, me(req)) })),

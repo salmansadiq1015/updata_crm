@@ -120,7 +120,7 @@ export function DashboardScreen({ navigation }: MainTabScreenProps<'Dashboard'>)
               title={t('dashboard.startCampaign')}
               leftIcon={Bot}
               fullWidth
-              onPress={() => navigation.navigate('CallAgentLeadPicker', { purpose: 'call' })}
+              onPress={() => navigation.navigate('CallAgentLeadPicker', { purpose: 'campaign' })}
             />
           </View>
         </View>

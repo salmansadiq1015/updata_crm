@@ -97,10 +97,10 @@ describe('LeadsScreen multi-select', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('LeadDetail', { leadId: '64b7f0c2a1b2c3d4e5f60701' });
   });
 
-  it('opens the AI agent campaigns from the header', async () => {
+  it('opens the SIM call campaigns from the header', async () => {
     await renderLeads();
-    await fireEvent.press(screen.getByRole('button', { name: 'AI agent campaigns' }));
-    expect(navigation.navigate).toHaveBeenCalledWith('AiAgentCampaigns');
+    await fireEvent.press(screen.getByRole('button', { name: 'Call campaigns' }));
+    expect(navigation.navigate).toHaveBeenCalledWith('CallCampaigns');
   });
 
   it('keeps only failed leads selected after a partial bulk delete', async () => {

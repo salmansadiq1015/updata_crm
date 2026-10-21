@@ -1164,6 +1164,8 @@ export const de: Translations = {
     picker: {
       title: 'Leads auswählen',
       intro: {
+        simSms:
+          'Wählen Sie die Leads, denen über die SIM dieses Telefons geschrieben wird. Nichts wird gesendet, bevor Sie prüfen und bestätigen.',
         call: 'Wählen Sie die Leads, die der KI-Agent anrufen soll. Nichts startet, bevor Sie prüfen und bestätigen.',
         sms: 'Wählen Sie die Leads, die eine KI-SMS erhalten sollen. Nichts wird gesendet, bevor Sie prüfen und bestätigen.',
         test: 'Wählen Sie einen Lead für einen Testentwurf. Niemand wird angerufen und der Lead wird nicht geändert.',
@@ -1250,6 +1252,97 @@ export const de: Translations = {
     overdueCount_other: '{{count}} überfällig',
     todayCount_one: '{{count}} heute',
     todayCount_other: '{{count}} heute',
+  },
+  readiness: {
+    title: 'Bereitschaft für Anrufe vom Handy',
+    intro:
+      'Anrufe und SMS gehen über die eigene SIM dieses Telefons. Keine SIP-Nummer und kein Cloud-Telefonanbieter nötig.',
+    checkAgain: 'Erneut prüfen',
+    summary: {
+      checking: 'Wird geprüft…',
+      ready: 'Bereit zum Anrufen über Ihre SIM',
+      attention: '{{count}} Punkt(e) brauchen Ihre Aufmerksamkeit',
+      blocked: 'Anrufen ist noch nicht möglich',
+    },
+    sections: {
+      phone: 'Dieses Telefon',
+      server: 'CRM-Server',
+      limits: 'Bei SIM-Anrufen nicht möglich',
+      optional: 'Optionaler Cloud-Modus',
+    },
+    items: {
+      sim: 'SIM',
+      phone: 'Telefon-Berechtigung',
+      sms: 'SMS',
+      microphone: 'Mikrofon (Sprachnotizen)',
+      notifications: 'Benachrichtigungen',
+      background: 'Hintergrundbetrieb',
+      server: 'CRM-Server',
+      ai: 'KI-Funktionen',
+      callAudio: 'KI-Stimme in SIM-Anrufen',
+      cloudCalling: 'Cloud-KI-Anrufe (SIP)',
+    },
+    reasons: {
+      checking: 'Wird geprüft…',
+      noTelephony: 'Dieses Gerät kann keine Anrufe tätigen.',
+      airplane: 'Flugmodus ist aktiv.',
+      noSim: 'Keine SIM-Karte gefunden.',
+      simNotReady: 'Die SIM ist gesperrt oder nicht bereit.',
+      simReady: 'SIM bereit: {{names}}',
+      simsReady: '{{count}} SIMs: {{names}}. Sie wählen eine pro Kampagne.',
+      simReadyUnnamed: 'SIM bereit. Erlauben Sie den Telefonzugriff, um die SIM-Namen zu sehen.',
+      phoneGranted: 'Anrufe gehen direkt über die gewählte SIM, und die App erkennt das Gesprächsende.',
+      phoneMissing:
+        'Ohne sie öffnet sich die Telefon-App und Sie tippen jedes Mal auf Anrufen; die App sieht das Gesprächsende nicht.',
+      smsAutomatic: 'Automatische SMS über diese SIM; Antworten liest der Agent.',
+      smsMissing: 'Erlauben Sie SMS, damit der Agent über diese SIM senden und Antworten lesen kann.',
+      smsComposer:
+        'SMS öffnet Ihre Nachrichten-App mit fertigem Text; Sie tippen auf Senden. Automatische SMS braucht die Firmenhandy-Version.',
+      noSmsApp: 'Keine Nachrichten-App auf diesem Telefon gefunden.',
+      notificationsGranted: 'Die Benachrichtigung „Agent läuft“ kann angezeigt werden.',
+      notificationsMissing: 'Erlauben Sie Benachrichtigungen, damit der SMS-Agent weiterlaufen kann.',
+      backgroundOk: 'Der SMS-Agent darf bei ausgeschaltetem Bildschirm laufen.',
+      backgroundLimited: 'Der Energiesparmodus kann den SMS-Agent bei ausgeschaltetem Bildschirm anhalten.',
+      micGranted: 'Sprachnotizen nach einem Anruf können aufgenommen werden.',
+      micOnUse: 'Wird bei der ersten Sprachnotiz abgefragt.',
+      micBlocked: 'In den Einstellungen deaktiviert. Sprachnotizen brauchen es.',
+      serverOk: 'Verbunden ({{ms}} ms).',
+      offline: 'Keine Internetverbindung.',
+      serverError: 'Das CRM ist gerade nicht erreichbar.',
+      aiReady: 'Transkription von Sprachnotizen, Antwortvorschläge und SMS-Agent-Antworten sind verfügbar.',
+      aiOff:
+        'KI ist auf dem Server nicht eingerichtet: Transkription und Vorschläge sind aus. Anrufe und manuelle Antworten funktionieren weiter.',
+      serverOutdated:
+        'Aktualisieren Sie den CRM-Server, um den KI-Status zu sehen. Anrufe funktionieren weiter.',
+      callAudioUnsupported:
+        'Android erlaubt Apps nicht, in einem normalen SIM-Anruf zu hören oder zu sprechen. Sie sprechen; die App zeigt die Fragen, kann sie Ihnen vorlesen und speichert die Antworten.',
+      cloudReady: 'Auf dem Server eingerichtet. Optional; für SIM-Anrufe nicht nötig.',
+      cloudOptional: 'Nicht eingerichtet. Nicht nötig: Anrufe laufen über Ihre SIM.',
+    },
+    actions: {
+      allowPhone: 'Telefonzugriff erlauben',
+      allowSms: 'SMS erlauben',
+      allowMicrophone: 'Mikrofon erlauben',
+      allowNotifications: 'Benachrichtigungen erlauben',
+      allowBackground: 'Hintergrundbetrieb erlauben',
+      openSettings: 'Einstellungen öffnen',
+      retry: 'Erneut versuchen',
+    },
+    micTitle: 'Mikrofon für Sprachnotizen',
+    micMessage:
+      'Nehmen Sie nach einem Anruf eine kurze Sprachnotiz auf; sie wird in die Lead-Notizen transkribiert.',
+    callFromSim: 'Stattdessen über meine SIM anrufen',
+    textFromPhone: 'Stattdessen von diesem Telefon schreiben',
+    cloudCallNotNeeded:
+      'Cloud-KI-Anrufe sind optional und auf dem Server nicht eingerichtet. Sie können diese Leads jetzt über Ihre eigene SIM anrufen.',
+    cloudSmsNotNeeded:
+      'Der SMS-Anbieter des CRM ist optional und nicht eingerichtet. Sie können diesen Leads von diesem Telefon schreiben.',
+    optionalTitle: 'Optional: Cloud-KI-Agent',
+    optionalNote:
+      'Braucht einen Cloud-Telefon- oder SMS-Anbieter auf dem Server. Für Anrufe und SMS über Ihre SIM nicht nötig.',
+    leadCampaign: 'Kampagne',
+    leadCampaignA11y: '{{name}} in einer SIM-Anrufkampagne anrufen',
+    open: 'Bereitschaft öffnen',
   },
   callCampaign: {
     editor: {

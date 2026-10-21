@@ -42,6 +42,7 @@ import {
   smsReadiness,
   toQuestionnaire,
   type DefaultQuestionTexts,
+  type Readiness,
 } from '../domain/agentDomain';
 import {
   useAgentLanguages,
@@ -264,7 +265,7 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
             selected={channel === 'call'}
             onPress={() => setChannel('call')}
           >
-            <ReadinessNotice channel="call" readiness={callReady} />
+            <CloudReadiness channel="call" readiness={callReady} leadIds={leadIds} navigation={navigation} />
             {callReady.state !== 'ready' && callReady.state !== 'checking' ? (
               <AppText variant="caption" tone="muted">
                 {t('aiAgent.readiness.testStillWorks')}
@@ -279,7 +280,7 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
             selected={channel === 'sms'}
             onPress={() => setChannel('sms')}
           >
-            <ReadinessNotice channel="sms" readiness={smsReady} />
+            <CloudReadiness channel="sms" readiness={smsReady} leadIds={leadIds} navigation={navigation} />
           </ChannelCard>
           {getEnv().distribution === 'private' ? (
             // Company build: the AI converses by SMS from THIS phone's SIM (own flow).
@@ -476,7 +477,7 @@ export function AiAgentLaunchScreen({ route, navigation }: RootScreenProps<'AiAg
         <View className="gap-4">
           <AppText variant="h3">{t('aiAgent.review.title')}</AppText>
           <AppAlert tone="info" message={t('aiAgent.review.draftNote')} />
-          <ReadinessNotice channel={channel} readiness={readiness} />
+          <CloudReadiness channel={channel} readiness={readiness} leadIds={leadIds} navigation={navigation} />
           {channel === 'call' ? (
             <>
               <CallReviewPanel preview={preview} recipients={callRecipients.data?.items ?? []} />
@@ -570,5 +571,64 @@ function ChannelCard({ icon, title, body, note, selected, onPress, children }: C
       </AppText>
       {children}
     </AppCard>
+  );
+}
+
+/**
+ * Cloud calling and the CRM SMS provider are optional server modes. When one is not set up this
+ * is not an error: the same leads can be called or texted from this phone's SIM instead.
+ */
+function CloudReadiness({
+  channel,
+  readiness,
+  leadIds,
+  navigation,
+}: {
+  channel: AgentChannel;
+  readiness: Readiness;
+  leadIds: string[];
+  navigation: RootScreenProps<'AiAgentLaunch'>['navigation'];
+}) {
+  const { t } = useTranslation();
+  if (readiness.state === 'ready' || readiness.state === 'checking') {
+    return <ReadinessNotice channel={channel} readiness={readiness} />;
+  }
+  const privateBuild = getEnv().distribution === 'private';
+  const textInstead =
+    channel === 'sms'
+      ? privateBuild
+        ? () => navigation.replace('SimSmsLaunch', { leadIds })
+        : leadIds.length === 1
+          ? () => navigation.replace('SmsCompose', { leadId: leadIds[0]! })
+          : null
+      : null;
+  return (
+    <View className="gap-2">
+      {readiness.state === 'not_ready' ? (
+        <AppAlert
+          tone="info"
+          message={t(channel === 'call' ? 'readiness.cloudCallNotNeeded' : 'readiness.cloudSmsNotNeeded')}
+        />
+      ) : (
+        // Status unknown (e.g. this account cannot read it): say so, never guess.
+        <ReadinessNotice channel={channel} readiness={readiness} />
+      )}
+      {channel === 'call' && leadIds.length > 0 ? (
+        <AppButton
+          title={t('readiness.callFromSim')}
+          leftIcon={PhoneCall}
+          onPress={() => navigation.replace('CallCampaignCreate', { leadIds })}
+        />
+      ) : null}
+      {textInstead ? (
+        <AppButton title={t('readiness.textFromPhone')} leftIcon={Smartphone} onPress={textInstead} />
+      ) : null}
+      <AppButton
+        title={t('readiness.open')}
+        variant="ghost"
+        size="sm"
+        onPress={() => navigation.navigate('MobileReadiness')}
+      />
+    </View>
   );
 }

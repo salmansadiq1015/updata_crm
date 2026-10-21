@@ -152,8 +152,12 @@ describe('RootNavigator', () => {
     await fireEvent.press(screen.getByRole('tab', { name: 'Updata Call Agent' }));
     expect(screen.getByTestId('tab-call-agent')).toBeSelected();
     expect(await screen.findByRole('button', { name: 'Set up agent' })).toBeTruthy();
-    expect(await screen.findByText("AI calling can't dial yet: no phone trunk is configured.")).toBeTruthy();
-    expect(await screen.findByText('SMS sending is ready.')).toBeTruthy();
+    // SIM-first: the readiness card and SIM call campaigns lead; no trunk error on the home screen.
+    expect(await screen.findByText('Mobile calling readiness')).toBeTruthy();
+    expect(screen.getByText('Call campaigns (your SIM)')).toBeTruthy();
+    expect(screen.queryByText("AI calling can't dial yet: no phone trunk is configured.")).toBeNull();
+    // The cloud SMS provider is ready in this fixture, so its optional action is offered.
+    expect(await screen.findByText('Optional: cloud AI agent')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Set up agent' }));
     expect(await screen.findByLabelText('Agent name')).toBeTruthy();

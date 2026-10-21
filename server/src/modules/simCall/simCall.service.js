@@ -18,6 +18,8 @@ import {
   CALLABLE_TASK_STATES, CAMPAIGN_TRANSITIONS, DEFAULT_SETTINGS, LOCK_MS, MAX_LEADS, NO_CONTACT_OUTCOMES,
   RETRYABLE_TASK_STATES, SIM_CALL_ERROR_CODES,
 } from './simCall.constants.js';
+import { isAiConfigured } from '../../shared/ai/llmFactory.js';
+import { telephonyHealth } from '../aiCalling/providers/telephonyRouter.js';
 
 const MAX_SYNC_ATTEMPTS = 5;
 const MAX_FAILED_DIALS = 3;          // "could not place the call" before the task is closed as failed
@@ -168,6 +170,32 @@ function serializeTask(task, { lead = null, includeAttempts = true } = {}) {
 }
 
 class SimCallService {
+  /**
+   * What the phone needs to know before calling: SIM calling and SIM SMS need nothing from the
+   * server beyond this API; AI features need an AI key on the server; cloud calling
+   * (LiveKit + SIP) is an optional, separate mode and never required by the app.
+   */
+  async readiness() {
+    const ai = isAiConfigured();
+    let cloudCalling = { configured: false, reason: 'unavailable' };
+    try {
+      const health = await Promise.race([
+        telephonyHealth(),
+        new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+      cloudCalling = health ? { configured: Boolean(health.configured), reason: health.reason ?? null } : { configured: false, reason: 'timeout' };
+    } catch {
+      // Optional mode: a failing check never blocks SIM calling.
+    }
+    return {
+      serverTime: new Date().toISOString(),
+      simCalling: { available: true },
+      simSms: { available: true },
+      ai: { configured: ai, voiceNotes: ai, answerSuggestions: ai, smsAgentReplies: ai },
+      cloudCalling: { ...cloudCalling, required: false },
+    };
+  }
+
   // ------------------------------------------------------------------ helpers
   async _event(campaignId, type, { taskId = null, leadId = null, actor = null, details = null } = {}) {
     try {

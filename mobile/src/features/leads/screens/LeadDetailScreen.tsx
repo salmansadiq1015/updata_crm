@@ -214,10 +214,10 @@ function LeadDetail({
               />
               <HeroAction
                 icon={Bot}
-                label={t('aiAgent.entryShort')}
-                accessibilityLabel={t('aiAgent.entryA11y', { name: lead.name })}
+                label={t('readiness.leadCampaign')}
+                accessibilityLabel={t('readiness.leadCampaignA11y', { name: lead.name })}
                 variant="ai"
-                onPress={() => navigation.navigate('AiAgentLaunch', { leadIds: [lead.id] })}
+                onPress={() => navigation.navigate('CallCampaignCreate', { leadIds: [lead.id] })}
               />
             </View>
           ) : null}

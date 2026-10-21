@@ -1136,6 +1136,8 @@ export const en = {
     picker: {
       title: 'Choose leads',
       intro: {
+        simSms:
+          "Choose the leads to text from this phone's SIM. Nothing is sent until you review and confirm.",
         call: 'Choose the leads the AI agent should call. Nothing starts until you review and confirm.',
         sms: 'Choose the leads that should get an AI SMS. Nothing is sent until you review and confirm.',
         test: 'Choose one lead for a test draft. Nobody is called and the lead is not changed.',
@@ -1220,6 +1222,94 @@ export const en = {
     overdueCount_other: '{{count}} overdue',
     todayCount_one: '{{count}} today',
     todayCount_other: '{{count}} today',
+  },
+  readiness: {
+    title: 'Mobile calling readiness',
+    intro: "Calls and SMS go out from this phone's own SIM. No SIP number or cloud phone provider is needed.",
+    checkAgain: 'Check again',
+    summary: {
+      checking: 'Checking…',
+      ready: 'Ready to call from your SIM',
+      attention: '{{count}} item(s) need your attention',
+      blocked: 'Calling is not possible yet',
+    },
+    sections: {
+      phone: 'This phone',
+      server: 'CRM server',
+      limits: 'Not possible on SIM calls',
+      optional: 'Optional cloud mode',
+    },
+    items: {
+      sim: 'SIM',
+      phone: 'Phone permission',
+      sms: 'SMS',
+      microphone: 'Microphone (voice notes)',
+      notifications: 'Notifications',
+      background: 'Background running',
+      server: 'CRM server',
+      ai: 'AI features',
+      callAudio: 'AI voice inside SIM calls',
+      cloudCalling: 'Cloud AI calling (SIP)',
+    },
+    reasons: {
+      checking: 'Checking…',
+      noTelephony: "This device can't place phone calls.",
+      airplane: 'Airplane mode is on.',
+      noSim: 'No SIM card found.',
+      simNotReady: 'The SIM is locked or not ready.',
+      simReady: 'SIM ready: {{names}}',
+      simsReady: '{{count}} SIMs: {{names}}. You choose one per campaign.',
+      simReadyUnnamed: 'SIM ready. Allow phone access to see the SIM names.',
+      phoneGranted: 'Calls go out directly on the SIM you choose, and the app sees when they end.',
+      phoneMissing:
+        "Without it the dialer opens and you press Call each time, and the app can't see when the call ends.",
+      smsAutomatic: 'Automatic SMS from this SIM; replies are read by the agent.',
+      smsMissing: 'Allow SMS so the agent can send and read replies on this SIM.',
+      smsComposer:
+        'SMS opens your messaging app with the text ready; you press Send. Automatic SMS needs the company-phone build.',
+      noSmsApp: 'No messaging app found on this phone.',
+      notificationsGranted: 'The "agent running" notification can be shown.',
+      notificationsMissing: 'Allow notifications so the SMS agent can keep running.',
+      backgroundOk: 'The SMS agent may run with the screen off.',
+      backgroundLimited: 'Battery saving may pause the SMS agent when the screen is off.',
+      micGranted: 'Voice notes after a call can be recorded.',
+      micOnUse: 'Asked the first time you record a voice note.',
+      micBlocked: 'Turned off in Settings. Voice notes need it.',
+      serverOk: 'Connected ({{ms}} ms).',
+      offline: 'No internet connection.',
+      serverError: "Can't reach the CRM right now.",
+      aiReady: 'Voice-note transcription, answer suggestions and SMS-agent replies are available.',
+      aiOff:
+        'AI is not configured on the server: transcription and suggestions are off. Calling and manual answers still work.',
+      serverOutdated: 'Update the CRM server to see the AI status. Calling still works.',
+      callAudioUnsupported:
+        "Android doesn't let apps hear or speak inside a normal SIM call. You talk; the app shows the questions, can read them to you and saves the answers.",
+      cloudReady: 'Set up on the server. Optional; not needed for SIM calling.',
+      cloudOptional: 'Not set up. Not needed: calls use your SIM.',
+    },
+    actions: {
+      allowPhone: 'Allow phone access',
+      allowSms: 'Allow SMS',
+      allowMicrophone: 'Allow microphone',
+      allowNotifications: 'Allow notifications',
+      allowBackground: 'Allow background running',
+      openSettings: 'Open settings',
+      retry: 'Try again',
+    },
+    micTitle: 'Microphone for voice notes',
+    micMessage: 'Record a short voice note after a call; it is transcribed into the lead notes.',
+    callFromSim: 'Call from my SIM instead',
+    textFromPhone: 'Text from this phone instead',
+    cloudCallNotNeeded:
+      'Cloud AI calling is optional and not set up on the server. You can call these leads from your own SIM now.',
+    cloudSmsNotNeeded:
+      'The CRM SMS provider is optional and not set up. You can text these leads from this phone.',
+    optionalTitle: 'Optional: cloud AI agent',
+    optionalNote:
+      'Needs a cloud phone or SMS provider on the server. Not required for calling or texting from your SIM.',
+    leadCampaign: 'Campaign',
+    leadCampaignA11y: 'Call {{name}} in a SIM call campaign',
+    open: 'Open readiness',
   },
   callCampaign: {
     editor: {

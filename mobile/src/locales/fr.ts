@@ -1161,6 +1161,8 @@ export const fr: Translations = {
     picker: {
       title: 'Choisir des prospects',
       intro: {
+        simSms:
+          "Choisissez les leads à qui écrire depuis la SIM de ce téléphone. Rien n'est envoyé avant votre vérification et confirmation.",
         call: "Choisissez les prospects que l'agent IA doit appeler. Rien ne démarre avant votre vérification et confirmation.",
         sms: "Choisissez les prospects qui doivent recevoir un SMS IA. Rien n'est envoyé avant votre vérification et confirmation.",
         test: "Choisissez un prospect pour un brouillon de test. Personne n'est appelé et le prospect n'est pas modifié.",
@@ -1245,6 +1247,97 @@ export const fr: Translations = {
     overdueCount_other: '{{count}} en retard',
     todayCount_one: '{{count}} aujourd’hui',
     todayCount_other: '{{count}} aujourd’hui',
+  },
+  readiness: {
+    title: 'Préparation des appels depuis le mobile',
+    intro:
+      "Les appels et SMS partent de la SIM de ce téléphone. Aucun numéro SIP ni fournisseur de téléphonie cloud n'est nécessaire.",
+    checkAgain: 'Vérifier à nouveau',
+    summary: {
+      checking: 'Vérification…',
+      ready: 'Prêt à appeler depuis votre SIM',
+      attention: '{{count}} point(s) à traiter',
+      blocked: 'Les appels ne sont pas encore possibles',
+    },
+    sections: {
+      phone: 'Ce téléphone',
+      server: 'Serveur CRM',
+      limits: 'Impossible pendant un appel SIM',
+      optional: 'Mode cloud facultatif',
+    },
+    items: {
+      sim: 'SIM',
+      phone: 'Autorisation Téléphone',
+      sms: 'SMS',
+      microphone: 'Micro (notes vocales)',
+      notifications: 'Notifications',
+      background: 'Fonctionnement en arrière-plan',
+      server: 'Serveur CRM',
+      ai: 'Fonctions IA',
+      callAudio: "Voix de l'IA dans les appels SIM",
+      cloudCalling: 'Appels IA cloud (SIP)',
+    },
+    reasons: {
+      checking: 'Vérification…',
+      noTelephony: 'Cet appareil ne peut pas passer d’appels.',
+      airplane: 'Le mode avion est activé.',
+      noSim: 'Aucune carte SIM trouvée.',
+      simNotReady: "La SIM est verrouillée ou n'est pas prête.",
+      simReady: 'SIM prête : {{names}}',
+      simsReady: '{{count}} SIM : {{names}}. Vous en choisissez une par campagne.',
+      simReadyUnnamed: "SIM prête. Autorisez l'accès au téléphone pour voir le nom des SIM.",
+      phoneGranted: "Les appels partent directement de la SIM choisie et l'app voit quand ils se terminent.",
+      phoneMissing:
+        "Sans elle, le composeur s'ouvre et vous appuyez sur Appeler à chaque fois ; l'app ne voit pas la fin de l'appel.",
+      smsAutomatic: "SMS automatiques depuis cette SIM ; l'agent lit les réponses.",
+      smsMissing: "Autorisez les SMS pour que l'agent envoie et lise les réponses sur cette SIM.",
+      smsComposer:
+        "Le SMS ouvre votre app de messagerie avec le texte prêt ; vous appuyez sur Envoyer. Les SMS automatiques nécessitent la version téléphones d'entreprise.",
+      noSmsApp: 'Aucune app de messagerie sur ce téléphone.',
+      notificationsGranted: 'La notification « agent actif » peut s’afficher.',
+      notificationsMissing: "Autorisez les notifications pour que l'agent SMS continue de fonctionner.",
+      backgroundOk: "L'agent SMS peut fonctionner écran éteint.",
+      backgroundLimited: "L'économie de batterie peut mettre l'agent SMS en pause écran éteint.",
+      micGranted: 'Les notes vocales après un appel peuvent être enregistrées.',
+      micOnUse: 'Demandé lors de la première note vocale.',
+      micBlocked: 'Désactivé dans les réglages. Les notes vocales en ont besoin.',
+      serverOk: 'Connecté ({{ms}} ms).',
+      offline: 'Pas de connexion Internet.',
+      serverError: 'Le CRM est injoignable pour le moment.',
+      aiReady:
+        "La transcription des notes vocales, les suggestions de réponses et les réponses de l'agent SMS sont disponibles.",
+      aiOff:
+        "L'IA n'est pas configurée sur le serveur : transcription et suggestions désactivées. Les appels et les réponses manuelles fonctionnent.",
+      serverOutdated: "Mettez à jour le serveur CRM pour voir l'état de l'IA. Les appels fonctionnent.",
+      callAudioUnsupported:
+        "Android ne permet pas aux apps d'entendre ou de parler pendant un appel SIM normal. Vous parlez ; l'app affiche les questions, peut vous les lire et enregistre les réponses.",
+      cloudReady: 'Configuré sur le serveur. Facultatif ; inutile pour les appels SIM.',
+      cloudOptional: 'Non configuré. Inutile : les appels passent par votre SIM.',
+    },
+    actions: {
+      allowPhone: "Autoriser l'accès au téléphone",
+      allowSms: 'Autoriser les SMS',
+      allowMicrophone: 'Autoriser le micro',
+      allowNotifications: 'Autoriser les notifications',
+      allowBackground: "Autoriser l'arrière-plan",
+      openSettings: 'Ouvrir les réglages',
+      retry: 'Réessayer',
+    },
+    micTitle: 'Micro pour les notes vocales',
+    micMessage:
+      'Enregistrez une courte note vocale après un appel ; elle est transcrite dans les notes du lead.',
+    callFromSim: 'Appeler plutôt depuis ma SIM',
+    textFromPhone: 'Écrire plutôt depuis ce téléphone',
+    cloudCallNotNeeded:
+      'Les appels IA cloud sont facultatifs et non configurés sur le serveur. Vous pouvez appeler ces leads depuis votre SIM maintenant.',
+    cloudSmsNotNeeded:
+      'Le fournisseur SMS du CRM est facultatif et non configuré. Vous pouvez écrire à ces leads depuis ce téléphone.',
+    optionalTitle: 'Facultatif : agent IA cloud',
+    optionalNote:
+      'Nécessite un fournisseur de téléphonie ou de SMS cloud sur le serveur. Inutile pour appeler ou écrire depuis votre SIM.',
+    leadCampaign: 'Campagne',
+    leadCampaignA11y: 'Appeler {{name}} dans une campagne d’appels SIM',
+    open: 'Ouvrir la préparation',
   },
   callCampaign: {
     editor: {

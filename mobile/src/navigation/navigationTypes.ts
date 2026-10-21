@@ -51,6 +51,7 @@ export type RootStackParamList = {
   SimSmsCampaigns: undefined;
   CallAudioCheck: undefined;
   CallCampaigns: undefined;
+  MobileReadiness: undefined;
   CallCampaignCreate: { leadIds: string[] };
   CallCampaignDetail: { campaignId: string };
   CallCampaignRun: { campaignId: string };
@@ -60,7 +61,7 @@ export type RootStackParamList = {
   // Call Agent tab. Settings are deep-linkable (they start nothing); the picker and
   // the test screen are reached only from an explicit tap.
   CallAgentSettings: undefined;
-  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' | 'queue' | 'campaign' };
+  CallAgentLeadPicker: { purpose: 'call' | 'sms' | 'test' | 'queue' | 'campaign' | 'simSms' };
   CallAgentTest: { leadId?: string } | undefined;
 };
 

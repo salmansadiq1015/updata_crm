@@ -1,4 +1,12 @@
-import { Bot, FlaskConical, ListChecks, ListOrdered, MessageSquare, PhoneCall } from 'lucide-react-native';
+import {
+  Bot,
+  FlaskConical,
+  ListChecks,
+  ListOrdered,
+  MessageSquare,
+  PhoneCall,
+  Smartphone,
+} from 'lucide-react-native';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -11,6 +19,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppPressableCard } from '@/components/ui/AppCard';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppText } from '@/components/ui/AppText';
+import { getEnv } from '@/config/env';
 import { Icon } from '@/components/ui/Icon';
 import { CampaignStatusBadge } from '@/features/aiAgent/components/StatusBadges';
 import { callReadiness, smsReadiness } from '@/features/aiAgent/domain/agentDomain';
@@ -24,12 +33,12 @@ import { rowCounts } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
 import { ACTIVE_CAMPAIGN_STATUSES } from '@/features/aiAgent/types';
 import { ActiveQueueBanner } from '@/features/callQueue/components/ActiveQueueBanner';
 import { useActiveCallQueue } from '@/features/callQueue/hooks/useCallQueue';
+import { ReadinessSummaryCard } from '@/features/readiness/components/ReadinessSummaryCard';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
 import { formatRelative } from '@/utils/date';
 
 import { ActionTile } from '../components/ActionTile';
 import { AgentHero } from '../components/AgentHero';
-import { ReadinessCard } from '../components/ReadinessCard';
 import { formFromDefaults } from '../domain/agentSettings';
 import { useAgentDefaults, useSettingsFallbacks } from '../hooks/useCallAgent';
 
@@ -71,7 +80,12 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
     void campaigns.refetch();
   };
 
-  const pick = (purpose: 'call' | 'sms' | 'queue') => navigation.navigate('CallAgentLeadPicker', { purpose });
+  const pick = (purpose: 'call' | 'sms' | 'queue' | 'campaign' | 'simSms') =>
+    navigation.navigate('CallAgentLeadPicker', { purpose });
+  const privateBuild = getEnv().distribution === 'private';
+  // Cloud AI calling / CRM SMS provider are optional server modes: offered only once set up.
+  const cloudCallsReady = callReady.state === 'ready';
+  const cloudSmsReady = smsReady.state === 'ready';
   // SIM call queue: resume the active one, otherwise choose leads for a new one.
   const activeQueue = useActiveCallQueue();
   const openCallQueue = () => (activeQueue.queue ? navigation.navigate('CallQueue') : pick('queue'));
@@ -91,37 +105,12 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
       <ActiveQueueBanner onPress={() => navigation.navigate('CallQueue')} />
 
       <Appear index={1}>
-        <View className="gap-2">
-          <SectionHeader title={t('callAgent.readiness.title')} />
-          <ReadinessCard
-            channel="call"
-            icon={PhoneCall}
-            title={t('callAgent.readiness.calls')}
-            readiness={callReady}
-          />
-          <ReadinessCard
-            channel="sms"
-            icon={MessageSquare}
-            title={t('callAgent.readiness.sms')}
-            readiness={smsReady}
-          />
-        </View>
+        <ReadinessSummaryCard onPress={() => navigation.navigate('MobileReadiness')} />
       </Appear>
 
       <Appear index={2}>
         <View className="gap-3">
           <SectionHeader title={t('callAgent.actions.title')} />
-          <ActionTile
-            icon={PhoneCall}
-            title={t('callAgent.actions.call')}
-            hint={t('callAgent.actions.callHint')}
-            note={
-              callReady.state === 'ready' || callReady.state === 'checking'
-                ? null
-                : t('callAgent.actions.callDraftOnly')
-            }
-            onPress={() => pick('call')}
-          />
           <ActionTile
             icon={PhoneCall}
             tone="success"
@@ -143,13 +132,41 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
             }
             onPress={openCallQueue}
           />
-          <ActionTile
-            icon={MessageSquare}
-            tone="info"
-            title={t('callAgent.actions.sms')}
-            hint={t('callAgent.actions.smsHint')}
-            onPress={() => pick('sms')}
-          />
+          {privateBuild ? (
+            <ActionTile
+              icon={Smartphone}
+              tone="info"
+              title={t('smsAgent.channelTitle')}
+              hint={t('smsAgent.channelBody')}
+              onPress={() => pick('simSms')}
+            />
+          ) : null}
+        </View>
+      </Appear>
+
+      <Appear index={3}>
+        <View className="gap-3">
+          <SectionHeader title={t('readiness.optionalTitle')} />
+          <AppText variant="caption" tone="muted">
+            {t('readiness.optionalNote')}
+          </AppText>
+          {cloudCallsReady ? (
+            <ActionTile
+              icon={PhoneCall}
+              title={t('callAgent.actions.call')}
+              hint={t('callAgent.actions.callHint')}
+              onPress={() => pick('call')}
+            />
+          ) : null}
+          {cloudSmsReady ? (
+            <ActionTile
+              icon={MessageSquare}
+              tone="info"
+              title={t('callAgent.actions.sms')}
+              hint={t('callAgent.actions.smsHint')}
+              onPress={() => pick('sms')}
+            />
+          ) : null}
           <ActionTile
             icon={FlaskConical}
             tone="success"
@@ -171,7 +188,7 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
         </View>
       </Appear>
 
-      <Appear index={3}>
+      <Appear index={4}>
         <View className="gap-3">
           <SectionHeader
             title={t('callAgent.campaigns.title')}

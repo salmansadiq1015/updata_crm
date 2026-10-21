@@ -434,6 +434,49 @@ accessibility permissions; `npm run verify:apk` passes). Installs as an update o
 Rollback: install the previous APK after uninstalling (Android forbids downgrades in place);
 no server or database change was made.
 
+### 0.16 SIM-first mobile app: no mandatory SIP/LiveKit trunk (2026-10-21)
+
+**Decision (owner):** the Android app calls and texts through the phone's own SIM. A purchased
+SIP number, LiveKit or any telephony provider is **not** part of the mobile setup. Cloud AI
+calling (LiveKit + SIP, `/ai-calling`) remains an **optional, separately configured** server mode.
+
+**Audit — where the app depended on a trunk (before):**
+
+| Place | Behaviour before | Now |
+|---|---|---|
+| Call Agent home | "AI calls: Not ready — no phone trunk", "AI SMS: Not ready — no SMS provider" cards; first action "Call leads with AI" (cloud) | One **Mobile calling readiness** card; SIM call campaigns, call queue and (company build) SMS from this phone first; cloud agent moved to "Optional: cloud AI agent", its call/SMS actions shown only when the server reports them ready |
+| Dashboard "Start campaign" | cloud AI agent launch | SIM call campaign (lead picker → create) |
+| Lead detail "AI agent" | cloud AI agent launch | "Campaign" → SIM call campaign for that lead |
+| Leads header campaign icon | cloud campaigns | SIM call campaigns |
+| Settings | "AI calls / AI SMS" trunk status rows | "Mobile calling readiness" row |
+| Cloud launch screen (optional path) | red "can't dial: no phone trunk" dead end | "optional, not set up" + **Call from my SIM instead** (same leads) / **Text from this phone instead**; unknown status still shown honestly |
+
+No LiveKit/WebRTC/SIP package exists in the mobile app (checked `package.json`). The server's
+`LIVEKIT_*` / `SIP_OUTBOUND_*` settings were already optional (empty defaults); nothing on the
+server requires them for SIM calling or SIM SMS. The removed mobile file is the cloud
+`callAgent/components/ReadinessCard.tsx`.
+
+**Mobile Calling Readiness screen** (`mobile/src/features/readiness`), every row from real state:
+SIM (hardware, airplane mode, SIM state, dual-SIM names), phone permission (Allow / Open
+settings when Android stops asking), SMS (company build: send/receive + notification + battery;
+shareable build: messaging app), microphone for voice notes, CRM server (reachable + latency,
+retry), AI features on the server, **"AI voice inside SIM calls: not possible on Android"**
+(measured 0.1), and optional cloud calling (information only).
+
+**New API:** `GET /api/v1/sim-calls/readiness` (auth + `ai-calling:read`) → `{ serverTime,
+simCalling, simSms, ai: { configured, … }, cloudCalling: { configured, reason, required:false } }`.
+The cloud check has a 3 s cap and can never fail SIM readiness. An older server (404) is shown as
+reachable with "update the server to see AI status".
+
+**Tests:** readiness logic (12), readiness screen (4: SIM-ready dual SIM without trunk, permission
+request from the row, offline/retry/older server, honest call-audio limit), API (2: shape and
+401), updated launch/home/leads tests (no trunk error; SIM fallback replaces to
+`CallCampaignCreate` with the same leads).
+
+**Not yet verified on the physical phone:** the readiness screen itself (the TECNO was not
+connected after this change). SIM calling, SIM SMS sending and their limits were verified on the
+TECNO on 2026-10-21 (0.14, report). AI speech inside SIM calls remains impossible on Android 13.
+
 ---
 
 ## 1. Architecture

@@ -71,6 +71,7 @@ export const ENDPOINTS = {
   },
   // SIM call campaigns: AI-assisted calling from THIS phone's SIM (server/src/modules/simCall).
   simCalls: {
+    readiness: '/sim-calls/readiness',
     campaigns: '/sim-calls/campaigns',
     campaign: (id: string) => `/sim-calls/campaigns/${encodeURIComponent(id)}`,
     action: (id: string, action: 'start' | 'resume' | 'pause' | 'cancel' | 'retry') =>

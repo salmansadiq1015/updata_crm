@@ -67,6 +67,7 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
     if (selected.length === 0) return;
     if (purpose === 'test') navigation.replace('CallAgentTest', { leadId: selected[0]! });
     else if (purpose === 'campaign') navigation.replace('CallCampaignCreate', { leadIds: selected });
+    else if (purpose === 'simSms') navigation.replace('SimSmsLaunch', { leadIds: selected });
     else if (purpose === 'queue')
       callQueue.start(selected.map((id) => ({ id, name: names.current.get(id) ?? '' })));
     else navigation.navigate('AiAgentLaunch', { leadIds: selected, initialChannel: purpose });

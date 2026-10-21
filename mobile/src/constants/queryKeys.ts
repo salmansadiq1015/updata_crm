@@ -50,6 +50,11 @@ export const queryKeys = {
     conversation: (id: string) => ['sms-agent', 'conversation', id] as const,
     readiness: ['sms-agent', 'readiness'] as const,
   },
+  readiness: {
+    server: ['readiness', 'server'] as const,
+    microphone: ['readiness', 'microphone'] as const,
+    battery: ['readiness', 'battery'] as const,
+  },
   callCampaigns: {
     all: ['call-campaigns'] as const,
     list: (status?: string, q?: string) => ['call-campaigns', 'list', status ?? 'all', q ?? ''] as const,

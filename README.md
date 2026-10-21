@@ -143,5 +143,3 @@ cd lead_extention && npm test && npm run typecheck
 - The `requirements/` folder holds design docs (e.g. the Lead Generation design);
   when docs and code disagree, trust the code.
 
-
-

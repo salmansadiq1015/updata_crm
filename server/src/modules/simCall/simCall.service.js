@@ -255,6 +255,21 @@ class SimCallService {
     return docs.length;
   }
 
+  /**
+   * Add leads to an existing campaign (idempotent per lead). Used by the SMS link
+   * assistant's "fall back to a human call" when a lead never answered the link.
+   */
+  async addLeads(campaignId, leadIds, actor) {
+    const campaign = await SimCallCampaign.findOne({ _id: campaignId, createdBy: actor });
+    if (!campaign) throw new NotFoundError('SimCallCampaign', campaignId);
+    if (['cancelled', 'completed'].includes(campaign.status)) throw conflict('The call campaign is closed', 'SIM_CALL_CAMPAIGN_CLOSED');
+    const last = await SimCallTask.findOne({ campaignId: campaign._id }).sort({ order: -1 }).select('order').lean();
+    const added = await this._buildTasks(campaign, [...new Set(leadIds.map(String))], actor, (last?.order ?? -1) + 1);
+    await this.refreshSummary(campaign._id);
+    await this._event(campaign._id, 'campaign.leads_added', { actor, details: { leads: added, source: 'link_assistant_fallback' } });
+    return { added };
+  }
+
   // ---------------------------------------------------------------- campaigns
   async createCampaign(input, actor, meta = {}) {
     assertQuestionnaire(input.questionnaire);

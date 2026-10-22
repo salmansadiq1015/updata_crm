@@ -244,6 +244,24 @@ class LeadCommunicationService {
     return { eligible: reasons.length === 0, reasons, destinationMasked: dest.masked, dest };
   }
 
+  async _issueLink(leadId, input, userId) {
+    if (input.channel !== 'sms' || !input.linkCampaignId) return null;
+    const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
+    const issued = await linkAssistant.issueLink({
+      campaignId: input.linkCampaignId, leadId, userId, operationId: input.operationId, purpose: input.linkPurpose || 'initial',
+    });
+    return { url: issued.url, expiresAt: issued.expiresAt, sessionId: issued.sessionId };
+  }
+
+  async _linkFunnel(fn) {
+    try {
+      const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
+      await fn(linkAssistant);
+    } catch (error) {
+      logger.warn('link funnel update failed', { module: 'lead', error: error.message });
+    }
+  }
+
   async eligibility(leadId, { channel, destinationField }) {
     const lead = await this._loadLead(leadId);
     const { eligible, reasons, destinationMasked } = await this._evaluate(lead, channel, destinationField);
@@ -286,9 +304,13 @@ class LeadCommunicationService {
       // A replayed create for an operation that was never completed must not
       // hand out a number that has since been suppressed.
       if (existing.state !== 'completed' && !result.eligible && !skipEligibility) throw this._notEligible(result);
-      return { communication: serializeCommunication(existing), dialNumber, created: false };
+      const link = await this._issueLink(leadId, input, userId);
+      return { communication: serializeCommunication(existing), dialNumber, created: false, link };
     }
     if (!result.eligible && !skipEligibility) throw this._notEligible(result);
+    // The personal link is issued (and its campaign, hours and kill switch checked)
+    // before anything is recorded: if it can't be issued, no SMS goes out.
+    const link = await this._issueLink(leadId, input, userId);
 
     const startedAt = input.startedAt ? new Date(input.startedAt) : new Date();
     let doc;
@@ -313,7 +335,7 @@ class LeadCommunicationService {
       const winner = await LeadCommunication.findOne({ createdBy: userId, operationId: input.operationId }).lean();
       if (!winner) throw err;
       this._assertSameOperation(winner, leadId, input.channel);
-      return { communication: serializeCommunication(winner), dialNumber, created: false };
+      return { communication: serializeCommunication(winner), dialNumber, created: false, link };
     }
 
     auditService.logEvent({
@@ -327,7 +349,7 @@ class LeadCommunicationService {
       },
       module: 'lead',
     });
-    return { communication: serializeCommunication(doc), dialNumber, created: true };
+    return { communication: serializeCommunication(doc), dialNumber, created: true, link };
   }
 
   /** Append app/native events (dedupe by seq), then re-derive state + observed. */
@@ -361,6 +383,9 @@ class LeadCommunicationService {
       }
       try {
         await doc.save();
+        if (accepted.some((e) => e.type === 'sms_delivered')) {
+          await this._linkFunnel((link) => link.onSmsDelivered(operationId));
+        }
         return serializeCommunication(doc);
       } catch (err) {
         if (err?.name !== 'VersionError') throw err;
@@ -442,6 +467,7 @@ class LeadCommunicationService {
             { runValidators: true },
           );
           ran.outcome = 'ok';
+          if (sms) await this._linkFunnel((link) => link.onSmsOutcome(operationId, sms.sendStatus));
         } catch (err) {
           await this._setStep(existing._id, 'outcome', 'failed', String(err.message).slice(0, 500));
           ran.outcome = 'failed';

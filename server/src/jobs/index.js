@@ -50,6 +50,7 @@ import { OutboundMessagingRecoveryWorker } from './outboundMessagingRecovery.job
 import { OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE } from '../modules/messaging/messaging.constants.js';
 import { OutboundCallingWorker } from './outboundCalling.job.js';
 import { registerAiCallReconciliationJob } from './aiCallReconciliation.job.js';
+import { registerLinkAssistantSweepJob } from './linkAssistantSweep.job.js';
 import { registerSimSmsSweepJob } from './simSmsSweep.job.js';
 import { registerSimCallSweepJob } from './simCallSweep.job.js';
 import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
@@ -713,6 +714,7 @@ export function registerJobs() {
 
   // AI call reconciliation — recover calls stuck after a crash / lost webhook.
   registerAiCallReconciliationJob(queueManager);
+  registerLinkAssistantSweepJob(queueManager);
 
   // SIM SMS agent — reply timeouts / reminders / lease recovery for SMS sent from users' phones.
   registerSimSmsSweepJob(queueManager);

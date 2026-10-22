@@ -26,6 +26,8 @@ import type {
   SmsSendStatus,
 } from '../types';
 import { flushOutbox } from './outboxSync';
+import { queueSmsId } from '@/services/telephony/smsIds';
+import { analyzeSms } from '../domain/smsEncoding';
 
 export class ContactFlowError extends Error {
   constructor(
@@ -59,7 +61,7 @@ async function authorise(input: {
   lead: LeadRef;
   channel: Channel;
   destinationField: DestinationField;
-  route: 'telecom_direct' | 'dialer_handoff' | 'sms_composer';
+  route: 'telecom_direct' | 'dialer_handoff' | 'sms_composer' | 'sms_direct';
   mode: 'manual' | 'assisted';
   sim: SimInfo | null;
 }): Promise<{ operationId: string; dialNumber: string }> {
@@ -225,6 +227,97 @@ export async function startSms(input: {
   );
   void flushOutbox();
   return operationId;
+}
+
+/** How long to wait for Android's SENT result before recording the send as unknown. */
+const DIRECT_SMS_RESULT_TIMEOUT_MS = 60_000;
+
+/**
+ * Send one SMS from this phone's SIM without the composer (client "shared" / company builds).
+ * The CRM authorises it first (eligibility, suppression, number), the "dispatching" marker is
+ * on disk before the radio call, and the outcome is the phone's own SENT result: transmission by
+ * the SIM, never delivery. A send whose result never arrives is recorded as unknown, not resent.
+ */
+export async function startDirectSms(input: {
+  userId: string;
+  lead: LeadRef;
+  destinationField: DestinationField;
+  body: string;
+  templateId: string | null;
+  sim: SimInfo | null;
+}): Promise<{ operationId: string; status: 'sent' | 'failed' | 'unknown'; errorCode: string | null }> {
+  const { operationId, dialNumber } = await authorise({
+    ...input,
+    channel: 'sms',
+    route: 'sms_direct',
+    mode: 'manual',
+  });
+  const store = useOperationsStore.getState();
+  store.update(operationId, (op) => ({ ...op, smsBody: input.body, smsTemplateId: input.templateId }));
+  const messageId = queueSmsId(operationId);
+
+  type Result = { status: 'sent' | 'failed' | 'unknown'; errorCode: string | null };
+  const result = new Promise<Result>((resolve) => {
+    const timer = setTimeout(() => {
+      sub?.remove();
+      resolve({ status: 'unknown', errorCode: null });
+    }, DIRECT_SMS_RESULT_TIMEOUT_MS);
+    const sub = telephony.addSmsStatusListener((event) => {
+      if (event.messageId !== messageId || event.status === 'delivered') return;
+      clearTimeout(timer);
+      sub?.remove();
+      resolve({ status: event.status, errorCode: event.errorCode ?? null });
+    });
+  });
+
+  let status: Result['status'];
+  let errorCode: string | null = null;
+  try {
+    await telephony.sendSms({
+      messageId,
+      to: dialNumber,
+      body: input.body,
+      subscriptionId: input.sim?.subscriptionId ?? null,
+    });
+    store.update(operationId, (op) =>
+      withEvent(
+        { ...op, phase: 'in_progress', dispatchedAt: Date.now() },
+        'dispatched',
+        'native',
+        Date.now(),
+      ),
+    );
+    ({ status, errorCode } = await result);
+  } catch (error) {
+    // SmsManager refused before anything left the phone (permission, no SIM): nothing was sent.
+    status = 'failed';
+    errorCode = error instanceof Error ? error.message.slice(0, 60) : 'SEND_FAILED';
+    store.update(operationId, (op) =>
+      withEvent({ ...op, phase: 'in_progress' }, 'dispatch_failed', 'native', Date.now(), {
+        code: errorCode,
+      }),
+    );
+  }
+  const sms = analyzeSms(input.body);
+  await submitOutcome(operationId, {
+    disposition: status === 'sent' ? 'sent' : status === 'failed' ? 'not_sent' : 'unknown',
+    connected: 'unknown',
+    notes: '',
+    followUpAt: null,
+    followUpTimezone: null,
+    statusChange: null,
+    doNotContact: false,
+    answers: [],
+    sms: {
+      sendStatus: status === 'sent' ? 'device_sent' : status === 'failed' ? 'device_failed' : 'unknown',
+      encoding: sms.encoding,
+      segments: sms.segments,
+    },
+  });
+  // A sent SMS stays in the native journal until its delivery report arrives (or times out):
+  // collectQueueDeliveries turns that report into an event for the CRM.
+  if (status !== 'sent') await telephony.ackSmsJournal([messageId]);
+  return { operationId, status, errorCode };
 }
 
 /** Pull native events persisted while JS was not listening (backgrounded, process death). */

@@ -68,6 +68,7 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
     if (purpose === 'test') navigation.replace('CallAgentTest', { leadId: selected[0]! });
     else if (purpose === 'campaign') navigation.replace('CallCampaignCreate', { leadIds: selected });
     else if (purpose === 'simSms') navigation.replace('SimSmsLaunch', { leadIds: selected });
+    else if (purpose === 'smsQueue') navigation.replace('SmsQueue', { leadIds: selected });
     else if (purpose === 'queue')
       callQueue.start(selected.map((id) => ({ id, name: names.current.get(id) ?? '' })));
     else navigation.navigate('AiAgentLaunch', { leadIds: selected, initialChannel: purpose });
@@ -80,7 +81,9 @@ export function CallAgentLeadPickerScreen({ route, navigation }: RootScreenProps
           ? t('callQueue.picker.intro')
           : purpose === 'campaign'
             ? t('callCampaign.picker.intro')
-            : t(`callAgent.picker.intro.${purpose}`)}
+            : purpose === 'smsQueue'
+              ? t('smsQueue.pickerIntro')
+              : t(`callAgent.picker.intro.${purpose}`)}
       </AppText>
       <AppSearchInput
         value={search}

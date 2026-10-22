@@ -258,7 +258,12 @@ export const en = {
       handoffExplain:
         'Without the call permission, the number opens in your phone app and you press call there. The app cannot choose the SIM in that case.',
     },
-    routeShort: { telecom_direct: 'SIM call', dialer_handoff: 'Via phone app', sms_composer: 'SMS app' },
+    routeShort: {
+      telecom_direct: 'SIM call',
+      dialer_handoff: 'Via phone app',
+      sms_composer: 'SMS app',
+      sms_direct: 'SMS from SIM',
+    },
     phase: {
       preparing: 'Checking with CRM',
       dispatching: 'Starting',
@@ -471,6 +476,9 @@ export const en = {
       user_reported_sent: 'Sent (your report)',
       user_reported_not_sent: 'Not sent (your report)',
       unknown: 'Unknown if sent',
+      device_sent: 'Sent by the phone (not delivery)',
+      device_failed: 'Phone could not send',
+      device_delivered: 'Delivered (carrier report)',
     },
     sms: {
       to: 'To {{number}}',
@@ -1223,6 +1231,68 @@ export const en = {
     todayCount_one: '{{count}} today',
     todayCount_other: '{{count}} today',
   },
+  smsQueue: {
+    title: 'Text leads from your phone',
+    tile: 'Text leads from your phone',
+    tileHint: 'Send an SMS to chosen leads from your SIM; every message is logged in the CRM',
+    pickerIntro: 'Choose the leads to text. Nothing is sent until you review and confirm.',
+    intro:
+      '{{count}} lead(s) selected. Each SMS is checked by the CRM (do-not-contact, number) and logged on the lead.',
+    message: 'Message',
+    placeholder: 'Hello {name}, …',
+    insert: {
+      name: '+ Lead name',
+      city: '+ City',
+    },
+    missingValue:
+      '{{placeholder}} is empty for {{count}} lead(s): {{names}}. Their message will have it left out — check the wording.',
+    unknownPlaceholders: 'Unknown placeholder(s): {{names}}. They would be sent as written.',
+    preview: 'Preview for {{name}}',
+    howTitle: 'How to send',
+    mode: {
+      composer: 'Open Messages for each lead (you tap Send)',
+      composerHint: 'Works on every phone. No SMS permission needed.',
+      automatic: 'Send automatically from my SIM',
+      automaticHint:
+        'The app sends each SMS from your SIM, about one every 6 seconds. Replies arrive in your Messages app. Carrier charges apply.',
+      automaticUnavailable:
+        'Automatic sending is not available in this app version; the Messages app is used.',
+    },
+    start: 'Continue with {{count}} lead(s)',
+    confirmTitle: 'Send {{count}} SMS automatically?',
+    confirmBody: 'They go out from {{sim}} now. Carrier charges apply. You can stop at any time.',
+    defaultSim: 'your default SMS SIM',
+    confirmSend: 'Send now',
+    permissionDenied: 'SMS sending is not allowed. Allow it in the readiness screen or use the Messages app.',
+    runningTitle: 'Texting leads…',
+    doneTitle: 'Done',
+    counts:
+      'Sent: {{sent}} · not sent: {{notSent}} · unknown: {{unknown}} · skipped: {{skipped}} · cannot text: {{blocked}} · left: {{pending}}',
+    stop: 'Stop',
+    resume: 'Continue sending',
+    didYouSend: 'Did the SMS to {{name}} go out?',
+    yesSent: 'Yes, sent',
+    notSent: 'No',
+    openMessages: 'Open Messages',
+    skip: 'Skip this lead',
+    leads: 'Leads',
+    recent: 'texted from this phone recently',
+    include: 'Include',
+    networkRefused:
+      'The phone network refused the SMS — usually no SMS balance or bundle on this SIM. Send one SMS from the Messages app with this SIM to check, or choose the other SIM.',
+    recentSkipped: '{{count}} lead(s) were texted from this phone in the last 12 hours and are skipped.',
+    includeAll: 'Include them',
+    status: {
+      pending: 'Waiting',
+      composer_open: 'In Messages',
+      sending: 'Sending…',
+      sent: 'Sent',
+      not_sent: 'Not sent',
+      unknown: 'Result unknown (not resent)',
+      skipped: 'Skipped',
+      blocked: 'Cannot text',
+    },
+  },
   readiness: {
     title: 'Mobile calling readiness',
     intro: "Calls and SMS go out from this phone's own SIM. No SIP number or cloud phone provider is needed.",
@@ -1233,11 +1303,15 @@ export const en = {
       attention: '{{count}} item(s) need your attention',
       blocked: 'Calling is not possible yet',
     },
+    diagnosticsIntro: 'Capability codes for support. CRM records waiting to sync: {{count}}.',
+    capabilities: 'Capability codes',
+    shareReport: 'Share diagnostic report',
     sections: {
       phone: 'This phone',
       server: 'CRM server',
       limits: 'Not possible on SIM calls',
       optional: 'Optional cloud mode',
+      diagnostics: 'Diagnostics',
     },
     items: {
       sim: 'SIM',
@@ -1252,6 +1326,9 @@ export const en = {
       cloudCalling: 'Cloud AI calling (SIP)',
     },
     reasons: {
+      smsSendOnly: 'Automatic SMS from this SIM (one-way). Replies arrive in your Messages app.',
+      smsSendMissing:
+        'Allow SMS sending so the app can text leads from this SIM. It never reads your messages.',
       checking: 'Checking…',
       noTelephony: "This device can't place phone calls.",
       airplane: 'Airplane mode is on.',
@@ -1296,6 +1373,7 @@ export const en = {
       openSettings: 'Open settings',
       retry: 'Try again',
     },
+    sendSmsMessage: "Updata sends the campaign SMS from this phone's SIM. It does not read your messages.",
     micTitle: 'Microphone for voice notes',
     micMessage: 'Record a short voice note after a call; it is transcribed into the lead notes.',
     callFromSim: 'Call from my SIM instead',
@@ -1423,6 +1501,8 @@ export const en = {
       maxAttempts: 'Attempts per lead (no answer / busy)',
       retryDelay: 'Wait before retrying',
       minutes: '{{count}} min',
+      outsideNow:
+        'It is outside these calling hours right now ({{start}}–{{end}}, {{tz}}). The campaign will wait and start calling when they open.',
       reviewLeads: 'Leads: {{count}}',
       reviewQuestions: 'Questions: {{count}}',
       reviewSequence:
@@ -1516,6 +1596,8 @@ export const en = {
         'The lead hears only you. Read-aloud plays on this phone, not inside the call; the AI does not speak or listen on SIM calls.',
     },
     idle: {
+      hours:
+        'Calling hours: {{start}}–{{end}} ({{tz}}). Calls start automatically when they open; nothing is dialled outside them.',
       queue_empty: 'No more leads to call.',
       campaign_completed: 'Campaign completed.',
       waiting: 'Remaining leads are scheduled for later.',

@@ -80,7 +80,7 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
     void campaigns.refetch();
   };
 
-  const pick = (purpose: 'call' | 'sms' | 'queue' | 'campaign' | 'simSms') =>
+  const pick = (purpose: 'call' | 'sms' | 'queue' | 'campaign' | 'simSms' | 'smsQueue') =>
     navigation.navigate('CallAgentLeadPicker', { purpose });
   const privateBuild = getEnv().distribution === 'private';
   // Cloud AI calling / CRM SMS provider are optional server modes: offered only once set up.
@@ -131,6 +131,13 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
                 : t('callQueue.action.hint')
             }
             onPress={openCallQueue}
+          />
+          <ActionTile
+            icon={MessageSquare}
+            tone="info"
+            title={t('smsQueue.tile')}
+            hint={t('smsQueue.tileHint')}
+            onPress={() => pick('smsQueue')}
           />
           {privateBuild ? (
             <ActionTile

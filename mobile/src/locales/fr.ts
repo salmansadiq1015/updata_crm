@@ -260,7 +260,12 @@ export const fr: Translations = {
       handoffExplain:
         "Sans l'autorisation d'appel, le numéro s'ouvre dans votre app Téléphone et vous appuyez sur Appeler. L'app ne peut alors pas choisir la SIM.",
     },
-    routeShort: { telecom_direct: 'Appel SIM', dialer_handoff: 'Via app Téléphone', sms_composer: 'App SMS' },
+    routeShort: {
+      telecom_direct: 'Appel SIM',
+      dialer_handoff: 'Via app Téléphone',
+      sms_composer: 'App SMS',
+      sms_direct: 'SMS depuis la SIM',
+    },
     phase: {
       preparing: 'Vérification CRM',
       dispatching: 'Lancement',
@@ -481,6 +486,9 @@ export const fr: Translations = {
       user_reported_sent: 'Envoyé (selon vous)',
       user_reported_not_sent: 'Non envoyé (selon vous)',
       unknown: 'Envoi incertain',
+      device_sent: 'Envoyé par le téléphone (pas la livraison)',
+      device_failed: "Le téléphone n'a pas pu envoyer",
+      device_delivered: "Distribué (accusé de l'opérateur)",
     },
     sms: {
       to: 'À {{number}}',
@@ -1248,6 +1256,72 @@ export const fr: Translations = {
     todayCount_one: '{{count}} aujourd’hui',
     todayCount_other: '{{count}} aujourd’hui',
   },
+  smsQueue: {
+    title: 'Écrire aux leads depuis le téléphone',
+    tile: 'Écrire aux leads depuis le téléphone',
+    tileHint: 'Envoyer un SMS aux leads choisis depuis votre SIM ; chaque message est enregistré dans le CRM',
+    pickerIntro:
+      "Choisissez les leads à qui écrire. Rien n'est envoyé avant votre vérification et confirmation.",
+    intro:
+      '{{count}} lead(s) sélectionné(s). Chaque SMS est vérifié par le CRM (liste noire, numéro) et enregistré sur le lead.',
+    message: 'Message',
+    placeholder: 'Bonjour {name}, …',
+    insert: {
+      name: '+ Nom du lead',
+      city: '+ Ville',
+    },
+    missingValue:
+      '{{placeholder}} est vide pour {{count}} lead(s) : {{names}}. Il sera omis de leur message — vérifiez la formulation.',
+    unknownPlaceholders: 'Variables inconnues : {{names}}. Elles seraient envoyées telles quelles.',
+    preview: 'Aperçu pour {{name}}',
+    howTitle: "Mode d'envoi",
+    mode: {
+      composer: 'Ouvrir Messages pour chaque lead (vous appuyez sur Envoyer)',
+      composerHint: 'Fonctionne sur tous les téléphones. Aucune autorisation SMS nécessaire.',
+      automatic: 'Envoyer automatiquement depuis ma SIM',
+      automaticHint:
+        "L'app envoie chaque SMS depuis votre SIM, environ un toutes les 6 secondes. Les réponses arrivent dans votre app Messages. Des frais s'appliquent.",
+      automaticUnavailable:
+        "L'envoi automatique n'est pas disponible dans cette version ; l'app Messages est utilisée.",
+    },
+    start: 'Continuer avec {{count}} lead(s)',
+    confirmTitle: 'Envoyer {{count}} SMS automatiquement ?',
+    confirmBody:
+      "Ils partent maintenant depuis {{sim}}. Des frais s'appliquent. Vous pouvez arrêter à tout moment.",
+    defaultSim: 'votre SIM SMS par défaut',
+    confirmSend: 'Envoyer maintenant',
+    permissionDenied:
+      "L'envoi de SMS n'est pas autorisé. Autorisez-le dans la préparation ou utilisez l'app Messages.",
+    runningTitle: 'Envoi aux leads…',
+    doneTitle: 'Terminé',
+    counts:
+      'Envoyés : {{sent}} · non envoyés : {{notSent}} · inconnus : {{unknown}} · ignorés : {{skipped}} · impossibles : {{blocked}} · restants : {{pending}}',
+    stop: 'Arrêter',
+    resume: "Reprendre l'envoi",
+    didYouSend: 'Le SMS à {{name}} est-il parti ?',
+    yesSent: 'Oui, envoyé',
+    notSent: 'Non',
+    openMessages: 'Ouvrir Messages',
+    skip: 'Ignorer ce lead',
+    leads: 'Leads',
+    recent: 'écrit récemment depuis ce téléphone',
+    include: 'Inclure',
+    networkRefused:
+      "Le réseau mobile a refusé des SMS avant leur envoi — généralement pas de crédit ou de forfait SMS sur cette SIM. Envoyez un SMS depuis l'app Messages avec cette SIM pour vérifier, ou choisissez l'autre SIM.",
+    recentSkipped:
+      '{{count}} prospect(s) ont reçu un SMS de ce téléphone dans les 12 dernières heures et sont ignorés.',
+    includeAll: 'Les inclure',
+    status: {
+      pending: 'En attente',
+      composer_open: 'Dans Messages',
+      sending: 'Envoi…',
+      sent: 'Envoyé',
+      not_sent: 'Non envoyé',
+      unknown: 'Résultat inconnu (pas renvoyé)',
+      skipped: 'Ignoré',
+      blocked: 'Impossible',
+    },
+  },
   readiness: {
     title: 'Préparation des appels depuis le mobile',
     intro:
@@ -1259,11 +1333,16 @@ export const fr: Translations = {
       attention: '{{count}} point(s) à traiter',
       blocked: 'Les appels ne sont pas encore possibles',
     },
+    diagnosticsIntro:
+      'Codes de capacité pour le support. Enregistrements CRM en attente de synchronisation : {{count}}.',
+    capabilities: 'Codes de capacité',
+    shareReport: 'Partager le rapport de diagnostic',
     sections: {
       phone: 'Ce téléphone',
       server: 'Serveur CRM',
       limits: 'Impossible pendant un appel SIM',
       optional: 'Mode cloud facultatif',
+      diagnostics: 'Diagnostic',
     },
     items: {
       sim: 'SIM',
@@ -1278,6 +1357,10 @@ export const fr: Translations = {
       cloudCalling: 'Appels IA cloud (SIP)',
     },
     reasons: {
+      smsSendOnly:
+        'SMS automatiques depuis cette SIM (envoi seul). Les réponses arrivent dans votre app de messagerie.',
+      smsSendMissing:
+        "Autorisez l'envoi de SMS pour que l'app écrive aux leads depuis cette SIM. Elle ne lit jamais vos messages.",
       checking: 'Vérification…',
       noTelephony: 'Cet appareil ne peut pas passer d’appels.',
       airplane: 'Le mode avion est activé.',
@@ -1323,6 +1406,8 @@ export const fr: Translations = {
       openSettings: 'Ouvrir les réglages',
       retry: 'Réessayer',
     },
+    sendSmsMessage:
+      'Updata envoie les SMS de campagne depuis la SIM de ce téléphone. Il ne lit pas vos messages.',
     micTitle: 'Micro pour les notes vocales',
     micMessage:
       'Enregistrez une courte note vocale après un appel ; elle est transcrite dans les notes du lead.',
@@ -1451,6 +1536,8 @@ export const fr: Translations = {
       maxAttempts: 'Tentatives par lead (pas de réponse / occupé)',
       retryDelay: 'Délai avant nouvelle tentative',
       minutes: '{{count}} min',
+      outsideNow:
+        'Nous sommes actuellement hors de ces horaires ({{start}}–{{end}}, {{tz}}). La campagne attendra leur ouverture pour appeler.',
       reviewLeads: 'Leads : {{count}}',
       reviewQuestions: 'Questions : {{count}}',
       reviewSequence:
@@ -1546,6 +1633,8 @@ export const fr: Translations = {
         "Le lead n'entend que vous. La lecture à voix haute se fait sur ce téléphone, pas dans l'appel ; l'IA ne parle ni n'écoute sur les appels SIM.",
     },
     idle: {
+      hours:
+        "Horaires d'appel : {{start}}–{{end}} ({{tz}}). Les appels démarrent à l'ouverture ; rien n'est composé en dehors.",
       queue_empty: 'Plus aucun lead à appeler.',
       campaign_completed: 'Campagne terminée.',
       waiting: 'Les leads restants sont planifiés plus tard.',

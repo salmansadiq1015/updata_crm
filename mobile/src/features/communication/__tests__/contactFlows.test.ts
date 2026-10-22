@@ -7,7 +7,7 @@ import { ApiError } from '@/services/api/apiErrors';
 import { __setNativeTelephonyForTests } from '@/services/telephony/telephonyService';
 
 import { communicationApi } from '../api/communicationApi';
-import { startCall, startSms, submitOutcome } from '../services/contactFlows';
+import { startCall, startDirectSms, startSms, submitOutcome } from '../services/contactFlows';
 import { flushOutbox, retryOperation, stopOutboxTimer } from '../services/outboxSync';
 import { flushOperationsWrites, getOperation, useOperationsStore } from '../store/operationsStore';
 import type { Receipt } from '../types';
@@ -326,7 +326,7 @@ describe('startSms', () => {
     await flushOutbox();
     const sent = api.appendEvents.mock.calls.flatMap(([, , events]) => events.map((event) => event.type));
     expect(sent).toEqual(['dispatch_requested', 'composer_opened']);
-    expect(op?.pendingEvents).toEqual([]);
+    expect(getOperation(id)?.pendingEvents).toEqual([]);
   });
 
   it('marks a missing SMS app as dispatch_failed', async () => {
@@ -339,5 +339,176 @@ describe('startSms', () => {
       templateId: null,
     });
     expect(getOperation(id)?.phase).toBe('dispatch_failed');
+  });
+});
+
+describe('startDirectSms (client / company builds: SEND_SMS from the SIM)', () => {
+  type StatusListener = (event: { messageId: string; status: string }) => void;
+  let statusListener: StatusListener | null = null;
+  const sim = {
+    subscriptionId: 3,
+    slotIndex: 0,
+    carrierName: 'Jazz',
+    displayName: 'Jazz',
+    countryIso: 'pk',
+    isEmbedded: false,
+    isDefaultVoice: false,
+    isDefaultSms: false,
+    number: null,
+  };
+  const sendNative = {
+    ...native,
+    sendSms: jest.fn(async (_req: { messageId: string }) => ({ parts: 1 })),
+    ackSmsJournal: jest.fn(async (_ids: string[]) => undefined),
+    getSmsJournal: jest.fn(async (): Promise<unknown[]> => []),
+    addListener: jest.fn((name: string, cb: StatusListener) => {
+      if (name === 'onSmsStatus') statusListener = cb;
+      return { remove: jest.fn() };
+    }),
+  };
+  beforeEach(() => {
+    statusListener = null;
+    __setNativeTelephonyForTests(sendNative as never);
+  });
+  const input = {
+    userId: USER,
+    lead,
+    destinationField: 'mobile' as const,
+    body: 'Salam, quick question',
+    templateId: null,
+    sim,
+  };
+
+  it("is authorised by the CRM as sms_direct, sent on the chosen SIM, and logged with the phone's result", async () => {
+    sendNative.sendSms.mockImplementationOnce(async (req: { messageId: string }) => {
+      setTimeout(() => statusListener?.({ messageId: req.messageId, status: 'sent' }), 0);
+      return { parts: 1 };
+    });
+    const { operationId, status } = await startDirectSms(input);
+    expect(status).toBe('sent');
+    expect(api.create).toHaveBeenCalledWith(
+      lead.id,
+      expect.objectContaining({ channel: 'sms', route: 'sms_direct' }),
+    );
+    expect(sendNative.sendSms).toHaveBeenCalledWith({
+      messageId: `smsq-${operationId}`,
+      to: '+41 44 000 00 00',
+      body: 'Salam, quick question',
+      subscriptionId: 3,
+    });
+    await flushOutbox();
+    expect(api.complete).toHaveBeenCalledWith(
+      lead.id,
+      operationId,
+      expect.objectContaining({
+        outcome: expect.objectContaining({ disposition: 'sent', connected: 'unknown' }),
+        sms: expect.objectContaining({ sendStatus: 'device_sent', body: 'Salam, quick question' }),
+      }),
+    );
+    // Sent: kept in the native journal until the carrier's delivery report arrives.
+    expect(sendNative.ackSmsJournal).not.toHaveBeenCalledWith([`smsq-${operationId}`]);
+
+    const finishedAt = Date.now();
+    sendNative.getSmsJournal.mockResolvedValueOnce([
+      {
+        messageId: `smsq-${operationId}`,
+        status: 'sent',
+        errorCode: null,
+        parts: 1,
+        startedAt: finishedAt - 2_000,
+        finishedAt,
+        deliveredAt: finishedAt + 5_000,
+      },
+    ]);
+    await flushOutbox();
+    expect(api.appendEvents).toHaveBeenLastCalledWith(
+      lead.id,
+      operationId,
+      expect.arrayContaining([expect.objectContaining({ type: 'sms_delivered', source: 'native' })]),
+    );
+    expect(sendNative.ackSmsJournal).toHaveBeenLastCalledWith([`smsq-${operationId}`]);
+  });
+
+  it('stops waiting for a delivery report after 72 hours without reporting one', async () => {
+    const old = Date.now() - 73 * 60 * 60_000;
+    sendNative.getSmsJournal.mockResolvedValueOnce([
+      {
+        messageId: 'smsq-gone',
+        status: 'sent',
+        errorCode: null,
+        parts: 1,
+        startedAt: old,
+        finishedAt: old,
+        deliveredAt: null,
+      },
+      {
+        messageId: 'smsq-fresh',
+        status: 'sent',
+        errorCode: null,
+        parts: 1,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        deliveredAt: null,
+      },
+      {
+        messageId: 'agent-1',
+        status: 'sent',
+        errorCode: null,
+        parts: 1,
+        startedAt: old,
+        finishedAt: old,
+        deliveredAt: old,
+      },
+    ]);
+    await flushOutbox();
+    expect(sendNative.ackSmsJournal).toHaveBeenLastCalledWith(['smsq-gone']);
+    expect(api.appendEvents).not.toHaveBeenCalled();
+  });
+
+  it('records a SIM send failure as device_failed / not_sent', async () => {
+    sendNative.sendSms.mockImplementationOnce(async (req: { messageId: string }) => {
+      setTimeout(() => statusListener?.({ messageId: req.messageId, status: 'failed' }), 0);
+      return { parts: 1 };
+    });
+    const { operationId, status } = await startDirectSms(input);
+    expect(status).toBe('failed');
+    await flushOutbox();
+    expect(api.complete).toHaveBeenCalledWith(
+      lead.id,
+      operationId,
+      expect.objectContaining({
+        outcome: expect.objectContaining({ disposition: 'not_sent' }),
+        sms: expect.objectContaining({ sendStatus: 'device_failed' }),
+      }),
+    );
+  });
+
+  it('a send refused by the phone before transmission is not_sent and never retried', async () => {
+    sendNative.sendSms.mockRejectedValueOnce(new Error('PERMISSION_DENIED'));
+    const { status } = await startDirectSms(input);
+    expect(status).toBe('failed');
+    expect(sendNative.sendSms).toHaveBeenCalledTimes(1);
+  });
+
+  it('no result from the phone in time is recorded as unknown, not resent', async () => {
+    jest.useFakeTimers();
+    try {
+      const pending = startDirectSms(input);
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(61_000);
+      const { status } = await pending;
+      expect(status).toBe('unknown');
+      expect(sendNative.sendSms).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('never sends when the CRM does not authorise it (e.g. SMS opt-out)', async () => {
+    api.create.mockRejectedValueOnce(
+      new ApiError({ kind: 'http', status: 409, code: 'CONTACT_NOT_ELIGIBLE', message: 'no' }),
+    );
+    await expect(startDirectSms(input)).rejects.toMatchObject({ code: 'NOT_AUTHORISED' });
+    expect(sendNative.sendSms).not.toHaveBeenCalled();
   });
 });

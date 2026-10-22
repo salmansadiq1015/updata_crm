@@ -10,6 +10,7 @@ import { logger } from '@/services/logging/logger';
 import { communicationApi } from '../api/communicationApi';
 import { afterReceipt, afterSyncFailure, classifySyncError, needsSync } from '../domain/operations';
 import { getOperation, useOperationsStore } from '../store/operationsStore';
+import { collectQueueDeliveries } from './queueDeliveries';
 
 const EVENT_BATCH = 100;
 
@@ -80,6 +81,9 @@ export function flushOutbox(): Promise<void> {
   flushing = (async () => {
     const userId = activeUserId();
     if (!userId) return;
+    await collectQueueDeliveries().catch((error: unknown) =>
+      logger.warn('communication.delivery_collect_failed', { message: String(error).slice(0, 120) }),
+    );
     const now = Date.now();
     const due = Object.values(useOperationsStore.getState().operations).filter((op) => needsSync(op, now));
     for (const op of due) {

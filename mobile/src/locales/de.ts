@@ -264,7 +264,12 @@ export const de: Translations = {
       handoffExplain:
         'Ohne Anrufberechtigung öffnet sich die Nummer in Ihrer Telefon-App und Sie drücken dort auf Anrufen. Die App kann dann keine SIM auswählen.',
     },
-    routeShort: { telecom_direct: 'SIM-Anruf', dialer_handoff: 'Über Telefon-App', sms_composer: 'SMS-App' },
+    routeShort: {
+      telecom_direct: 'SIM-Anruf',
+      dialer_handoff: 'Über Telefon-App',
+      sms_composer: 'SMS-App',
+      sms_direct: 'SMS von der SIM',
+    },
     phase: {
       preparing: 'Prüfung im CRM',
       dispatching: 'Wird gestartet',
@@ -487,6 +492,9 @@ export const de: Translations = {
       user_reported_sent: 'Gesendet (Ihre Angabe)',
       user_reported_not_sent: 'Nicht gesendet (Ihre Angabe)',
       unknown: 'Unklar, ob gesendet',
+      device_sent: 'Vom Telefon gesendet (keine Zustellung)',
+      device_failed: 'Telefon konnte nicht senden',
+      device_delivered: 'Zugestellt (Bericht des Netzbetreibers)',
     },
     sms: {
       to: 'An {{number}}',
@@ -1253,6 +1261,71 @@ export const de: Translations = {
     todayCount_one: '{{count}} heute',
     todayCount_other: '{{count}} heute',
   },
+  smsQueue: {
+    title: 'Leads vom Telefon anschreiben',
+    tile: 'Leads vom Telefon anschreiben',
+    tileHint: 'SMS an gewählte Leads über Ihre SIM; jede Nachricht wird im CRM protokolliert',
+    pickerIntro:
+      'Wählen Sie die Leads zum Anschreiben. Nichts wird gesendet, bevor Sie prüfen und bestätigen.',
+    intro:
+      '{{count}} Lead(s) gewählt. Jede SMS wird vom CRM geprüft (Sperrliste, Nummer) und beim Lead protokolliert.',
+    message: 'Nachricht',
+    placeholder: 'Hallo {name}, …',
+    insert: {
+      name: '+ Lead-Name',
+      city: '+ Ort',
+    },
+    missingValue:
+      '{{placeholder}} ist bei {{count}} Lead(s) leer: {{names}}. Es fehlt in deren Nachricht – prüfen Sie den Text.',
+    unknownPlaceholders: 'Unbekannte Platzhalter: {{names}}. Sie würden wörtlich gesendet.',
+    preview: 'Vorschau für {{name}}',
+    howTitle: 'Versandart',
+    mode: {
+      composer: 'Nachrichten-App für jeden Lead öffnen (Sie tippen auf Senden)',
+      composerHint: 'Funktioniert auf jedem Telefon. Keine SMS-Berechtigung nötig.',
+      automatic: 'Automatisch über meine SIM senden',
+      automaticHint:
+        'Die App sendet jede SMS über Ihre SIM, etwa alle 6 Sekunden. Antworten kommen in Ihrer Nachrichten-App an. Es fallen Gebühren an.',
+      automaticUnavailable:
+        'Automatisches Senden ist in dieser App-Version nicht verfügbar; die Nachrichten-App wird verwendet.',
+    },
+    start: 'Weiter mit {{count}} Lead(s)',
+    confirmTitle: '{{count}} SMS automatisch senden?',
+    confirmBody: 'Sie gehen jetzt über {{sim}} raus. Es fallen Gebühren an. Sie können jederzeit stoppen.',
+    defaultSim: 'Ihre Standard-SMS-SIM',
+    confirmSend: 'Jetzt senden',
+    permissionDenied:
+      'SMS-Versand ist nicht erlaubt. Erlauben Sie ihn in der Bereitschaft oder nutzen Sie die Nachrichten-App.',
+    runningTitle: 'Leads werden angeschrieben…',
+    doneTitle: 'Fertig',
+    counts:
+      'Gesendet: {{sent}} · nicht gesendet: {{notSent}} · unbekannt: {{unknown}} · übersprungen: {{skipped}} · nicht möglich: {{blocked}} · offen: {{pending}}',
+    stop: 'Stopp',
+    resume: 'Weiter senden',
+    didYouSend: 'Ist die SMS an {{name}} rausgegangen?',
+    yesSent: 'Ja, gesendet',
+    notSent: 'Nein',
+    openMessages: 'Nachrichten öffnen',
+    skip: 'Diesen Lead überspringen',
+    leads: 'Leads',
+    recent: 'kürzlich von diesem Telefon angeschrieben',
+    include: 'Einbeziehen',
+    networkRefused:
+      'Das Mobilfunknetz hat SMS abgelehnt, bevor sie zugestellt wurden – meist fehlt SMS-Guthaben oder ein SMS-Paket auf dieser SIM. Senden Sie zum Test eine SMS mit dieser SIM aus der Nachrichten-App oder wählen Sie die andere SIM.',
+    recentSkipped:
+      '{{count}} Lead(s) wurden in den letzten 12 Stunden von diesem Telefon angeschrieben und werden übersprungen.',
+    includeAll: 'Trotzdem einbeziehen',
+    status: {
+      pending: 'Wartet',
+      composer_open: 'In Nachrichten',
+      sending: 'Wird gesendet…',
+      sent: 'Gesendet',
+      not_sent: 'Nicht gesendet',
+      unknown: 'Ergebnis unbekannt (nicht erneut gesendet)',
+      skipped: 'Übersprungen',
+      blocked: 'Nicht möglich',
+    },
+  },
   readiness: {
     title: 'Bereitschaft für Anrufe vom Handy',
     intro:
@@ -1264,11 +1337,15 @@ export const de: Translations = {
       attention: '{{count}} Punkt(e) brauchen Ihre Aufmerksamkeit',
       blocked: 'Anrufen ist noch nicht möglich',
     },
+    diagnosticsIntro: 'Fähigkeitscodes für den Support. Noch nicht synchronisierte CRM-Einträge: {{count}}.',
+    capabilities: 'Fähigkeitscodes',
+    shareReport: 'Diagnosebericht teilen',
     sections: {
       phone: 'Dieses Telefon',
       server: 'CRM-Server',
       limits: 'Bei SIM-Anrufen nicht möglich',
       optional: 'Optionaler Cloud-Modus',
+      diagnostics: 'Diagnose',
     },
     items: {
       sim: 'SIM',
@@ -1283,6 +1360,10 @@ export const de: Translations = {
       cloudCalling: 'Cloud-KI-Anrufe (SIP)',
     },
     reasons: {
+      smsSendOnly:
+        'Automatische SMS über diese SIM (nur senden). Antworten kommen in Ihrer Nachrichten-App an.',
+      smsSendMissing:
+        'Erlauben Sie das Senden von SMS, damit die App Leads über diese SIM anschreiben kann. Sie liest Ihre Nachrichten nie.',
       checking: 'Wird geprüft…',
       noTelephony: 'Dieses Gerät kann keine Anrufe tätigen.',
       airplane: 'Flugmodus ist aktiv.',
@@ -1328,6 +1409,8 @@ export const de: Translations = {
       openSettings: 'Einstellungen öffnen',
       retry: 'Erneut versuchen',
     },
+    sendSmsMessage:
+      'Updata sendet die Kampagnen-SMS über die SIM dieses Telefons. Es liest Ihre Nachrichten nicht.',
     micTitle: 'Mikrofon für Sprachnotizen',
     micMessage:
       'Nehmen Sie nach einem Anruf eine kurze Sprachnotiz auf; sie wird in die Lead-Notizen transkribiert.',
@@ -1456,6 +1539,8 @@ export const de: Translations = {
       maxAttempts: 'Versuche pro Lead (keine Antwort / besetzt)',
       retryDelay: 'Wartezeit vor erneutem Versuch',
       minutes: '{{count}} Min.',
+      outsideNow:
+        'Gerade ist ausserhalb dieser Anrufzeiten ({{start}}–{{end}}, {{tz}}). Die Kampagne wartet und beginnt, sobald sie beginnen.',
       reviewLeads: 'Leads: {{count}}',
       reviewQuestions: 'Fragen: {{count}}',
       reviewSequence:
@@ -1552,6 +1637,8 @@ export const de: Translations = {
         'Der Lead hört nur Sie. Vorlesen läuft auf diesem Telefon, nicht im Anruf; die KI spricht und hört bei SIM-Anrufen nicht mit.',
     },
     idle: {
+      hours:
+        'Anrufzeiten: {{start}}–{{end}} ({{tz}}). Anrufe starten, sobald sie beginnen; ausserhalb wird nicht gewählt.',
       queue_empty: 'Keine Leads mehr anzurufen.',
       campaign_completed: 'Kampagne abgeschlossen.',
       waiting: 'Die übrigen Leads sind für später geplant.',

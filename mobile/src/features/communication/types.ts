@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const CHANNELS = ['phone', 'sms'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const ROUTES = ['telecom_direct', 'dialer_handoff', 'sms_composer'] as const;
+export const ROUTES = ['telecom_direct', 'dialer_handoff', 'sms_composer', 'sms_direct'] as const;
 export type CommunicationRoute = (typeof ROUTES)[number];
 
 export type DestinationField = 'phone' | 'mobile';
@@ -35,6 +35,11 @@ export const SMS_SEND_STATUSES = [
   'user_reported_sent',
   'user_reported_not_sent',
   'unknown',
+  // sms_direct: the phone's SmsManager result (transmission by the SIM, not delivery).
+  'device_sent',
+  'device_failed',
+  // sms_direct: sent, and the carrier's delivery report confirmed delivery (set by the CRM).
+  'device_delivered',
 ] as const;
 export type SmsSendStatus = (typeof SMS_SEND_STATUSES)[number];
 
@@ -54,6 +59,8 @@ export const EVENT_TYPES = [
   'disposition_selected',
   'qualification_reviewed',
   'submitted',
+  // sms_direct: the carrier's delivery report reached the phone (may arrive after completion).
+  'sms_delivered',
 ] as const;
 export type CommunicationEventType = (typeof EVENT_TYPES)[number];
 

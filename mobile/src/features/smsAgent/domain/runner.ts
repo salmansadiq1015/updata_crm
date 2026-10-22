@@ -13,6 +13,7 @@
 import type { InboundSms, SendSmsRequest, SmsJournalEntry } from '@/services/telephony/types';
 
 import type { LeaseResult } from '../types';
+import { isQueueSmsId } from '@/services/telephony/smsIds';
 
 export const RESULT_TIMEOUT_MS = 10 * 60_000; // no SENT callback within this → unknown
 export const DELIVERY_WAIT_MS = 24 * 3600_000; // keep the journal entry for a late delivery report
@@ -85,6 +86,7 @@ async function reconcileJournal(deps: RunnerDeps, now: number): Promise<number> 
   const ack: string[] = [];
   let reported = 0;
   for (const entry of await native.getSmsJournal()) {
+    if (isQueueSmsId(entry.messageId)) continue; // an SMS-queue send, owned by that flow
     let status: 'sent' | 'failed' | 'unknown' | null = null;
     let errorCode = entry.errorCode;
     if (entry.status === 'attempting') {

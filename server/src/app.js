@@ -66,6 +66,8 @@ import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.ro
 import extensionRoutes from './modules/extension/extension.routes.js';
 import messagingRoutes, { messagingWebhookRoutes } from './modules/messaging/messaging.routes.js';
 import aiCallingRoutes, { agentToolRoutes, aiCallingWebhookRoutes } from './modules/aiCalling/aiCalling.routes.js';
+import linkAssistantRoutes from './modules/linkAssistant/linkAssistant.routes.js';
+import linkAssistantPublicRoutes from './modules/linkAssistant/linkAssistant.public.routes.js';
 import simSmsRoutes from './modules/simSms/simSms.routes.js';
 import simCallRoutes from './modules/simCall/simCall.routes.js';
 
@@ -126,6 +128,8 @@ export function createApp() {
     if (req.path.startsWith('/socket.io')) return next();
     // AI-calling worker + provider webhooks have dedicated limiters (mounted below).
     if (req.path.startsWith('/api/v1/ai-calling/agent/') || req.path.startsWith('/api/v1/webhooks/ai-calling/')) return next();
+    // The SMS link assistant's public page has its own per-IP / per-link limiters.
+    if (req.path.startsWith('/c/')) return next();
     return globalLimiter(req, res, next);
   });
 
@@ -160,6 +164,9 @@ export function createApp() {
   app.use("/api/v1/messaging", messagingRoutes);
   app.use("/api/v1/webhooks/messaging", messagingWebhookRoutes);
   app.use("/api/v1/ai-calling", aiCallingRoutes);
+  app.use("/api/v1/link-assistant", linkAssistantRoutes);
+  // SMS link assistant customer page (public, token-authorised): https://<host>/c/<token>
+  app.use("/c", linkAssistantPublicRoutes);
   app.use("/api/v1/ai-calling/agent", agentToolLimiter, agentToolRoutes);
   app.use("/api/v1/webhooks/ai-calling", providerWebhookLimiter, aiCallingWebhookRoutes);
   // AI SMS agent over the user's own phone SIM (Android private build).

@@ -18,8 +18,9 @@ import ERROR_CODES from '../errors/errorCodes.js';
  * when Redis has a transient failure.
  */
 
-function createLimiter({ windowMs, max, message, keyGenerator } = {}) {
+function createLimiter({ windowMs, max, message, keyGenerator, ...extra } = {}) {
   const limiterConfig = {
+    ...extra,
     windowMs: windowMs || config.rateLimit.windowMs,
     max: max || config.rateLimit.global,
     standardHeaders: true,
@@ -131,3 +132,30 @@ export { createLimiter };
 export default {
   globalLimiter, authLimiter, uploadLimiter, enrichLimiter, geocodeLimiter, createLimiter,
 };
+
+/**
+ * SMS link assistant (public customer page). Per-IP budget for page/API traffic,
+ * a per-link budget for chat messages, and a strict budget for unknown links that
+ * only counts failures (brute-force guessing of 128-bit tokens is already futile;
+ * this keeps scanners cheap to reject).
+ */
+export const linkPageLimiter = createLimiter({
+  windowMs: 60_000,
+  max: config.isDevelopment ? 10_000 : 120,
+  keyGenerator: (req, res) => `link:ip:${ipKeyGenerator(req, res)}`,
+});
+
+export const linkMessageLimiter = createLimiter({
+  windowMs: 60_000,
+  max: config.isDevelopment ? 10_000 : 30,
+  keyGenerator: (req, res) => `link:msg:${String(req.params.token || '').slice(0, 22)}:${ipKeyGenerator(req, res)}`,
+  message: 'Please slow down a little',
+});
+
+export const linkMissLimiter = createLimiter({
+  windowMs: 10 * 60_000,
+  max: config.isDevelopment ? 10_000 : 20,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (req, res) => res.statusCode !== 404,
+  keyGenerator: (req, res) => `link:miss:${ipKeyGenerator(req, res)}`,
+});

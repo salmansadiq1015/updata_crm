@@ -1,4 +1,4 @@
-# Updata CRM: AI Calling Agent system design and status report
+# Updata CRM: AI Calling Agent + SMS link assistant: system design and status report
 
 **Date:** 22 October 2026
 **Scope:** Android app (SIM calling and SMS), Updata CRM backend, web CRM, and the optional cloud AI voice agent
@@ -163,6 +163,23 @@ sequenceDiagram
 **Not running:** steps that need LiveKit + SIP (dialing, live audio).
 
 ---
+
+### 3.5 Mode C: SMS link → AI chat (new, `web_link` channel)
+
+This is the practical way to get an **AI conversation without a phone line**:
+- The user texts each lead a personal link from their own SIM, using the SMS queue.
+- The lead chats with an AI assistant on a fast web page, which collects the campaign's answers.
+- The results flow into the CRM exactly like an AI call: status rules, review queue, lead status.
+
+Details, configuration and test evidence: [SMS-LINK-ASSISTANT.md](SMS-LINK-ASSISTANT.md).
+
+| Part | Status |
+|---|---|
+| Links issued during SMS authorisation (DNC, consent, sending hours, kill switch) | ✅ tested |
+| Customer page (20.6 KB, English/Urdu/Roman Urdu, streaming, offline resend, second-device check) | ✅ tested in headless Chromium |
+| Server-decided conversation (opt-out, human, busy, FAQ, unclear → unknown, injection-safe) | ✅ 39 scenario tests |
+| CRM: answers saved immediately, status rules, review, funnel, CSV, preview, kill switch, daily AI budget | ✅ 13 API tests + web panel tests |
+| Deploy, short domain, real-model latency, premium voice, first real SMS batch | ⏳ waiting for owner approval (gates 1–4) |
 
 ## 4. What is DONE (with evidence)
 

@@ -511,6 +511,70 @@ describe('complete', () => {
     expect((await Lead.findById(lead._id).lean()).lastContactChannel).toBeNull();
   });
 
+  it('SMS sent by the app from the SIM (sms_direct): authorised like any SMS, logged with device evidence', async () => {
+    const lead = await makeLead();
+    const { res, body } = await start(lead, { channel: 'sms', route: 'sms_direct' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.dialNumber).toBeTruthy();
+    const done = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+      .send({
+        outcome: { disposition: 'sent', connected: 'unknown', notes: '' },
+        sms: { templateId: null, body: 'Salam, quick question', encoding: 'GSM-7', segments: 1, sendStatus: 'device_sent' },
+      }).expect(200);
+    expect(done.body.data.communication).toMatchObject({ route: 'sms_direct', sms: { sendStatus: 'device_sent' } });
+    const log = await ContactLog.findOne({ leadId: lead._id }).lean();
+    expect(log).toMatchObject({ channel: 'sms', subject: 'SMS (mobile) — device_sent' });
+  });
+
+  it('a carrier delivery report after completion upgrades device_sent to device_delivered, once and only then', async () => {
+    const lead = await makeLead();
+    const complete = async (sendStatus) => {
+      const { body } = await start(lead, { channel: 'sms', route: 'sms_direct' });
+      await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+        .send({
+          outcome: { disposition: sendStatus === 'device_sent' ? 'sent' : 'not_sent', connected: 'unknown', notes: '' },
+          sms: { templateId: null, body: 'Hi', encoding: 'GSM-7', segments: 1, sendStatus },
+        }).expect(200);
+      return body.operationId;
+    };
+    const deliver = (operationId, seq) => request(server)
+      .post(`${base(lead._id)}/communications/${operationId}/events`).set(auth(tokenA))
+      .send({ events: [{ seq, type: 'sms_delivered', at: new Date().toISOString(), source: 'native' }] });
+
+    const sent = await complete('device_sent');
+    const first = await deliver(sent, 50).expect(200);
+    expect(first.body.data).toMatchObject({ state: 'completed', sms: { sendStatus: 'device_delivered' } });
+    const again = await deliver(sent, 50).expect(200); // replayed by the outbox: no duplicate event
+    expect(again.body.data.sms.sendStatus).toBe('device_delivered');
+    const stored = await LeadCommunication.findOne({ operationId: sent }).lean();
+    expect(stored.events.filter((e) => e.type === 'sms_delivered')).toHaveLength(1);
+
+    const failed = await complete('device_failed');
+    const res = await deliver(failed, 50).expect(200);
+    expect(res.body.data.sms.sendStatus).toBe('device_failed');
+  });
+
+  it('a delivery report synced before the outcome is kept when the outcome arrives', async () => {
+    const lead = await makeLead();
+    const { body } = await start(lead, { channel: 'sms', route: 'sms_direct' });
+    await request(server).post(`${base(lead._id)}/communications/${body.operationId}/events`).set(auth(tokenA))
+      .send({ events: [{ seq: 1, type: 'sms_delivered', at: new Date().toISOString(), source: 'native' }] }).expect(200);
+    const done = await request(server).post(`${base(lead._id)}/communications/${body.operationId}/complete`).set(auth(tokenA))
+      .send({
+        outcome: { disposition: 'sent', connected: 'unknown', notes: '' },
+        sms: { templateId: null, body: 'Hi', encoding: 'GSM-7', segments: 1, sendStatus: 'device_sent' },
+      }).expect(200);
+    expect(done.body.data.communication.sms.sendStatus).toBe('device_delivered');
+  });
+
+  it('sms_direct respects SMS suppression like the composer', async () => {
+    const lead = await makeLead();
+    await MessageSuppression.create({ channel: 'sms', destinationHash: destinationHash('sms', '+41797654321'), reason: 'opt_out' });
+    const { res } = await start(lead, { channel: 'sms', route: 'sms_direct' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.data.reasons).toContain('SMS_SUPPRESSED');
+  });
+
   it('validates followUpTimezone and qualification values', async () => {
     const lead = await makeLead();
     const { body } = await start(lead);

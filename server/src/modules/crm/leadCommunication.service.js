@@ -29,6 +29,7 @@ const SUBJECT_ROUTE = {
   telecom_direct: 'SIM call (in-app)',
   dialer_handoff: 'SIM call via dialer',
   sms_composer: 'SMS composer',
+  sms_direct: 'SMS sent from SIM (app)',
   sim_call_campaign: 'SIM call (campaign)',
 };
 const CREATOR_FIELDS = 'firstName lastName email';
@@ -353,6 +354,11 @@ class LeadCommunicationService {
       const all = doc.events.map((e) => ({ seq: e.seq, type: e.type, at: e.at }));
       doc.state = deriveState(doc.state, all);
       doc.observed = deriveObserved(all);
+      // A carrier delivery report upgrades a SIM-sent SMS; it never revives a failed or unknown one.
+      if (doc.route === 'sms_direct' && doc.sms?.sendStatus === 'device_sent'
+        && accepted.some((e) => e.type === 'sms_delivered')) {
+        doc.sms.sendStatus = 'device_delivered';
+      }
       try {
         await doc.save();
         return serializeCommunication(doc);
@@ -415,7 +421,9 @@ class LeadCommunicationService {
           body: body.sms.body ?? '',
           encoding: body.sms.encoding,
           segments: body.sms.segments,
-          sendStatus: body.sms.sendStatus,
+          // A delivery report that reached the CRM before the outcome (offline device) still counts.
+          sendStatus: existing.route === 'sms_direct' && body.sms.sendStatus === 'device_sent'
+            && existing.events.some((e) => e.type === 'sms_delivered') ? 'device_delivered' : body.sms.sendStatus,
         } : null;
         try {
           await LeadCommunication.updateOne(

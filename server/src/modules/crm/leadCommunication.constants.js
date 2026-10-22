@@ -8,9 +8,10 @@
 export const COMM_CHANNELS = Object.freeze(['phone', 'sms']);
 export const COMM_DIRECTIONS = Object.freeze(['outbound']);
 // 'sim_sms_agent' and 'sim_call_campaign' records are written only server-side (never claimable over HTTP).
-export const COMM_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff', 'sms_composer', 'sim_sms_agent', 'sim_call_campaign']);
+export const COMM_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff', 'sms_composer', 'sms_direct', 'sim_sms_agent', 'sim_call_campaign']);
 export const PHONE_ROUTES = Object.freeze(['telecom_direct', 'dialer_handoff']);
-export const SMS_ROUTES = Object.freeze(['sms_composer']);
+// sms_direct: the app sent the SMS itself from the phone's SIM (SEND_SMS); replies go to the phone's SMS app.
+export const SMS_ROUTES = Object.freeze(['sms_composer', 'sms_direct']);
 export const COMM_MODES = Object.freeze(['manual', 'assisted', 'ai_agent']);
 // Modes a device may claim over HTTP. 'ai_agent' records (route sim_sms_agent)
 // are created only server-side by the SIM SMS agent.
@@ -23,6 +24,7 @@ export const COMM_EVENT_TYPES = Object.freeze([
   'call_state_idle', 'call_state_ringing', 'call_state_offhook',
   'app_backgrounded', 'app_foregrounded', 'composer_opened', 'composer_returned',
   'notes_edited', 'disposition_selected', 'qualification_reviewed', 'submitted',
+  'sms_delivered', // sms_direct: the carrier's delivery report reached the phone (may arrive after completion)
 ]);
 export const COMM_EVENT_SOURCES = Object.freeze(['native', 'app', 'user']);
 export const MAX_EVENTS = 300;
@@ -38,6 +40,9 @@ export const SMS_ENCODINGS = Object.freeze(['GSM-7', 'UCS-2']);
 export const SMS_SEND_STATUSES = Object.freeze([
   'composer_opened', 'user_reported_sent', 'user_reported_not_sent', 'unknown',
   'sent_by_app', // SIM SMS agent: SmsManager confirmed transmission
+  'device_sent', // sms_direct: the phone's SmsManager confirmed the SIM sent it (not delivery)
+  'device_failed', // sms_direct: the phone's SmsManager reported a send failure
+  'device_delivered', // sms_direct: sent, and the carrier's delivery report confirmed delivery
 ]);
 
 export const ANSWER_STATUSES = Object.freeze(['answered', 'unknown', 'refused', 'not_applicable']);

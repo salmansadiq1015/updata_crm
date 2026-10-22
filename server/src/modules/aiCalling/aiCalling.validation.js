@@ -92,6 +92,40 @@ const schedule = Joi.object({
   maxCampaignSpend: Joi.number().min(0).default(0),
 });
 
+const linkConfig = Joi.object({
+  expiryDays: Joi.number().integer().min(1).max(60).default(7),
+  languages: Joi.array().items(Joi.string().valid('en', 'ur', 'roman_ur')).min(1).max(3).default(['en', 'ur', 'roman_ur']),
+  defaultLanguage: Joi.string().valid('en', 'ur', 'roman_ur').default('en'),
+  personaName: Joi.string().trim().max(60).default('Ayesha'),
+  personaTone: Joi.string().valid('warm', 'professional', 'concise').default('warm'),
+  reason: Joi.string().trim().max(300).allow('').default(''),
+  estimatedMinutes: Joi.number().integer().min(1).max(30).default(3),
+  faq: Joi.array().items(Joi.object({
+    question: Joi.string().trim().max(300).required(),
+    answer: Joi.string().trim().max(1000).required(),
+  })).max(50).default([]),
+  smsTemplates: Joi.object().pattern(Joi.string().valid('en', 'ur', 'roman_ur', 'fr', 'de', 'ar'), Joi.string().trim().max(500)).allow(null).default(null),
+  voiceTier: Joi.string().valid('off', 'browser', 'premium').default('off'),
+  reminders: Joi.object({
+    enabled: Joi.boolean().default(false),
+    afterHours: Joi.number().integer().min(1).max(336).default(24),
+    max: Joi.number().integer().min(0).max(3).default(1),
+  }).default({}),
+  fallbackToCall: Joi.object({
+    enabled: Joi.boolean().default(false),
+    simCallCampaignId: objectId.allow(null).default(null),
+    afterHours: Joi.number().integer().min(1).max(336).default(24),
+  }).default({}),
+  limits: Joi.object({
+    maxTurns: Joi.number().integer().min(5).max(200).default(40),
+    maxTokensPerTurn: Joi.number().integer().min(60).max(800).default(220),
+    maxSessionMinutes: Joi.number().integer().min(5).max(240).default(30),
+    dailySpendCap: Joi.number().min(0).max(1000).default(2),
+  }).default({}),
+  transcriptRetentionDays: Joi.number().integer().min(1).max(730).default(90),
+  whatsappShare: Joi.boolean().default(false),
+});
+
 const explicitSelection = Joi.object({
   mode: Joi.string().valid('explicit').required(),
   leadIds: Joi.array().items(objectId).min(1).max(5000).required(),
@@ -112,6 +146,8 @@ export const createCampaign = { body: Joi.object({
   questionnaire: Joi.object({ questions: Joi.array().items(question).min(1).max(40).required() }).required(),
   statusRules: Joi.array().items(statusRule).max(40).default([]),
   agentConfig: agentConfig.default({}),
+  channel: Joi.string().valid('voice', 'web_link').default('voice'),
+  linkConfig: linkConfig.when('channel', { is: 'web_link', then: linkConfig.default({}), otherwise: Joi.forbidden() }),
   schedule: schedule.default({}),
   selection: Joi.alternatives().try(explicitSelection, filterSelection).required(),
   scheduledAt: Joi.date().iso().greater('now').allow(null),
@@ -124,13 +160,13 @@ export const updateCampaign = { params: Joi.object({ id: objectId.required() }),
   description: Joi.string().trim().max(1000).allow(''),
   questionnaire: Joi.object({ questions: Joi.array().items(question).min(1).max(40).required() }),
   statusRules: Joi.array().items(statusRule).max(40),
-  agentConfig, schedule,
+  agentConfig, schedule, linkConfig,
   scheduledAt: Joi.date().iso().allow(null),
 }).min(1) };
 
 export const campaignId = { params: Joi.object({ id: objectId.required() }) };
 export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null) }).default({}) };
-export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES) }) };
+export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link') }) };
 export const listRecipients = { params: Joi.object({ id: objectId.required() }), query: Joi.object({ page, limit: Joi.number().integer().min(1).max(200).default(50), state: Joi.string().valid(...RECIPIENT_STATES) }) };
 export const simulate = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
   state: Joi.object().allow(null).default(null),

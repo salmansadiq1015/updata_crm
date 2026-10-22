@@ -9,7 +9,7 @@ import leadCommunicationService, { resolveDestination } from '../crm/leadCommuni
 import { normalizeConfirmedAnswer } from '../crm/leadQualification.service.js';
 import { conditionMet } from '../aiCalling/engine/questionEngine.js';
 import { validateAnswer } from '../aiCalling/engine/answerValidation.js';
-import { windowState, isValidTimezone } from '../aiCalling/engine/callWindow.js';
+import { nextWindowOpen, windowState, isValidTimezone } from '../aiCalling/engine/callWindow.js';
 import auditService from '../auth/audit.service.js';
 import notificationService from '../notifications/notification.service.js';
 import logger from '../../shared/logger/index.js';
@@ -533,7 +533,11 @@ class SimCallService {
       return { task: null, resumed: false, reason: 'not_started', nextAt: campaign.startsAt };
     }
     const window = windowState({ timezone: campaign.settings?.timezone, callWindow: campaign.settings?.callWindow, daysOfWeek: campaign.settings?.daysOfWeek }, now);
-    if (!window.open) return { task: null, resumed: false, reason: 'outside_calling_hours', nextAt: new Date(now.getTime() + window.delayMs) };
+    if (!window.open) {
+      // The real next opening (e.g. tomorrow 09:00), not the worker's one-hour re-check hint.
+      const opens = nextWindowOpen({ timezone: campaign.settings?.timezone, callWindow: campaign.settings?.callWindow, daysOfWeek: campaign.settings?.daysOfWeek }, now);
+      return { task: null, resumed: false, reason: 'outside_calling_hours', nextAt: opens ?? new Date(now.getTime() + window.delayMs) };
+    }
 
     for (let i = 0; i < 25; i += 1) {
       const attemptId = randomUUID();

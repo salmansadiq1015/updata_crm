@@ -7,9 +7,11 @@ import {
   type LucideIcon,
   PhoneCall,
   RefreshCw,
+  Share2,
 } from 'lucide-react-native';
+import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Share, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { SectionHeader } from '@/components/layout/SectionHeader';
@@ -18,9 +20,18 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { Icon } from '@/components/ui/Icon';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
+import { getEnv } from '@/config/env';
+import { hasUnsyncedWork } from '@/features/communication/domain/operations';
+import { useOperationsStore } from '@/features/communication/store/operationsStore';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 
-import type { ItemState, ReadinessItem, ReadinessKey } from '../domain/mobileReadiness';
+import {
+  capabilityCodes,
+  diagnosticReport,
+  type ItemState,
+  type ReadinessItem,
+  type ReadinessKey,
+} from '../domain/mobileReadiness';
 import { useMobileReadiness } from '../hooks/useMobileReadiness';
 
 const STATE_ICON: Record<
@@ -50,6 +61,19 @@ export function MobileReadinessScreen({ navigation }: RootScreenProps<'MobileRea
   const { items, summary, run, refresh, checking } = useMobileReadiness();
   const act = useSingleFlight(run);
   const byKey = new Map(items.map((item) => [item.key, item]));
+  const unsynced = useOperationsStore(
+    (state) => Object.values(state.operations).filter(hasUnsyncedWork).length,
+  );
+  const shareReport = () =>
+    void Share.share({
+      message: diagnosticReport({
+        items,
+        appVersion: Constants.expoConfig?.version ?? 'unknown',
+        distribution: getEnv().distribution,
+        unsyncedOperations: unsynced,
+        now: new Date(),
+      }),
+    });
 
   return (
     <Screen refreshing={checking} onRefresh={() => void refresh()} contentClassName="gap-5 pt-1 pb-10">
@@ -94,6 +118,23 @@ export function MobileReadinessScreen({ navigation }: RootScreenProps<'MobileRea
           </View>
         );
       })}
+
+      <View className="gap-2">
+        <SectionHeader title={t('readiness.sections.diagnostics')} />
+        <AppCard className="gap-2">
+          <AppText tone="muted">{t('readiness.diagnosticsIntro', { count: unsynced })}</AppText>
+          <AppText variant="caption" selectable accessibilityLabel={t('readiness.capabilities')}>
+            {capabilityCodes(items).join(' · ')}
+          </AppText>
+          <AppButton
+            title={t('readiness.shareReport')}
+            leftIcon={Share2}
+            variant="outline"
+            size="sm"
+            onPress={shareReport}
+          />
+        </AppCard>
+      </View>
     </Screen>
   );
 }

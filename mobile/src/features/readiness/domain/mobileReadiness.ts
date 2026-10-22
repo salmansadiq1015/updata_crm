@@ -1,6 +1,7 @@
 // Mobile calling readiness: can THIS phone call and text leads from its own SIM, and which
 // server features back it up. Pure: the hook gathers the inputs, the screen renders the result.
 // Cloud calling (LiveKit + SIP on the server) is optional and never blocks SIM calling.
+import type { Distribution } from '@/config/envSchema';
 import type { PermissionStatus } from '@/services/permissions/permissionsService';
 import type { SimInfo, TelephonyCapabilities } from '@/services/telephony/types';
 
@@ -48,7 +49,7 @@ export type ServerCheck =
 export type ReadinessInput = {
   caps: TelephonyCapabilities | null;
   sims: SimInfo[] | null;
-  distribution: 'play' | 'private';
+  distribution: Distribution;
   microphone: PermissionStatus | null;
   batteryUnrestricted: boolean | null;
   /** A permission Android will no longer ask for ("Don't ask again"): only Settings can grant it. */
@@ -138,6 +139,18 @@ export function buildReadiness(input: ReadinessInput): ReadinessItem[] {
             ? { key: 'background', state: 'ok', reason: 'backgroundOk' }
             : { key: 'background', state: 'action', reason: 'backgroundLimited', action: 'allowBackground' },
         );
+    } else if (distribution === 'shared' && caps.smsPermissionsDeclared) {
+      // Client APK: one-way automatic SMS from the SIM; replies land in the phone's SMS app.
+      items.push(
+        caps.sendSmsGranted
+          ? { key: 'sms', state: 'ok', reason: 'smsSendOnly' }
+          : {
+              key: 'sms',
+              state: 'action',
+              reason: 'smsSendMissing',
+              action: askOrSettings(input.blockedPermissions, 'sms', 'allowSms'),
+            },
+      );
     } else {
       items.push(
         caps.smsComposerAvailable
@@ -200,4 +213,64 @@ export function summarize(items: ReadinessItem[]): ReadinessSummary {
     attention,
     canCall,
   };
+}
+
+/**
+ * Machine-readable capability codes for support and diagnostics. The three AI-audio codes are
+ * constant: measured on Android 13 (LEAD-VOICE-CALLING.md 0.1), an app cannot hear or speak into
+ * an ordinary SIM call, so "AI calling ready" is never derived from being able to dial.
+ */
+export type CapabilityCode =
+  | 'SIM_CALLING_AVAILABLE'
+  | 'SIM_CALLING_UNAVAILABLE'
+  | 'CALL_STATE_TRACKING_AVAILABLE'
+  | 'CALL_STATE_TRACKING_UNAVAILABLE'
+  | 'SMS_AVAILABLE'
+  | 'SMS_COMPOSER_ONLY'
+  | 'SMS_UNAVAILABLE'
+  | 'AI_PROCESSING_AVAILABLE'
+  | 'AI_PROCESSING_UNAVAILABLE'
+  | 'AI_AUDIO_INPUT_UNAVAILABLE'
+  | 'AI_AUDIO_OUTPUT_UNAVAILABLE'
+  | 'AUTONOMOUS_CELLULAR_AI_UNSUPPORTED'
+  | 'CLOUD_AI_CALLING_AVAILABLE'
+  | 'CLOUD_AI_CALLING_NOT_CONFIGURED';
+
+export function capabilityCodes(items: ReadinessItem[]): CapabilityCode[] {
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  const ok = (key: ReadinessKey) => byKey.get(key)?.state === 'ok';
+  const sms = byKey.get('sms');
+  const cloud = byKey.get('cloudCalling');
+  return [
+    ok('sim') && ok('phone') ? 'SIM_CALLING_AVAILABLE' : 'SIM_CALLING_UNAVAILABLE',
+    ok('phone') ? 'CALL_STATE_TRACKING_AVAILABLE' : 'CALL_STATE_TRACKING_UNAVAILABLE',
+    sms?.state === 'ok'
+      ? 'SMS_AVAILABLE'
+      : sms?.reason === 'smsComposer'
+        ? 'SMS_COMPOSER_ONLY'
+        : 'SMS_UNAVAILABLE',
+    ok('ai') ? 'AI_PROCESSING_AVAILABLE' : 'AI_PROCESSING_UNAVAILABLE',
+    'AI_AUDIO_INPUT_UNAVAILABLE',
+    'AI_AUDIO_OUTPUT_UNAVAILABLE',
+    'AUTONOMOUS_CELLULAR_AI_UNSUPPORTED',
+    cloud?.reason === 'cloudReady' ? 'CLOUD_AI_CALLING_AVAILABLE' : 'CLOUD_AI_CALLING_NOT_CONFIGURED',
+  ];
+}
+
+/** Plain-text report for support: states and codes only, no phone numbers or message text. */
+export function diagnosticReport(input: {
+  items: ReadinessItem[];
+  appVersion: string;
+  distribution: Distribution;
+  unsyncedOperations: number;
+  now: Date;
+}): string {
+  return [
+    'Updata mobile diagnostics',
+    `time: ${input.now.toISOString()}`,
+    `app: ${input.appVersion} (${input.distribution})`,
+    `unsynced CRM records: ${input.unsyncedOperations}`,
+    `capabilities: ${capabilityCodes(input.items).join(', ')}`,
+    ...input.items.map((item) => `${item.key}: ${item.state} (${item.reason})`),
+  ].join('\n');
 }

@@ -12,6 +12,7 @@ import {
 } from '@/services/permissions/permissionsService';
 import {
   requestCallingPermissions,
+  requestSendSmsPermission,
   requestSmsAgentPermissions,
   telephony,
 } from '@/services/telephony/telephonyService';
@@ -109,6 +110,14 @@ export function useMobileReadiness() {
           },
         });
         markBlocked('phone', result.callPhone === 'blocked' || result.phoneState === 'blocked');
+      } else if (action === 'allowSms' && distribution === 'shared') {
+        const result = await requestSendSmsPermission({
+          title: t('smsAgent.permission.sendTitle'),
+          message: t('readiness.sendSmsMessage'),
+          buttonPositive: t('smsAgent.permission.allow'),
+          buttonNegative: t('smsAgent.permission.deny'),
+        });
+        markBlocked('sms', result === 'blocked');
       } else if (action === 'allowSms' || action === 'allowNotifications') {
         const result = await requestSmsAgentPermissions({
           sendSms: {
@@ -142,7 +151,7 @@ export function useMobileReadiness() {
       }
       await refresh();
     },
-    [t, refresh, refetchServer],
+    [t, refresh, refetchServer, distribution],
   );
 
   const checking = caps.isFetching || server.isFetching;

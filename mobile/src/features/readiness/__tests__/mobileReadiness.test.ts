@@ -1,6 +1,12 @@
 import type { SimInfo, TelephonyCapabilities } from '@/services/telephony/types';
 
-import { buildReadiness, summarize, type ReadinessInput } from '../domain/mobileReadiness';
+import {
+  buildReadiness,
+  capabilityCodes,
+  diagnosticReport,
+  summarize,
+  type ReadinessInput,
+} from '../domain/mobileReadiness';
 
 const caps = (overrides: Partial<TelephonyCapabilities> = {}): TelephonyCapabilities => ({
   hasTelephony: true,
@@ -148,5 +154,52 @@ describe('mobile calling readiness', () => {
     expect(summarize(buildReadiness(input({ caps: null, server: { state: 'checking' } }))).state).toBe(
       'checking',
     );
+  });
+});
+
+describe('capability codes and diagnostic report', () => {
+  it('never reports AI voice over a SIM call, even when everything else is ready', () => {
+    const codes = capabilityCodes(
+      buildReadiness(
+        input({ distribution: 'shared', caps: caps({ smsPermissionsDeclared: true, sendSmsGranted: true }) }),
+      ),
+    );
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        'SIM_CALLING_AVAILABLE',
+        'CALL_STATE_TRACKING_AVAILABLE',
+        'SMS_AVAILABLE',
+        'AI_AUDIO_INPUT_UNAVAILABLE',
+        'AI_AUDIO_OUTPUT_UNAVAILABLE',
+        'AUTONOMOUS_CELLULAR_AI_UNSUPPORTED',
+      ]),
+    );
+  });
+
+  it('reflects missing permissions and composer-only SMS', () => {
+    const codes = capabilityCodes(
+      buildReadiness(input({ caps: caps({ callPhoneGranted: false, readPhoneStateGranted: false }) })),
+    );
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        'SIM_CALLING_UNAVAILABLE',
+        'CALL_STATE_TRACKING_UNAVAILABLE',
+        'SMS_COMPOSER_ONLY',
+      ]),
+    );
+  });
+
+  it('the report lists states and codes but no phone numbers', () => {
+    const report = diagnosticReport({
+      items: buildReadiness(input({ sims: [{ ...sim(3, 'Jazz'), number: '+923054949624' }] })),
+      appVersion: '0.1.5',
+      distribution: 'shared',
+      unsyncedOperations: 2,
+      now: new Date('2026-10-22T09:00:00Z'),
+    });
+    expect(report).toContain('app: 0.1.5 (shared)');
+    expect(report).toContain('unsynced CRM records: 2');
+    expect(report).toContain('AUTONOMOUS_CELLULAR_AI_UNSUPPORTED');
+    expect(report).not.toMatch(/\+?92305/);
   });
 });

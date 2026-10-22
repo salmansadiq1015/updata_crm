@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 
 import { logger } from '@/services/logging/logger';
+import { isQueueSmsId } from '@/services/telephony/smsIds';
 import { telephony } from '@/services/telephony/telephonyService';
 import type { TelephonyCapabilities } from '@/services/telephony/types';
 
@@ -84,7 +85,8 @@ class AgentLoop {
    */
   private async hasWork(lastCycleSent: boolean): Promise<boolean> {
     const [journal, inbound] = await Promise.all([telephony.getSmsJournal(), telephony.getInboundSms()]);
-    if (journal.length || inbound.length) return true;
+    // SMS-queue sends wait in the journal for their delivery report; that is not agent work.
+    if (journal.some((entry) => !isQueueSmsId(entry.messageId)) || inbound.length) return true;
     if (!lastCycleSent || Date.now() - this.activeCheckedAt > ACTIVE_RECHECK_MS) {
       this.active = (await simSmsApi.campaigns('running').catch(() => [{}])).length > 0; // unknown → keep going
       this.activeCheckedAt = Date.now();

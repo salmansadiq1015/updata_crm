@@ -58,6 +58,7 @@ export const queryKeys = {
       ['link-assistant', 'templates', campaignId ?? 'default'] as const,
     remindersDue: ['link-assistant', 'reminders-due'] as const,
     leadSessions: (leadId: string) => ['link-assistant', 'lead', leadId] as const,
+    contactStatus: (leadId: string) => ['link-assistant', 'contact-status', leadId] as const,
     session: (id: string) => ['link-assistant', 'session', id] as const,
   },
   readiness: {

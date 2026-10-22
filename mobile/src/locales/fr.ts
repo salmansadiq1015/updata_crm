@@ -1257,6 +1257,9 @@ export const fr: Translations = {
     todayCount_other: '{{count}} aujourd’hui',
   },
   linkAssistant: {
+    timelineLabel: "Suivi du lien",
+    notYet: "pas encore",
+    loadError: "Impossible de charger le statut du chat.",
     title: 'Assistant de chat par SMS',
     review: '\u00c0 v\u00e9rifier',
     confirmed: 'confirm\u00e9',
@@ -1264,6 +1267,20 @@ export const fr: Translations = {
     noAnswers: 'Pas encore de r\u00e9ponses.',
     yes: 'Oui',
     no: 'Non',
+    optedOut:
+      'Ne pas contacter : d\u00e9sinscrit ({{source}}) {{date}}. Aucun SMS, lien ou appel ne sera envoy\u00e9.',
+    reportStop: 'Le prospect a r\u00e9pondu STOP',
+    reportStopTitle: 'Enregistrer la r\u00e9ponse STOP ?',
+    reportStopBody:
+      "Seulement si le prospect a r\u00e9pondu STOP (ou demand\u00e9 \u00e0 ne plus \u00eatre contact\u00e9) \u00e0 votre SMS. Tous les SMS, liens, rappels et appels vers ce prospect s'arr\u00eatent imm\u00e9diatement.",
+    reportStopConfirm: 'Enregistrer la d\u00e9sinscription',
+    optOutSource: {
+      web_link: 'sur la page de chat',
+      sms_reply_device: 'r\u00e9ponse SMS re\u00e7ue par ce t\u00e9l\u00e9phone',
+      sms_reply_reported: 'r\u00e9ponse SMS enregistr\u00e9e par un utilisateur',
+      sim_sms_agent: "r\u00e9ponse \u00e0 l'agent SMS",
+      other: 'pr\u00e9c\u00e9demment',
+    },
     stage: {
       issued: 'Lien pr\u00eat',
       sent: 'SMS envoy\u00e9',
@@ -1280,6 +1297,22 @@ export const fr: Translations = {
     },
   },
   smsQueue: {
+    progressLabel: "Progression de l'envoi",
+    progressCount: "{{processed}} sur {{total}} traités",
+    sentMeaningAutomatic: "Envoyé = accepté par votre SIM. La remise est confirmée plus tard par l'opérateur, ou pas du tout.",
+    sentMeaningComposer: "Envoyé = vous avez confirmé l'envoi dans Messages. La remise n'est pas confirmée.",
+    reason: {
+      NO_NUMBER: "Aucun numéro mobile valide",
+      SMS_SUPPRESSED: "Désinscrit des SMS",
+      SMS_CONSENT_DENIED: "Pas de consentement pour les SMS",
+      LEAD_SUPPRESSED: "Marqué « ne pas contacter »",
+      LEAD_CONVERTED_PROTECTED: "Déjà client (protégé)",
+      OUTSIDE_CALLING_HOURS: "Hors des heures d'envoi de la campagne",
+      LINK_ASSISTANT_PAUSED: "Les liens de chat sont en pause dans le CRM",
+      CAMPAIGN_NOT_RUNNING: "La campagne de liens n'est pas active",
+      CAMPAIGN_NOT_WEB_LINK: "Ce n'est pas une campagne de liens SMS",
+      DAILY_SPEND_CAP_REACHED: "Le budget IA du jour est épuisé",
+    },
     title: 'Écrire aux leads depuis le téléphone',
     tile: 'Écrire aux leads depuis le téléphone',
     tileHint: 'Envoyer un SMS aux leads choisis depuis votre SIM ; chaque message est enregistré dans le CRM',

@@ -53,6 +53,15 @@ export type DueReminder = z.infer<typeof dueReminderSchema>;
 
 const funnelSchema = z.record(z.string(), z.string().nullish()).nullish();
 
+export const contactStatusSchema = z.object({
+  leadId: z.string(),
+  smsBlocked: z.boolean(),
+  callsBlocked: z.boolean(),
+  optedOut: z.boolean(),
+  lastOptOut: z.object({ source: z.string(), at: z.string() }).nullish(),
+});
+export type ContactStatus = z.infer<typeof contactStatusSchema>;
+
 export const linkSessionSchema = z
   .object({
     id: z.string(),

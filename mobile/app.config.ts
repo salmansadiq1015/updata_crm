@@ -120,7 +120,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       name: VARIANT[env.appEnv].name,
       slug: 'updata-mobile',
       scheme: 'updata',
-      version: '0.1.6',
+      version: '0.1.7',
       orientation: 'portrait',
       icon: './assets/icon.png',
       // Follows the device; the user can override it in Settings (light / dark / system).
@@ -129,7 +129,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       android: {
         // Each environment installs side by side, so a dev build never overwrites production.
         package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
-        versionCode: 7,
+        versionCode: 8,
         adaptiveIcon: {
           foregroundImage: './assets/android-icon-foreground.png',
           backgroundColor: BRAND_NAVY,

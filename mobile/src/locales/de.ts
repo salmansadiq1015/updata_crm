@@ -1262,6 +1262,9 @@ export const de: Translations = {
     todayCount_other: '{{count}} heute',
   },
   linkAssistant: {
+    timelineLabel: "Link-Verlauf",
+    notYet: "noch nicht",
+    loadError: "Der Chat-Status konnte nicht geladen werden.",
     title: 'SMS-Chat-Assistent',
     review: 'Pr\u00fcfung n\u00f6tig',
     confirmed: 'best\u00e4tigt',
@@ -1269,6 +1272,20 @@ export const de: Translations = {
     noAnswers: 'Noch keine Antworten.',
     yes: 'Ja',
     no: 'Nein',
+    optedOut:
+      'Nicht kontaktieren: abgemeldet ({{source}}) {{date}}. Es werden keine SMS, Links oder Anrufe mehr gesendet.',
+    reportStop: 'Lead hat STOP geantwortet',
+    reportStopTitle: 'STOP-Antwort erfassen?',
+    reportStopBody:
+      'Nur, wenn der Lead auf Ihre SMS mit STOP geantwortet (oder um keinen Kontakt gebeten) hat. Alle SMS, Links, Erinnerungen und Anrufe an diesen Lead werden sofort gestoppt.',
+    reportStopConfirm: 'Abmeldung erfassen',
+    optOutSource: {
+      web_link: 'auf der Chat-Seite',
+      sms_reply_device: 'SMS-Antwort, von diesem Telefon empfangen',
+      sms_reply_reported: 'SMS-Antwort, von einem Benutzer erfasst',
+      sim_sms_agent: 'Antwort an den SMS-Agenten',
+      other: 'fr\u00fcher',
+    },
     stage: {
       issued: 'Link bereit',
       sent: 'SMS gesendet',
@@ -1285,6 +1302,22 @@ export const de: Translations = {
     },
   },
   smsQueue: {
+    progressLabel: "Sendefortschritt",
+    progressCount: "{{processed}} von {{total}} erledigt",
+    sentMeaningAutomatic: "Gesendet = von Ihrer SIM angenommen. Die Zustellung bestätigt der Netzbetreiber später – oder gar nicht.",
+    sentMeaningComposer: "Gesendet = Sie haben in „Nachrichten“ bestätigt, dass die SMS rausging. Die Zustellung ist nicht bestätigt.",
+    reason: {
+      NO_NUMBER: "Keine gültige Mobilnummer",
+      SMS_SUPPRESSED: "Hat SMS abbestellt",
+      SMS_CONSENT_DENIED: "Keine Einwilligung für SMS",
+      LEAD_SUPPRESSED: "Als „nicht kontaktieren“ markiert",
+      LEAD_CONVERTED_PROTECTED: "Bereits Kunde (geschützt)",
+      OUTSIDE_CALLING_HOURS: "Außerhalb der Sendezeiten der Kampagne",
+      LINK_ASSISTANT_PAUSED: "Chat-Links sind im CRM pausiert",
+      CAMPAIGN_NOT_RUNNING: "Die Link-Kampagne läuft nicht",
+      CAMPAIGN_NOT_WEB_LINK: "Keine SMS-Link-Kampagne",
+      DAILY_SPEND_CAP_REACHED: "Das KI-Tagesbudget ist aufgebraucht",
+    },
     title: 'Leads vom Telefon anschreiben',
     tile: 'Leads vom Telefon anschreiben',
     tileHint: 'SMS an gewählte Leads über Ihre SIM; jede Nachricht wird im CRM protokolliert',

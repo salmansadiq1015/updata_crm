@@ -10,14 +10,14 @@ import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { telephony } from '@/services/telephony/telephonyService';
 
 import { smsAgentLoop } from '../domain/agentLoop';
-import { ensureSmsAgentRunning, stopSmsAgent } from '../services/agentControl';
+import { ensureSmsAgentRunning, stopSmsAgent, syncWatchedNumbers } from '../services/agentControl';
 
 export function useSmsAgentRuntime() {
   const userId = useSessionStore((state) => state.user?.id ?? null);
 
   useEffect(() => {
     if (!userId || getEnv().distribution !== 'private') return;
-    void ensureSmsAgentRunning();
+    void syncWatchedNumbers().then(() => ensureSmsAgentRunning());
 
     const wake = () => {
       if (smsAgentLoop.getStatus().running) smsAgentLoop.kick();
@@ -26,7 +26,9 @@ export function useSmsAgentRuntime() {
     const received = telephony.addSmsReceivedListener(wake);
     const status = telephony.addSmsStatusListener(wake);
     const appState = AppState.addEventListener('change', (next) => {
-      if (next === 'active') wake();
+      if (next !== 'active') return;
+      void syncWatchedNumbers();
+      wake();
     });
     const online = onlineManager.subscribe((isOnline) => {
       if (isOnline) wake();

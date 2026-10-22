@@ -9,6 +9,7 @@ import {
   linkSessionDetailSchema,
   linkSessionSchema,
   linkSettingsSchema,
+  contactStatusSchema,
   smsTemplateSchema,
 } from './types';
 
@@ -38,6 +39,18 @@ export const linkAssistantApi = {
   },
   async leadSessions(leadId: string, signal?: AbortSignal) {
     return (await api.get(E.leadSessions(leadId), z.array(linkSessionSchema), { signal })).data;
+  },
+  async contactStatus(leadId: string, signal?: AbortSignal) {
+    return (await api.get(E.contactStatus(leadId), contactStatusSchema, { signal })).data;
+  },
+  /** The lead replied STOP in the Messages app: record the opt-out (same rule as every other path). */
+  async reportStop(leadId: string) {
+    const { data } = await api.post(
+      E.optOut(leadId),
+      { source: 'sms_reply_reported', confirm: true },
+      z.object({ optedOut: z.boolean(), duplicate: z.boolean() }).passthrough(),
+    );
+    return data;
   },
   async session(id: string, signal?: AbortSignal) {
     return (await api.get(E.session(id), linkSessionDetailSchema, { signal })).data;

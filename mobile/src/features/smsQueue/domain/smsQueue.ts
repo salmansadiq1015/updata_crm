@@ -110,3 +110,40 @@ export function previewWithLink(text: string, baseUrl: string | null): string {
 }
 
 export const hasLink = (template: string) => template.includes('{link}');
+
+/** Refusal codes the CRM sends back (SMS authorisation / link issuing) that have a readable explanation. */
+export const KNOWN_FAILURE_CODES = [
+  'NO_NUMBER',
+  'SMS_SUPPRESSED',
+  'SMS_CONSENT_DENIED',
+  'LEAD_SUPPRESSED',
+  'LEAD_CONVERTED_PROTECTED',
+  'OUTSIDE_CALLING_HOURS',
+  'LINK_ASSISTANT_PAUSED',
+  'CAMPAIGN_NOT_RUNNING',
+  'CAMPAIGN_NOT_WEB_LINK',
+  'DAILY_SPEND_CAP_REACHED',
+] as const;
+export type FailureCode = (typeof KNOWN_FAILURE_CODES)[number];
+
+/**
+ * The i18n key explaining an item's failure detail (`smsQueue.reason.<CODE>`), or null when no
+ * listed code is known — the raw detail is then shown as is. A detail may list several codes
+ * ("SMS_SUPPRESSED, SMS_CONSENT_DENIED"); the first known one wins.
+ */
+export function failureReasonKey(detail: string | null | undefined): `smsQueue.reason.${FailureCode}` | null {
+  if (!detail) return null;
+  const known = new Set<string>(KNOWN_FAILURE_CODES);
+  const code = detail
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .find((part) => known.has(part)) as FailureCode | undefined;
+  return code ? `smsQueue.reason.${code}` : null;
+}
+
+/** Progress of the queue: every item that is no longer waiting or in flight counts as processed. */
+export function queueProgress(items: QueueItem[]) {
+  const c = counts(items);
+  const processed = c.total - c.pending;
+  return { processed, total: c.total, fraction: c.total ? processed / c.total : 0 };
+}

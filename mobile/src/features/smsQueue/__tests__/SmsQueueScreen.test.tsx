@@ -98,7 +98,10 @@ describe('SmsQueueScreen', () => {
     await fireEvent.press(screen.getByText('Continue with 3 lead(s)'));
 
     // The lead without a number is marked, not texted.
-    expect(await screen.findByText(/Cannot text · NO_NUMBER/)).toBeTruthy();
+    // …with the reason in words, and it already counts as processed in the progress bar.
+    expect(await screen.findByText(/Cannot text · No valid mobile number/)).toBeTruthy();
+    expect(screen.getByRole('progressbar').props.accessibilityValue).toEqual({ min: 0, max: 3, now: 1 });
+    expect(screen.getByText('1 of 3 done')).toBeTruthy();
     await fireEvent.press(screen.getByText('Open Messages'));
     expect(startSms).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -108,6 +111,8 @@ describe('SmsQueueScreen', () => {
       }),
     );
     await fireEvent.press(await screen.findByText('Yes, sent'));
+    // "Sent" here is the user's own report, never carrier delivery.
+    expect(await screen.findByText(/Delivery is not confirmed/)).toBeTruthy();
     expect(submitOutcome).toHaveBeenCalledWith(
       'op1',
       expect.objectContaining({

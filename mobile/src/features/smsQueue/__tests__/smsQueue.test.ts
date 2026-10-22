@@ -1,5 +1,7 @@
 import {
   buildQueue,
+  failureReasonKey,
+  queueProgress,
   counts,
   missingValues,
   nextIndex,
@@ -51,5 +53,25 @@ describe('SMS queue', () => {
       missingValues('Hi {name} from {city}', [lead('a'), lead('b', { name: 'Bilal', city: null })]),
     ).toEqual([{ placeholder: 'city', names: ['Bilal'] }]);
     expect(missingValues('Hi {name}', [lead('b', { city: null })])).toEqual([]);
+  });
+});
+
+describe('SMS queue: failure reasons and progress', () => {
+  it('maps the CRM refusal codes to a readable reason; the first known code wins', () => {
+    expect(failureReasonKey('NO_NUMBER')).toBe('smsQueue.reason.NO_NUMBER');
+    expect(failureReasonKey('SMS_SUPPRESSED, SMS_CONSENT_DENIED')).toBe('smsQueue.reason.SMS_SUPPRESSED');
+    expect(failureReasonKey('SOMETHING_NEW, OUTSIDE_CALLING_HOURS')).toBe('smsQueue.reason.OUTSIDE_CALLING_HOURS');
+    expect(failureReasonKey('RESULT_ERROR_GENERIC_FAILURE')).toBeNull();
+    expect(failureReasonKey(null)).toBeNull();
+    expect(failureReasonKey('')).toBeNull();
+  });
+
+  it('counts every item that is no longer waiting or in flight as processed', () => {
+    let items = buildQueue([lead('a'), lead('b'), lead('c'), lead('d', { hasNumber: false })], new Set());
+    expect(queueProgress(items)).toEqual({ processed: 1, total: 4, fraction: 0.25 });
+    items = setItem(items, 0, { status: 'sent' });
+    items = setItem(items, 1, { status: 'sending' });
+    expect(queueProgress(items)).toMatchObject({ processed: 2, total: 4 });
+    expect(queueProgress([])).toEqual({ processed: 0, total: 0, fraction: 0 });
   });
 });

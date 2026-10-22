@@ -94,6 +94,8 @@ export const ENDPOINTS = {
     remindersDue: '/link-assistant/reminders/due',
     session: (id: string) => `/link-assistant/sessions/${encodeURIComponent(id)}`,
     leadSessions: (leadId: string) => `/link-assistant/leads/${encodeURIComponent(leadId)}/sessions`,
+    contactStatus: (leadId: string) => `/link-assistant/leads/${encodeURIComponent(leadId)}/contact-status`,
+    optOut: (leadId: string) => `/link-assistant/leads/${encodeURIComponent(leadId)}/opt-out`,
   },
   // AI SMS agent over THIS phone's SIM (server/src/modules/simSms). Private build only.
   simSms: {

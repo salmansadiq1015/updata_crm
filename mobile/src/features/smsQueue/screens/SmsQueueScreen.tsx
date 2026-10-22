@@ -1,5 +1,14 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { CheckCircle2, CircleSlash, Clock, MessageSquare, Send, Square, XCircle } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  CircleHelp,
+  CircleSlash,
+  Clock,
+  MessageSquare,
+  Send,
+  Square,
+  XCircle,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, View } from 'react-native';
@@ -11,6 +20,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppChip } from '@/components/ui/AppChip';
 import { AppInput } from '@/components/ui/AppInput';
+import { AppRadioGroup } from '@/components/ui/AppRadioGroup';
 import { AppText } from '@/components/ui/AppText';
 import { Icon } from '@/components/ui/Icon';
 import { queryKeys } from '@/constants/queryKeys';
@@ -25,6 +35,7 @@ import {
 import { useOperationsStore } from '@/features/communication/store/operationsStore';
 import { leadsApi } from '@/features/leads/api/leadsApi';
 import { linkAssistantApi } from '@/features/linkAssistant/api';
+import { syncWatchedNumbers } from '@/features/smsAgent/services/agentControl';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { ApiError } from '@/services/api/apiErrors';
 import { requestSendSmsPermission, telephony } from '@/services/telephony/telephonyService';
@@ -34,12 +45,14 @@ import {
   AUTOMATIC_GAP_MS,
   buildQueue,
   counts,
+  failureReasonKey,
   hasLink,
   MAX_CONSECUTIVE_FAILURES,
   previewWithLink,
   missingValues,
   nextIndex,
   personalize,
+  queueProgress,
   RECENT_WINDOW_MS,
   setItem,
   unknownPlaceholders,
@@ -54,9 +67,20 @@ const STATUS_ICON: Record<ItemStatus, typeof Clock> = {
   sending: Send,
   sent: CheckCircle2,
   not_sent: XCircle,
-  unknown: Clock,
+  unknown: CircleHelp,
   skipped: CircleSlash,
   blocked: CircleSlash,
+};
+
+const STATUS_COLOR: Record<ItemStatus, 'success' | 'destructive' | 'warning' | 'mutedForeground'> = {
+  pending: 'mutedForeground',
+  composer_open: 'mutedForeground',
+  sending: 'mutedForeground',
+  sent: 'success',
+  not_sent: 'destructive',
+  unknown: 'warning',
+  skipped: 'mutedForeground',
+  blocked: 'destructive',
 };
 
 /** Start of the "texted recently" window (outside render: reads the clock). */
@@ -306,6 +330,11 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
     if (nextIndex(next) === -1) setPhase('done');
   };
 
+  // Company build: once link SMS went out, watch those numbers so a "STOP" reply reaches the CRM.
+  useEffect(() => {
+    if (phase === 'done' && linkCampaignId) void syncWatchedNumbers();
+  }, [phase, linkCampaignId]);
+
   // Coming back from the Messages app re-renders the "did you send it?" question.
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -314,6 +343,12 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
   }, []);
 
   const c = counts(items);
+  const progress = queueProgress(items);
+  // Known CRM refusal codes read as words; anything else (e.g. a modem error) stays as sent.
+  const detailText = (detail: string) => {
+    const key = failureReasonKey(detail);
+    return key ? t(key) : detail;
+  };
   const composerIndex = items.findIndex((item) => item.status === 'composer_open');
   const next = nextIndex(items);
 
@@ -411,7 +446,10 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
             {firstLead && body.trim() ? (
               <View className="gap-1">
                 <AppText variant="label">{t('smsQueue.preview', { name: firstLead.name })}</AppText>
-                <AppText>{preview}</AppText>
+                {/* Shaped like the SMS the lead receives. */}
+                <View className="max-w-[92%] self-start rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5">
+                  <AppText selectable>{preview}</AppText>
+                </View>
                 <AppText variant="caption" tone={info.segments > 1 ? 'warning' : 'muted'}>
                   {t('communication.sms.meter', {
                     characters: info.characters,
@@ -426,26 +464,28 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
 
           <AppCard className="gap-3">
             <SectionHeader title={t('smsQueue.howTitle')} />
-            <AppChip
-              label={t('smsQueue.mode.composer')}
-              selected={mode === 'composer'}
-              onPress={() => setMode('composer')}
+            <AppRadioGroup<QueueMode>
+              accessibilityLabel={t('smsQueue.howTitle')}
+              value={mode}
+              onChange={setMode}
+              options={[
+                {
+                  value: 'composer',
+                  label: t('smsQueue.mode.composer'),
+                  description: t('smsQueue.mode.composerHint'),
+                },
+                ...(automaticAvailable
+                  ? [
+                      {
+                        value: 'automatic' as const,
+                        label: t('smsQueue.mode.automatic'),
+                        description: t('smsQueue.mode.automaticHint'),
+                      },
+                    ]
+                  : []),
+              ]}
             />
-            <AppText variant="caption" tone="muted">
-              {t('smsQueue.mode.composerHint')}
-            </AppText>
-            {automaticAvailable ? (
-              <>
-                <AppChip
-                  label={t('smsQueue.mode.automatic')}
-                  selected={mode === 'automatic'}
-                  onPress={() => setMode('automatic')}
-                />
-                <AppText variant="caption" tone="muted">
-                  {t('smsQueue.mode.automaticHint')}
-                </AppText>
-              </>
-            ) : (
+            {automaticAvailable ? null : (
               <AppText variant="caption" tone="muted">
                 {t('smsQueue.mode.automaticUnavailable')}
               </AppText>
@@ -522,7 +562,29 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
             <AppText variant="title">
               {phase === 'done' ? t('smsQueue.doneTitle') : t('smsQueue.runningTitle')}
             </AppText>
+            <View
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={t('smsQueue.progressLabel')}
+              accessibilityValue={{ min: 0, max: progress.total, now: progress.processed }}
+              className="gap-1.5"
+            >
+              <View className="h-2 overflow-hidden rounded-full bg-muted">
+                <View
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${Math.round(progress.fraction * 100)}%` }}
+                />
+              </View>
+              <AppText variant="caption" tone="muted">
+                {t('smsQueue.progressCount', progress)}
+              </AppText>
+            </View>
             <AppText tone="muted">{t('smsQueue.counts', c)}</AppText>
+            {c.sent > 0 ? (
+              <AppText variant="caption" tone="muted">
+                {mode === 'automatic' ? t('smsQueue.sentMeaningAutomatic') : t('smsQueue.sentMeaningComposer')}
+              </AppText>
+            ) : null}
             {mode === 'automatic' &&
             phase === 'running' &&
             items.some((i) => i.status === 'sending' || i.status === 'pending') ? (
@@ -590,24 +652,14 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
           <SectionHeader title={t('smsQueue.leads')} />
           {items.map((item, index) => (
             <AppCard key={item.lead.id} className="flex-row items-center gap-3">
-              <Icon
-                icon={STATUS_ICON[item.status]}
-                size="sm"
-                color={
-                  item.status === 'sent'
-                    ? 'success'
-                    : item.status === 'blocked' || item.status === 'not_sent'
-                      ? 'destructive'
-                      : 'mutedForeground'
-                }
-              />
-              <View className="flex-1">
+              <Icon icon={STATUS_ICON[item.status]} size="sm" color={STATUS_COLOR[item.status]} />
+              <View className="min-w-0 flex-1">
                 <AppText variant="label" numberOfLines={1}>
                   {item.lead.name}
                 </AppText>
                 <AppText variant="caption" tone="muted">
                   {t(`smsQueue.status.${item.status}`)}
-                  {item.detail ? ` · ${item.detail}` : ''}
+                  {item.detail ? ` · ${detailText(item.detail)}` : ''}
                   {item.recentlyTexted && item.status === 'skipped' ? ` · ${t('smsQueue.recent')}` : ''}
                 </AppText>
               </View>

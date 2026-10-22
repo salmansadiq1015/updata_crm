@@ -6,7 +6,7 @@ import {
   CloudUpload,
   Info,
   LogOut,
-  MessageSquare,
+  Smartphone,
   Phone,
   Server,
   Settings2,
@@ -31,8 +31,6 @@ import { Icon } from '@/components/ui/Icon';
 import { getEnv } from '@/config/env';
 import { signOut } from '@/features/auth/services/session';
 import { useSessionStore } from '@/features/auth/store/sessionStore';
-import { callReadiness, smsReadiness } from '@/features/aiAgent/domain/agentDomain';
-import { useMessagingHealth, useTelephonyHealth } from '@/features/aiAgent/hooks/useAiAgent';
 import { useAgentDefaults } from '@/features/callAgent/hooks/useCallAgent';
 import { hasUnsyncedWork } from '@/features/communication/domain/operations';
 import { useAllOperations, useTelephonyCapabilities } from '@/features/communication/hooks/useCommunication';
@@ -72,8 +70,6 @@ export function SettingsScreen() {
   const unsynced = useMemo(() => operations.filter(hasUnsyncedWork).length, [operations]);
   const capabilities = useTelephonyCapabilities().data;
   const defaults = useAgentDefaults();
-  const telephony = useTelephonyHealth();
-  const messaging = useMessagingHealth();
   const callingSummary = !capabilities?.hasTelephony
     ? capabilities?.dialerAvailable
       ? t('communication.settings.handoffOnly')
@@ -81,14 +77,6 @@ export function SettingsScreen() {
     : capabilities.callPhoneGranted && capabilities.readPhoneStateGranted
       ? t('communication.settings.full')
       : t('communication.settings.limited');
-  const readinessLabel = (state: 'ready' | 'not_ready' | 'unknown' | 'checking') =>
-    state === 'ready'
-      ? t('callAgent.readiness.ready')
-      : state === 'not_ready'
-        ? t('callAgent.readiness.notReady')
-        : state === 'checking'
-          ? t('callAgent.readiness.checking')
-          : t('callAgent.readiness.unknown');
 
   const languageOptions = [
     { value: DEVICE, label: t('settings.languageSystem') },
@@ -206,18 +194,11 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate('CallAgentSettings')}
           />
           <AppListItem
-            icon={Phone}
-            iconTone={callReadiness(telephony).state === 'ready' ? 'success' : 'warning'}
+            icon={Smartphone}
+            iconTone="primary"
             layout="inline"
-            label={t('callAgent.readiness.calls')}
-            value={readinessLabel(callReadiness(telephony).state)}
-          />
-          <AppListItem
-            icon={MessageSquare}
-            iconTone={smsReadiness(messaging).state === 'ready' ? 'success' : 'warning'}
-            layout="inline"
-            label={t('callAgent.readiness.sms')}
-            value={readinessLabel(smsReadiness(messaging).state)}
+            label={t('readiness.title')}
+            onPress={() => navigation.navigate('MobileReadiness')}
           />
         </AppListGroup>
       </Appear>

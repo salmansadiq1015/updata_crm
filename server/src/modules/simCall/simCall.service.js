@@ -9,7 +9,7 @@ import leadCommunicationService, { resolveDestination } from '../crm/leadCommuni
 import { normalizeConfirmedAnswer } from '../crm/leadQualification.service.js';
 import { conditionMet } from '../aiCalling/engine/questionEngine.js';
 import { validateAnswer } from '../aiCalling/engine/answerValidation.js';
-import { windowState, isValidTimezone } from '../aiCalling/engine/callWindow.js';
+import { nextWindowOpen, windowState, isValidTimezone } from '../aiCalling/engine/callWindow.js';
 import auditService from '../auth/audit.service.js';
 import notificationService from '../notifications/notification.service.js';
 import logger from '../../shared/logger/index.js';
@@ -18,6 +18,8 @@ import {
   CALLABLE_TASK_STATES, CAMPAIGN_TRANSITIONS, DEFAULT_SETTINGS, LOCK_MS, MAX_LEADS, NO_CONTACT_OUTCOMES,
   RETRYABLE_TASK_STATES, SIM_CALL_ERROR_CODES,
 } from './simCall.constants.js';
+import { isAiConfigured } from '../../shared/ai/llmFactory.js';
+import { telephonyHealth } from '../aiCalling/providers/telephonyRouter.js';
 
 const MAX_SYNC_ATTEMPTS = 5;
 const MAX_FAILED_DIALS = 3;          // "could not place the call" before the task is closed as failed
@@ -168,6 +170,32 @@ function serializeTask(task, { lead = null, includeAttempts = true } = {}) {
 }
 
 class SimCallService {
+  /**
+   * What the phone needs to know before calling: SIM calling and SIM SMS need nothing from the
+   * server beyond this API; AI features need an AI key on the server; cloud calling
+   * (LiveKit + SIP) is an optional, separate mode and never required by the app.
+   */
+  async readiness() {
+    const ai = isAiConfigured();
+    let cloudCalling = { configured: false, reason: 'unavailable' };
+    try {
+      const health = await Promise.race([
+        telephonyHealth(),
+        new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+      cloudCalling = health ? { configured: Boolean(health.configured), reason: health.reason ?? null } : { configured: false, reason: 'timeout' };
+    } catch {
+      // Optional mode: a failing check never blocks SIM calling.
+    }
+    return {
+      serverTime: new Date().toISOString(),
+      simCalling: { available: true },
+      simSms: { available: true },
+      ai: { configured: ai, voiceNotes: ai, answerSuggestions: ai, smsAgentReplies: ai },
+      cloudCalling: { ...cloudCalling, required: false },
+    };
+  }
+
   // ------------------------------------------------------------------ helpers
   async _event(campaignId, type, { taskId = null, leadId = null, actor = null, details = null } = {}) {
     try {
@@ -225,6 +253,21 @@ class SimCallService {
       }
     }
     return docs.length;
+  }
+
+  /**
+   * Add leads to an existing campaign (idempotent per lead). Used by the SMS link
+   * assistant's "fall back to a human call" when a lead never answered the link.
+   */
+  async addLeads(campaignId, leadIds, actor) {
+    const campaign = await SimCallCampaign.findOne({ _id: campaignId, createdBy: actor });
+    if (!campaign) throw new NotFoundError('SimCallCampaign', campaignId);
+    if (['cancelled', 'completed'].includes(campaign.status)) throw conflict('The call campaign is closed', 'SIM_CALL_CAMPAIGN_CLOSED');
+    const last = await SimCallTask.findOne({ campaignId: campaign._id }).sort({ order: -1 }).select('order').lean();
+    const added = await this._buildTasks(campaign, [...new Set(leadIds.map(String))], actor, (last?.order ?? -1) + 1);
+    await this.refreshSummary(campaign._id);
+    await this._event(campaign._id, 'campaign.leads_added', { actor, details: { leads: added, source: 'link_assistant_fallback' } });
+    return { added };
   }
 
   // ---------------------------------------------------------------- campaigns
@@ -505,7 +548,11 @@ class SimCallService {
       return { task: null, resumed: false, reason: 'not_started', nextAt: campaign.startsAt };
     }
     const window = windowState({ timezone: campaign.settings?.timezone, callWindow: campaign.settings?.callWindow, daysOfWeek: campaign.settings?.daysOfWeek }, now);
-    if (!window.open) return { task: null, resumed: false, reason: 'outside_calling_hours', nextAt: new Date(now.getTime() + window.delayMs) };
+    if (!window.open) {
+      // The real next opening (e.g. tomorrow 09:00), not the worker's one-hour re-check hint.
+      const opens = nextWindowOpen({ timezone: campaign.settings?.timezone, callWindow: campaign.settings?.callWindow, daysOfWeek: campaign.settings?.daysOfWeek }, now);
+      return { task: null, resumed: false, reason: 'outside_calling_hours', nextAt: opens ?? new Date(now.getTime() + window.delayMs) };
+    }
 
     for (let i = 0; i < 25; i += 1) {
       const attemptId = randomUUID();

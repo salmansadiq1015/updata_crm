@@ -9,6 +9,7 @@ import {
   visibleQuestions,
   ymdInZone,
   zonedWallTimeToIso,
+  callWindowOpen,
 } from '../domain/campaignDomain';
 import type { CampaignQuestion } from '../types';
 
@@ -142,5 +143,26 @@ describe('campaign rules', () => {
       remaining: 4,
       ratio: 0.6,
     });
+  });
+});
+
+describe('callWindowOpen (warning only; the server gate decides)', () => {
+  const hours = { start: '09:00', end: '19:00' };
+  const weekdays = [1, 2, 3, 4, 5, 6];
+  it('open in the daytime, closed after hours and on excluded days (Asia/Karachi)', () => {
+    expect(callWindowOpen(hours, weekdays, 'Asia/Karachi', new Date('2026-10-21T05:00:00Z'))).toBe(true); // Wed 10:00
+    expect(callWindowOpen(hours, weekdays, 'Asia/Karachi', new Date('2026-10-21T17:48:00Z'))).toBe(false); // Wed 22:48
+    expect(callWindowOpen(hours, weekdays, 'Asia/Karachi', new Date('2026-10-25T05:00:00Z'))).toBe(false); // Sun
+  });
+  it('supports overnight windows and rejects an unknown timezone', () => {
+    expect(
+      callWindowOpen(
+        { start: '22:00', end: '02:00' },
+        [0, 1, 2, 3, 4, 5, 6],
+        'UTC',
+        new Date('2026-10-21T23:30:00Z'),
+      ),
+    ).toBe(true);
+    expect(callWindowOpen(hours, weekdays, 'Mars/Base', new Date())).toBe(false);
   });
 });

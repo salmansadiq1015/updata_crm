@@ -70,5 +70,25 @@ test('the APK sharing profile inherits production without private SMS access', (
   assert.equal(apk.extends, 'production');
   assert.equal(apk.android.buildType, 'apk');
   assert.equal(apk.distribution, 'internal');
-  assert.equal({ ...profiles.production.env, ...apk.env }.EXPO_PUBLIC_DISTRIBUTION, 'play');
+  assert.equal({ ...profiles.production.env, ...apk.env }.EXPO_PUBLIC_DISTRIBUTION, 'shared');
+});
+
+test('shared (client APK) build: SEND_SMS and its result receiver only, nothing that receives SMS', () => {
+  const initial = { manifest: { application: [{ $: { 'android:name': '.MainApplication' } }] } };
+  const shared = evaluate('shared', initial);
+  assert(shared.android.permissions.includes('android.permission.SEND_SMS'));
+  assert(!shared.android.permissions.includes('android.permission.RECEIVE_SMS'));
+  for (const name of ['RECEIVE_SMS', 'READ_SMS', 'RECEIVE_MMS', 'RECEIVE_WAP_PUSH', 'READ_CALL_LOG']) {
+    assert(shared.android.blockedPermissions.includes(`android.permission.${name}`), name);
+  }
+  assert(!shared.android.blockedPermissions.includes('android.permission.SEND_SMS'));
+  const application = shared.manifest.manifest.application[0];
+  assert.deepEqual(
+    application.receiver.map((item) => item.$['android:name'].split('.').pop()),
+    ['SmsResultReceiver'],
+  );
+  assert.deepEqual(application.service ?? [], []);
+  // Re-running the prebuild does not duplicate the receiver.
+  const again = evaluate('shared', shared.manifest).manifest.manifest.application[0];
+  assert.equal(again.receiver.length, 1);
 });

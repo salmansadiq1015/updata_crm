@@ -177,6 +177,41 @@ export function ymdInZone(instant: Date, timeZone: string): string {
   }
 }
 
+/**
+ * Whether the campaign's calling window is open at `now` in its timezone (same rule as the server
+ * gate: days of week + [start, end), overnight windows allowed). Used only to warn; the server decides.
+ */
+export function callWindowOpen(
+  window: { start: string; end: string },
+  days: readonly number[],
+  timeZone: string,
+  now: Date = new Date(),
+): boolean {
+  const WEEKDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      weekday: 'short',
+      hourCycle: 'h23',
+    }).formatToParts(now);
+  } catch {
+    return false;
+  }
+  const value = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const minutes = Number(value('hour')) * 60 + Number(value('minute'));
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  const start = toMin(window.start);
+  const end = toMin(window.end);
+  const inWindow = start <= end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+  return days.includes(WEEKDAY[value('weekday')] ?? -1) && inWindow;
+}
+
 export function isValidTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());

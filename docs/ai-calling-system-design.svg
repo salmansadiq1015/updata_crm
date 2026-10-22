@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1430" viewBox="0 0 1600 1430" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+    <style>
+      .t{font-size:15px;fill:#0f172a}
+      .s{font-size:12.5px;fill:#334155}
+      .h{font-size:17px;font-weight:700;fill:#0f172a}
+      .hh{font-size:22px;font-weight:700;fill:#0f172a}
+      .ok{fill:#dcfce7;stroke:#16a34a;stroke-width:1.5}
+      .pa{fill:#fef3c7;stroke:#d97706;stroke-width:1.5}
+      .no{fill:#fee2e2;stroke:#dc2626;stroke-width:1.5}
+      .gr{fill:#f8fafc;stroke:#94a3b8;stroke-width:1.5}
+      .ln{stroke:#475569;stroke-width:1.8;fill:none}
+      .lr{stroke:#dc2626;stroke-width:2.2;fill:none;stroke-dasharray:7 5}
+    </style>
+  </defs>
+  <rect width="1600" height="1430" fill="#ffffff"/>
+  <text x="800" y="38" text-anchor="middle" class="hh">Updata CRM: AI Calling Agent + SMS link assistant: system design and status (22 Oct 2026)</text>
+  <text x="800" y="62" text-anchor="middle" class="s">Three channels. A: SIM calls (AI assists the human). B: cloud AI calls (built, no phone line yet). C: SMS link → AI chat (built, tested, not deployed).</text>
+
+  <!-- People -->
+  <rect x="40" y="85" width="300" height="62" rx="10" class="gr"/>
+  <text x="190" y="111" text-anchor="middle" class="h">Admin / sales user</text>
+  <text x="190" y="132" text-anchor="middle" class="s">Web CRM (Next.js) and Android app</text>
+  <rect x="1260" y="85" width="300" height="62" rx="10" class="gr"/>
+  <text x="1410" y="111" text-anchor="middle" class="h">Lead / customer</text>
+  <text x="1410" y="132" text-anchor="middle" class="s">Ordinary mobile phone</text>
+
+  <!-- ===== Mode A ===== -->
+  <rect x="25" y="170" width="520" height="700" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+  <text x="285" y="198" text-anchor="middle" class="h">MODE A · Android app, own SIM (Expo RN)</text>
+
+  <rect x="45" y="215" width="480" height="300" rx="10" fill="#fff" stroke="#94a3b8"/>
+  <text x="60" y="238" class="t" font-weight="700">React Native features</text>
+  <rect x="60" y="250" width="215" height="44" rx="7" class="ok"/><text x="70" y="270" class="s">Readiness screen + capability</text><text x="70" y="286" class="s">codes + diagnostic report</text>
+  <rect x="295" y="250" width="215" height="44" rx="7" class="ok"/><text x="305" y="270" class="s">Call campaigns / call queue</text><text x="305" y="286" class="s">(SIM choice, calling hours)</text>
+  <rect x="60" y="304" width="215" height="44" rx="7" class="ok"/><text x="70" y="324" class="s">Call guide: questions, notes,</text><text x="70" y="340" class="s">voice note → STT, AI proposals</text>
+  <rect x="295" y="304" width="215" height="44" rx="7" class="ok"/><text x="305" y="324" class="s">Outcome form + offline outbox</text><text x="305" y="340" class="s">(idempotent CRM sync)</text>
+  <rect x="60" y="358" width="215" height="44" rx="7" class="pa"/><text x="70" y="378" class="s">SMS queue: Messages app +</text><text x="70" y="394" class="s">automatic from SIM</text>
+  <rect x="295" y="358" width="215" height="44" rx="7" class="pa"/><text x="305" y="378" class="s">SMS AI agent (company build,</text><text x="305" y="394" class="s">two-way, USB install only)</text>
+  <rect x="60" y="412" width="450" height="90" rx="7" class="no"/>
+  <text x="285" y="434" text-anchor="middle" class="t" font-weight="700">AI speaks and listens inside the SIM call: NOT POSSIBLE</text>
+  <text x="285" y="455" text-anchor="middle" class="s">During a call Android silences every audio source an app may record</text>
+  <text x="285" y="472" text-anchor="middle" class="s">(MIC … silenced, RMS 0; VOICE_CALL fails to open). Call-audio capture</text>
+  <text x="285" y="489" text-anchor="middle" class="s">is for system apps only. Measured on TECNO / Android 13.</text>
+
+  <rect x="45" y="530" width="480" height="160" rx="10" fill="#fff" stroke="#94a3b8"/>
+  <text x="60" y="553" class="t" font-weight="700">Native module: updata-telephony (Kotlin)</text>
+  <rect x="60" y="565" width="140" height="48" rx="7" class="ok"/><text x="130" y="585" text-anchor="middle" class="s">Dial on chosen</text><text x="130" y="601" text-anchor="middle" class="s">SIM (CALL_PHONE)</text>
+  <rect x="210" y="565" width="140" height="48" rx="7" class="ok"/><text x="280" y="585" text-anchor="middle" class="s">Call state: ringing</text><text x="280" y="601" text-anchor="middle" class="s">/ off-hook / idle</text>
+  <rect x="360" y="565" width="150" height="48" rx="7" class="ok"/><text x="435" y="585" text-anchor="middle" class="s">SmsManager send +</text><text x="435" y="601" text-anchor="middle" class="s">sent/delivery reports</text>
+  <rect x="60" y="623" width="215" height="52" rx="7" class="no"/><text x="168" y="644" text-anchor="middle" class="s">"Answered?" signal</text><text x="168" y="662" text-anchor="middle" class="s">Android gives none to the app</text>
+  <rect x="295" y="623" width="215" height="52" rx="7" class="gr"/><text x="403" y="644" text-anchor="middle" class="s">CallAudioProbe (diagnostic):</text><text x="403" y="662" text-anchor="middle" class="s">proved the audio block</text>
+
+  <rect x="45" y="705" width="480" height="150" rx="10" class="pa"/>
+  <text x="285" y="730" text-anchor="middle" class="t" font-weight="700">Mobile network (Jazz / Telenor SIMs)</text>
+  <text x="285" y="755" text-anchor="middle" class="s">Voice call: works (verified: Jazz → own Telenor, 0:13, saved to CRM)</text>
+  <text x="285" y="778" text-anchor="middle" class="s">SMS: both operators reject the send (RESULT_ERROR_GENERIC_FAILURE),</text>
+  <text x="285" y="796" text-anchor="middle" class="s">also from the phone's own Messages app → SIM plan / balance issue</text>
+  <text x="285" y="826" text-anchor="middle" class="s" font-weight="700">No SMS delivered yet. App side verified end to end.</text>
+
+  <!-- ===== Backend ===== -->
+  <rect x="570" y="170" width="460" height="700" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="800" y="198" text-anchor="middle" class="h">Updata CRM backend (Node · MongoDB · Redis)</text>
+  <rect x="590" y="215" width="420" height="58" rx="8" class="ok"/><text x="800" y="238" text-anchor="middle" class="t">Auth · RBAC · leads · audit log · single-tenant</text><text x="800" y="258" text-anchor="middle" class="s">records scoped to the user who created them</text>
+  <rect x="590" y="285" width="420" height="72" rx="8" class="ok"/><text x="800" y="307" text-anchor="middle" class="t">leadCommunication  (/crm/leads/:id/communications)</text><text x="800" y="326" text-anchor="middle" class="s">authorise each call/SMS (do-not-contact, consent, number), events,</text><text x="800" y="343" text-anchor="middle" class="s">outcome, receipt · SMS: sms_composer / sms_direct / delivered</text>
+  <rect x="590" y="369" width="420" height="58" rx="8" class="ok"/><text x="800" y="391" text-anchor="middle" class="t">simCall  (/sim-calls): SIM call campaigns</text><text x="800" y="410" text-anchor="middle" class="s">claim-next, retries, callbacks, calling hours (next-opening fix)</text>
+  <rect x="590" y="439" width="420" height="58" rx="8" class="ok"/><text x="800" y="461" text-anchor="middle" class="t">simSms: SMS AI agent (company phones)</text><text x="800" y="480" text-anchor="middle" class="s">lease → send → reply → AI answer → collect fields</text>
+  <rect x="590" y="509" width="420" height="120" rx="8" class="ok"/><text x="800" y="531" text-anchor="middle" class="t">aiCalling: cloud AI calling</text>
+  <text x="800" y="551" text-anchor="middle" class="s">campaigns · recipients · call records · consent · suppression</text>
+  <text x="800" y="569" text-anchor="middle" class="s">engines: questionEngine · answerValidation · statusRules · callWindow</text>
+  <text x="800" y="587" text-anchor="middle" class="s">agent tool API (per-call token): record_answer, confirm,</text>
+  <text x="800" y="605" text-anchor="middle" class="s">mark_unknown, callback, do_not_contact, end · simulate · web-test</text>
+  <rect x="590" y="641" width="420" height="58" rx="8" class="ok"/><text x="800" y="663" text-anchor="middle" class="t">AI services (server-side key only)</text><text x="800" y="682" text-anchor="middle" class="s">speech-to-text (whisper-1) · answer proposals (gpt-4o)</text>
+  <rect x="590" y="711" width="420" height="140" rx="8" class="pa"/>
+  <text x="800" y="735" text-anchor="middle" class="t" font-weight="700">Deployment: NOT DONE for the latest changes</text>
+  <text x="800" y="758" text-anchor="middle" class="s">Live server: updata.behjja.com, GitHub "Deploy" workflow</text>
+  <text x="800" y="778" text-anchor="middle" class="s">Waiting: sms_direct, delivery status, calling-hours fix,</text>
+  <text x="800" y="796" text-anchor="middle" class="s">/sim-calls/readiness. All tested locally:</text>
+  <text x="800" y="814" text-anchor="middle" class="s">server 1716 · mobile 428 · web 146 tests pass</text>
+  <text x="800" y="836" text-anchor="middle" class="s" font-weight="700">Committed on feature branches; merge + deploy need owner approval</text>
+
+  <!-- ===== Mode B ===== -->
+  <rect x="1055" y="170" width="520" height="700" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="1315" y="198" text-anchor="middle" class="h">MODE B · Cloud AI voice agent (optional)</text>
+  <rect x="1075" y="215" width="480" height="96" rx="8" class="ok"/>
+  <text x="1315" y="238" text-anchor="middle" class="t" font-weight="700">agent-worker (LiveKit Agents, Node)</text>
+  <text x="1315" y="259" text-anchor="middle" class="s">OpenAI Realtime (gpt-realtime): speech in ⇄ speech out, barge-in</text>
+  <text x="1315" y="277" text-anchor="middle" class="s">waits for "answered" before speaking · AI disclosure first</text>
+  <text x="1315" y="295" text-anchor="middle" class="s">tools call the CRM; the CRM validates and decides the flow</text>
+  <rect x="1075" y="323" width="480" height="72" rx="8" class="no"/>
+  <text x="1315" y="346" text-anchor="middle" class="t" font-weight="700">LiveKit Cloud project: NOT CONFIGURED</text>
+  <text x="1315" y="366" text-anchor="middle" class="s">LIVEKIT_URL / API_KEY / API_SECRET empty on the server;</text>
+  <text x="1315" y="383" text-anchor="middle" class="s">worker process not running in production</text>
+  <rect x="1075" y="407" width="480" height="72" rx="8" class="no"/>
+  <text x="1315" y="430" text-anchor="middle" class="t" font-weight="700">SIP trunk + phone number: NOT PURCHASED</text>
+  <text x="1315" y="450" text-anchor="middle" class="s">LIVEKIT_SIP_OUTBOUND_TRUNK_ID / SIP_OUTBOUND_NUMBER empty</text>
+  <text x="1315" y="467" text-anchor="middle" class="s">(e.g. Telnyx / Twilio SIP; caller ID = that number, not the SIM)</text>
+  <rect x="1075" y="491" width="480" height="58" rx="8" class="pa"/>
+  <text x="1315" y="514" text-anchor="middle" class="t">Browser "Live test" (WebRTC, no phone line)</text>
+  <text x="1315" y="533" text-anchor="middle" class="s">built; needs LiveKit + OpenAI keys to run · not yet run live</text>
+  <rect x="1075" y="561" width="480" height="58" rx="8" class="ok"/>
+  <text x="1315" y="584" text-anchor="middle" class="t">"Simulate" chat test (same engine, no audio)</text>
+  <text x="1315" y="603" text-anchor="middle" class="s">works today in the web CRM</text>
+  <rect x="1075" y="631" width="480" height="224" rx="8" fill="#fff" stroke="#94a3b8"/>
+  <text x="1315" y="655" text-anchor="middle" class="t" font-weight="700">What a full AI call needs (Mode B)</text>
+  <text x="1095" y="681" class="s">1. Admin builds campaign: questions, language, hours, rules</text>
+  <text x="1095" y="703" class="s">2. Job queue leases a lead → LiveKit dials it over the SIP trunk</text>
+  <text x="1095" y="725" class="s">3. Customer answers → worker starts OpenAI Realtime voice</text>
+  <text x="1095" y="747" class="s">4. AI discloses itself, asks the questions one at a time, follows up</text>
+  <text x="1095" y="769" class="s">5. Each answer → record_answer → server validates and stores</text>
+  <text x="1095" y="791" class="s">6. End → status rules → lead status, review queue, CSV, analytics</text>
+  <text x="1095" y="817" class="s" font-weight="700">Steps 1, 5, 6 are built and tested. Steps 2–4 need the</text>
+  <text x="1095" y="835" class="s" font-weight="700">LiveKit + SIP credentials (external, paid).</text>
+
+  <!-- arrows -->
+  <path d="M190 147 L190 168" class="ln" marker-end="url(#a)"/>
+  <path d="M525 330 L588 330" class="ln" marker-end="url(#a)"/>
+  <text x="556" y="322" text-anchor="middle" class="s">HTTPS</text>
+  <path d="M1010 569 L1042 569 L1042 263 L1073 263" class="ln" marker-end="url(#a)"/>
+  <text x="1036" y="420" text-anchor="middle" class="s" transform="rotate(-90 1036 420)">tool API</text>
+  <path d="M285 870 L285 930 L1588 930 L1588 116 L1563 116" class="ln" marker-end="url(#a)"/>
+  <text x="800" y="922" text-anchor="middle" class="t">Mode A: SIM call and SMS reach the customer. The human talks; the AI only assists.</text>
+  <text x="800" y="955" text-anchor="middle" class="t" style="fill:#dc2626" font-weight="700">✕  The AI's voice cannot go into this call, and the AI cannot hear the customer (Android restriction)</text>
+  <path d="M1360 170 L1360 150" class="lr" marker-end="url(#ar)"/>
+  <text x="1352" y="162" text-anchor="end" class="s" style="fill:#dc2626" font-weight="700">✕ Mode B phone line not connected</text>
+
+
+  <!-- ===== Mode C: SMS link -> AI chat (web_link) ===== -->
+  <rect x="25" y="985" width="1550" height="250" rx="14" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+  <text x="800" y="1013" text-anchor="middle" class="h">MODE C · SMS link → AI chat (channel web_link) · built on branch, not deployed</text>
+  <rect x="45" y="1030" width="330" height="190" rx="10" class="ok"/>
+  <text x="210" y="1054" text-anchor="middle" class="t" font-weight="700">1. Android SMS queue</text>
+  <text x="60" y="1078" class="s">Pick link campaign + text (6 languages)</text>
+  <text x="60" y="1098" class="s">CRM checks DNC · consent · hours · kill switch</text>
+  <text x="60" y="1118" class="s">→ personal link {link} (128-bit, hashed)</text>
+  <text x="60" y="1138" class="s">SMS from own SIM · 6 s pacing · auto-pause</text>
+  <text x="60" y="1158" class="s">after 3 operator refusals · reminders</text>
+  <text x="60" y="1186" class="s" font-weight="700">SMS delivery still blocked by carrier (SIM)</text>
+  <rect x="395" y="1030" width="370" height="190" rx="10" class="ok"/>
+  <text x="580" y="1054" text-anchor="middle" class="t" font-weight="700">2. Customer page /c/&lt;token&gt;</text>
+  <text x="410" y="1078" class="s">Server-rendered · 20.6 KB gzipped · strict CSP</text>
+  <text x="410" y="1098" class="s">Greeting with AI disclosure · quick replies</text>
+  <text x="410" y="1118" class="s">English / Urdu (RTL) / Roman Urdu · streaming</text>
+  <text x="410" y="1138" class="s">Offline resend · 2nd device verify (last 4)</text>
+  <text x="410" y="1158" class="s">Opt-out button · browser voice (optional)</text>
+  <text x="410" y="1186" class="s" font-weight="700">Verified in headless Chromium (Pixel 7)</text>
+  <rect x="785" y="1030" width="400" height="190" rx="10" class="ok"/>
+  <text x="985" y="1054" text-anchor="middle" class="t" font-weight="700">3. Server decides (shared engine)</text>
+  <text x="800" y="1078" class="s">Intents (STOP / human / busy / are you AI?)</text>
+  <text x="800" y="1098" class="s">questionEngine + answerValidation (+ Urdu)</text>
+  <text x="800" y="1118" class="s">agent tools → answer saved immediately</text>
+  <text x="800" y="1138" class="s">Model only phrases replies (gpt-4o-mini, guarded)</text>
+  <text x="800" y="1158" class="s">≈ $0.001 per completed chat · daily cap pauses</text>
+  <text x="800" y="1186" class="s" font-weight="700">Server first-token overhead p50 41 ms · p95 49 ms</text>
+  <rect x="1205" y="1030" width="350" height="190" rx="10" class="pa"/>
+  <text x="1380" y="1054" text-anchor="middle" class="t" font-weight="700">4. CRM results</text>
+  <text x="1220" y="1078" class="s">processCallResults → status rules → lead</text>
+  <text x="1220" y="1098" class="s">Partial / unclear → human review queue</text>
+  <text x="1220" y="1118" class="s">Funnel · drop-off · transcripts · CSV</text>
+  <text x="1220" y="1138" class="s">Preview as customer · kill switch</text>
+  <text x="1220" y="1158" class="s">Mobile lead detail shows link status + answers</text>
+  <text x="1220" y="1186" class="s" font-weight="700">Waiting: deploy · short domain · real-model test</text>
+
+  <g transform="translate(0,250)">
+  <!-- legend -->
+  <rect x="25" y="1010" width="1550" height="150" rx="12" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="45" y="1038" class="h">Legend and verdict</text>
+  <rect x="45" y="1055" width="26" height="18" rx="4" class="ok"/><text x="80" y="1069" class="t">Done and tested</text>
+  <rect x="255" y="1055" width="26" height="18" rx="4" class="pa"/><text x="290" y="1069" class="t">Partial / waiting (carrier, deploy, credentials)</text>
+  <rect x="680" y="1055" width="26" height="18" rx="4" class="no"/><text x="715" y="1069" class="t">Not done / not possible</text>
+  <text x="45" y="1102" class="t">• The app CAN make SIM calls, track them, guide the human with the questions and save every answer to the CRM.</text>
+  <text x="45" y="1126" class="t">• The AI CANNOT hold the conversation inside a SIM call (Android restriction). Autonomous AI calls need Mode B: LiveKit + SIP number (not yet bought).</text>
+  <text x="45" y="1150" class="t">• SMS: app side verified; the Jazz and Telenor SIMs refuse to send. Mode C (SMS link → AI chat) works end to end in tests; not deployed yet.</text>
+  </g>
+</svg>

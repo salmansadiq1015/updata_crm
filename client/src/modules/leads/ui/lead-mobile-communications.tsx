@@ -19,6 +19,7 @@ const ROUTE_FALLBACK: Record<string, string> = {
   telecom_direct: 'SIM call (in app)',
   dialer_handoff: 'SIM call via dialer',
   sms_composer: 'SMS via composer',
+  sms_direct: 'SMS sent from SIM (app)',
   sim_sms_agent: 'AI SMS agent (from the agent phone SIM)',
 };
 
@@ -42,6 +43,9 @@ const CONNECTED_FALLBACK: Record<string, string> = { yes: 'Yes', no: 'No', unkno
 const SEND_STATUS_FALLBACK: Record<string, string> = {
   composer_opened: 'Composer opened',
   user_reported_sent: 'Sent (user-reported)',
+  device_sent: 'Sent by the phone (not delivery)',
+  device_failed: 'Phone could not send',
+  device_delivered: 'Delivered (carrier report)',
   user_reported_not_sent: 'Not sent (user-reported)',
   sent_by_app: 'Sent by the app (confirmed by the phone)',
   unknown: 'Unknown',

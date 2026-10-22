@@ -170,6 +170,20 @@ describe('SIM SMS runner — journal reconciliation', () => {
     expect(native.ackSmsJournal).toHaveBeenCalledWith(['sent-delivered', 'failed', 'sent-old']);
   });
 
+  it('leaves SMS-queue sends (smsq- ids) to their own flow: never reported to the agent server', async () => {
+    const { api, native, deps } = setup({
+      journal: [
+        entry({ messageId: 'smsq-op-1' }),
+        entry({ messageId: 'agent-msg', status: 'failed', errorCode: 'X' }),
+      ],
+    });
+    const res = await runCycle(deps);
+    expect(res.reported).toBe(1);
+    expect(api.result).toHaveBeenCalledTimes(1);
+    expect(api.result).toHaveBeenCalledWith('agent-msg', expect.anything());
+    expect(native.ackSmsJournal).not.toHaveBeenCalledWith(expect.arrayContaining(['smsq-op-1']));
+  });
+
   it('an attempt with no SENT callback becomes "unknown" only after the timeout', async () => {
     const fresh = setup({
       journal: [entry({ messageId: 'a', status: 'attempting', startedAt: NOW - 1000, finishedAt: null })],

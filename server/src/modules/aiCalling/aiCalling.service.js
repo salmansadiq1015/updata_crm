@@ -30,6 +30,8 @@ import { evaluateOutcome } from './engine/statusRuleEngine.js';
 import { leadContext, buildSystemPrompt, disclosureText } from './engine/leadContext.js';
 import { windowState, recipientWindow } from './engine/callWindow.js';
 import { recordCallMetric, observeDuration, observeDispatchLatency } from './aiCalling.metrics.js';
+import MessageSuppression from '../messaging/suppression.model.js';
+import { destinationHash } from '../messaging/destinationHash.js';
 
 export { windowState };
 
@@ -40,7 +42,10 @@ const DISPATCH_LEASE_MS = 2 * 60_000;     // claim → provider request window
 const TERMINAL_CALL_STATES = new Set(['completed', 'no_answer', 'busy', 'voicemail', 'failed', 'cancelled']);
 // Web (browser) voice tests are attached to a real recipient for lead context but
 // must never count as campaign traffic or touch the recipient's state.
-const NOT_WEB_TEST = { provider: { $ne: 'livekit_web' } };
+// The same holds for "Preview as customer" sessions of SMS link campaigns.
+const TEST_PROVIDERS = ['livekit_web', 'web_link_preview'];
+const isTestProvider = (provider) => TEST_PROVIDERS.includes(provider);
+const NOT_WEB_TEST = { provider: { $nin: TEST_PROVIDERS } };
 const callConsentRequired = () => process.env.AI_CALLING_REQUIRE_CONSENT !== 'false';
 
 /**
@@ -248,6 +253,8 @@ class AiCallingService {
       questionnaire: input.questionnaire,
       statusRules: input.statusRules || [],
       agentConfig: input.agentConfig || {},
+      channel: input.channel || 'voice',
+      ...(input.channel === 'web_link' ? { linkConfig: input.linkConfig || {} } : {}),
       schedule: input.schedule || {},
       selection: { ...input.selection, leadIds, selectedAt: new Date() },
       timezone: input.schedule?.timezone || input.timezone || 'UTC',
@@ -265,19 +272,26 @@ class AiCallingService {
       if (hash) candidateHashes.push(hash);
       return { lead, e164, hash };
     });
-    const [suppressionRows, consentByLead] = await Promise.all([
+    // Link campaigns reach the lead by SMS: SMS suppression applies, voice-call consent does not
+    // (SMS consent is checked again on every send by the communication authorisation).
+    const isLink = campaign.channel === 'web_link';
+    const needsCallConsent = !isLink && callConsentRequired();
+    const smsHashes = isLink ? computed.filter((c) => c.e164).map((c) => destinationHash('sms', c.e164)) : [];
+    const [suppressionRows, consentByLead, smsSuppressed] = await Promise.all([
       CallSuppression.find({ phoneHash: { $in: candidateHashes } }).select('phoneHash').lean(),
-      callConsentRequired() ? latestConsentByLead(candidateHashes) : new Map(),
+      needsCallConsent ? latestConsentByLead(candidateHashes) : new Map(),
+      isLink ? MessageSuppression.find({ channel: 'sms', destinationHash: { $in: smsHashes } }).select('destinationHash').lean() : [],
     ]);
     const suppressed = new Set(suppressionRows.map((d) => d.phoneHash));
+    const smsSuppressedSet = new Set(smsSuppressed.map((d) => d.destinationHash));
 
     const seen = new Set();
     const docs = computed.map(({ lead, e164, hash }) => {
       const reasons = [];
       if (!e164) reasons.push('missing_phone');
-      if (hash && suppressed.has(hash)) reasons.push('suppressed');
+      if (hash && (suppressed.has(hash) || (isLink && smsSuppressedSet.has(destinationHash('sms', e164))))) reasons.push('suppressed');
       const consent = hash ? consentStatus(consentByLead.get(`${lead._id}:${hash}`)) : 'missing';
-      if (callConsentRequired() && hash && consent !== 'granted') {
+      if (needsCallConsent && hash && consent !== 'granted') {
         reasons.push(consent === 'expired' ? 'consent_expired' : 'consent_required');
       }
       if (hash && seen.has(hash)) reasons.push('duplicate_phone');
@@ -311,9 +325,11 @@ class AiCallingService {
     return campaign;
   }
 
-  async listCampaigns(actor, { page = 1, limit = 25, status } = {}) {
+  async listCampaigns(actor, { page = 1, limit = 25, status, channel } = {}) {
     const filter = { createdBy: actor };
     if (status) filter.status = status;
+    if (channel === 'web_link') filter.channel = 'web_link';
+    else if (channel === 'voice') filter.channel = { $ne: 'web_link' };
     const [data, total] = await Promise.all([
       CallCampaign.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       CallCampaign.countDocuments(filter),
@@ -330,7 +346,8 @@ class AiCallingService {
       campaign.questionnaire = input.questionnaire;
       campaign.questionnaireVersion += 1;
     }
-    for (const key of ['name', 'description', 'statusRules', 'agentConfig', 'schedule', 'scheduledAt']) {
+    if (input.linkConfig !== undefined && campaign.channel !== 'web_link') throw new ValidationError('linkConfig is only for SMS link campaigns');
+    for (const key of ['name', 'description', 'statusRules', 'agentConfig', 'schedule', 'scheduledAt', 'linkConfig']) {
       if (input[key] !== undefined) campaign[key] = input[key];
     }
     campaign.updatedBy = actor;
@@ -397,7 +414,8 @@ class AiCallingService {
       { campaignId: id, state: 'draft', 'eligibility.eligible': true },
       { $set: { state: 'queued' } },
     );
-    await this._scheduleTick(id, delay);
+    // A link campaign never dials: its links are sent from the user's phone (SMS queue).
+    if (campaign.channel !== 'web_link') await this._scheduleTick(id, delay);
     await refreshCampaignSummary(id);
     auditService.logEvent({
       eventType: 'ai_calling.campaign.started', userId: actor, ipAddress: meta.ipAddress || 'internal',
@@ -496,6 +514,7 @@ class AiCallingService {
   async _runTick(campaign) {
     const campaignId = campaign._id;
     if (['paused', 'cancelled', 'completed', 'draft', 'failed'].includes(campaign.status)) return { stopped: true, status: campaign.status };
+    if (campaign.channel === 'web_link') return { stopped: true, reason: 'web_link_never_dials' };
     if (campaign.status === 'scheduled' && campaign.scheduledAt && campaign.scheduledAt > new Date()) {
       await this._scheduleTick(campaignId, campaign.scheduledAt.getTime() - Date.now());
       return { rescheduled: true };
@@ -899,7 +918,7 @@ class AiCallingService {
       { returnDocument: 'after' },
     );
     if (!call) return { acknowledged: true, changed: false };
-    if (call.provider !== 'livekit_web') {
+    if (!isTestProvider(call.provider)) {
       await CampaignRecipient.updateOne({ _id: call.recipientId, lastCallId: call._id }, { $set: { state: 'in_progress' } });
     }
     recordCallMetric('answered', call.provider);
@@ -949,9 +968,23 @@ class AiCallingService {
     return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
   }
 
-  async agentRequestCallback(internalCallId, { when, note }) {
+  /** Clear one answer so the question is asked again (customer edits an answer before submitting). */
+  async agentResetAnswer(internalCallId, { fieldKey }) {
+    const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
+      if (!(c.questionnaire.questions || []).some((q) => q.fieldKey === fieldKey)) throw new ValidationError(`Unknown question: ${fieldKey}`);
+      const answers = { ...s.answers };
+      delete answers[fieldKey];
+      return { state: { ...s, answers } };
+    });
+    return { state, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+  }
+
+  async agentRequestCallback(internalCallId, { when, note, human = false }) {
     await this._mutateConversation(internalCallId, (s) => ({
-      state: { ...engine.endConversation(s, 'callback_requested'), control: { callbackRequestedAt: when || null, callbackText: note || null } },
+      state: {
+        ...engine.endConversation(s, 'callback_requested'),
+        control: { callbackRequestedAt: when || null, callbackText: note || null, ...(human ? { humanRequested: true } : {}) },
+      },
     }));
     return { acknowledged: true, nextAction: { type: 'end', reason: 'callback_requested' } };
   }
@@ -1060,12 +1093,12 @@ class AiCallingService {
     await call.save();
 
     // 2. CRM side-effects only for real campaign calls (never browser/test calls).
-    if (!campaign.isTest && call.provider !== 'livekit_web') {
+    if (!campaign.isTest && !isTestProvider(call.provider)) {
       await this._applyOutcomeToLead({ call, campaign, recipient, outcome, disposition: finalDisposition });
     }
 
     // 3. Recipient terminal state / retry (web tests never touch the recipient).
-    if (recipient && call.provider !== 'livekit_web') await this._finalizeRecipient(campaign, recipient, call);
+    if (recipient && !isTestProvider(call.provider)) await this._finalizeRecipient(campaign, recipient, call);
 
     // 4. Stamp processed — from here every other finisher is a no-op.
     await CallRecord.updateOne({ _id: call._id }, { $set: { resultsProcessedAt: new Date(), processingLeaseUntil: null } });
@@ -1102,7 +1135,7 @@ class AiCallingService {
     const set = {};
     if (['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact'].includes(disposition)) {
       set.lastContactedAt = call.endedAt || new Date();
-      set.lastContactChannel = 'phone';
+      set.lastContactChannel = call.provider === 'web_link' ? 'sms' : 'phone';
     }
 
     const targetStatus = ACTION_TO_LEAD_STATUS[outcome.action] ?? null;
@@ -1161,6 +1194,14 @@ class AiCallingService {
         { phoneHash: recipient.phoneHash, state: { $in: ['draft', 'queued', 'retry_scheduled'] } },
         { $set: { state: 'suppressed', 'eligibility.eligible': false, 'eligibility.reasons': ['suppressed'] } },
       );
+      // "Don't contact me" also stops every SMS to this number (link reminders included).
+      if (recipient.phoneSnapshot) {
+        await MessageSuppression.updateOne(
+          { channel: 'sms', destinationHash: destinationHash('sms', recipient.phoneSnapshot) },
+          { $setOnInsert: { leadId: lead._id, reason: 'opt_out', source: call.provider === 'web_link' ? 'link_assistant' : 'ai_call', suppressedAt: new Date(), createdBy: campaign.createdBy } },
+          { upsert: true },
+        );
+      }
     }
 
     if (outcome.action === 'schedule_callback') {
@@ -1331,7 +1372,7 @@ class AiCallingService {
       } else {
         // Provider state unknown → we cannot prove the lead was not reached.
         const campaign = await CallCampaign.findById(c.campaignId).lean();
-        if (campaign && c.provider !== 'livekit_web') {
+        if (campaign && !isTestProvider(c.provider)) {
           await this._markAmbiguous(c._id, c.recipientId, campaign, 'PROVIDER_STATE_UNKNOWN', 'Call never reported an outcome and the provider could not be queried');
         } else {
           await CallRecord.updateOne({ _id: c._id }, { $set: { state: 'needs_reconcile', 'reconciliation.needed': true } });
@@ -1549,7 +1590,7 @@ class AiCallingService {
     const action = ({
       qualified: 'mark_qualified', unqualified: 'mark_unqualified', do_not_contact: 'mark_do_not_contact', callback: 'schedule_callback',
     })[qualification];
-    if (action && campaign && !campaign.isTest && call.provider !== 'livekit_web' && qualification !== previousQualification) {
+    if (action && campaign && !campaign.isTest && !isTestProvider(call.provider) && qualification !== previousQualification) {
       const recipient = await CampaignRecipient.findById(call.recipientId);
       leadTransition = await this._applyOutcomeToLead({
         call, campaign, recipient,

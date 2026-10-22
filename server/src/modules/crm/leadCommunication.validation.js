@@ -72,6 +72,9 @@ export const createCommunication = {
     sim: simSchema.allow(null),
     device: deviceSchema.allow(null),
     startedAt: Joi.date().iso().allow(null),
+    // SMS link assistant: issue the lead's personal link for this SMS ({link} placeholder).
+    linkCampaignId: Joi.when('channel', { is: 'sms', then: objectId.allow(null), otherwise: Joi.forbidden() }),
+    linkPurpose: Joi.string().valid('initial', 'reminder').default('initial'),
   }),
 };
 

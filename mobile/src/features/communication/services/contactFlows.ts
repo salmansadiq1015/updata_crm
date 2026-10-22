@@ -26,6 +26,8 @@ import type {
   SmsSendStatus,
 } from '../types';
 import { flushOutbox } from './outboxSync';
+import { queueSmsId } from '@/services/telephony/smsIds';
+import { analyzeSms } from '../domain/smsEncoding';
 
 export class ContactFlowError extends Error {
   constructor(
@@ -59,10 +61,11 @@ async function authorise(input: {
   lead: LeadRef;
   channel: Channel;
   destinationField: DestinationField;
-  route: 'telecom_direct' | 'dialer_handoff' | 'sms_composer';
+  route: 'telecom_direct' | 'dialer_handoff' | 'sms_composer' | 'sms_direct';
   mode: 'manual' | 'assisted';
   sim: SimInfo | null;
-}): Promise<{ operationId: string; dialNumber: string }> {
+  link?: LinkRequest | null;
+}): Promise<{ operationId: string; dialNumber: string; linkUrl: string | null }> {
   const store = useOperationsStore.getState();
   const operationId = randomUUID();
   const now = Date.now();
@@ -86,6 +89,7 @@ async function authorise(input: {
   );
 
   let dialNumber: string | null;
+  let linkUrl: string | null = null;
   try {
     const created = await communicationApi.create(input.lead.id, {
       operationId,
@@ -106,8 +110,12 @@ async function authorise(input: {
         : null,
       device: device(),
       startedAt: new Date(now).toISOString(),
+      ...(input.link
+        ? { linkCampaignId: input.link.campaignId, linkPurpose: input.link.purpose ?? 'initial' }
+        : {}),
     });
     dialNumber = created.dialNumber;
+    linkUrl = created.link?.url ?? null;
   } catch (error) {
     // Not authorised (or unreachable): nothing is dialed. The CRM decides, not the device.
     store.update(operationId, (op) => ({ ...op, phase: 'abandoned', dispatchError: 'NOT_AUTHORISED' }));
@@ -134,7 +142,33 @@ async function authorise(input: {
   // The "dispatching" marker must be on disk before the side effect, so a crash between
   // here and the dial is recovered as dispatch_unknown — never as "safe to dial again".
   await flushOperationsWrites();
-  return { operationId, dialNumber };
+  return { operationId, dialNumber, linkUrl };
+}
+
+/** SMS link assistant: which link campaign the SMS belongs to (first send or reminder). */
+export type LinkRequest = { campaignId: string; purpose?: 'initial' | 'reminder' };
+
+export const LINK_PLACEHOLDER = '{link}';
+
+/**
+ * Put the personal link into the text. A text that needs a link but did not get one is
+ * never sent with a raw "{link}" in it.
+ */
+export function withLink(body: string, linkUrl: string | null): string {
+  if (!body.includes(LINK_PLACEHOLDER)) return body;
+  if (!linkUrl) throw new ContactFlowError('LINK_NOT_ISSUED');
+  return body.split(LINK_PLACEHOLDER).join(linkUrl);
+}
+
+function abandonOnMissingLink(operationId: string, body: string, linkUrl: string | null): string {
+  try {
+    return withLink(body, linkUrl);
+  } catch (error) {
+    useOperationsStore
+      .getState()
+      .update(operationId, (op) => ({ ...op, phase: 'abandoned', dispatchError: 'LINK_NOT_ISSUED' }));
+    throw error;
+  }
 }
 
 export async function startCall(input: {
@@ -194,8 +228,9 @@ export async function startSms(input: {
   destinationField: DestinationField;
   body: string;
   templateId: string | null;
+  link?: LinkRequest | null;
 }): Promise<string> {
-  const { operationId, dialNumber } = await authorise({
+  const { operationId, dialNumber, linkUrl } = await authorise({
     ...input,
     channel: 'sms',
     route: 'sms_composer',
@@ -203,8 +238,9 @@ export async function startSms(input: {
     sim: null,
   });
   const store = useOperationsStore.getState();
-  store.update(operationId, (op) => ({ ...op, smsBody: input.body, smsTemplateId: input.templateId }));
-  const launched = await telephony.openSmsComposer(dialNumber, input.body);
+  const body = abandonOnMissingLink(operationId, input.body, linkUrl);
+  store.update(operationId, (op) => ({ ...op, smsBody: body, smsTemplateId: input.templateId }));
+  const launched = await telephony.openSmsComposer(dialNumber, body);
   store.update(operationId, (op) =>
     launched
       ? withEvent(
@@ -225,6 +261,99 @@ export async function startSms(input: {
   );
   void flushOutbox();
   return operationId;
+}
+
+/** How long to wait for Android's SENT result before recording the send as unknown. */
+const DIRECT_SMS_RESULT_TIMEOUT_MS = 60_000;
+
+/**
+ * Send one SMS from this phone's SIM without the composer (client "shared" / company builds).
+ * The CRM authorises it first (eligibility, suppression, number), the "dispatching" marker is
+ * on disk before the radio call, and the outcome is the phone's own SENT result: transmission by
+ * the SIM, never delivery. A send whose result never arrives is recorded as unknown, not resent.
+ */
+export async function startDirectSms(input: {
+  userId: string;
+  lead: LeadRef;
+  destinationField: DestinationField;
+  body: string;
+  templateId: string | null;
+  sim: SimInfo | null;
+  link?: LinkRequest | null;
+}): Promise<{ operationId: string; status: 'sent' | 'failed' | 'unknown'; errorCode: string | null }> {
+  const { operationId, dialNumber, linkUrl } = await authorise({
+    ...input,
+    channel: 'sms',
+    route: 'sms_direct',
+    mode: 'manual',
+  });
+  const store = useOperationsStore.getState();
+  const body = abandonOnMissingLink(operationId, input.body, linkUrl);
+  store.update(operationId, (op) => ({ ...op, smsBody: body, smsTemplateId: input.templateId }));
+  const messageId = queueSmsId(operationId);
+
+  type Result = { status: 'sent' | 'failed' | 'unknown'; errorCode: string | null };
+  const result = new Promise<Result>((resolve) => {
+    const timer = setTimeout(() => {
+      sub?.remove();
+      resolve({ status: 'unknown', errorCode: null });
+    }, DIRECT_SMS_RESULT_TIMEOUT_MS);
+    const sub = telephony.addSmsStatusListener((event) => {
+      if (event.messageId !== messageId || event.status === 'delivered') return;
+      clearTimeout(timer);
+      sub?.remove();
+      resolve({ status: event.status, errorCode: event.errorCode ?? null });
+    });
+  });
+
+  let status: Result['status'];
+  let errorCode: string | null = null;
+  try {
+    await telephony.sendSms({
+      messageId,
+      to: dialNumber,
+      body,
+      subscriptionId: input.sim?.subscriptionId ?? null,
+    });
+    store.update(operationId, (op) =>
+      withEvent(
+        { ...op, phase: 'in_progress', dispatchedAt: Date.now() },
+        'dispatched',
+        'native',
+        Date.now(),
+      ),
+    );
+    ({ status, errorCode } = await result);
+  } catch (error) {
+    // SmsManager refused before anything left the phone (permission, no SIM): nothing was sent.
+    status = 'failed';
+    errorCode = error instanceof Error ? error.message.slice(0, 60) : 'SEND_FAILED';
+    store.update(operationId, (op) =>
+      withEvent({ ...op, phase: 'in_progress' }, 'dispatch_failed', 'native', Date.now(), {
+        code: errorCode,
+      }),
+    );
+  }
+  const sms = analyzeSms(body);
+  await submitOutcome(operationId, {
+    disposition: status === 'sent' ? 'sent' : status === 'failed' ? 'not_sent' : 'unknown',
+    connected: 'unknown',
+    notes: '',
+    followUpAt: null,
+    followUpTimezone: null,
+    statusChange: null,
+    doNotContact: false,
+    answers: [],
+    sms: {
+      sendStatus: status === 'sent' ? 'device_sent' : status === 'failed' ? 'device_failed' : 'unknown',
+      encoding: sms.encoding,
+      segments: sms.segments,
+    },
+  });
+  // A sent SMS stays in the native journal until its delivery report arrives (or times out):
+  // collectQueueDeliveries turns that report into an event for the CRM.
+  if (status !== 'sent') await telephony.ackSmsJournal([messageId]);
+  return { operationId, status, errorCode };
 }
 
 /** Pull native events persisted while JS was not listening (backgrounded, process death). */

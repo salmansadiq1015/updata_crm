@@ -50,6 +50,21 @@ export const queryKeys = {
     conversation: (id: string) => ['sms-agent', 'conversation', id] as const,
     readiness: ['sms-agent', 'readiness'] as const,
   },
+  linkAssistant: {
+    all: ['link-assistant'] as const,
+    campaigns: ['link-assistant', 'campaigns'] as const,
+    settings: ['link-assistant', 'settings'] as const,
+    templates: (campaignId: string | null) =>
+      ['link-assistant', 'templates', campaignId ?? 'default'] as const,
+    remindersDue: ['link-assistant', 'reminders-due'] as const,
+    leadSessions: (leadId: string) => ['link-assistant', 'lead', leadId] as const,
+    session: (id: string) => ['link-assistant', 'session', id] as const,
+  },
+  readiness: {
+    server: ['readiness', 'server'] as const,
+    microphone: ['readiness', 'microphone'] as const,
+    battery: ['readiness', 'battery'] as const,
+  },
   callCampaigns: {
     all: ['call-campaigns'] as const,
     list: (status?: string, q?: string) => ['call-campaigns', 'list', status ?? 'all', q ?? ''] as const,

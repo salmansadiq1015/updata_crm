@@ -37,6 +37,9 @@ export type CreateCommunicationInput = {
   } | null;
   device?: { platform: 'android'; osVersion: string; appVersion: string; model: string | null };
   startedAt: string;
+  /** SMS link assistant: the CRM issues the lead's personal link for this SMS. */
+  linkCampaignId?: string | null;
+  linkPurpose?: 'initial' | 'reminder';
 };
 
 export const communicationApi = {

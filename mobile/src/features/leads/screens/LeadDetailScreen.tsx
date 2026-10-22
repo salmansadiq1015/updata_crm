@@ -34,6 +34,7 @@ import { Icon } from '@/components/ui/Icon';
 import { IconContainer } from '@/components/ui/IconContainer';
 import { CommunicationHistory } from '@/features/communication/components/CommunicationHistory';
 import { QualificationSummary } from '@/features/communication/components/QualificationSummary';
+import { LeadLinkSessions } from '@/features/linkAssistant/components/LeadLinkSessions';
 import { useOpenLeadOperations } from '@/features/communication/hooks/useCommunication';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
@@ -214,10 +215,10 @@ function LeadDetail({
               />
               <HeroAction
                 icon={Bot}
-                label={t('aiAgent.entryShort')}
-                accessibilityLabel={t('aiAgent.entryA11y', { name: lead.name })}
+                label={t('readiness.leadCampaign')}
+                accessibilityLabel={t('readiness.leadCampaignA11y', { name: lead.name })}
                 variant="ai"
-                onPress={() => navigation.navigate('AiAgentLaunch', { leadIds: [lead.id] })}
+                onPress={() => navigation.navigate('CallCampaignCreate', { leadIds: [lead.id] })}
               />
             </View>
           ) : null}
@@ -320,6 +321,7 @@ function LeadDetail({
       </AppListGroup>
 
       <QualificationSummary leadId={lead.id} />
+      <LeadLinkSessions leadId={lead.id} />
 
       <AppButton
         title={t('aiAgent.callHistory.open')}

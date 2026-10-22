@@ -66,7 +66,11 @@ export function CallAudioCheckScreen() {
       },
     },
     { key: 'speakerOn', label: t('communication.callCheck.speakerOn'), fn: () => probe.setCallSpeaker(true) },
-    { key: 'speakerOff', label: t('communication.callCheck.speakerOff'), fn: () => probe.setCallSpeaker(false) },
+    {
+      key: 'speakerOff',
+      label: t('communication.callCheck.speakerOff'),
+      fn: () => probe.setCallSpeaker(false),
+    },
     {
       key: 'toneVoice',
       label: t('communication.callCheck.toneVoice'),

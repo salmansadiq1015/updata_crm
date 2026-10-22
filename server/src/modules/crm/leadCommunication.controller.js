@@ -18,11 +18,11 @@ class LeadCommunicationController {
 
   async create(req, res, next) {
     try {
-      const { communication, dialNumber, created } = await leadCommunicationService.create(
+      const { communication, dialNumber, created, link } = await leadCommunicationService.create(
         req.params.leadId, req.body, req.user._id, metaOf(req),
       );
       return res.success({
-        data: { ...communication, dialNumber },
+        data: { ...communication, dialNumber, ...(link ? { link } : {}) },
         message: created ? 'Communication started' : 'Communication already exists',
         statusCode: created ? 201 : 200,
       });

@@ -848,3 +848,20 @@ describe('model', () => {
     expect(await SimCallCampaign.countDocuments()).toBe(1);
   });
 });
+
+describe('mobile calling readiness', () => {
+  it('reports SIM calling as available without any cloud telephony, and cloud calling as optional', async () => {
+    const res = await request(server).get(`${BASE}/readiness`).set(auth(tokenA)).expect(200);
+    expect(res.body.data).toMatchObject({
+      simCalling: { available: true },
+      simSms: { available: true },
+      ai: { configured: expect.any(Boolean) },
+      cloudCalling: { configured: expect.any(Boolean), required: false },
+    });
+    expect(Date.parse(res.body.data.serverTime)).not.toBeNaN();
+  });
+
+  it('requires authentication', async () => {
+    await request(server).get(`${BASE}/readiness`).expect(401);
+  });
+});

@@ -203,8 +203,8 @@ export function LeadsScreen({ navigation }: MainTabScreenProps<'Leads'>) {
             )}
             <AppIconButton
               icon={Bot}
-              accessibilityLabel={t('aiAgent.campaignsA11y')}
-              onPress={() => navigation.navigate('AiAgentCampaigns')}
+              accessibilityLabel={t('callCampaign.title')}
+              onPress={() => navigation.navigate('CallCampaigns')}
             />
             {selecting ? null : (
               <AppIconButton

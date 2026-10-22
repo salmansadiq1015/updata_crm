@@ -94,6 +94,8 @@ export interface Campaign {
   agentConfig: AgentConfig;
   schedule: Schedule;
   summary: CampaignSummary;
+  channel?: CampaignChannel;
+  linkConfig?: LinkConfig;
   isTest?: boolean;
   scheduledAt?: string | null;
   startedAt?: string | null;
@@ -111,8 +113,85 @@ export interface CreateCampaignInput {
   selection:
     | { mode: 'explicit'; leadIds: string[] }
     | { mode: 'filters'; filters: Record<string, unknown> };
+  channel?: CampaignChannel;
+  linkConfig?: LinkConfig;
   isTest?: boolean;
   scheduledAt?: string | null;
+}
+
+/** 'voice' = AI phone calls (cloud); 'web_link' = SMS link → AI chat page. */
+export type CampaignChannel = 'voice' | 'web_link';
+export type LinkLanguage = 'en' | 'ur' | 'roman_ur';
+
+export interface LinkConfig {
+  expiryDays: number;
+  languages: LinkLanguage[];
+  defaultLanguage: LinkLanguage;
+  personaName: string;
+  personaTone: 'warm' | 'professional' | 'concise';
+  reason: string;
+  estimatedMinutes: number;
+  faq: { question: string; answer: string }[];
+  smsTemplates?: Record<string, string> | null;
+  voiceTier: 'off' | 'browser' | 'premium';
+  reminders: { enabled: boolean; afterHours: number; max: number };
+  fallbackToCall: { enabled: boolean; simCallCampaignId: string | null; afterHours: number };
+  limits: { maxTurns: number; maxTokensPerTurn: number; maxSessionMinutes: number; dailySpendCap: number };
+  transcriptRetentionDays: number;
+  whatsappShare?: boolean;
+}
+
+export type LinkSessionStatus = 'issued' | 'opened' | 'active' | 'completed' | 'abandoned' | 'opted_out' | 'expired' | 'revoked';
+
+export interface LinkSession {
+  id: string;
+  campaignId: string;
+  leadId: string;
+  leadName: string | null;
+  callId: string;
+  callRecordId: string;
+  status: LinkSessionStatus;
+  outcome: string | null;
+  language: string;
+  turns: number;
+  funnel: Record<string, string | null>;
+  isTest: boolean;
+  reminders: { sent: number; lastSentAt: string | null };
+  usage: { cost: number; modelCalls: number };
+  expiresAt: string;
+  lastActivityAt: string;
+  createdAt: string;
+  closedAt: string | null;
+}
+
+export interface LinkSessionDetail extends LinkSession {
+  campaignName: string | null;
+  transcript: { role: 'assistant' | 'customer' | 'system'; text: string; at: string; source: string | null }[];
+  answers: { fieldKey: string; label: string; value: unknown; validation: string | null; confirmed: boolean; unknown: boolean }[];
+  disposition: string | null;
+  qualification: string | null;
+  reviewRequired: boolean;
+  openQuestions: { text: string; at: string }[];
+}
+
+export interface LinkAnalytics {
+  campaignId: string;
+  sessions: number;
+  funnel: Record<string, number>;
+  rates: { openRate: number; startRate: number; completionRate: number; optOutRate: number };
+  perQuestion: { fieldKey: string; label: string; answered: number; unknown: number; dropOff: number; unknownRate: number }[];
+  averageCompletionSeconds: number | null;
+  cost: { total: number; perCompleted: number | null };
+}
+
+export interface LinkSettings {
+  paused: boolean;
+  pausedByEnv: boolean;
+  pausedReason: string;
+  changedAt: string | null;
+  aiConfigured: boolean;
+  model: string;
+  baseUrl: string;
 }
 
 export interface SimAnswerEntry {

@@ -275,6 +275,11 @@ export async function requestCallingPermissions(rationale: {
   return { callPhone, phoneState };
 }
 
+/** Client (shared) build: SEND_SMS only, for one-way SMS from this SIM. Never asks to read SMS. */
+export async function requestSendSmsPermission(rationale: PermissionRationale): Promise<PermissionStatus> {
+  return ensurePermission(PermissionsAndroid.PERMISSIONS.SEND_SMS, rationale);
+}
+
 /**
  * Private build: SEND_SMS sends the agent's messages from this SIM, RECEIVE_SMS lets
  * the app see replies from active conversation numbers, POST_NOTIFICATIONS (Android 13+)

@@ -70,6 +70,43 @@ const scheduleSchema = new mongoose.Schema({
   maxCampaignSpend: { type: Number, default: 0, min: 0 },
 }, { _id: false });
 
+// SMS link assistant (channel 'web_link'): persona, FAQ, link lifetime, reminders, limits.
+const faqSchema = new mongoose.Schema({
+  question: { type: String, trim: true, maxlength: 300, required: true },
+  answer: { type: String, trim: true, maxlength: 1000, required: true },
+}, { _id: false });
+
+const linkConfigSchema = new mongoose.Schema({
+  expiryDays: { type: Number, default: 7, min: 1, max: 60 },
+  languages: { type: [String], default: ['en', 'ur', 'roman_ur'] },
+  defaultLanguage: { type: String, maxlength: 10, default: 'en' },
+  personaName: { type: String, trim: true, maxlength: 60, default: 'Ayesha' },
+  personaTone: { type: String, enum: ['warm', 'professional', 'concise'], default: 'warm' },
+  reason: { type: String, trim: true, maxlength: 300, default: '' },
+  estimatedMinutes: { type: Number, default: 3, min: 1, max: 30 },
+  faq: { type: [faqSchema], default: [] },
+  smsTemplates: { type: mongoose.Schema.Types.Mixed, default: null }, // { en, ur, roman_ur, … } overrides
+  voiceTier: { type: String, enum: ['off', 'browser', 'premium'], default: 'off' },
+  reminders: {
+    enabled: { type: Boolean, default: false },
+    afterHours: { type: Number, default: 24, min: 1, max: 336 },
+    max: { type: Number, default: 1, min: 0, max: 3 },
+  },
+  fallbackToCall: {
+    enabled: { type: Boolean, default: false },
+    simCallCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'SimCallCampaign', default: null },
+    afterHours: { type: Number, default: 24, min: 1, max: 336 },
+  },
+  limits: {
+    maxTurns: { type: Number, default: 40, min: 5, max: 200 },
+    maxTokensPerTurn: { type: Number, default: 220, min: 60, max: 800 },
+    maxSessionMinutes: { type: Number, default: 30, min: 5, max: 240 },
+    dailySpendCap: { type: Number, default: 2, min: 0 },
+  },
+  transcriptRetentionDays: { type: Number, default: 90, min: 1, max: 730 },
+  whatsappShare: { type: Boolean, default: false },
+}, { _id: false });
+
 const campaignSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 160 },
   description: { type: String, trim: true, maxlength: 1000, default: '' },
@@ -79,6 +116,9 @@ const campaignSchema = new mongoose.Schema({
   questionnaire: { questions: { type: [questionSchema], default: [] } },
   statusRules: { type: [statusRuleSchema], default: [] },
   agentConfig: { type: agentConfigSchema, default: () => ({}) },
+  // 'voice' = AI phone calls (cloud); 'web_link' = SMS link → AI chat page.
+  channel: { type: String, enum: ['voice', 'web_link'], default: 'voice', index: true },
+  linkConfig: { type: linkConfigSchema, default: undefined },
   schedule: { type: scheduleSchema, default: () => ({ ...DEFAULT_SCHEDULE }) },
 
   selection: {

@@ -16,6 +16,8 @@ import { CallCampaignCreateScreen } from '@/features/callCampaign/screens/CallCa
 import { CallCampaignDetailScreen } from '@/features/callCampaign/screens/CallCampaignDetailScreen';
 import { CallCampaignRunScreen } from '@/features/callCampaign/screens/CallCampaignRunScreen';
 import { CallCampaignsScreen } from '@/features/callCampaign/screens/CallCampaignsScreen';
+import { MobileReadinessScreen } from '@/features/readiness/screens/MobileReadinessScreen';
+import { SmsQueueScreen } from '@/features/smsQueue/screens/SmsQueueScreen';
 import { SimSmsConversationScreen } from '@/features/smsAgent/screens/SimSmsConversationScreen';
 import { SimSmsLaunchScreen } from '@/features/smsAgent/screens/SimSmsLaunchScreen';
 import { AiAgentCampaignsScreen } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
@@ -145,6 +147,24 @@ export function RootNavigator() {
               name="SimSmsLaunch"
               component={SimSmsLaunchScreen}
               options={{ headerShown: true, title: t('smsAgent.title'), headerBackTitle: t('common.back') }}
+            />
+            <Stack.Screen
+              name="SmsQueue"
+              component={SmsQueueScreen}
+              options={{
+                headerShown: true,
+                title: t('smsQueue.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="MobileReadiness"
+              component={MobileReadinessScreen}
+              options={{
+                headerShown: true,
+                title: t('readiness.title'),
+                headerBackTitle: t('common.back'),
+              }}
             />
             <Stack.Screen
               name="CallCampaigns"

@@ -108,6 +108,12 @@ describe('LanguageList', () => {
 });
 
 describe('AiAgentLaunchScreen', () => {
+  it('without a phone trunk, "Call from my SIM instead" opens a SIM call campaign for the same leads', async () => {
+    await renderLaunch();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Call from my SIM instead' }));
+    expect(navigation.replace).toHaveBeenCalledWith('CallCampaignCreate', { leadIds: LEADS });
+  });
+
   it('shows honest call readiness and keeps Start disabled without a phone trunk', async () => {
     jest.mocked(aiAgentApi.createCallCampaign).mockResolvedValue({ id: 'c1' } as never);
     jest.mocked(aiAgentApi.previewCallCampaign).mockResolvedValue({
@@ -123,7 +129,14 @@ describe('AiAgentLaunchScreen', () => {
     jest.mocked(aiAgentApi.callRecipients).mockResolvedValue({ items: [], total: 2 });
     await renderLaunch();
 
-    expect(await screen.findByText("AI calling can't dial yet: no phone trunk is configured.")).toBeTruthy();
+    // Cloud calling is optional: no trunk is not an error, and the SIM route is offered instead.
+    expect(
+      await screen.findByText(
+        'Cloud AI calling is optional and not set up on the server. You can call these leads from your own SIM now.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("AI calling can't dial yet: no phone trunk is configured.")).toBeNull();
+    expect(screen.getByRole('button', { name: 'Call from my SIM instead' })).toBeTruthy();
     expect(
       screen.getAllByText(
         "Calls are placed from the CRM's cloud phone number, not from this phone or its SIM.",

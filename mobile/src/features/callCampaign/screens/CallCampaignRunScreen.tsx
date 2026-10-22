@@ -172,6 +172,15 @@ export function CallCampaignRunScreen({ route }: RootScreenProps<'CallCampaignRu
       {runner.phase === 'idle' ? (
         <AppCard className="gap-3">
           <AppText variant="title">{t(`callCampaign.idle.${runner.idleReason ?? 'queue_empty'}`)}</AppText>
+          {runner.idleReason === 'outside_calling_hours' ? (
+            <AppText tone="muted">
+              {t('callCampaign.idle.hours', {
+                start: campaign.settings.callWindow.start,
+                end: campaign.settings.callWindow.end,
+                tz: campaign.settings.timezone,
+              })}
+            </AppText>
+          ) : null}
           {runner.nextAt ? (
             <AppText tone="muted">
               {t('callCampaign.idle.nextAt', { when: formatDateTime(runner.nextAt, i18n.language) ?? '' })}

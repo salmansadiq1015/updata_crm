@@ -67,6 +67,25 @@ export function windowState(schedule, now = new Date()) {
   return { open: false, delayMs: Math.min(minutesUntil, 60) * 60_000 };
 }
 
+/**
+ * The first instant (to the minute) at or after `now` when the window is open, or null if it
+ * never opens within 8 days (e.g. no days selected). `windowState().delayMs` is only a re-check
+ * hint capped at one hour; this is the time to show people. Steps in local time, so DST and
+ * day-of-week rules come from the same evaluation as the dial gate.
+ */
+export function nextWindowOpen(schedule, now = new Date()) {
+  if (windowState(schedule, now).open) return now;
+  const STEP = 15 * 60_000;
+  const start = Math.ceil(now.getTime() / 60_000) * 60_000;
+  for (let t = start; t <= start + 8 * 24 * 60 * 60_000; t += STEP) {
+    if (!windowState(schedule, new Date(t)).open) continue;
+    let first = t;
+    while (first - 60_000 > now.getTime() && windowState(schedule, new Date(first - 60_000)).open) first -= 60_000;
+    return new Date(first);
+  }
+  return null;
+}
+
 export function isValidTimezone(tz) {
   try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); return true; } catch { return false; }
 }

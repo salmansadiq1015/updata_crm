@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
-  windowState, recipientWindow, recipientTimezone, parseDays, parseHours, isValidTimezone,
+  windowState, nextWindowOpen, recipientWindow, recipientTimezone, parseDays, parseHours, isValidTimezone,
 } from '../../src/modules/aiCalling/engine/callWindow.js';
 import { mapLiveKitWebhook } from '../../src/modules/aiCalling/providers/livekitWebhook.js';
 import { normalizeTelephonyStatus } from '../../src/modules/aiCalling/aiCalling.constants.js';
@@ -79,5 +79,28 @@ describe('LiveKit webhook mapping', () => {
     expect(mapLiveKitWebhook({ event: 'room_finished', room }).eventType).toBe('completed');
     expect(mapLiveKitWebhook({ event: 'participant_left', room, participant: { kind: 'AGENT', identity: 'agent-1' } }).eventType).toBe('ignored');
     expect(mapLiveKitWebhook({ event: 'room_finished', room: { name: 'other-room' } }).internalCallId).toBeNull();
+  });
+});
+
+describe('next calling-window opening (shown to people)', () => {
+  const karachi = { timezone: 'Asia/Karachi', callWindow: { start: '09:00', end: '19:00' }, daysOfWeek: [1, 2, 3, 4, 5, 6] };
+
+  it('after hours it is the next day\'s start, not the one-hour re-check hint', () => {
+    // Wed 21 Oct 2026 22:48 Karachi.
+    expect(nextWindowOpen(karachi, new Date('2026-10-21T17:48:00Z'))?.toISOString()).toBe('2026-10-22T04:00:00.000Z');
+  });
+
+  it('skips excluded days and returns now when already open', () => {
+    // Sat 24 Oct 20:00 Karachi, Sunday excluded → Mon 26 Oct 09:00.
+    expect(nextWindowOpen(karachi, new Date('2026-10-24T15:00:00Z'))?.toISOString()).toBe('2026-10-26T04:00:00.000Z');
+    const open = new Date('2026-10-22T05:00:00Z');
+    expect(nextWindowOpen(karachi, open)).toBe(open);
+  });
+
+  it('follows DST and returns null when the window can never open', () => {
+    const zurich = { timezone: 'Europe/Zurich', callWindow: { start: '09:00', end: '19:00' }, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] };
+    // Night of the 25 Oct 2026 change (CEST → CET): 09:00 local is 08:00 UTC.
+    expect(nextWindowOpen(zurich, new Date('2026-10-24T22:00:00Z'))?.toISOString()).toBe('2026-10-25T08:00:00.000Z');
+    expect(nextWindowOpen({ ...zurich, daysOfWeek: [9] }, new Date())).toBeNull();
   });
 });

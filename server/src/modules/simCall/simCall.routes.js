@@ -16,6 +16,7 @@ const write = [authenticate, requirePermission('ai-calling:write')];
 const qualificationWrite = (req, res, next) => req.body.qualification?.answers?.length
   ? requirePermission('lead:write')(req, res, next) : next();
 
+router.get('/readiness', ...read, controller.readiness);
 router.get('/campaigns', ...read, validate(schemas.listCampaigns), controller.listCampaigns);
 router.post('/campaigns', ...write, validate(schemas.createCampaign), controller.createCampaign);
 router.get('/campaigns/:id', ...read, validate(schemas.campaignId), controller.getCampaign);

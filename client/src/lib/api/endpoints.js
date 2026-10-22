@@ -933,4 +933,17 @@ export const ENDPOINTS = Object.freeze({
     TELEPHONY_HEALTH: '/ai-calling/telephony/health',
     LANGUAGES: '/ai-calling/languages',
   },
+  // SMS link assistant (server/src/modules/linkAssistant): personal chat links sent by SMS.
+  LINK_ASSISTANT: {
+    SETTINGS: '/link-assistant/settings',
+    KILL_SWITCH: '/link-assistant/settings/kill-switch',
+    TEMPLATES: '/link-assistant/templates',
+    SESSIONS: '/link-assistant/sessions',
+    SESSION: (id) => `/link-assistant/sessions/${id}`,
+    REVOKE: (id) => `/link-assistant/sessions/${id}/revoke`,
+    ANALYTICS: (id) => `/link-assistant/campaigns/${id}/analytics`,
+    EXPORT: (id) => `/link-assistant/campaigns/${id}/export`,
+    PREVIEW: (id) => `/link-assistant/campaigns/${id}/preview`,
+    LEAD_SESSIONS: (leadId) => `/link-assistant/leads/${leadId}/sessions`,
+  },
 });

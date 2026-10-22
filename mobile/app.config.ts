@@ -35,6 +35,9 @@ const env = parseEnv({
 });
 
 const PRIVATE_BUILD = env.distribution === 'private';
+// Sideloaded client APK: may SEND SMS from the SIM (one-way), never receive or read SMS —
+// RECEIVE_SMS / READ_SMS are what Play Protect blocks for apps installed outside the store.
+const SEND_ONLY_BUILD = env.distribution === 'shared';
 const SMS_PERMISSIONS = ['android.permission.SEND_SMS', 'android.permission.RECEIVE_SMS'] as const;
 // Keeps the process alive while the AI SMS agent runs in the background.
 const AGENT_SERVICE_PERMISSIONS = [
@@ -65,6 +68,10 @@ const withSmsComponents: ConfigPlugin = (config) =>
         (item) => ![`${PKG}.SmsResultReceiver`, `${PKG}.SmsInboundReceiver`].includes(item.$['android:name']),
       );
       app.service = (app.service ?? []).filter((item) => item.$['android:name'] !== `${PKG}.SmsAgentService`);
+      // Send-only: the SENT/DELIVERED result receiver (explicit, not exported) and nothing that receives SMS.
+      if (SEND_ONLY_BUILD) {
+        app.receiver.push({ $: { 'android:name': `${PKG}.SmsResultReceiver`, 'android:exported': 'false' } });
+      }
       return mod;
     }
     const named = (list: { $: { 'android:name': string } }[] | undefined, name: string) =>
@@ -113,7 +120,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       name: VARIANT[env.appEnv].name,
       slug: 'updata-mobile',
       scheme: 'updata',
-      version: '0.1.4',
+      version: '0.1.6',
       orientation: 'portrait',
       icon: './assets/icon.png',
       // Follows the device; the user can override it in Settings (light / dark / system).
@@ -122,7 +129,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       android: {
         // Each environment installs side by side, so a dev build never overwrites production.
         package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
-        versionCode: 5,
+        versionCode: 7,
         adaptiveIcon: {
           foregroundImage: './assets/android-icon-foreground.png',
           backgroundColor: BRAND_NAVY,
@@ -155,7 +162,11 @@ export default ({ config }: ConfigContext): ExpoConfig =>
           'android.permission.READ_PHONE_STATE',
           // Voice notes: recorded only when the user taps Record after a call, never during one.
           'android.permission.RECORD_AUDIO',
-          ...(PRIVATE_BUILD ? [...SMS_PERMISSIONS, ...AGENT_SERVICE_PERMISSIONS] : []),
+          ...(PRIVATE_BUILD
+            ? [...SMS_PERMISSIONS, ...AGENT_SERVICE_PERMISSIONS]
+            : SEND_ONLY_BUILD
+              ? ['android.permission.SEND_SMS']
+              : []),
         ],
         blockedPermissions: [
           'android.permission.READ_EXTERNAL_STORAGE',
@@ -168,7 +179,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
           ...(PRIVATE_BUILD
             ? []
             : [
-                ...SMS_PERMISSIONS,
+                ...(SEND_ONLY_BUILD ? ['android.permission.RECEIVE_SMS'] : SMS_PERMISSIONS),
                 'android.permission.RECEIVE_MMS',
                 'android.permission.RECEIVE_WAP_PUSH',
                 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',

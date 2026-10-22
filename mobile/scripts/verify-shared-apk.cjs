@@ -17,8 +17,12 @@ if (!version) throw new Error('Install Android SDK build-tools and set ANDROID_H
 const run = (tool, args) => execFileSync(path.join(buildTools, version, tool), args, { encoding: 'utf8' });
 const permissions = run('aapt', ['dump', 'permissions', apk]);
 const manifest = run('aapt', ['dump', 'xmltree', apk, 'AndroidManifest.xml']);
+// SEND_SMS is allowed only with --allow-send-sms (the client "shared" build sends one-way SMS).
+// Receiving or reading SMS, call logs, accessibility and notification access are never allowed:
+// those are what Play Protect blocks for apps installed from WhatsApp or a browser.
+const allowSendSms = process.argv.includes('--allow-send-sms');
 const forbidden = [
-  'SEND_SMS',
+  ...(allowSendSms ? [] : ['SEND_SMS']),
   'RECEIVE_SMS',
   'READ_SMS',
   'RECEIVE_MMS',
@@ -35,7 +39,7 @@ for (const permission of forbidden) {
 }
 for (const component of [
   'SmsInboundReceiver',
-  'SmsResultReceiver',
+  ...(allowSendSms ? [] : ['SmsResultReceiver']),
   'SmsAgentService',
   'android.accessibilityservice.AccessibilityService',
   'android.service.notification.NotificationListenerService',

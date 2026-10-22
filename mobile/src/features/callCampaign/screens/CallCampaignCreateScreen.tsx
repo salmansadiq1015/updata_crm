@@ -27,6 +27,7 @@ import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { telephony } from '@/services/telephony/telephonyService';
 import { toApiError } from '@/services/api/apiErrors';
 
+import { callWindowOpen } from '../domain/campaignDomain';
 import { useCreateCallCampaign } from '../hooks/useCallCampaigns';
 
 const STEPS = ['details', 'questions', 'calling', 'review'] as const;
@@ -88,10 +89,13 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
     review: true,
   };
   const index = STEPS.indexOf(step);
+  // When the review step opens: is it inside the chosen calling hours right now?
+  const [reviewNow, setReviewNow] = useState<Date | null>(null);
   const next = () => {
     setShowErrors(true);
     if (!stepValid[step]) return;
     setShowErrors(false);
+    setReviewNow(new Date());
     setStep(STEPS[Math.min(STEPS.length - 1, index + 1)]!);
   };
 
@@ -290,6 +294,16 @@ export function CallCampaignCreateScreen({ navigation, route }: RootScreenProps<
       {step === 'review' ? (
         <AppCard className="gap-3">
           <AppText variant="h3">{name}</AppText>
+          {reviewNow && !callWindowOpen({ start: windowStart, end: windowEnd }, days, timezone, reviewNow) ? (
+            <AppAlert
+              tone="warning"
+              message={t('callCampaign.create.outsideNow', {
+                start: windowStart,
+                end: windowEnd,
+                tz: timezone,
+              })}
+            />
+          ) : null}
           <AppText>{t('callCampaign.create.reviewLeads', { count: leadIds.length })}</AppText>
           <AppText>{t('callCampaign.create.reviewQuestions', { count: questions.length })}</AppText>
           <AppText>

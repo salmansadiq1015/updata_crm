@@ -16,10 +16,17 @@ const UNKNOWN_PATTERNS = [
   /^(not\s+sure|no\s+idea|unsure|unknown|n\/?a|dunno)\b/i,
   /^(i\s+)?(can'?t|cannot)\s+say\b/i,
   /^(keine\s+ahnung|weiss\s+nicht|weiß\s+nicht)\b/i, // de
+  /^(pata\s+nahi|pata\s+nahin|maloom\s+nahi|maloom\s+nahin|maalum\s+nahi|nahi\s+pata)\b/i, // Roman Urdu
+  /^(پتا نہیں|پتہ نہیں|معلوم نہیں)/, // Urdu
 ];
 
 const YES_WORDS = /^(yes|yeah|yep|yup|sure|correct|right|absolutely|of course|ok|okay|ja|oui|si)\b/i;
 const NO_WORDS = /^(no|nope|nah|not really|negative|incorrect|nein|non)\b/i;
+// Roman Urdu / Urdu script (\b is ASCII-only, so Urdu uses an explicit end check).
+const YES_UR = /^(ji|jee|haan|han|hanji|haan ji|ji haan|bilkul|theek hai|thik hai|sahi hai)\b/i;
+const NO_UR = /^(nahi|nahin|nai|na|ji nahi|bilkul nahi)\b/i;
+const YES_UR_SCRIPT = /^(جی|ہاں|بالکل|درست|ٹھیک)(\s|$|[،۔!])/;
+const NO_UR_SCRIPT = /^(نہیں|جی نہیں|بالکل نہیں)(\s|$|[،۔!])/;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
@@ -70,7 +77,9 @@ export function validateAnswer(question, rawAnswer) {
 
   switch (type) {
     case 'boolean': {
-      if (YES_WORDS.test(text)) return ok(true);
+      // No-forms first: "ji nahi" starts with the yes-word "ji".
+      if (NO_UR.test(text) || NO_UR_SCRIPT.test(text)) return ok(false);
+      if (YES_WORDS.test(text) || YES_UR.test(text) || YES_UR_SCRIPT.test(text)) return ok(true);
       if (NO_WORDS.test(text)) return ok(false);
       return bad('not_yes_no');
     }

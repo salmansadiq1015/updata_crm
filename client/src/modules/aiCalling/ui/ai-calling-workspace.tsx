@@ -22,6 +22,7 @@ const EmptyState = EmptyStateRaw as (props: {
 import type { Campaign } from '../types/ai-calling-types';
 import { CampaignWizard } from './campaign-wizard';
 import { CampaignDetailDrawer } from './campaign-detail-drawer';
+import { LinkKillSwitch } from './link-kill-switch';
 import { StatusPill } from './status-pill';
 
 function fmtDuration(seconds: number): string {
@@ -80,6 +81,7 @@ export function AiCallingWorkspace() {
 
       {/* Telephony status — honest about whether real calls are possible */}
       <TelephonyBanner telephony={telephony} failed={telephonyError} />
+      <LinkKillSwitch />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">

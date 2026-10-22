@@ -476,6 +476,87 @@ request from the row, offline/retry/older server, honest call-audio limit), API 
 **Not yet verified on the physical phone:** the readiness screen itself (the TECNO was not
 connected after this change). SIM calling, SIM SMS sending and their limits were verified on the
 TECNO on 2026-10-21 (0.14, report). AI speech inside SIM calls remains impossible on Android 13.
+*(Readiness screen verified on the TECNO on 2026-10-22, see 0.17.)*
+
+### 0.17 Client SMS queue, send-only "shared" build, calling-hours fix (2026-10-22)
+
+**Reported:** "SMS feature not showing" in the client APK, and "calling not working" with
+"Outside the campaign's calling hours. Next: 21 Oct 2026, 23:47" at 22:48.
+
+**Calling cause:** the gate itself was correct (campaign hours 09:00–23:30 Asia/Karachi), but
+`claimNext` returned `now + delayMs` as "next", so the time was meaningless. New
+`nextWindowOpen(schedule, now)` (`aiCalling/engine/callWindow.js`) finds the real opening
+(15-minute steps for up to 8 days, refined to the minute; DST-safe; `null` if never). The run
+screen now shows the hours and time zone. The create review step warns when the window is
+closed now.
+
+**SMS for the client APK.** There are three distributions (`EXPO_PUBLIC_DISTRIBUTION`):
+
+| Build | SMS permissions | SMS features |
+|---|---|---|
+| `play` | none | Messages-app queue |
+| `shared` (client APK, `production-apk`) | `SEND_SMS` only + `SmsResultReceiver` (not exported); `RECEIVE_SMS`/`READ_SMS` blocked | Messages-app queue **and** automatic one-way send from a chosen SIM |
+| `private` (company phones, USB) | full | SMS agent (two-way) + both of the above |
+
+"Text leads from your phone" (`mobile/src/features/smsQueue`):
+- **Personalisation:** `{name}` and `{city}`. Unknown placeholders and leads with an empty value are flagged before sending.
+- **Messages mode:** one tap per lead; the user confirms whether each SMS went out (`sms_composer`, `user_reported_*`).
+- **Automatic mode:** confirm card, then a 6 s gap between sends and Stop/Continue. Each SMS is authorised by the CRM (new route `sms_direct`) and logged as `device_sent` / `device_failed` / `unknown` (no result within 60 s; never resent).
+- **Failures:** a failed send shows the radio result code, plus a plain hint when the network refused it.
+- **Repeat protection:** leads texted from this phone in the last 12 h start skipped, and can be included on the confirm card. A failed or not-sent SMS does not count.
+
+The queue's journal ids (`smsq-…`) are ignored by the SMS-agent journal reconcile.
+
+**Verified on the TECNO (isolated server, own SIMs + authorised 0327 only, 2026-10-21/22):**
+- The readiness screen covers the send-only SMS row, Allow SMS / Allow phone, and "Ready to call from your SIM".
+- Automatic mode from Jazz and Telenor: the CRM authorised each SMS, the SIM send was attempted, and the network answered `RESULT_ERROR_GENERIC_FAILURE`. The CRM recorded `sms_direct` / `device_failed` with the personalised body.
+- Messages mode opened the composer (Messages is behind the phone's App Lock) and was recorded as `user_reported_not_sent`.
+- The campaign card showed hours 09:00–23:30 and "Next: 22 Oct 2026, 09:00", with nothing dialled.
+- A call queue call from Jazz to the user's own Telenor number was placed, its end was detected (0:13), and it was saved in the CRM (`telecom_direct`, `no_answer`).
+
+**Open:**
+- Both operators still refuse SMS from this phone (also from the Messages app earlier), so this is a SIM plan / balance issue, not an app issue. No SMS has been delivered yet.
+- Play Protect behaviour of the `shared` APK (now declaring `SEND_SMS`) on a client phone installed from WhatsApp is not yet tested.
+- `sms_direct`, `nextWindowOpen` and `/sim-calls/readiness` need the server deploy. Until then, automatic SMS is refused (400) by the live server.
+
+### 0.18 Audit against the "principal engineer" brief: evidence-backed status (2026-10-22)
+
+**Feasibility gate (brief §3): FAIL.** Autonomous AI voice over an ordinary SIM call is not possible.
+- *Evidence (0.1, measured 2026-10-19 on TECNO KJ5 / Android 13, native `CallAudioProbe`):* during an active SIM call, every capture source an app may open (MIC, VOICE_COMMUNICATION, VOICE_RECOGNITION, UNPROCESSED, CAMCORDER) is `clientSilenced=true` with RMS 0. VOICE_CALL, VOICE_UPLINK and VOICE_DOWNLINK fail to initialise even when idle.
+- *Why:* `CAPTURE_AUDIO_OUTPUT` is a signature/privileged permission, and the default-dialer role does not grant call-audio capture. Speakerphone/mic loopback and accessibility capture are excluded by the brief and by Play policy.
+- *Consequence:* SIM mode is **AI-assisted** (the human speaks; the app shows the questions, transcribes voice notes after the call and proposes answers). Fully autonomous calls exist only in the **optional cloud mode** (`aiCalling`: OpenAI Realtime `gpt-realtime` over LiveKit SIP). That mode is separately configured and never a silent fallback.
+- *Re-run attempted 2026-10-22:* the phone was disconnected from USB before the probe could run. It is still to be repeated.
+
+**Changes in this pass**
+- **SMS delivery reports reach the CRM.** A queue SMS that the SIM sent now stays in the native journal until the carrier's delivery report arrives (multipart: every part's report is requested).
+  - `collectQueueDeliveries` (run by every outbox flush: launch, foreground, reconnect) turns it into an `sms_delivered` event.
+  - The CRM upgrades `device_sent` to the new status `device_delivered`; failed or unknown sends are never upgraded. A report that arrives before the outcome is kept, and replays are deduplicated by event `seq`.
+  - It stops waiting after 72 h.
+- **Capability codes and a diagnostic report** on the readiness screen (`capabilityCodes`, `diagnosticReport`: states and codes only, no phone numbers or SMS text, shared through the Android share sheet). The three AI-audio codes (`AI_AUDIO_INPUT_UNAVAILABLE`, `AI_AUDIO_OUTPUT_UNAVAILABLE`, `AUTONOMOUS_CELLULAR_AI_UNSUPPORTED`) are constant, so being able to dial never reads as "AI calling ready".
+- **Release-APK security scan:**
+  - no API keys, DB URLs or private keys in the JS bundle;
+  - the only `http://` strings are schema identifiers;
+  - `allowBackup=false`, cleartext off (target SDK 36);
+  - refresh token in SecureStore;
+  - the OpenAI key lives only on the server (`OPENAI_API_KEY`).
+- Version 0.1.6 (versionCode 7).
+
+**Status by feature**
+
+| Feature | Status | Evidence / blocker |
+|---|---|---|
+| SIM call from chosen SIM, end detection, outcome saved to CRM | PASS | TECNO 2026-10-22: Jazz → own Telenor, 0:13 off-hook, `telecom_direct`/`no_answer` stored |
+| "Answered" detection | BLOCKED (platform) | Android gives a non-dialer app no answer signal. The outcome is entered by the user; "connected" is never inferred |
+| Calling-hours gate + next opening | PASS (test server) / NOT TESTED (live) | Device showed 09:00–23:30 and "Next 22 Oct 09:00". Live server not deployed |
+| Autonomous AI voice in SIM call | FAIL (platform) | §0.1 measurement above |
+| AI-assisted SIM calling (questions, voice note STT, answer proposals) | PASS | Earlier device runs (0.13/0.14) |
+| Cloud autonomous AI calls (OpenAI Realtime + SIP) | BLOCKED | Needs a SIP trunk / LiveKit credentials (owner decision: optional) |
+| SMS via Messages app (all builds) | PASS | Composer opened; `user_reported_*` logged |
+| Automatic SMS from SIM (client/company builds) | PARTIAL | App path works; both operators reject the send (`RESULT_ERROR_GENERIC_FAILURE`, also from the Messages app). Delivery not yet observed |
+| SMS delivery confirmation to CRM | PASS (tests) / NOT TESTED (device) | Needs a SIM that can send |
+| Client APK install vs Play Protect (SEND_SMS) | NOT TESTED | Needs a WhatsApp install on a client phone |
+| Server features on the live server (`sms_direct`, `nextWindowOpen`, readiness, delivery) | NOT TESTED | Not deployed |
+| Tenant isolation | PASS (tests) | The product is single-tenant by design: records are scoped to `createdBy`; the API tests cover cross-user 404s |
 
 ---
 

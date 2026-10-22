@@ -48,6 +48,18 @@ router.post('/campaigns/:id/preview', ...WRITE, validate({ ...idParam, body: Joi
   ok((req) => service.previewLink(req.params.id, req.user._id, { leadId: req.body?.leadId || null })));
 
 router.get('/reminders/due', ...READ, ok((req) => service.dueReminders(req.user._id)));
+
+// Opt-out recorded by the user: the lead replied STOP and the reply arrived in the user's
+// Messages app (the client app cannot read SMS). Same effect as every other opt-out path.
+router.post('/leads/:leadId/opt-out', authenticate, requirePermission('lead:write'),
+  validate({
+    params: Joi.object({ leadId: objectId.required() }),
+    body: Joi.object({ source: Joi.string().valid('sms_reply_reported').required(), confirm: Joi.boolean().valid(true).required() }),
+  }),
+  ok((req) => service.optOutLead({ leadId: req.params.leadId, actor: req.user._id, source: 'sms_reply_reported', keyword: 'STOP', meta: meta(req) })));
+router.get('/leads/:leadId/contact-status', authenticate, requirePermission('lead:read'),
+  validate({ params: Joi.object({ leadId: objectId.required() }) }),
+  ok((req) => service.contactStatus(req.params.leadId)));
 router.get('/leads/:leadId/sessions', ...READ, validate({ params: Joi.object({ leadId: objectId.required() }) }),
   wrap(async (req, res) => res.success(await service.listSessions(req.user._id, { leadId: req.params.leadId, limit: 20 }))));
 

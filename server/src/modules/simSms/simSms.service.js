@@ -543,7 +543,10 @@ class SimSmsService {
       createdBy: actor, state: { $in: ['awaiting_send', 'awaiting_reply', 'needs_attention'] },
     }).select('leadId').limit(MAX_LEADS * 2).lean();
     const leads = await Lead.find({ _id: { $in: conversations.map((c) => c.leadId) } }).select('phone mobile address.country').lean();
-    return [...new Set(leads.map((l) => leadDestination(l).e164).filter(Boolean))];
+    // Numbers texted an SMS-link invitation are watched too, so a "STOP" reply opts them out.
+    const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
+    const linkNumbers = await linkAssistant.watchNumbers(actor).catch(() => []);
+    return [...new Set([...leads.map((l) => leadDestination(l).e164).filter(Boolean), ...linkNumbers])];
   }
 
   // ------------------------------------------------------------- inbound
@@ -576,7 +579,11 @@ class SimSmsService {
     const conversation = await SimSmsConversation.findOne({
       createdBy: actor, destinationHash: { $in: hashes }, state: { $in: ['awaiting_reply', 'awaiting_send', 'needs_attention', 'completed', 'stopped', 'expired'] },
     }).sort({ lastOutboundAt: -1, updatedAt: -1 });
-    if (!conversation) return { matched: false };
+    // Not an SMS-agent conversation: it may be a STOP reply to an SMS-link campaign.
+    if (!conversation) {
+      const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
+      return linkAssistant.inboundSmsReply(actor, { from, body, deviceMessageKey, receivedAt });
+    }
 
     let inbound;
     try {
@@ -602,6 +609,13 @@ class SimSmsService {
     // Opt-out is honoured in every state, even after the conversation ended.
     if (interpretation.intent === 'stop') {
       await this._optOut(conversation, actor);
+      // The same opt-out closes the lead's SMS-link conversations and is logged once.
+      const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
+      await linkAssistant.optOutLead({
+        leadId: conversation.leadId, actor, source: 'sim_sms_agent', keyword: String(inbound.body).trim().slice(0, 40).toUpperCase(),
+        dedupeKey: `sms:${deviceMessageKey}:${conversation.leadId}`, receivedAt: inbound.receivedAt,
+        exceptSmsConversationId: conversation._id,
+      }).catch((e) => logger.warn('link opt-out propagation failed', { module: 'sim-sms', error: e.message }));
       if (active) {
         await this._mutate(conversation._id, (s) => ({ state: engine.endConversation(s, 'do_not_contact') }));
         await this._advance(conversation._id);
@@ -655,11 +669,22 @@ class SimSmsService {
       { upsert: true },
     );
     // Every other pending SMS to this lead (any campaign of any user) stops.
-    const others = await SimSmsConversation.find({ leadId: conversation.leadId, _id: { $ne: conversation._id }, state: { $in: ACTIVE_CONVERSATION_STATES } }).select('_id campaignId').lean();
-    if (others.length) {
-      await SimSmsMessage.updateMany({ conversationId: { $in: others.map((o) => o._id) }, status: { $in: ['pending', 'leased'] } }, { $set: { status: 'cancelled', failureCode: 'OPTED_OUT' } });
-      await SimSmsConversation.updateMany({ _id: { $in: others.map((o) => o._id) } }, { $set: { state: 'ineligible', 'eligibility.eligible': false, 'eligibility.reasons': ['SMS_SUPPRESSED'] } });
-    }
+    await this.cancelLeadConversations(conversation.leadId, { exceptId: conversation._id });
+  }
+
+  /**
+   * The lead opted out: cancel every queued SMS-agent message to them and make their
+   * active conversations ineligible (any campaign of any user). Idempotent.
+   */
+  async cancelLeadConversations(leadId, { exceptId = null } = {}) {
+    const filter = { leadId, state: { $in: ACTIVE_CONVERSATION_STATES } };
+    if (exceptId) filter._id = { $ne: exceptId };
+    const others = await SimSmsConversation.find(filter).select('_id campaignId').lean();
+    if (!others.length) return { cancelled: 0 };
+    await SimSmsMessage.updateMany({ conversationId: { $in: others.map((o) => o._id) }, status: { $in: ['pending', 'leased'] } }, { $set: { status: 'cancelled', failureCode: 'OPTED_OUT' } });
+    await SimSmsConversation.updateMany({ _id: { $in: others.map((o) => o._id) } }, { $set: { state: 'ineligible', 'eligibility.eligible': false, 'eligibility.reasons': ['SMS_SUPPRESSED'] } });
+    for (const campaignId of new Set(others.map((o) => String(o.campaignId)))) await this.refreshSummary(campaignId);
+    return { cancelled: others.length };
   }
 
   // ------------------------------------------------------------- results → CRM

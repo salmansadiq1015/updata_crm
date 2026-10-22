@@ -56,6 +56,8 @@ export const STOP_KEYWORDS = Object.freeze([
   'basta', 'alto',
   'توقف', 'الغاء', 'إلغاء',
   'band karo', 'bas', 'band', 'stop karo', 'mat bhejo',
+  'band kar do', 'message mat karo', 'sms mat karo', 'unsubscribe karo',
+  'سٹاپ', 'اسٹاپ', 'میسج نہ کریں', 'پیغام نہ بھیجیں',
   'بند', 'بند کریں', 'بند کرو', 'رکیں', 'روکیں', 'مت بھیجیں',
 ]);
 

@@ -12,6 +12,10 @@ import { windowState, nextWindowOpen } from '../aiCalling/engine/callWindow.js';
 import { phoneHash } from '../aiCalling/callAuth.js';
 import Lead from '../crm/lead.model.js';
 import MessageSuppression from '../messaging/suppression.model.js';
+import LeadChannelConsent from '../messaging/consent.model.js';
+import CallSuppression from '../aiCalling/callSuppression.model.js';
+import { suppressLeadContact } from '../crm/leadCommunication.service.js';
+import OptOutEvent from './optOutEvent.model.js';
 import { destinationHash } from '../messaging/destinationHash.js';
 import { normalizePhone } from '../businessDiscovery/engine/normalizer.js';
 import notificationService from '../notifications/notification.service.js';
@@ -35,6 +39,7 @@ import {
 } from './engine/linkTokens.js';
 import { copyFor } from './engine/assistantCopy.js';
 import { detectLanguage, greetingName } from './engine/intents.js';
+import { isStopRequest } from '../simSms/engine/smsCopy.js';
 import { planForState, runTurn, matchFaq } from './engine/conversation.js';
 import {
   buildComposerMessages, checkModelOutput, costOf, shouldUseModel, streamCompletion,
@@ -241,6 +246,119 @@ class LinkAssistantService {
     const lid = leadId || campaign.selection?.leadIds?.[0];
     if (!lid) throw new ValidationError('Add a lead to the campaign to preview it');
     return this.issueLink({ campaignId, leadId: lid, userId, preview: true });
+  }
+
+  // ------------------------------------------------------------------- opt-out
+  /** Every valid number of the lead (mobile and phone), E.164. */
+  _leadNumbers(lead) {
+    const out = new Set();
+    for (const raw of [lead.mobile, lead.phone].filter(Boolean)) {
+      for (const n of [normalizePhone(raw, lead.address?.country || 'PK'), normalizePhone(raw)]) if (n.valid) out.add(n.e164);
+    }
+    return [...out];
+  }
+
+  /**
+   * The lead asked not to be contacted (page button/chat, STOP reply received by the
+   * company build, or a STOP reply the user saw and recorded). One rule for every path:
+   * calls + SMS suppressed, SMS consent revoked, every open link conversation closed through
+   * the existing do-not-contact outcome (lead status, audit, review), queued SMS-agent
+   * messages cancelled. Idempotent per dedupeKey; effects are idempotent too, so a retry
+   * after a crash completes the job.
+   */
+  async optOutLead({ leadId, actor, source, keyword = null, dedupeKey = null, receivedAt = new Date(), meta = {}, exceptSmsConversationId = null }) {
+    const lead = await Lead.findById(leadId).select('_id name phone mobile address').lean();
+    if (!lead) throw new NotFoundError('Lead', leadId);
+    const key = dedupeKey || `${source}:${leadId}`;
+    const already = await OptOutEvent.findOne({ dedupeKey: key }).lean();
+    const now = new Date();
+
+    const e164s = this._leadNumbers(lead);
+    const { callHashes, smsSuppressed } = await suppressLeadContact({ leadId: lead._id, userId: actor, source: `opt_out:${source}`, e164s, now });
+    await LeadChannelConsent.updateOne(
+      { leadId: lead._id, channel: 'sms' },
+      { $set: { status: 'revoked', evidence: `Opt-out (${source})`, source: `opt_out:${source}`, capturedAt: now, changedBy: actor } },
+      { upsert: true },
+    );
+
+    // Close every open link conversation of this lead (any campaign, any user).
+    let sessionsClosed = 0;
+    for (const session of await LinkSession.find({ leadId: lead._id, status: { $in: ['issued', 'opened', 'active'] } })) {
+      await aiCallingService.agentDoNotContact(session.internalCallId).catch(() => {});
+      await LinkSession.updateOne(
+        { _id: session._id, status: { $in: ['issued', 'opened', 'active'] } },
+        { $set: { status: 'opted_out', outcome: 'opted_out', closedAt: now, 'funnel.opted_out': now, 'tokens.$[].revokedAt': now } },
+      );
+      await this._finish(session).catch((e) => logger.warn('opt-out processing failed', { module: 'link-assistant', sessionId: String(session._id), error: e.message }));
+      sessionsClosed += 1;
+    }
+    const { default: simSmsService } = await import('../simSms/simSms.service.js');
+    // The SMS-agent conversation that received the STOP is ended by its own flow.
+    const { cancelled } = await simSmsService.cancelLeadConversations(lead._id, { exceptId: exceptSmsConversationId });
+
+    const effects = { sessionsClosed, smsConversationsCancelled: cancelled, callHashes: callHashes.length, smsSuppressed };
+    if (already) return { optedOut: true, duplicate: true, effects };
+    try {
+      await OptOutEvent.create({ leadId: lead._id, source, keyword, dedupeKey: key, receivedAt, recordedBy: actor, effects });
+    } catch (error) {
+      if (error?.code === 11000) return { optedOut: true, duplicate: true, effects };
+      throw error;
+    }
+    linkEvent(`opt_out_${source}`);
+    auditService.logEvent({
+      eventType: 'lead.opted_out', userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: 'success', module: 'link-assistant', details: { leadId: String(lead._id), source, sessionsClosed, smsSuppressed },
+    });
+    emitToOwner(actor, 'link-assistant:opt-out', { leadId: String(lead._id), source });
+    logger.info('lead opted out', { module: 'link-assistant', leadId: String(lead._id), source, sessionsClosed });
+    return { optedOut: true, duplicate: false, effects };
+  }
+
+  /** Whether the lead can still be contacted, and the latest opt-out (for the CRM and the app). */
+  async contactStatus(leadId) {
+    const lead = await Lead.findById(leadId).select('_id phone mobile address').lean();
+    if (!lead) throw new NotFoundError('Lead', leadId);
+    const e164s = this._leadNumbers(lead);
+    const [sms, calls, latest] = await Promise.all([
+      e164s.length ? MessageSuppression.exists({ channel: 'sms', destinationHash: { $in: e164s.map((e) => destinationHash('sms', e)) } }) : null,
+      e164s.length ? CallSuppression.exists({ phoneHash: { $in: e164s.map((e) => phoneHash(e)) } }) : null,
+      OptOutEvent.findOne({ leadId: lead._id }).sort({ receivedAt: -1 }).select('source receivedAt keyword').lean(),
+    ]);
+    return {
+      leadId: String(lead._id), smsBlocked: Boolean(sms), callsBlocked: Boolean(calls), optedOut: Boolean(sms || latest),
+      lastOptOut: latest ? { source: latest.source, at: latest.receivedAt } : null,
+    };
+  }
+
+  /** Numbers whose STOP replies the company build should upload: open link conversations of this user. */
+  async watchNumbers(actor, limit = 1000) {
+    const sessions = await LinkSession.find({ createdBy: actor, isTest: false, status: { $in: ['issued', 'opened', 'active'] } })
+      .select('recipientId').limit(limit).lean();
+    const recipients = await CampaignRecipient.find({ _id: { $in: sessions.map((x) => x.recipientId) } }).select('phoneSnapshot').lean();
+    return [...new Set(recipients.map((r) => r.phoneSnapshot).filter(Boolean))];
+  }
+
+  /**
+   * An SMS reply from a link-campaign lead, received by the company build. Only an
+   * exact opt-out keyword counts ("STOP", "band karo", …); any other reply is ignored
+   * and not stored (the assistant page is where conversations happen).
+   */
+  async inboundSmsReply(actor, { from, body, deviceMessageKey, receivedAt = null }) {
+    const keyword = String(body || '').trim().slice(0, 40);
+    if (!isStopRequest(keyword)) return { matched: false, reason: 'not_an_opt_out' };
+    const hashes = [normalizePhone(from, 'PK'), normalizePhone(from)].filter((n) => n.valid).map((n) => phoneHash(n.e164));
+    if (!hashes.length) return { matched: false, reason: 'invalid_number' };
+    const recipients = await CampaignRecipient.find({ phoneHash: { $in: hashes }, createdBy: actor }).select('_id leadId').lean();
+    const leadIds = [...new Set(recipients.map((r) => String(r.leadId)))];
+    if (!leadIds.length) return { matched: false, reason: 'unknown_number' };
+    const results = [];
+    for (const leadId of leadIds) {
+      results.push(await this.optOutLead({
+        leadId, actor, source: 'sms_reply_device', keyword: keyword.toUpperCase().slice(0, 40),
+        dedupeKey: `sms:${deviceMessageKey}:${leadId}`, receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
+      }));
+    }
+    return { matched: true, intent: 'stop', leads: leadIds.length, duplicate: results.every((r) => r.duplicate) };
   }
 
   // ------------------------------------------------------- SMS funnel hooks
@@ -620,8 +738,9 @@ class LinkAssistantService {
       for (const event of result.events) linkEvent(event);
       if (ended) {
         emitToOwner(session.createdBy, 'link-assistant:session', { sessionId: String(session._id), status: set.status, outcome: set.outcome });
-        if (set.status === 'opted_out') {
-          auditService.logEvent({ eventType: 'link_assistant.opted_out', userId: session.createdBy, ipAddress: 'customer', result: 'success', module: 'link-assistant', details: { sessionId: String(session._id), leadId: String(session.leadId) } });
+        if (set.status === 'opted_out' && !session.isTest) {
+          await this.optOutLead({ leadId: session.leadId, actor: session.createdBy, source: 'web_link', keyword: text ? null : 'button', dedupeKey: `web_link:${session._id}`, meta: { ipAddress: 'customer' } })
+            .catch((e) => logger.error('opt-out propagation failed', { module: 'link-assistant', sessionId: String(session._id), error: e.message }));
         }
       } else if (result.events.includes('chat_started')) {
         emitToOwner(session.createdBy, 'link-assistant:session', { sessionId: String(session._id), status: 'active' });

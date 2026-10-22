@@ -58,6 +58,7 @@ let mongod; let server;
 let Lead; let User; let Role; let Permission; let LeadCommunication; let MessageSuppression;
 let CallRecord; let CallCampaign; let LinkSession; let LinkSpend; let linkService; let generateAccessToken;
 let userA; let userB; let tokenA; let tokenB; let n = 0;
+let CallSuppression; let OptOutEvent;
 
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
 const H = { 'X-Requested-With': 'ula' };
@@ -131,6 +132,9 @@ beforeAll(async () => {
   const aiCallingRoutes = (await import('../../src/modules/aiCalling/aiCalling.routes.js')).default;
   const linkRoutes = (await import('../../src/modules/linkAssistant/linkAssistant.routes.js')).default;
   const linkPublic = (await import('../../src/modules/linkAssistant/linkAssistant.public.routes.js')).default;
+  const simSmsRoutes = (await import('../../src/modules/simSms/simSms.routes.js')).default;
+  CallSuppression = (await import('../../src/modules/aiCalling/callSuppression.model.js')).default;
+  OptOutEvent = (await import('../../src/modules/linkAssistant/optOutEvent.model.js')).default;
   User = (await import('../../src/modules/auth/user.model.js')).default;
   Role = (await import('../../src/modules/auth/role.model.js')).default;
   Permission = (await import('../../src/modules/auth/permission.model.js')).default;
@@ -157,6 +161,7 @@ beforeAll(async () => {
   app.use('/api/v1/ai-calling', aiCallingRoutes);
   app.use('/api/v1/link-assistant', linkRoutes);
   app.use('/c', linkPublic);
+  app.use('/api/v1/sim-sms', simSmsRoutes);
   app.use(errorHandler);
   server = app.listen(0);
 }, 120000);
@@ -451,5 +456,116 @@ describe('SMS link assistant end to end', () => {
     expect(sessions[0].reminders.sent).toBe(1);
     const dueAfter = await request(server).get('/api/v1/link-assistant/reminders/due').set(auth(tokenA)).expect(200);
     expect(dueAfter.body.data).toHaveLength(0);
+  });
+});
+
+describe('opt-out by SMS reply and by the user (one rule for every path)', () => {
+  const DEVICE = 'android-test-device-1';
+  const inbound = (from, body, key = randomUUID(), receivedAt = null, token = tokenA) => request(server)
+    .post('/api/v1/sim-sms/device/inbound').set(auth(token))
+    .send({ deviceId: DEVICE, deviceMessageKey: `inbound-${key}`, from, body, matchedTo: from, receivedAt });
+
+  it('company build: the link number is watched; a STOP reply opts the lead out once, closes the link and blocks every send', async () => {
+    const lead = await makeLead();
+    const campaignId = await makeCampaign([lead], { linkConfig: { reminders: { enabled: true, afterHours: 1, max: 2 } } });
+    const { path } = await authorise(lead, campaignId);
+    const watch = await request(server).get('/api/v1/sim-sms/device/watch-list').set(auth(tokenA)).expect(200);
+    expect(watch.body.data.numbers).toContain('+41797654321');
+
+    const first = await inbound('+41 79 765 43 21', '  Stop. ', 'same');
+    expect(first.status).toBe(200);
+    expect(first.body.data).toMatchObject({ matched: true, intent: 'stop', duplicate: false });
+    const again = await inbound('+41 79 765 43 21', 'STOP', 'same');
+    expect(again.body.data.duplicate).toBe(true);
+    expect(await OptOutEvent.countDocuments({ leadId: lead._id })).toBe(1);
+
+    const session = await LinkSession.findOne({ leadId: lead._id }).lean();
+    expect(session).toMatchObject({ status: 'opted_out', outcome: 'opted_out' });
+    expect(session.tokens.every((t) => t.revokedAt)).toBe(true);
+    expect(await MessageSuppression.countDocuments({ channel: 'sms' })).toBe(1);
+    expect(await CallSuppression.countDocuments({})).toBeGreaterThanOrEqual(1);
+    expect((await request(server).get(path)).status).toBe(410);
+
+    // Every later send is refused; no reminder is due; the CRM shows why.
+    await LinkSession.updateMany({}, { $set: { lastActivityAt: new Date(Date.now() - 5 * 3_600_000) } });
+    const due = await request(server).get('/api/v1/link-assistant/reminders/due').set(auth(tokenA)).expect(200);
+    expect(due.body.data).toHaveLength(0);
+    const resend = await authorise(lead, campaignId);
+    expect(resend.res.status).toBe(409);
+    expect(JSON.stringify(resend.res.body)).toMatch(/SMS_SUPPRESSED/);
+    const status = await request(server).get(`/api/v1/link-assistant/leads/${lead._id}/contact-status`).set(auth(tokenA)).expect(200);
+    expect(status.body.data).toMatchObject({ optedOut: true, smsBlocked: true, callsBlocked: true, lastOptOut: { source: 'sms_reply_device' } });
+  });
+
+  it.each(['band karo', 'BAND KAR DO', 'بند کریں', 'unsubscribe', 'Cancel!', 'QUIT', 'end'])('recognises "%s" as an opt-out', async (word) => {
+    const lead = await makeLead({ mobile: `+41 79 ${String(300 + n).padStart(3, '0')} 11 22` });
+    const campaignId = await makeCampaign([lead]);
+    await authorise(lead, campaignId);
+    const res = await inbound(lead.mobile, word);
+    expect(res.body.data).toMatchObject({ matched: true, intent: 'stop' });
+  });
+
+  it('ordinary replies and unknown numbers are ignored and not stored', async () => {
+    const lead = await makeLead();
+    const campaignId = await makeCampaign([lead]);
+    await authorise(lead, campaignId);
+    for (const body of ['ok thanks', 'Stop by tomorrow? I am free', 'please call me']) {
+      const res = await inbound('+41 79 765 43 21', body);
+      expect(res.body.data).toMatchObject({ matched: false, reason: 'not_an_opt_out' });
+    }
+    const stranger = await inbound('+41 79 111 22 33', 'STOP');
+    expect(stranger.body.data).toMatchObject({ matched: false, reason: 'unknown_number' });
+    expect(await OptOutEvent.countDocuments({})).toBe(0);
+    expect(await MessageSuppression.countDocuments({})).toBe(0);
+    expect((await LinkSession.findOne({}).lean()).status).toBe('issued');
+  });
+
+  it('a STOP delivered late (after the chat finished) still blocks every future send', async () => {
+    const lead = await makeLead();
+    const campaignId = await makeCampaign([lead]);
+    const { path } = await authorise(lead, campaignId);
+    const { agent } = await openPage(path);
+    await say(agent, path, { action: '__start' });
+    await say(agent, path, { action: 'yes' });
+    await say(agent, path, { text: '9000' });
+    await say(agent, path, { action: '__submit' });
+    const res = await inbound('+41 79 765 43 21', 'STOP', 'late', new Date(Date.now() - 3_600_000).toISOString());
+    expect(res.body.data).toMatchObject({ matched: true, intent: 'stop' });
+    expect((await LinkSession.findOne({}).lean()).status).toBe('completed'); // results stay
+    expect((await authorise(lead, campaignId)).res.status).toBe(409);
+  });
+
+  it('client build: the user records a STOP seen in the Messages app (authorised, idempotent)', async () => {
+    const lead = await makeLead();
+    const campaignId = await makeCampaign([lead]);
+    await authorise(lead, campaignId);
+    expect((await request(server).post(`/api/v1/link-assistant/leads/${lead._id}/opt-out`).send({})).status).toBe(401);
+    const noWriteRole = await Role.create({ name: `ReadOnly_${randomUUID()}`, permissions: (await Permission.find({ action: 'read' })).map((p) => p._id) });
+    const reader = await User.create({ email: `ro-${randomUUID()}@test.ch`, passwordHash: '$2b$04$dummyhashpaddedenoughtopassvalidation', firstName: 'R', lastName: 'O', role: noWriteRole._id, status: 'active' });
+    const readerToken = generateAccessToken({ sub: String(reader._id) });
+    expect((await request(server).post(`/api/v1/link-assistant/leads/${lead._id}/opt-out`).set(auth(readerToken)).send({})).status).toBe(403);
+
+    const body = { source: 'sms_reply_reported', confirm: true };
+    expect((await request(server).post(`/api/v1/link-assistant/leads/${lead._id}/opt-out`).set(auth(tokenA)).send({})).status).toBe(400); // explicit confirmation required
+    const first = await request(server).post(`/api/v1/link-assistant/leads/${lead._id}/opt-out`).set(auth(tokenA)).send(body).expect(200);
+    expect(first.body.data).toMatchObject({ optedOut: true, duplicate: false, effects: { sessionsClosed: 1, smsSuppressed: true } });
+    const second = await request(server).post(`/api/v1/link-assistant/leads/${lead._id}/opt-out`).set(auth(tokenA)).send(body).expect(200);
+    expect(second.body.data.duplicate).toBe(true);
+    expect(await OptOutEvent.countDocuments({ leadId: lead._id, source: 'sms_reply_reported' })).toBe(1);
+    expect((await authorise(lead, campaignId)).res.status).toBe(409);
+  });
+
+  it('opt-out on the chat page also closes the lead\'s other open link conversations', async () => {
+    const lead = await makeLead();
+    const campaignA = await makeCampaign([lead]);
+    const campaignB = await makeCampaign([lead]);
+    const { path } = await authorise(lead, campaignA);
+    await authorise(lead, campaignB);
+    const { agent } = await openPage(path);
+    const r = await say(agent, path, { action: '__opt_out' });
+    expect(r.done.status).toBe('opted_out');
+    const sessions = await LinkSession.find({ leadId: lead._id }).lean();
+    expect(sessions.map((x) => x.status).sort()).toEqual(['opted_out', 'opted_out']);
+    expect(await OptOutEvent.countDocuments({ leadId: lead._id, source: 'web_link' })).toBe(1);
   });
 });

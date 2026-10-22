@@ -209,6 +209,37 @@ function sameOutcome(stored, incoming) {
 
 const stepDone = (step) => step && (step.status === 'ok' || step.status === 'skipped');
 
+/**
+ * Do-not-contact for a lead's numbers: blocks calls (CallSuppression, pending AI-call
+ * recipients) and SMS (MessageSuppression). Idempotent; shared by the mobile outcome
+ * step, the SMS link assistant and SMS-reply opt-outs so every path applies the same rule.
+ * @returns {{ callHashes: string[], smsSuppressed: boolean }}
+ */
+export async function suppressLeadContact({ leadId, userId, source, e164s = [], extraCallHashes = [], now = new Date() }) {
+  const callHashes = [...new Set([...extraCallHashes.filter(Boolean), ...e164s.map((e164) => phoneHash(e164))])];
+  for (const hash of callHashes) {
+    await CallSuppression.updateOne(
+      { phoneHash: hash },
+      { $setOnInsert: { leadId, reason: 'do_not_contact', source, suppressedAt: now, createdBy: userId } },
+      { upsert: true },
+    );
+  }
+  if (callHashes.length) {
+    await CampaignRecipient.updateMany(
+      { phoneHash: { $in: callHashes }, state: { $in: ['draft', 'queued', 'retry_scheduled'] } },
+      { $set: { state: 'suppressed', 'eligibility.eligible': false } },
+    );
+  }
+  for (const e164 of e164s) {
+    await MessageSuppression.updateOne(
+      { channel: 'sms', destinationHash: destinationHash('sms', e164) },
+      { $setOnInsert: { leadId, reason: 'opt_out', source, suppressedAt: now, createdBy: userId } },
+      { upsert: true },
+    );
+  }
+  return { callHashes, smsSuppressed: e164s.length > 0 };
+}
+
 class LeadCommunicationService {
   async _loadLead(leadId) {
     const lead = await Lead.findById(leadId).select('_id status phone mobile address.country').lean();
@@ -608,28 +639,11 @@ class LeadCommunicationService {
           break;
         }
       }
-      const now = new Date();
-      const callHashes = new Set([doc.destinationHash, ...candidates.map((e164) => phoneHash(e164))]);
-      for (const hash of callHashes) {
-        await CallSuppression.updateOne(
-          { phoneHash: hash },
-          { $setOnInsert: { leadId, reason: 'do_not_contact', source: 'mobile_app', suppressedAt: now, createdBy: userId } },
-          { upsert: true },
-        );
-      }
-      await CampaignRecipient.updateMany(
-        { phoneHash: { $in: [...callHashes] }, state: { $in: ['draft', 'queued', 'retry_scheduled'] } },
-        { $set: { state: 'suppressed', 'eligibility.eligible': false } },
-      );
-      if (!candidates.length) {
+      const { smsSuppressed } = await suppressLeadContact({
+        leadId, userId, source: 'mobile_app', e164s: candidates, extraCallHashes: [doc.destinationHash],
+      });
+      if (!smsSuppressed) {
         return { status: 'failed', error: 'SMS_DESTINATION_UNRESOLVED: the lead number changed; call suppression applied, SMS suppression could not be' };
-      }
-      for (const e164 of candidates) {
-        await MessageSuppression.updateOne(
-          { channel: 'sms', destinationHash: destinationHash('sms', e164) },
-          { $setOnInsert: { leadId, reason: 'opt_out', source: 'mobile_app', suppressedAt: now, createdBy: userId } },
-          { upsert: true },
-        );
       }
       return { status: 'ok' };
     });

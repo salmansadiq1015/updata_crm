@@ -126,12 +126,14 @@ The Call Agent home shows "Send N reminder(s)", which opens the SMS queue in rem
 | Requirement | Result |
 |---|---|
 | Server-rendered first screen, greeting in HTML | ✅ greeting is in the HTML response |
-| Initial JS ≤ 150 KB gzipped | ✅ **20.6 KB** for HTML + CSS + JS (plain JS, no framework; fingerprinted, immutable, pre-gzipped) |
+| Initial JS ≤ 150 KB gzipped | ✅ **13.7 KB** for HTML + CSS + JS, measured 2026-10-22 (HTML 4.1 · CSS 3.6 · JS 6.0 KB gz; plain JS, no framework; fingerprinted, immutable, pre-gzipped) |
 | First reply token p50 ≤ 800 ms, p95 ≤ 1.5 s | Server overhead measured: **p50 41 ms, p95 49 ms** (stub model, n=24). Real-model latency: run `node scripts/linkAssistantLatency.mjs --confirm` (paid; owner approval) |
 | Streaming | NDJSON over `fetch` (token / replace / done), typing indicator |
 | Lost connection | The message is kept locally and resent with the same id until delivered; the server answers each id once |
-| Languages | English / Urdu (right-to-left) / Roman Urdu. Auto-detected from the first reply, switchable in one tap |
-| Accessibility and trust | ≥ 44 px tap targets, font-size toggle, screen-reader labels, company initial and name, "automated assistant" note, privacy/terms links (`LINK_ASSISTANT_PRIVACY_URL`, `…_TERMS_URL`), "I don't want to be contacted" |
+| Languages | English / Urdu (right-to-left) / Roman Urdu. Auto-detected from the first reply, switchable in one tap. The page's own wording (notice, opt-out, buttons, states) comes from `page/copy.js`: rendered server-side in the session language and switched with `<html dir>` on the page. Phone numbers, links and e-mails are isolated left-to-right inside Urdu text |
+| Layout | App shell: header (company, "AI assistant" badge, language, options menu) · scrolling conversation · composer docked to the bottom (`100dvh`, `interactive-widget=resizes-content`, safe-area insets). No horizontal overflow from 320 px to desktop (`linkAssistant.page.test.js`). Long answers get a growing text area; dates/times native pickers |
+| Accessibility and trust | ≥ 44 px tap targets, text-size toggle, `role=log` conversation with speaker labels, `progressbar` semantics, keyboard-operable menu and mic, reduced-motion and forced-colours support, company initial and name, "automated assistant" note, privacy/terms links (`LINK_ASSISTANT_PRIVACY_URL`, `…_TERMS_URL`), "I don't want to be contacted" at the top and in the menu |
+| Errors | Network loss: kept and resent automatically ("Try again" to resend now). Server error: the message is marked "Not sent" with "Try again" (same id, never answered twice). Finished chats show a confirmation card and hide the composer |
 | Security | Strict CSP (`default-src 'none'`, self-only scripts and styles), no third-party scripts or trackers, `Referrer-Policy: no-referrer`, `noindex`, httpOnly SameSite cookie, `X-Requested-With` marker on every API call, `textContent` rendering only (no HTML from the server or customer) |
 | Voice: browser tier | Push-to-talk speech recognition + "read replies aloud" where the browser supports it. Shown only when the campaign enables voice; falls back to text |
 | Voice: premium tier (LiveKit + OpenAI Realtime) | **Not wired to the page yet.** The setting exists; the existing browser Live test covers the agent. Needs gate 3 (owner approval) and LiveKit keys |
@@ -234,7 +236,9 @@ Campaigns themselves: `/api/v1/ai-calling/campaigns` with `channel: 'web_link'`.
 | `server/tests/unit/linkAssistant.api.test.js` (13) | HTTP end to end: authorise → link → open → chat → answers saved immediately → submit → lead qualified; streaming + cost + **daily cap pauses**; human-claim output replaced; opt-out → SMS suppression + link closed; **second device verify**; clientMessageId replay; expired/revoked/unknown/preview-bot; **kill switch**; sending hours; preview never touches the lead; CRM views + RBAC; abandoned → review; reminders |
 | `server/tests/unit/linkAssistant.browser.test.js` (5) | **Real headless Chromium, Pixel 7**: full flow, numeric keyboard, ≥44 px targets, offline → reconnect (no duplicate), Urdu RTL + opt-out button, **page-weight budget**, **first-token latency p50/p95** |
 | `mobile/src/features/linkAssistant/__tests__`, `communication/__tests__/contactFlows.test.ts` | `{link}` filled from the CRM; never sends a raw `{link}`; funnel stage; reminder grouping |
-| `client/src/modules/aiCalling/__tests__/link-assistant-panel.test.tsx` (3) | Funnel and per-question table, transcript + revoke, "Preview as customer" |
+| `server/tests/unit/linkAssistant.page.test.js` (12) | Real Chromium against the real template: no horizontal overflow and essential controls visible at 320/360/390/768/1440 px (English + Urdu), tap targets, Urdu RTL with LTR phone numbers, options menu Escape/focus, language switch updates wording + direction, server error → "Try again" with the same id, completed state |
+| `client/src/modules/aiCalling/__tests__/link-assistant-panel.test.tsx` (6) | Funnel step conversion, per-question table, server-side status filter, transcript + link activity (no "delivered" without a carrier report), revoke needs confirmation, error → retry, "Preview as customer" |
+| `client/e2e/link-assistant.spec.ts` (6, Playwright, mocked API) | CRM panel, conversation drawer and wizard at 360/768/1440 px: no overflow, filter, revoke confirmation, inline validation, live SMS preview, unsaved-changes guard. `LINK_E2E_SHOTS=<dir>` keeps screenshots |
 
 ---
 

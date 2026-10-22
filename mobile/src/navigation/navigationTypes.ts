@@ -52,7 +52,7 @@ export type RootStackParamList = {
   CallAudioCheck: undefined;
   CallCampaigns: undefined;
   MobileReadiness: undefined;
-  SmsQueue: { leadIds: string[] };
+  SmsQueue: { leadIds: string[]; linkCampaignId?: string; linkPurpose?: 'initial' | 'reminder' };
   CallCampaignCreate: { leadIds: string[] };
   CallCampaignDetail: { campaignId: string };
   CallCampaignRun: { campaignId: string };

@@ -1261,6 +1261,29 @@ export const de: Translations = {
     todayCount_one: '{{count}} heute',
     todayCount_other: '{{count}} heute',
   },
+  linkAssistant: {
+    title: 'SMS-Chat-Assistent',
+    review: 'Pr\u00fcfung n\u00f6tig',
+    confirmed: 'best\u00e4tigt',
+    unknown: 'Unbekannt',
+    noAnswers: 'Noch keine Antworten.',
+    yes: 'Ja',
+    no: 'Nein',
+    stage: {
+      issued: 'Link bereit',
+      sent: 'SMS gesendet',
+      delivered: 'Zugestellt',
+      opened: 'Ge\u00f6ffnet',
+      started: 'Im Chat',
+      completed: 'Abgeschlossen',
+      opted_out: 'Abgemeldet',
+      closed: 'Geschlossen',
+    },
+    reminders: {
+      title: '{{count}} Erinnerung(en) senden',
+      hint: '{{campaign}}: Leads, die den Chat nicht beendet haben',
+    },
+  },
   smsQueue: {
     title: 'Leads vom Telefon anschreiben',
     tile: 'Leads vom Telefon anschreiben',
@@ -1274,6 +1297,8 @@ export const de: Translations = {
     insert: {
       name: '+ Lead-Name',
       city: '+ Ort',
+      company: '+ Firma',
+      link: '+ Link',
     },
     missingValue:
       '{{placeholder}} ist bei {{count}} Lead(s) leer: {{names}}. Es fehlt in deren Nachricht – prüfen Sie den Text.',
@@ -1315,6 +1340,25 @@ export const de: Translations = {
     recentSkipped:
       '{{count}} Lead(s) wurden in den letzten 12 Stunden von diesem Telefon angeschrieben und werden übersprungen.',
     includeAll: 'Trotzdem einbeziehen',
+    autoPaused:
+      'Pausiert: Der Netzbetreiber hat {{count}} SMS nacheinander abgelehnt. SMS-Paket oder Guthaben pr\u00fcfen oder die andere SIM w\u00e4hlen.',
+    link: {
+      title: 'Pers\u00f6nlicher Chat-Link (optional)',
+      reminderTitle: 'Erinnerung zum Chat-Link',
+      hint: 'Jeder Lead erh\u00e4lt einen eigenen sicheren Link zu einem KI-Assistenten, der die Fragen der Kampagne stellt. Antworten werden beim Lead gespeichert.',
+      none: 'Kein Link',
+      templates: 'Fertige Texte',
+      missing: 'Der Link der Kampagne fehlt noch im Text: {link} einf\u00fcgen.',
+      noCampaign: 'Der Text enth\u00e4lt {link}, aber keine Link-Kampagne ist gew\u00e4hlt.',
+      language: {
+        en: 'English',
+        ur: '\u0627\u0631\u062f\u0648',
+        roman_ur: 'Roman Urdu',
+        fr: 'Fran\u00e7ais',
+        de: 'Deutsch',
+        ar: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629',
+      },
+    },
     status: {
       pending: 'Wartet',
       composer_open: 'In Nachrichten',

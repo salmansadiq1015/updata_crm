@@ -29,13 +29,22 @@ export type QueueItem = {
   recentlyTexted: boolean;
 };
 
-export const PLACEHOLDERS = ['name', 'city'] as const;
+// {link} is filled by the CRM at send time (the lead's personal SMS-link-assistant link).
+export const PLACEHOLDERS = ['name', 'city', 'company', 'link'] as const;
+/** Representative link length for previews and segment counts (22-character token). */
+export const SAMPLE_TOKEN = 'Xy7Kp2Qm9Ld4Rt6Vb1Nc8Z';
+/** Pause automatic sending after this many operator refusals in a row. */
+export const MAX_CONSECUTIVE_FAILURES = 3;
 export const AUTOMATIC_GAP_MS = 6_000; // pacing between automatic sends from one SIM
 export const RECENT_WINDOW_MS = 12 * 60 * 60_000;
 
-/** Fill {name} and {city}; an empty value never leaves a dangling space or comma. */
-export function personalize(template: string, lead: Pick<QueueLead, 'name' | 'city'>): string {
-  const values: Record<string, string> = { name: lead.name.trim(), city: (lead.city ?? '').trim() };
+/** Fill {name}, {city} and {company}; {link} stays until the CRM issues it. No dangling punctuation. */
+export function personalize(template: string, lead: Pick<QueueLead, 'name' | 'city'>, company = ''): string {
+  const values: Record<string, string> = {
+    name: lead.name.trim(),
+    city: (lead.city ?? '').trim(),
+    company: company.trim(),
+  };
   return template
     .replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? values[key]! : match))
     .replace(/[ \t]+([,.!?])/g, '$1')
@@ -93,3 +102,11 @@ export function counts(items: QueueItem[]) {
 export function setItem(items: QueueItem[], index: number, change: Partial<QueueItem>): QueueItem[] {
   return items.map((item, i) => (i === index ? { ...item, ...change } : item));
 }
+
+/** The text as the lead will receive it, with a representative link for the preview. */
+export function previewWithLink(text: string, baseUrl: string | null): string {
+  const base = (baseUrl || 'https://updata.behjja.com').replace(/\/+$/, '');
+  return text.split('{link}').join(`${base}/c/${SAMPLE_TOKEN}`);
+}
+
+export const hasLink = (template: string) => template.includes('{link}');

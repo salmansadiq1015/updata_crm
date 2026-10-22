@@ -24,6 +24,7 @@ import {
 } from '@/features/communication/services/contactFlows';
 import { useOperationsStore } from '@/features/communication/store/operationsStore';
 import { leadsApi } from '@/features/leads/api/leadsApi';
+import { linkAssistantApi } from '@/features/linkAssistant/api';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { ApiError } from '@/services/api/apiErrors';
 import { requestSendSmsPermission, telephony } from '@/services/telephony/telephonyService';
@@ -33,6 +34,9 @@ import {
   AUTOMATIC_GAP_MS,
   buildQueue,
   counts,
+  hasLink,
+  MAX_CONSECUTIVE_FAILURES,
+  previewWithLink,
   missingValues,
   nextIndex,
   personalize,
@@ -97,7 +101,38 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
   });
   const automaticAvailable = Boolean(caps.data?.smsPermissionsDeclared && caps.data.hasTelephony);
 
+  // SMS link assistant: an optional campaign whose personal link goes into each SMS ({link}).
+  const reminder = route.params.linkPurpose === 'reminder';
+  const [linkCampaignId, setLinkCampaignId] = useState<string | null>(route.params.linkCampaignId ?? null);
+  const linkCampaigns = useQuery({
+    queryKey: queryKeys.linkAssistant.campaigns,
+    queryFn: ({ signal }) => linkAssistantApi.campaigns(signal),
+  });
+  const linkSettings = useQuery({
+    queryKey: queryKeys.linkAssistant.settings,
+    queryFn: ({ signal }) => linkAssistantApi.settings(signal),
+    enabled: Boolean(linkCampaignId),
+  });
+  const templates = useQuery({
+    queryKey: queryKeys.linkAssistant.templates(linkCampaignId),
+    queryFn: ({ signal }) => linkAssistantApi.templates(linkCampaignId, signal),
+    enabled: Boolean(linkCampaignId),
+  });
+  const linkCampaign = linkCampaigns.data?.find((c) => c.id === linkCampaignId) ?? null;
+  const company = linkCampaign?.company ?? '';
+  const link = linkCampaignId
+    ? { campaignId: linkCampaignId, purpose: reminder ? ('reminder' as const) : ('initial' as const) }
+    : null;
+
   const [body, setBody] = useState('');
+  // Choosing a link campaign pre-fills its template in the campaign's language (editable).
+  const defaultTemplate =
+    templates.data?.find((tpl) => tpl.language === (linkCampaign?.defaultLanguage ?? 'en'))?.template ?? null;
+  const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
+  if (linkCampaignId && defaultTemplate && prefilledFor !== linkCampaignId && !body.trim()) {
+    setPrefilledFor(linkCampaignId);
+    setBody(defaultTemplate);
+  }
   const [mode, setMode] = useState<QueueMode>('composer');
   const [simId, setSimId] = useState<number | null>(null);
   const [phase, setPhase] = useState<'compose' | 'confirm' | 'running' | 'done'>('compose');
@@ -114,10 +149,15 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
   const loaded = leadQueries.every((q) => q.isSuccess || q.isError);
   const leads = leadQueries.flatMap((q) => (q.data ? [q.data] : []));
   const firstLead = leads[0];
-  const preview = firstLead
-    ? personalize(body, { name: firstLead.name, city: firstLead.address?.city ?? null })
-    : body;
+  const preview = previewWithLink(
+    firstLead
+      ? personalize(body, { name: firstLead.name, city: firstLead.address?.city ?? null }, company)
+      : body,
+    linkSettings.data?.baseUrl ?? null,
+  );
   const info = analyzeSms(preview);
+  const linkMissing = Boolean(linkCampaignId) && body.trim() !== '' && !hasLink(body);
+  const linkWithoutCampaign = !linkCampaignId && hasLink(body);
   const unknown = unknownPlaceholders(body);
   const missing = missingValues(
     body,
@@ -180,8 +220,17 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
       setPhase('compose');
       return;
     }
+    let refusedInARow = 0;
     for (let i = nextIndex(itemsRef.current); i !== -1; i = nextIndex(itemsRef.current)) {
       if (stopRef.current) break;
+      // Repeated operator refusals mean the SIM can't send (no SMS package / balance): stop
+      // instead of burning through the list.
+      if (refusedInARow >= MAX_CONSECUTIVE_FAILURES) {
+        stopRef.current = true;
+        setStopped(true);
+        setError(t('smsQueue.autoPaused', { count: refusedInARow }));
+        break;
+      }
       const item = itemsRef.current[i]!;
       update(setItem(itemsRef.current, i, { status: 'sending' }));
       try {
@@ -190,10 +239,12 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
           userId,
           lead: { id: lead.id, name: lead.name },
           destinationField: field,
-          body: personalize(body, item.lead),
+          body: personalize(body, item.lead, company),
           templateId: null,
           sim: chosenSim,
+          link,
         });
+        refusedInARow = result.status === 'failed' ? refusedInARow + 1 : 0;
         update(
           setItem(itemsRef.current, i, {
             operationId: result.operationId,
@@ -209,7 +260,7 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
       }
     }
     setPhase(nextIndex(itemsRef.current) === -1 ? 'done' : 'running');
-  }, [userId, t, update, body, chosenSim]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, t, update, body, chosenSim, company, linkCampaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- composer: open the Messages app for the next lead; the user reports what happened.
   const openComposer = async (index: number) => {
@@ -221,8 +272,9 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
         userId,
         lead: { id: lead.id, name: lead.name },
         destinationField: field,
-        body: personalize(body, item.lead),
+        body: personalize(body, item.lead, company),
         templateId: null,
+        link,
       });
       update(setItem(itemsRef.current, index, { status: 'composer_open', operationId }));
     } catch (e) {
@@ -232,7 +284,7 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
   const reportComposer = async (index: number, sent: boolean) => {
     const item = itemsRef.current[index]!;
     if (!item.operationId) return;
-    const text = personalize(body, item.lead);
+    const text = previewWithLink(personalize(body, item.lead, company), linkSettings.data?.baseUrl ?? null);
     const sms = analyzeSms(text);
     await submitOutcome(item.operationId, {
       disposition: sent ? 'sent' : 'not_sent',
@@ -271,6 +323,46 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
         <>
           <AppText tone="muted">{t('smsQueue.intro', { count: leadIds.length })}</AppText>
           {error ? <AppAlert tone="destructive" message={error} /> : null}
+          {linkCampaigns.data?.length || linkCampaignId ? (
+            <AppCard className="gap-3">
+              <SectionHeader title={reminder ? t('smsQueue.link.reminderTitle') : t('smsQueue.link.title')} />
+              <AppText variant="caption" tone="muted">
+                {t('smsQueue.link.hint')}
+              </AppText>
+              <View className="flex-row flex-wrap gap-2">
+                {!reminder ? (
+                  <AppChip
+                    label={t('smsQueue.link.none')}
+                    selected={!linkCampaignId}
+                    onPress={() => setLinkCampaignId(null)}
+                  />
+                ) : null}
+                {(linkCampaigns.data ?? []).map((campaign) => (
+                  <AppChip
+                    key={campaign.id}
+                    label={campaign.name}
+                    selected={linkCampaignId === campaign.id}
+                    onPress={() => setLinkCampaignId(campaign.id)}
+                  />
+                ))}
+              </View>
+              {linkCampaignId && templates.data?.length ? (
+                <View className="gap-2">
+                  <AppText variant="label">{t('smsQueue.link.templates')}</AppText>
+                  <View className="flex-row flex-wrap gap-2">
+                    {templates.data.map((tpl) => (
+                      <AppChip
+                        key={tpl.language}
+                        selected={body === tpl.template}
+                        label={t(`smsQueue.link.language.${tpl.language}` as never)}
+                        onPress={() => setBody(tpl.template)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </AppCard>
+          ) : null}
           <AppCard className="gap-3">
             <AppInput
               label={t('smsQueue.message')}
@@ -281,7 +373,10 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
               accessibilityLabel={t('smsQueue.message')}
             />
             <View className="flex-row flex-wrap gap-2">
-              {(['name', 'city'] as const).map((key) => (
+              {(linkCampaignId
+                ? (['name', 'city', 'company', 'link'] as const)
+                : (['name', 'city'] as const)
+              ).map((key) => (
                 <AppChip
                   key={key}
                   selected={false}
@@ -292,6 +387,10 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
                 />
               ))}
             </View>
+            {linkMissing ? <AppAlert tone="warning" message={t('smsQueue.link.missing')} /> : null}
+            {linkWithoutCampaign ? (
+              <AppAlert tone="destructive" message={t('smsQueue.link.noCampaign')} />
+            ) : null}
             {unknown.length ? (
               <AppAlert
                 tone="warning"
@@ -372,7 +471,11 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
             title={t('smsQueue.start', { count: leadIds.length })}
             leftIcon={Send}
             disabled={
-              !loaded || !leads.length || !body.trim() || (mode === 'automatic' && severalSims && !chosenSim)
+              !loaded ||
+              !leads.length ||
+              !body.trim() ||
+              linkWithoutCampaign ||
+              (mode === 'automatic' && severalSims && !chosenSim)
             }
             onPress={begin}
           />
@@ -461,7 +564,12 @@ export function SmsQueueScreen({ route, navigation }: RootScreenProps<'SmsQueue'
           ) : mode === 'composer' && next !== -1 ? (
             <AppCard className="gap-3">
               <AppText variant="title">{items[next]!.lead.name}</AppText>
-              <AppText tone="muted">{personalize(body, items[next]!.lead)}</AppText>
+              <AppText tone="muted">
+                {previewWithLink(
+                  personalize(body, items[next]!.lead, company),
+                  linkSettings.data?.baseUrl ?? null,
+                )}
+              </AppText>
               <AppButton
                 title={t('smsQueue.openMessages')}
                 leftIcon={MessageSquare}

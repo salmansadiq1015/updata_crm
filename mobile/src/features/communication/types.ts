@@ -234,11 +234,18 @@ export type Communication = z.infer<typeof communicationSchema>;
 
 /** POST /communications also returns the number exactly as the CRM stores it. */
 export const createdCommunicationSchema = z
-  .object({ dialNumber: z.string().nullish() })
+  .object({
+    dialNumber: z.string().nullish(),
+    // Present when the SMS carries a personal SMS-link-assistant link.
+    link: z
+      .object({ url: z.string(), expiresAt: z.string().nullish(), sessionId: z.string().nullish() })
+      .nullish(),
+  })
   .passthrough()
   .transform((raw) => ({
     communication: communicationSchema.parse(raw),
     dialNumber: raw.dialNumber ?? null,
+    link: raw.link ?? null,
   }));
 
 export const completeResponseSchema = z.object({

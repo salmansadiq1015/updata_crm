@@ -1,4 +1,5 @@
 import {
+  BellRing,
   Bot,
   FlaskConical,
   ListChecks,
@@ -32,6 +33,7 @@ import {
 import { rowCounts } from '@/features/aiAgent/screens/AiAgentCampaignsScreen';
 import { ACTIVE_CAMPAIGN_STATUSES } from '@/features/aiAgent/types';
 import { ActiveQueueBanner } from '@/features/callQueue/components/ActiveQueueBanner';
+import { useLinkReminders } from '@/features/linkAssistant/hooks';
 import { useActiveCallQueue } from '@/features/callQueue/hooks/useCallQueue';
 import { ReadinessSummaryCard } from '@/features/readiness/components/ReadinessSummaryCard';
 import type { MainTabScreenProps } from '@/navigation/navigationTypes';
@@ -89,6 +91,8 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
   // SIM call queue: resume the active one, otherwise choose leads for a new one.
   const activeQueue = useActiveCallQueue();
   const openCallQueue = () => (activeQueue.queue ? navigation.navigate('CallQueue') : pick('queue'));
+  // SMS link assistant: leads who have not finished their chat and are due a reminder SMS.
+  const reminders = useLinkReminders();
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh} contentClassName="gap-5 pt-3">
@@ -139,6 +143,22 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
             hint={t('smsQueue.tileHint')}
             onPress={() => pick('smsQueue')}
           />
+          {reminders.map((group) => (
+            <ActionTile
+              key={group.campaignId}
+              icon={BellRing}
+              tone="warning"
+              title={t('linkAssistant.reminders.title', { count: group.leadIds.length })}
+              hint={t('linkAssistant.reminders.hint', { campaign: group.campaignName })}
+              onPress={() =>
+                navigation.navigate('SmsQueue', {
+                  leadIds: group.leadIds,
+                  linkCampaignId: group.campaignId,
+                  linkPurpose: 'reminder',
+                })
+              }
+            />
+          ))}
           {privateBuild ? (
             <ActionTile
               icon={Smartphone}

@@ -75,8 +75,8 @@ function signIn(id: string) {
   });
 }
 
-function created(operationId: string) {
-  return { communication: { operationId } as never, dialNumber: '+41 44 000 00 00' };
+function created(operationId: string, link: { url: string } | null = null) {
+  return { communication: { operationId } as never, dialNumber: '+41 44 000 00 00', link };
 }
 
 beforeEach(async () => {
@@ -463,6 +463,33 @@ describe('startDirectSms (client / company builds: SEND_SMS from the SIM)', () =
     await flushOutbox();
     expect(sendNative.ackSmsJournal).toHaveBeenLastCalledWith(['smsq-gone']);
     expect(api.appendEvents).not.toHaveBeenCalled();
+  });
+
+  it('a link campaign: the CRM issues the personal link and it replaces {link} in the SMS', async () => {
+    api.create.mockImplementationOnce(async (_leadId, req) =>
+      created(req.operationId, { url: 'https://upd.example/c/AbCdEfGhIjKlMnOpQrStUv' }),
+    );
+    sendNative.sendSms.mockImplementationOnce(async (req: { messageId: string }) => {
+      setTimeout(() => statusListener?.({ messageId: req.messageId, status: 'sent' }), 0);
+      return { parts: 1 };
+    });
+    await startDirectSms({ ...input, body: 'Hi Ali, quick questions: {link}', link: { campaignId: 'c1' } });
+    expect(api.create).toHaveBeenCalledWith(
+      lead.id,
+      expect.objectContaining({ linkCampaignId: 'c1', linkPurpose: 'initial' }),
+    );
+    expect(sendNative.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'Hi Ali, quick questions: https://upd.example/c/AbCdEfGhIjKlMnOpQrStUv',
+      }),
+    );
+  });
+
+  it('never sends a raw {link}: no link from the CRM means nothing is sent', async () => {
+    await expect(startDirectSms({ ...input, body: 'Answer here: {link}' })).rejects.toMatchObject({
+      code: 'LINK_NOT_ISSUED',
+    });
+    expect(sendNative.sendSms).not.toHaveBeenCalled();
   });
 
   it('records a SIM send failure as device_failed / not_sent', async () => {

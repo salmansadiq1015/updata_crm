@@ -1231,6 +1231,29 @@ export const en = {
     todayCount_one: '{{count}} today',
     todayCount_other: '{{count}} today',
   },
+  linkAssistant: {
+    title: 'SMS chat assistant',
+    review: 'Needs review',
+    confirmed: 'confirmed',
+    unknown: 'Not known',
+    noAnswers: 'No answers yet.',
+    yes: 'Yes',
+    no: 'No',
+    stage: {
+      issued: 'Link ready',
+      sent: 'SMS sent',
+      delivered: 'Delivered',
+      opened: 'Opened',
+      started: 'Chatting',
+      completed: 'Completed',
+      opted_out: 'Opted out',
+      closed: 'Closed',
+    },
+    reminders: {
+      title: 'Send {{count}} reminder(s)',
+      hint: '{{campaign}}: leads who have not finished the chat',
+    },
+  },
   smsQueue: {
     title: 'Text leads from your phone',
     tile: 'Text leads from your phone',
@@ -1243,6 +1266,8 @@ export const en = {
     insert: {
       name: '+ Lead name',
       city: '+ City',
+      company: '+ Company',
+      link: '+ Link',
     },
     missingValue:
       '{{placeholder}} is empty for {{count}} lead(s): {{names}}. Their message will have it left out — check the wording.',
@@ -1282,6 +1307,25 @@ export const en = {
       'The phone network refused the SMS — usually no SMS balance or bundle on this SIM. Send one SMS from the Messages app with this SIM to check, or choose the other SIM.',
     recentSkipped: '{{count}} lead(s) were texted from this phone in the last 12 hours and are skipped.',
     includeAll: 'Include them',
+    autoPaused:
+      'Paused: the operator refused {{count}} SMS in a row. Check the SMS package or balance, or choose the other SIM.',
+    link: {
+      title: 'Personal chat link (optional)',
+      reminderTitle: 'Reminder for the chat link',
+      hint: "Each lead gets their own secure link to an AI assistant that asks the campaign's questions. Answers are saved to the lead.",
+      none: 'No link',
+      templates: 'Ready-made texts',
+      missing: "This campaign's link is not in the text yet: add {link}.",
+      noCampaign: 'The text contains {link} but no link campaign is chosen.',
+      language: {
+        en: 'English',
+        ur: '\u0627\u0631\u062f\u0648',
+        roman_ur: 'Roman Urdu',
+        fr: 'Fran\u00e7ais',
+        de: 'Deutsch',
+        ar: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629',
+      },
+    },
     status: {
       pending: 'Waiting',
       composer_open: 'In Messages',

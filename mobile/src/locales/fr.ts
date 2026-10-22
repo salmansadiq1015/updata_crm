@@ -1256,6 +1256,29 @@ export const fr: Translations = {
     todayCount_one: '{{count}} aujourd’hui',
     todayCount_other: '{{count}} aujourd’hui',
   },
+  linkAssistant: {
+    title: 'Assistant de chat par SMS',
+    review: '\u00c0 v\u00e9rifier',
+    confirmed: 'confirm\u00e9',
+    unknown: 'Inconnu',
+    noAnswers: 'Pas encore de r\u00e9ponses.',
+    yes: 'Oui',
+    no: 'Non',
+    stage: {
+      issued: 'Lien pr\u00eat',
+      sent: 'SMS envoy\u00e9',
+      delivered: 'Distribu\u00e9',
+      opened: 'Ouvert',
+      started: 'En discussion',
+      completed: 'Termin\u00e9',
+      opted_out: 'D\u00e9sinscrit',
+      closed: 'Ferm\u00e9',
+    },
+    reminders: {
+      title: 'Envoyer {{count}} rappel(s)',
+      hint: "{{campaign}} : prospects qui n'ont pas termin\u00e9 le chat",
+    },
+  },
   smsQueue: {
     title: 'Écrire aux leads depuis le téléphone',
     tile: 'Écrire aux leads depuis le téléphone',
@@ -1269,6 +1292,8 @@ export const fr: Translations = {
     insert: {
       name: '+ Nom du lead',
       city: '+ Ville',
+      company: '+ Entreprise',
+      link: '+ Lien',
     },
     missingValue:
       '{{placeholder}} est vide pour {{count}} lead(s) : {{names}}. Il sera omis de leur message — vérifiez la formulation.',
@@ -1311,6 +1336,25 @@ export const fr: Translations = {
     recentSkipped:
       '{{count}} prospect(s) ont reçu un SMS de ce téléphone dans les 12 dernières heures et sont ignorés.',
     includeAll: 'Les inclure',
+    autoPaused:
+      "En pause : l'op\u00e9rateur a refus\u00e9 {{count}} SMS d'affil\u00e9e. V\u00e9rifiez le forfait ou le cr\u00e9dit SMS, ou choisissez l'autre SIM.",
+    link: {
+      title: 'Lien de chat personnel (facultatif)',
+      reminderTitle: 'Rappel pour le lien de chat',
+      hint: 'Chaque prospect re\u00e7oit son propre lien s\u00e9curis\u00e9 vers un assistant IA qui pose les questions de la campagne. Les r\u00e9ponses sont enregistr\u00e9es sur le prospect.',
+      none: 'Pas de lien',
+      templates: 'Textes pr\u00eats',
+      missing: 'Le lien de la campagne manque dans le texte : ajoutez {link}.',
+      noCampaign: "Le texte contient {link} mais aucune campagne de lien n'est choisie.",
+      language: {
+        en: 'English',
+        ur: '\u0627\u0631\u062f\u0648',
+        roman_ur: 'Roman Urdu',
+        fr: 'Fran\u00e7ais',
+        de: 'Deutsch',
+        ar: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629',
+      },
+    },
     status: {
       pending: 'En attente',
       composer_open: 'Dans Messages',

@@ -87,6 +87,14 @@ export const ENDPOINTS = {
     callbacks: '/sim-calls/callbacks',
     leadTasks: (leadId: string) => `/sim-calls/leads/${encodeURIComponent(leadId)}/tasks`,
   },
+  // SMS link assistant (server/src/modules/linkAssistant): personal chat links sent by SMS.
+  linkAssistant: {
+    settings: '/link-assistant/settings',
+    templates: '/link-assistant/templates',
+    remindersDue: '/link-assistant/reminders/due',
+    session: (id: string) => `/link-assistant/sessions/${encodeURIComponent(id)}`,
+    leadSessions: (leadId: string) => `/link-assistant/leads/${encodeURIComponent(leadId)}/sessions`,
+  },
   // AI SMS agent over THIS phone's SIM (server/src/modules/simSms). Private build only.
   simSms: {
     campaigns: '/sim-sms/campaigns',

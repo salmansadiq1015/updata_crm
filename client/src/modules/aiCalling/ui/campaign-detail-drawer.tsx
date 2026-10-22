@@ -76,7 +76,7 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
                   </div>
                   {campaign.description ? <p className="mt-0.5 text-xs text-muted-foreground">{campaign.description}</p> : null}
                 </div>
-                <button type="button" onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+                <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
               </div>
 
               {/* lifecycle actions */}
@@ -119,7 +119,7 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
             </div>
 
             {/* tabs */}
-            <div className="flex gap-1 border-b border-border px-4">
+            <div className="flex gap-1 overflow-x-auto border-b border-border px-4 [scrollbar-width:none]" role="tablist" aria-label="Campaign sections">
               <TabButton active={tab === 'overview'} onClick={() => setTab('overview')} icon={ListChecks} label="Overview" />
               {isLink ? <TabButton active={tab === 'link'} onClick={() => setTab('link')} icon={MessageSquareText} label="SMS link chats" /> : null}
               <TabButton active={tab === 'recipients'} onClick={() => setTab('recipients')} icon={Phone} label="Recipients" />
@@ -274,7 +274,7 @@ function RecipientsTab({ campaignId }: { campaignId: string }) {
 
 function TabButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: React.ComponentType<{ className?: string }>; label: string }) {
   return (
-    <button type="button" onClick={onClick} className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition ${active ? 'border-brand-500 text-brand-500' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+    <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition ${active ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
       <Icon className="h-4 w-4" /> {label}
     </button>
   );

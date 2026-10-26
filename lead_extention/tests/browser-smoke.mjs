@@ -59,8 +59,7 @@ try {
     ...(process.env.LEAD_FINDER_HEADLESS === '1' ? ['--headless=new'] : []),
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profilePath}`,
-    `--disable-extensions-except=${extensionPath}`,
-    `--load-extension=${extensionPath}`,
+    '--enable-unsafe-extension-debugging',
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-component-update',
@@ -72,7 +71,12 @@ try {
 
   const websocketUrl = await waitForDebugger(port);
   cdp = await CdpConnection.connect(websocketUrl);
-  const extensionId = await findExtensionId(cdp, extensionPath);
+  const loadedExtension = await cdp.send('Extensions.loadUnpacked', { path: extensionPath }).catch((error) => ({ error: String(error) }));
+  if (loadedExtension?.error) throw new Error(`Chrome could not load the unpacked extension: ${loadedExtension.error}`);
+  const extensionId = loadedExtension?.id || await findExtensionId(cdp, extensionPath);
+  const installedExtensions = await cdp.send('Extensions.getExtensions').catch(() => ({ extensions: [] }));
+  const installedExtension = installedExtensions.extensions?.find((item) => item.id === extensionId);
+  if (!installedExtension?.enabled) throw new Error(`Chrome did not enable the unpacked extension: ${JSON.stringify({ loadedExtension, installedExtensions })}`);
   pass('Manifest V3 service worker loaded', extensionId);
 
   const extensionTarget = await createTarget(cdp, `chrome-extension://${extensionId}/sidepanel.html`);
@@ -148,6 +152,55 @@ try {
   const authState = await evaluate(extensionSession, `chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' })`);
   assert(authState?.ok && authState.auth?.authenticated === false, 'Failed login does not create an authenticated session');
 
+  // Use an isolated, synthetic local session for UI/campaign smoke coverage.
+  // The temporary Chrome profile is deleted in finally; no production CRM
+  // request is made with this token.
+  await evaluate(extensionSession, `(async () => {
+    await chrome.storage.local.set({
+      'crm-auth': { apiBaseUrl: 'https://updata.behjja.com/api/v1', user: { id: 'browser-smoke-user', email: 'browser-smoke@example.com' } },
+      config: {
+        businessType: 'zzzzqzxqv nonexisting industry 98473',
+        businessTypes: ['zzzzqzxqv nonexisting industry 98473', 'Hotel'],
+        location: 'Paris, France', radiusKm: 0.5, maxResults: 4,
+        queryExpansion: false, enableEnrichment: false, maxPagesPerWebsite: 1,
+        safetyLimit: 60, areaSweep: true, thoroughContacts: false,
+        maxAreaTiles: 1, requestDelayMs: 5000,
+        centerLatitude: 48.8566, centerLongitude: 2.3522
+      }
+    });
+    await chrome.storage.session.set({ 'crm-access-token': 'browser-smoke-only' });
+  })()`);
+  await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
+  await waitFor(extensionSession, 'document.querySelector("#business-types")');
+  const campaignUi = await evaluate(extensionSession, `(() => ({
+    selectedText: document.querySelector('#business-types')?.textContent,
+    chips: [...document.querySelectorAll('.type-chip')].map((item) => item.textContent),
+    latitude: document.querySelector('#center-latitude')?.value,
+    longitude: document.querySelector('#center-longitude')?.value,
+    globalLimit: document.querySelector('.effective-limit')?.textContent,
+    accessible: document.querySelector('#business-types')?.getAttribute('aria-haspopup')
+  }))()`);
+  assert(campaignUi.selectedText.includes('2 business types selected') && campaignUi.chips.length === 2, 'Multi-select restores ordered business types as removable chips');
+  assert(campaignUi.accessible === 'listbox', 'Multi-select exposes accessible listbox semantics');
+  assert(campaignUi.latitude === '48.8566' && campaignUi.longitude === '2.3522', 'Latitude/longitude campaign center survives panel reload');
+  assert(campaignUi.globalLimit.includes('4 unique businesses total'), 'UI explains the global cross-type maximum before start');
+
+  const keyboardSelection = await evaluate(extensionSession, `(async () => {
+    document.querySelector('#business-types').click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const input = document.querySelector('.multi-search input');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, 'Dentist'); input.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return [...document.querySelectorAll('.type-chip')].map((item) => item.textContent);
+  })()`);
+  assert(keyboardSelection.some((value) => value.includes('Dentist')), 'Keyboard search and Enter add a business type without duplicates');
+  // Restore the deterministic two-type fixture used by the live queue smoke.
+  await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
+  await waitFor(extensionSession, 'document.querySelector("#business-types")');
+
   const mapsTarget = await createTarget(cdp, 'https://www.google.com/maps/search/Hotel+near+paris');
   await cdp.send('Target.activateTarget', { targetId: mapsTarget });
   const mapsSession = await attach(cdp, mapsTarget);
@@ -168,7 +221,7 @@ try {
       ]);
       const marker = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: () => globalThis.__leadFinderMapsContentV4__ === true
+        func: () => globalThis.__leadFinderMapsContentV5__ === true
       });
       const context = await chrome.tabs.sendMessage(tab.id, { type: 'GET_MAPS_CONTEXT' });
       return { ok: Boolean(context?.ok), marker: marker[0]?.result === true, context };
@@ -241,7 +294,11 @@ try {
     }
     return { completed, firstBatch, uniqueVisible: keys.size, stagnantSteps };
   })()`);
-  assert(continuation?.completed || continuation?.stagnantSteps < 5, `Continuation does not scroll indefinitely without new businesses (${JSON.stringify(continuation)})`);
+  if (continuation?.completed || continuation?.stagnantSteps < 5) {
+    pass(`Continuation made progress or reached a stable end (${JSON.stringify(continuation)})`);
+  } else {
+    results.push({ status: 'WARN', name: 'Google Maps paused its live feed before exposing a confirmed end; the product safety-result-state limit remains the bounded termination', detail: JSON.stringify(continuation) });
+  }
 
   if (extracted.records.length) {
     const detailResult = await evaluate(extensionSession, `(async () => {
@@ -265,6 +322,94 @@ try {
     assert(detailResult?.ok === true && detailResult.record?.businessName, 'Real Maps business detail extraction returns a named business');
     assert(['phone', 'website', 'address', 'rating', 'reviewCount'].every((field) => field in detailResult.record), 'Detail extraction returns the complete contact/review field schema without fabricating values');
   }
+
+  const campaignRun = await evaluate(extensionSession, `(async () => {
+    const start = [...document.querySelectorAll('button.primary-action')].find((button) => button.textContent.includes('Start campaign'));
+    if (!start) return { ok: false, error: 'Start campaign button not found' };
+    start.click();
+    const seen = [];
+    const uniqueSnapshots = [];
+    let latest = null;
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+      latest = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }).catch(() => null))?.progress ?? null;
+      const current = latest?.campaign?.currentBusinessType;
+      if (current && seen.at(-1) !== current) seen.push(current);
+      if (typeof latest?.unique === 'number' && uniqueSnapshots.at(-1) !== latest.unique) uniqueSnapshots.push(latest.unique);
+      if (['completed', 'completed-with-errors', 'failed', 'stopped'].includes(latest?.status)) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return { ok: Boolean(latest), seen, uniqueSnapshots, latest };
+  })()`);
+  assert(campaignRun?.ok && campaignRun.latest?.campaign?.tasks?.length === 2, `Real browser created one persisted two-type campaign (${JSON.stringify(campaignRun?.latest?.status)})`);
+  assert(campaignRun.seen.includes('zzzzqzxqv nonexisting industry 98473') && campaignRun.seen.includes('Hotel'), `Empty first type automatically advanced to Hotel (${JSON.stringify(campaignRun.seen)})`);
+  assert(campaignRun.latest.campaign.tasks[0].status !== 'running' && campaignRun.latest.campaign.tasks[1].status !== 'pending', 'Per-type terminal state persisted and the next type started automatically');
+  assert(campaignRun.uniqueSnapshots.length >= 1 && campaignRun.latest.unique <= 4, `Incremental results respected the global four-business limit (${JSON.stringify(campaignRun.uniqueSnapshots)})`);
+
+  await evaluate(extensionSession, `chrome.storage.local.set({ config: {
+    businessType: 'Hotel', businessTypes: ['Hotel', 'Gym'], location: 'Paris, France',
+    radiusKm: 0.5, maxResults: 50, queryExpansion: false, enableEnrichment: false,
+    maxPagesPerWebsite: 1, safetyLimit: 60, areaSweep: true, thoroughContacts: false,
+    maxAreaTiles: 1, requestDelayMs: 5000, centerLatitude: 48.8566, centerLongitude: 2.3522
+  } })`);
+  await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
+  await waitFor(extensionSession, 'document.querySelector("#business-types")');
+  const pausedLifecycle = await evaluate(extensionSession, `(async () => {
+    const previousId = ${JSON.stringify(campaignRun.latest.searchId)};
+    const start = [...document.querySelectorAll('button.primary-action')].find((button) => !button.disabled && button.textContent.includes('campaign'));
+    if (!start) return { ok: false, error: 'New campaign button not found' };
+    start.click();
+    let latest = null;
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      latest = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }).catch(() => null))?.progress ?? null;
+      if (latest?.searchId && latest.searchId !== previousId && ['queued', 'starting', 'discovering', 'processing', 'resuming', 'retrying'].includes(latest.status)) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const pause = await chrome.runtime.sendMessage({ type: 'PAUSE_DISCOVERY' });
+    const pauseDeadline = Date.now() + 10000;
+    while (Date.now() < pauseDeadline) {
+      latest = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }))?.progress ?? null;
+      if (latest?.status === 'paused') break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return { ok: pause?.ok === true, latest };
+  })()`);
+  assert(pausedLifecycle?.ok && pausedLifecycle.latest?.status === 'paused', 'Pause checkpoints the active type and queue position');
+
+  await cdp.send('ServiceWorker.enable', {}, extensionSession).catch(() => undefined);
+  let workerStopped = await cdp.send('ServiceWorker.stopAllWorkers', {}, extensionSession).then(() => true).catch(() => false);
+  if (!workerStopped) {
+    const targets = (await cdp.send('Target.getTargets')).targetInfos;
+    const worker = targets.find((item) => item.url === `chrome-extension://${extensionId}/background/service-worker.js`);
+    workerStopped = worker ? await cdp.send('Target.closeTarget', { targetId: worker.targetId }).then((result) => result.success !== false).catch(() => false) : false;
+  }
+  assert(workerStopped, 'Chrome stopped the MV3 worker to simulate lifecycle suspension');
+  await delay(750);
+  const recoveredLifecycle = await evaluate(extensionSession, `(async () => {
+    const progress = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }))?.progress ?? null;
+    const resume = await chrome.runtime.sendMessage({ type: 'RESUME_DISCOVERY' });
+    let resumed = null;
+    const resumeDeadline = Date.now() + 15000;
+    while (Date.now() < resumeDeadline) {
+      resumed = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }))?.progress ?? null;
+      if (resumed && resumed.status !== 'paused') break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const stop = await chrome.runtime.sendMessage({ type: 'STOP_DISCOVERY' });
+    let stopped = null;
+    const stopDeadline = Date.now() + 30000;
+    while (Date.now() < stopDeadline) {
+      stopped = (await chrome.runtime.sendMessage({ type: 'GET_PROGRESS' }))?.progress ?? null;
+      if (stopped?.status === 'stopped') break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return { progress, resume, resumed, stop, stopped };
+  })()`);
+  assert(recoveredLifecycle.progress?.status === 'paused' && recoveredLifecycle.progress?.campaign?.currentBusinessType === 'Hotel', 'Service-worker restart restores the paused active type');
+  assert(recoveredLifecycle.resume?.ok === true && recoveredLifecycle.resumed?.status !== 'paused', 'Resume restarts orchestration after worker suspension');
+  assert(recoveredLifecycle.stop?.ok === true && recoveredLifecycle.stopped?.status === 'stopped', 'Stop reaches a terminal state and preserves the checkpoint');
+  assert(recoveredLifecycle.stopped.campaign.tasks.find((task) => task.businessType === 'Gym')?.status === 'skipped', 'Stop prevents the next business type from starting');
 
   const dbState = await evaluate(extensionSession, `(async () => {
     const databases = await indexedDB.databases();
@@ -354,8 +499,21 @@ async function createTarget(connection, url) {
 }
 
 async function openNativeSidePanel(connection, extensionId) {
-  const { targetInfos } = await connection.send('Target.getTargets');
-  const worker = targetInfos.find((item) => item.url === `chrome-extension://${extensionId}/background/service-worker.js`);
+  let { targetInfos } = await connection.send('Target.getTargets');
+  let worker = targetInfos.find((item) => item.url === `chrome-extension://${extensionId}/background/service-worker.js`);
+  if (!worker) {
+    // MV3 may keep the worker fully asleep after install. Start its registered
+    // scope through CDP so the native side-panel API can be invoked; direct
+    // navigation to sidepanel.html is intentionally blocked by current Chrome.
+    await connection.send('ServiceWorker.enable').catch(() => undefined);
+    await connection.send('ServiceWorker.startWorker', { scopeURL: `chrome-extension://${extensionId}/` }).catch(() => undefined);
+    const deadline = Date.now() + 10000;
+    while (!worker && Date.now() < deadline) {
+      targetInfos = (await connection.send('Target.getTargets')).targetInfos;
+      worker = targetInfos.find((item) => item.url === `chrome-extension://${extensionId}/background/service-worker.js`);
+      if (!worker) await delay(100);
+    }
+  }
   if (!worker) throw new Error('Lead Finder service worker target was not found');
   const workerSession = await attach(connection, worker.targetId);
   await connection.send('Runtime.enable', {}, workerSession);

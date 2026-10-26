@@ -1,6 +1,6 @@
 # Lead Finder — local-first Maps discovery + CRM
 
-This is the existing MV3 React/TypeScript extension, hardened for Google Maps SPA navigation and connected to the application's authenticated CRM.
+This is the existing MV3 React/TypeScript extension, hardened for Google Maps SPA navigation and connected to the application's authenticated CRM. Version 0.6.0 adds persistent, sequential multi-business-type campaigns.
 
 ## Build
 
@@ -16,6 +16,11 @@ Install `dist/` through `chrome://extensions` → Developer mode → Load unpack
 
 ## Discovery behavior
 
+- Choose one or more searchable business types. The selected chip order is the execution order; each type reaches a real terminal state before the worker starts the next one.
+- Location, radius, scanning, contact hydration, and query expansion are shared by the campaign. Optional latitude/longitude supplies the exact area-scan center while the area/city/address remains the human-readable query context.
+- **Maximum results is one global unique-business cap for the campaign**, not a per-type allowance. Pending types are skipped when that cap is reached.
+- The unified result list updates after each committed business. Cross-type duplicates keep one record and accumulate their search categories.
+- The campaign and per-type states support pause, resume, stop, bounded retry, service-worker reconstruction, and individual failed-type retry.
 - The service worker persists the active `SearchRecord` and local leads in IndexedDB.
 - URL changes, history navigation, pushState/replaceState, DOM replacement, delayed results, infinite scroll, and detail navigation are treated as recoverable Maps state changes.
 - The state machine waits, retries with exponential backoff, extracts, deduplicates, checkpoints, and only completes after settled no-new-result checks or an explicit termination condition.
@@ -86,4 +91,4 @@ justified below; broad host access is **optional** and requested at runtime.
 
 Maps host access is limited to Google Maps. The service worker is the only extension component that contacts the CRM API; access tokens and refresh tokens are not sent to Maps pages. No API keys, backend secrets, or passwords are bundled.
 
-See [AUDIT_REPORT.md](./AUDIT_REPORT.md) for root causes, implementation details, evidence, and the live-test boundary.
+See [MULTI_BUSINESS_DISCOVERY_REPORT.md](./MULTI_BUSINESS_DISCOVERY_REPORT.md) for the current audit, architecture, test evidence, browser verification, migration, and known limitations. The earlier hardening history remains in [AUDIT_REPORT.md](./AUDIT_REPORT.md).

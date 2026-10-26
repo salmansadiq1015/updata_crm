@@ -74,7 +74,8 @@ export const CSV_HEADERS = [
   'Source',
   'Email Source',
   'Email Confidence',
-  'Discovered At'
+  'Discovered At',
+  'Search Categories'
 ] as const;
 
 // The editable column order used by the CRM import template, plus the extra

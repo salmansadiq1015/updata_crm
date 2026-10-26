@@ -11,6 +11,7 @@ const valueFor = (lead: Lead, header: string): string | number => {
   const num = (value: number | null | undefined): string | number => (typeof value === 'number' && Number.isFinite(value) ? value : '');
   const values: Record<string, string | number | null> = {
     'Business Name': lead.businessName,
+    'Search Categories': (lead.discoveryCategories ?? []).join('; '),
     Category: lead.category,
     Phone: lead.phone,
     'International Phone': lead.internationalPhone,
@@ -56,7 +57,8 @@ export function createXlsx(leads: Lead[], search: SearchRecord | null): ArrayBuf
   const sheets = [
     { name: 'Leads', rows: [CSV_HEADERS as readonly (string | number)[], ...rows] },
     { name: 'Summary', rows: [['Metric', 'Value'], ['Total discovered', summary.totalDiscovered], ['Unique leads', summary.uniqueLeads], ['Phone available', summary.phoneAvailable], ['Website available', summary.websiteAvailable], ['Email available', summary.emailAvailable], ['Average rating', summary.averageRating ?? '']] },
-    { name: 'Search Details', rows: search ? [['Business type', search.businessType], ['Location', search.location], ['Radius', search.radiusKm ? `${search.radiusKm} km` : 'Not specified'], ['Search query', search.query], ['Started', search.startedAt], ['Completed', search.completedAt ?? '']] : [] }
+    { name: 'Search Details', rows: search ? [['Business types', search.businessTypes?.join(' | ') || search.campaign?.selectedBusinessTypes.join(' | ') || search.businessType], ['Location', search.location], ['Radius', search.radiusKm ? `${search.radiusKm} km` : 'Not specified'], ['Global maximum', search.campaign?.globalMaxResults ?? search.config?.maxResults ?? ''], ['Search query', search.query], ['Started', search.startedAt], ['Completed', search.completedAt ?? '']] : [] },
+    { name: 'Campaign Types', rows: search?.campaign ? [['Order', 'Business type', 'Status', 'Discovered', 'New unique', 'Duplicates', 'Invalid', 'Enriched', 'Enrichment failed', 'Error'], ...search.campaign.tasks.map((task) => [task.order + 1, task.businessType, task.status, task.resultCount, task.newCount, task.duplicateCount, task.invalidCount, task.enrichmentCompleted, task.enrichmentFailed, task.error ?? ''])] : [['Order', 'Business type', 'Status']] }
   ];
   return buildXlsx(sheets);
 }
@@ -156,6 +158,6 @@ export function downloadBlob(content: BlobPart, mimeType: string, filename: stri
 }
 
 export function filenameFor(search: SearchRecord | null, extension: 'csv' | 'xlsx'): string {
-  const prefix = search ? `${search.businessType}-${search.location}` : 'leads';
+  const prefix = search ? `${search.businessTypes?.join('-') || search.businessType}-${search.location}` : 'leads';
   return `${slugify(prefix)}-${new Date().toISOString().slice(0, 10)}.${extension}`;
 }

@@ -30,9 +30,25 @@ import {
   splitIntoBatches,
   upgradeCheckpoint,
 } from '../shared/discovery-checkpoint';
+import {
+  MAX_BUSINESS_TYPE_ATTEMPTS,
+  completeTask,
+  createCampaign,
+  ensureCampaign,
+  failTask,
+  finishCampaign,
+  nextRunnableTask,
+  normalizeBusinessTypes,
+  retryTask,
+  skipPendingTasks,
+  startTask,
+  syncCampaignTotals,
+  updateTaskStage,
+} from '../shared/campaign';
 import { makeLead, dedupeKey, isSameLead, mergeLead } from '../shared/normalize';
 import type {
   CrmImportProgress,
+  BusinessTypeTask,
   DiscoveryConfig,
   DiscoveryPhase,
   DiscoveryProgress,
@@ -70,7 +86,7 @@ const MAX_RESULT_WAIT_RETRIES = 6;
 // Consecutive failed detail-page reads before per-business hydration is paused
 // for the rest of the run (keeps a broken-detail run fast and complete).
 const DETAIL_FAILURE_LIMIT = 6;
-const ACTIVE_STATUSES = new Set(['starting', 'discovering', 'paused', 'processing', 'resuming', 'retrying', 'enriching']);
+const ACTIVE_STATUSES = new Set(['queued', 'starting', 'discovering', 'paused', 'processing', 'resuming', 'retrying', 'enriching']);
 
 type Job = {
   search: SearchRecord;
@@ -97,9 +113,12 @@ type Job = {
   // never a bare `/maps/search/<type>`, which Google resolves around the
   // user's own location (the "Paris sweep opens Lahore hotels" bug).
   resultsUrl: string | null;
+  /** Distinguishes a live paused loop from a paused job reconstructed after MV3 suspension. */
+  runActive: boolean;
 };
 
 let activeJob: Job | null = null;
+let startInFlight = false;
 let activeCrmImport: CrmImportProgress | null = null;
 const contentScriptInjectionByTab = new Map<number, Promise<void>>();
 
@@ -179,6 +198,11 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string
     case 'RETRY_DISCOVERY':
       void retryDiscovery().then(sendResponse);
       return true;
+    case 'RETRY_BUSINESS_TYPE': {
+      const value = message as Extract<ExtensionMessage, { type: 'RETRY_BUSINESS_TYPE' }>;
+      void retryBusinessType(value.businessType).then(sendResponse);
+      return true;
+    }
     case 'PAUSE_DISCOVERY':
       void pauseDiscovery().then(() => sendResponse({ ok: true }));
       return true;
@@ -186,8 +210,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string
       void resumeDiscovery().then((response) => sendResponse(response));
       return true;
     case 'STOP_DISCOVERY':
-      if (activeJob) { activeJob.stopped = true; activeJob.search.stopRequested = true; activeJob.resumeResolvers.splice(0).forEach((resolve) => resolve()); void persistJob(activeJob); }
-      void publishProgress('Stopping discovery…').then(() => sendResponse({ ok: true }));
+      void stopDiscovery().then(() => sendResponse({ ok: true }));
       return true;
     case 'GET_PROGRESS':
       void getProgressResponse().then((progress) => sendResponse({ ok: true, progress }));
@@ -237,52 +260,95 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string
 });
 
 async function startDiscovery(config: DiscoveryConfig): Promise<{ ok: boolean; error?: string; searchId?: string }> {
-  if (!(await getAuthState()).authenticated) return { ok: false, error: 'Log in to the CRM before starting discovery.' };
-  if (activeJob) return { ok: false, error: 'A discovery session is already running.' };
-  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  const tab = tabs[0];
-  if (!tab?.id || !isMapsUrl(tab.url)) return { ok: false, error: 'Open Google Maps in the active tab before starting discovery.' };
-  await ensureMapsContentScript(tab.id);
-  const context = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
-  // Location is explicit user input. Never replace an empty value with a Maps
-  // query: a query such as "Hotel" is a business type, not a geocodable place.
-  const explicitLocation = config.location.trim();
-  const usesMapsContext = explicitLocation.toLowerCase() === 'current maps context';
-  const effectiveConfig: DiscoveryConfig = {
-    ...config,
-    location: usesMapsContext ? '' : explicitLocation,
-    selectedCenter: usesMapsContext
-      ? (config.selectedCenter ?? context?.context?.centerCoordinates ?? null)
-      : null,
-  };
-  if (!config.businessType.trim()) return { ok: false, error: 'Enter a business type before starting discovery.' };
-  const searchId = crypto.randomUUID();
-  const query = buildDiscoveryQueries(effectiveConfig, context?.context)[0];
-  const initialCenter = effectiveConfig.selectedCenter ?? context?.context?.centerCoordinates ?? parseCoordinates(tab.url ?? '');
-  const search: SearchRecord = {
-    id: searchId, businessType: config.businessType, location: explicitLocation || 'Current Maps context',
-    radiusKm: config.radiusKm, query, startedAt: nowIso(), completedAt: null, status: 'starting',
-    discoveredCount: 0, uniqueCount: 0, duplicateCount: 0, exportedCount: 0, tabId: tab.id, lastActivityAt: nowIso(),
-    currentPhase: 'SEARCH_INITIALIZED', currentQuery: query, currentPage: 0, currentStateKey: tab.url,
-    currentResultIndex: 0, checkpointVersion: CHECKPOINT_VERSION, queryIndex: 0, processedResultKeys: [], processedCount: 0, currentBatchSize: 0,
-    retryCount: 0, stableRounds: 0, scrollTop: 0, scrollHeight: 0, firstVisibleResultKey: null,
-    lastVisibleResultKey: null, lastSuccessfulResultKey: null, lastSuccessfulUrl: null,
-    lastSuccessfulTimestamp: null, updatedAt: nowIso(), stopRequested: false, error: null,
-    resolvedCenter: usesMapsContext ? initialCenter : null,
-    rejectedOutOfAreaCount: 0, unverifiedLocationCount: 0,
-    config: effectiveConfig,
-  };
-  await SearchRepository.save(search);
-  activeJob = makeJob(search, tab.id, effectiveConfig, [], initialCenter);
-  await chrome.alarms.create(DISCOVERY_ALARM, { periodInMinutes: 0.5 });
-  void runDiscovery(activeJob);
-  return { ok: true, searchId };
+  if (startInFlight) return { ok: false, error: 'A discovery campaign is already starting.' };
+  startInFlight = true;
+  try {
+    if (!(await getAuthState()).authenticated) return { ok: false, error: 'Log in to the CRM before starting discovery.' };
+    if (activeJob || await hasActiveSearch()) {
+      await recoverDiscovery();
+      return { ok: false, error: 'A discovery campaign is already running.' };
+    }
+    const businessTypes = normalizeBusinessTypes(config);
+    if (!businessTypes.length) return { ok: false, error: 'Select at least one business type before starting discovery.' };
+    if (!Number.isFinite(config.maxResults) || config.maxResults < 1 || config.maxResults > 5_000) return { ok: false, error: 'Maximum results must be between 1 and 5,000.' };
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const tab = tabs[0];
+    if (!tab?.id || !isMapsUrl(tab.url)) return { ok: false, error: 'Open Google Maps in the active tab before starting discovery.' };
+    await ensureMapsContentScript(tab.id);
+    const context = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+    // Location is explicit user input. Never replace an empty value with a Maps
+    // query: a query such as "Hotel" is a business type, not a geocodable place.
+    const explicitLocation = config.location.trim();
+    const usesMapsContext = explicitLocation.toLowerCase() === 'current maps context';
+    const typedCenterProvided = config.centerLatitude !== null && config.centerLatitude !== undefined
+      || config.centerLongitude !== null && config.centerLongitude !== undefined;
+    const typedCenter = typedCenterProvided
+      ? { latitude: Number(config.centerLatitude), longitude: Number(config.centerLongitude) }
+      : null;
+    if (typedCenterProvided && !validCenter(typedCenter)) return { ok: false, error: 'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).' };
+    if (typedCenter && config.areaSweep === false) return { ok: false, error: 'Enable “Scan the entire area” to use a latitude/longitude center.' };
+    const suppliedCenter = typedCenter ?? (validCenter(config.selectedCenter) ? config.selectedCenter! : null);
+    const effectiveConfig: DiscoveryConfig = {
+      ...config,
+      businessType: businessTypes[0],
+      businessTypes,
+      location: usesMapsContext ? '' : explicitLocation,
+      selectedCenter: suppliedCenter ?? (usesMapsContext ? context?.context?.centerCoordinates ?? null : null),
+    };
+    const searchId = crypto.randomUUID();
+    const query = buildDiscoveryQueries(effectiveConfig, context?.context)[0];
+    const initialCenter = effectiveConfig.selectedCenter ?? context?.context?.centerCoordinates ?? parseCoordinates(tab.url ?? '');
+    const timestamp = nowIso();
+    const search: SearchRecord = {
+      id: searchId, businessType: businessTypes.join(', '), businessTypes, location: explicitLocation || (suppliedCenter ? `${suppliedCenter.latitude.toFixed(5)}, ${suppliedCenter.longitude.toFixed(5)}` : 'Current Maps context'),
+      radiusKm: config.radiusKm, query, startedAt: timestamp, completedAt: null, status: 'queued',
+      discoveredCount: 0, uniqueCount: 0, duplicateCount: 0, exportedCount: 0, tabId: tab.id, lastActivityAt: timestamp,
+      currentPhase: 'SEARCH_INITIALIZED', currentQuery: query, currentPage: 0, currentStateKey: tab.url,
+      currentResultIndex: 0, checkpointVersion: CHECKPOINT_VERSION, queryIndex: 0, processedResultKeys: [], processedCount: 0, currentBatchSize: 0,
+      retryCount: 0, stableRounds: 0, scrollTop: 0, scrollHeight: 0, firstVisibleResultKey: null,
+      lastVisibleResultKey: null, lastSuccessfulResultKey: null, lastSuccessfulUrl: null,
+      lastSuccessfulTimestamp: null, updatedAt: timestamp, stopRequested: false, error: null,
+      resolvedCenter: effectiveConfig.selectedCenter,
+      rejectedOutOfAreaCount: 0, unverifiedLocationCount: 0,
+      config: effectiveConfig,
+      campaign: createCampaign(searchId, businessTypes, config.maxResults, timestamp),
+    };
+    await SearchRepository.save(search);
+    activeJob = makeJob(search, tab.id, effectiveConfig, [], initialCenter);
+    await chrome.alarms.create(DISCOVERY_ALARM, { periodInMinutes: 0.5 });
+    void runDiscovery(activeJob);
+    return { ok: true, searchId };
+  } finally {
+    startInFlight = false;
+  }
 }
 
 async function retryDiscovery(): Promise<{ ok: boolean; error?: string; searchId?: string }> {
   if (activeJob) return { ok: false, error: 'A discovery session is already running.' };
-  const previous = (await SearchRepository.list()).find((search) => ['failed', 'cancelled', 'error', 'stopped'].includes(search.status));
+  const previous = (await SearchRepository.list()).find((search) => ['failed', 'cancelled', 'error', 'stopped', 'completed-with-errors'].includes(search.status));
   if (!previous?.tabId || !previous.config) return { ok: false, error: 'There is no recoverable discovery session.' };
+  const campaign = ensureCampaign(previous);
+  const candidate = campaign.tasks.find((task) => task.status === 'failed' || task.status === 'completed-with-errors' || task.status === 'skipped');
+  if (!candidate || !retryTask(campaign, candidate.businessType)) return { ok: false, error: 'There is no failed business type to retry.' };
+  resetTypeCheckpoint(previous);
+  return launchStoredCampaign(previous);
+}
+
+async function retryBusinessType(businessType: string): Promise<{ ok: boolean; error?: string; searchId?: string }> {
+  if (activeJob) return { ok: false, error: 'Pause or stop the active campaign before retrying a business type.' };
+  const previous = (await SearchRepository.list()).find((search) => {
+    const campaign = ensureCampaign(search);
+    return campaign.tasks.some((task) => task.businessType.toLocaleLowerCase() === businessType.trim().toLocaleLowerCase() && ['failed', 'completed-with-errors', 'skipped'].includes(task.status));
+  });
+  if (!previous?.tabId || !previous.config) return { ok: false, error: 'That business type has no retryable campaign task.' };
+  const campaign = ensureCampaign(previous);
+  if (!retryTask(campaign, businessType)) return { ok: false, error: 'That business type is not eligible for retry.' };
+  resetTypeCheckpoint(previous);
+  return launchStoredCampaign(previous);
+}
+
+async function launchStoredCampaign(previous: SearchRecord): Promise<{ ok: boolean; error?: string; searchId?: string }> {
+  if (!previous.tabId || !previous.config) return { ok: false, error: 'This campaign no longer has a recoverable Maps tab or configuration.' };
   const tab = await chrome.tabs.get(previous.tabId).catch(() => null);
   if (!tab?.id || !isMapsUrl(tab.url)) return { ok: false, error: 'Re-open Google Maps in the tab used for this search, then retry.' };
   previous.status = 'retrying'; previous.completedAt = null; previous.error = null; previous.stopRequested = false;
@@ -296,7 +362,9 @@ async function retryDiscovery(): Promise<{ ok: boolean; error?: string; searchId
 async function resumeDiscovery(): Promise<{ ok: boolean; error?: string }> {
   if (activeJob) {
     activeJob.paused = false; activeJob.search.status = 'resuming'; activeJob.resumeResolvers.splice(0).forEach((resolve) => resolve());
+    ensureCampaign(activeJob.search).status = 'running';
     await persistJob(activeJob); await publishProgress('Discovery resumed.');
+    if (!activeJob.runActive) void runDiscovery(activeJob);
     return { ok: true };
   }
   const recovered = await recoverDiscovery(true);
@@ -310,6 +378,7 @@ async function recoverDiscovery(forceResume = false): Promise<boolean> {
   const tab = await chrome.tabs.get(search.tabId).catch(() => null);
   if (!tab?.id || !isMapsUrl(tab.url)) return false;
   const leads = await LeadRepository.listBySearch(search.id);
+  ensureCampaign(search);
   activeJob = makeJob(search, tab.id, search.config, leads, parseCoordinates(tab.url ?? ''));
   if (search.status === 'paused' && !forceResume) return true;
   activeJob.paused = false; activeJob.search.status = 'resuming'; activeJob.search.updatedAt = nowIso();
@@ -333,42 +402,179 @@ function stampSearchLocation(job: Job): string | null {
 }
 
 function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, records: Lead[], originCoordinates: { latitude: number; longitude: number } | null): Job {
+  const campaign = ensureCampaign(search);
+  const activeTask = nextRunnableTask(campaign);
+  const effectiveConfig: DiscoveryConfig = {
+    ...config,
+    businessTypes: campaign.selectedBusinessTypes,
+    businessType: activeTask?.businessType ?? config.businessType ?? campaign.selectedBusinessTypes[0] ?? search.businessType,
+  };
+  search.config = effectiveConfig;
   upgradeCheckpoint(search, records.map((lead) => resultKeyForRecord(lead)));
-  const queries = buildDiscoveryQueries(config);
+  const queries = buildDiscoveryQueries(effectiveConfig);
   const matchingIndex = queries.findIndex((query) => query === search.currentQuery);
   const queryIndex = matchingIndex >= 0 ? matchingIndex : resumeQueryIndex(search, queries.length);
-  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates: search.resolvedCenter ?? config.selectedCenter ?? originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map(), detailFailureStreak: 0, detailHydrationDisabled: false, tilesScanned: 0, tilesPlanned: 0, throttleBackoff: 1, resultsUrl: null };
+  return { search, config: effectiveConfig, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates: search.resolvedCenter ?? effectiveConfig.selectedCenter ?? originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map(), detailFailureStreak: 0, detailHydrationDisabled: false, tilesScanned: 0, tilesPlanned: 0, throttleBackoff: 1, resultsUrl: null, runActive: false };
 }
 
 async function runDiscovery(job: Job): Promise<void> {
+  if (job.runActive) return;
+  job.runActive = true;
   try {
-    const isResume = (job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0) > 0;
-    await setPhase(job, isResume ? 'WAITING_FOR_RESULTS' : 'SEARCH_INITIALIZED', isResume ? `Resuming from ${job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0} processed businesses…` : 'Starting controlled discovery…');
-    const area = job.config.areaSweep === false ? null : await resolveSweepArea(job);
-    if (area) {
-      await runAreaSweep(job, area);
-    } else {
-      await runQueryVariations(job, isResume);
+    const campaign = ensureCampaign(job.search);
+    while (!job.stopped) {
+      if (job.leads.size >= campaign.globalMaxResults) {
+        skipPendingTasks(campaign, 'global-limit-reached');
+        break;
+      }
+      const task = nextRunnableTask(campaign);
+      if (!task) break;
+      const resumingTask = task.status === 'running';
+      prepareBusinessType(job, task, !resumingTask);
+      if (!resumingTask) startTask(campaign, task, job.expectedQuery);
+      else {
+        campaign.status = job.paused ? 'paused' : 'running';
+        campaign.currentBusinessType = task.businessType;
+      }
+      await persistJob(job);
+
+      let terminal = false;
+      while (!terminal && !job.stopped) {
+        if (task.attempts === 0) startTask(campaign, task, job.expectedQuery);
+        const isResume = resumingTask || (job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0) > 0;
+        try {
+          await setPhase(job, isResume ? 'WAITING_FOR_RESULTS' : 'SEARCH_INITIALIZED', isResume
+            ? `Resuming ${task.businessType} from ${job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0} processed businesses…`
+            : `Searching ${task.businessType} (${task.order + 1} of ${campaign.tasks.length})…`);
+          const area = job.config.areaSweep === false ? null : await resolveSweepArea(job);
+          if (area) await runAreaSweep(job, area);
+          else await runQueryVariations(job, isResume);
+          if (job.stopped) break;
+          const enrichment = job.config.enableEnrichment
+            ? await enrichJob(job, task)
+            : { total: 0, completed: 0, failed: 0 };
+          completeTask(campaign, task, {
+            enrichmentTotal: enrichment.total,
+            enrichmentCompleted: enrichment.completed,
+            enrichmentFailed: enrichment.failed,
+          });
+          terminal = true;
+          await persistJob(job);
+          await publishProgress(`${task.businessType} complete · ${task.resultCount.toLocaleString()} matched · ${task.newCount.toLocaleString()} new to this campaign.`);
+        } catch (error) {
+          const message = errorMessage(error);
+          task.error = message;
+          if (isRetryableDiscoveryError(message) && task.attempts < MAX_BUSINESS_TYPE_ATTEMPTS && !job.stopped) {
+            task.attempts += 1;
+            job.search.retryCount = (job.search.retryCount ?? 0) + 1;
+            job.search.status = 'retrying';
+            await persistJob(job);
+            await publishProgress(`${task.businessType} hit a temporary error. Retry ${task.attempts} of ${MAX_BUSINESS_TYPE_ATTEMPTS} will continue from the saved checkpoint.`);
+            await retryBackoff(job, task.attempts);
+            continue;
+          }
+          failTask(campaign, task, message);
+          terminal = true;
+          await persistJob(job);
+          await publishProgress(`${task.businessType} could not finish. Saved results were kept; continuing with the next business type.`);
+        }
+      }
     }
-    if (job.config.enableEnrichment && !job.stopped) await enrichJob(job);
-    job.search.status = job.stopped ? 'stopped' : 'completed';
-    job.search.currentPhase = job.stopped ? 'STOPPED' : 'COMPLETED';
-    job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.error = null;
+
+    if (job.stopped) {
+      const activeTask = job.search.campaign?.tasks.find((task) => task.status === 'running');
+      if (activeTask) {
+        activeTask.status = activeTask.newCount > 0 ? 'completed-with-errors' : 'skipped';
+        activeTask.error = 'Stopped by user.';
+        activeTask.skipReason = activeTask.newCount > 0 ? null : 'stopped-by-user';
+        activeTask.completedAt = nowIso();
+      }
+      if (job.search.campaign) {
+        job.search.campaign.stopRequested = true;
+        skipPendingTasks(job.search.campaign, 'stopped-by-user');
+      }
+    } else if (job.search.campaign && job.leads.size >= job.search.campaign.globalMaxResults) {
+      skipPendingTasks(job.search.campaign, 'global-limit-reached');
+    }
+    const campaignStatus = finishCampaign(campaign, job.leads.size, job.stopped);
+    job.search.status = campaignStatus === 'cancelled'
+      ? 'stopped'
+      : campaignStatus === 'failed'
+        ? 'failed'
+        : campaignStatus === 'completed-with-errors'
+          ? 'completed-with-errors'
+          : 'completed';
+    job.search.currentPhase = job.stopped ? 'STOPPED' : campaignStatus === 'failed' ? 'FAILED' : 'COMPLETED';
+    job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.error = campaignStatus === 'completed-with-errors' ? 'One or more business types completed with errors.' : campaignStatus === 'failed' ? 'Every business type failed. Saved partial results were preserved.' : null;
+    job.search.uniqueCount = job.leads.size;
     await SearchRepository.save(job.search);
     const completionMessage = job.leads.size >= job.config.maxResults
-      ? `Discovery completed at the configured maximum of ${job.config.maxResults.toLocaleString()} unique leads.`
+      ? `Campaign stopped at the global maximum of ${job.config.maxResults.toLocaleString()} unique businesses. Remaining business types were skipped.`
       : job.tilesScanned > 0
-        ? `Area sweep complete. Scanned ${job.tilesScanned.toLocaleString()} map areas and found ${job.leads.size.toLocaleString()} businesses.`
-        : 'Discovery completed. The available Maps result feeds were exhausted.';
-    await publishProgress(job.stopped ? 'Discovery stopped by the user. Saved leads were preserved.' : completionMessage);
+        ? `Campaign complete. The final type scanned ${job.tilesScanned.toLocaleString()} map areas; ${job.leads.size.toLocaleString()} unique businesses are saved.`
+        : `Campaign complete. ${job.leads.size.toLocaleString()} unique businesses are saved.`;
+    await publishProgress(job.stopped ? 'Campaign stopped by the user. Saved businesses were preserved.' : completionMessage);
   } catch (error) {
+    const campaign = ensureCampaign(job.search);
+    const task = campaign.tasks.find((item) => item.status === 'running');
+    if (task) failTask(campaign, task, errorMessage(error));
+    finishCampaign(campaign, job.leads.size, false);
     job.search.status = 'error'; job.search.currentPhase = 'FAILED'; job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); job.search.error = errorMessage(error);
     await SearchRepository.save(job.search);
     await publishProgress(job.search.error);
   } finally {
+    job.runActive = false;
     await closeDetailTab(job);
     if (activeJob === job) activeJob = null;
     if (!(await hasActiveSearch())) void chrome.alarms.clear(DISCOVERY_ALARM);
+  }
+}
+
+function prepareBusinessType(job: Job, task: BusinessTypeTask, resetCheckpoint: boolean): void {
+  job.config.businessType = task.businessType;
+  job.config.businessTypes = ensureCampaign(job.search).selectedBusinessTypes;
+  job.search.config = job.config;
+  job.search.currentPhase = 'SEARCH_INITIALIZED';
+  job.expectedQuery = buildDiscoveryQueries(job.config)[0];
+  job.search.currentQuery = job.expectedQuery;
+  job.resultsUrl = null;
+  job.tilesScanned = 0;
+  job.tilesPlanned = 0;
+  job.detailFailureStreak = 0;
+  job.detailHydrationDisabled = false;
+  if (resetCheckpoint) {
+    resetTypeCheckpoint(job.search);
+    job.queryIndex = 0;
+  }
+}
+
+function resetTypeCheckpoint(search: SearchRecord): void {
+  search.currentPage = 0;
+  search.currentResultIndex = 0;
+  search.queryIndex = 0;
+  search.processedResultKeys = [];
+  search.processedCount = 0;
+  search.currentBatchSize = 0;
+  search.stableRounds = 0;
+  search.scrollTop = 0;
+  search.scrollHeight = 0;
+  search.firstVisibleResultKey = null;
+  search.lastVisibleResultKey = null;
+  search.lastSuccessfulResultKey = null;
+  search.lastSuccessfulUrl = null;
+  search.lastSuccessfulTimestamp = null;
+  search.error = null;
+}
+
+function isRetryableDiscoveryError(message: string): boolean {
+  return !/could not find|invalid|permission|not authenticated|search context changed|captcha/i.test(message);
+}
+
+async function retryBackoff(job: Job, attempt: number): Promise<void> {
+  const until = Date.now() + Math.min(5_000, 750 * (2 ** Math.max(0, attempt - 1)));
+  while (Date.now() < until && !job.stopped) {
+    await waitIfPaused(job);
+    await delay(Math.min(500, until - Date.now()));
   }
 }
 
@@ -707,13 +913,14 @@ async function waitForResults(job: Job): Promise<void> {
 async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{ added: number; duplicates: number; newlyProcessed: number; repeated: number }> {
   await setPhase(job, 'PROCESSING', `Processing ${Math.min(records.length, DISCOVERY_BATCH_SIZE)} of ${records.length} visible results…`);
   const processed = new Set(job.search.processedResultKeys ?? []);
+  const campaign = ensureCampaign(job.search);
+  const task = campaign.tasks[campaign.queueIndex];
   let added = 0; let duplicates = 0; let newlyProcessed = 0; let repeated = 0; let sinceCheckpoint = 0;
   for (const batch of splitIntoBatches(records, DISCOVERY_BATCH_SIZE)) {
     job.search.currentBatchSize = batch.length;
     for (const record of batch) {
       await waitIfPaused(job);
       if (job.stopped) break;
-      if (!record.businessName || !record.googleMapsUrl) continue;
       const visibleResultKey = resultKeyForRecord(record);
       const legacyKey = [record.placeIdentifier, record.googleMapsUrl, `${record.businessName}|${record.address ?? ''}`].find((key) => Boolean(key) && processed.has(key!));
       if (processed.has(visibleResultKey) || legacyKey) {
@@ -721,10 +928,16 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
         repeated += 1;
         continue;
       }
+      if (!record.businessName || !record.googleMapsUrl) {
+        if (task) task.invalidCount += 1;
+        processed.add(visibleResultKey); newlyProcessed += 1; sinceCheckpoint += 1;
+        await checkpointProcessedRecord(job, processed, visibleResultKey, record.googleMapsUrl || '', true);
+        continue;
+      }
       const hydratedRecord = await hydrateMapsRecord(job, record);
       const resultKey = resultKeyForRecord(hydratedRecord);
       if (processed.has(resultKey)) { repeated += 1; continue; }
-      const lead = makeLead(hydratedRecord, job.search.id, stampSearchLocation(job));
+      const lead = makeLead(hydratedRecord, job.search.id, stampSearchLocation(job), job.config.businessType);
       const geo = validateGeographicResult(
         job.originCoordinates,
         job.config.radiusKm,
@@ -742,6 +955,7 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
       // are clearly marked unverified rather than silently claimed as in-area.
       if (geo.status === 'outside') {
         job.search.rejectedOutOfAreaCount = (job.search.rejectedOutOfAreaCount ?? 0) + 1;
+        if (task) { task.rejectedOutOfAreaCount += 1; task.invalidCount += 1; }
         processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
         await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, true);
         continue;
@@ -749,10 +963,11 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
       if (geo.status === 'unverified') {
         job.search.unverifiedLocationCount = (job.search.unverifiedLocationCount ?? 0) + 1;
       }
+      if (task) task.resultCount += 1;
       const exactKey = dedupeKey(lead); const proximityKey = [...job.leads.entries()].find(([, existing]) => isSameLead(existing, lead))?.[0]; const key = proximityKey ?? exactKey;
       const existing = job.leads.get(key);
-      if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; job.search.duplicateCount = (job.search.duplicateCount ?? 0) + 1; }
-      else { job.leads.set(key, lead); added += 1; }
+      if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; if (task) task.duplicateCount += 1; job.search.duplicateCount = (job.search.duplicateCount ?? 0) + 1; }
+      else { job.leads.set(key, lead); added += 1; if (task) task.newCount += 1; }
       // Commit lead data before marking its Maps result as processed. A service
       // worker suspension between these operations can therefore only retry and
       // merge the lead; it cannot silently lose it.
@@ -764,11 +979,13 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
     }
     job.search.discoveredCount = processed.size; job.search.processedCount = processed.size; job.search.currentResultIndex = processed.size;
     job.search.uniqueCount = job.leads.size; job.search.processedResultKeys = [...processed]; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso();
+    syncCampaignTotals(campaign, job.leads.size, job.search.updatedAt);
     await SearchRepository.save(job.search); await publishProgress(`${job.search.processedCount} processed · ${job.leads.size} unique leads saved locally.`);
     if (job.stopped || job.leads.size >= job.config.maxResults) break;
   }
   job.search.discoveredCount = processed.size; job.search.processedCount = processed.size; job.search.currentResultIndex = processed.size;
   job.search.uniqueCount = job.leads.size; job.search.processedResultKeys = [...processed]; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso();
+  syncCampaignTotals(campaign, job.leads.size, job.search.updatedAt);
   await SearchRepository.save(job.search); await publishProgress(`${job.leads.size} unique leads saved locally.`);
   return { added, duplicates, newlyProcessed, repeated };
 }
@@ -1037,14 +1254,49 @@ async function waitForTabNavigation(tabId: number): Promise<void> {
   }
 }
 
-async function enrichJob(job: Job): Promise<void> {
+async function enrichJob(job: Job, task: BusinessTypeTask): Promise<{ total: number; completed: number; failed: number }> {
   job.search.status = 'enriching'; await persistJob(job);
-  for (const lead of job.leads.values()) {
-    if (job.stopped) break; if (!lead.website) continue;
-    try { const result = await discoverPublicEmails(lead.website, job.config.maxPagesPerWebsite); lead.emails = result.emails; lead.emailSource = result.emailSource; lead.emailConfidence = result.emailConfidence; lead.enrichmentStatus = 'complete'; }
-    catch { lead.enrichmentStatus = 'failed'; }
-    lead.updatedAt = nowIso(); await LeadRepository.save(lead); await publishProgress('Checking publicly listed website contact pages…');
+  const candidates = [...job.leads.values()].filter((lead) => Boolean(lead.website) && (lead.discoveryCategories ?? []).includes(task.businessType));
+  let completed = 0;
+  let failed = 0;
+  task.enrichmentTotal = candidates.length;
+  for (const lead of candidates) {
+    if (job.stopped) break;
+    if (lead.enrichmentStatus === 'complete') {
+      completed += 1;
+      task.enrichmentCompleted = completed;
+      continue;
+    }
+    lead.enrichmentStatus = 'pending';
+    lead.enrichmentError = null;
+    await LeadRepository.save(lead);
+    let enriched = false;
+    for (let attempt = Math.max(0, lead.enrichmentAttempts ?? 0); attempt < 2 && !job.stopped; attempt += 1) {
+      lead.enrichmentAttempts = attempt + 1;
+      try {
+        const result = await discoverPublicEmails(lead.website!, job.config.maxPagesPerWebsite);
+        lead.emails = result.emails;
+        lead.emailSource = result.emailSource;
+        lead.emailConfidence = result.emailConfidence;
+        lead.enrichmentStatus = 'complete';
+        lead.enrichmentError = null;
+        enriched = true;
+        break;
+      } catch (error) {
+        lead.enrichmentError = errorMessage(error);
+        if (attempt < 1) await delay(500 * (2 ** attempt));
+      }
+    }
+    if (enriched) completed += 1;
+    else { failed += 1; lead.enrichmentStatus = 'failed'; }
+    task.enrichmentCompleted = completed;
+    task.enrichmentFailed = failed;
+    lead.updatedAt = nowIso();
+    await LeadRepository.save(lead);
+    await persistJob(job);
+    await publishProgress(`Website enrichment for ${task.businessType}: ${completed + failed} of ${candidates.length} processed.`);
   }
+  return { total: candidates.length, completed, failed };
 }
 
 async function enrichLead(leadId: string, maxPages: number): Promise<{ ok: boolean; lead?: Lead; error?: string }> {
@@ -1173,6 +1425,7 @@ async function pauseDiscovery(): Promise<void> {
   if (activeJob) {
     activeJob.paused = true;
     activeJob.search.status = 'paused';
+    ensureCampaign(activeJob.search).status = 'paused';
     try {
       const scroll = await sendToMaps(activeJob.tabId, { type: 'GET_SCROLL_STATE' }) as MapsScrollState;
       applyScrollCheckpoint(activeJob.search, scroll);
@@ -1183,12 +1436,44 @@ async function pauseDiscovery(): Promise<void> {
   await publishProgress('Discovery paused at the saved checkpoint.');
 }
 
-async function setPhase(job: Job, phase: DiscoveryPhase, message?: string): Promise<void> { job.search.currentPhase = phase; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); if (phase === 'PROCESSING') job.search.status = 'processing'; else if (phase === 'EXTRACTING' || phase === 'WAITING_FOR_RESULTS' || phase === 'CHECKING_FOR_MORE' || phase === 'NEXT_RESULTS' || phase === 'SEARCH_INITIALIZED') job.search.status = job.search.status === 'resuming' || job.search.status === 'retrying' ? job.search.status : 'discovering'; await persistJob(job); await publishProgress(message); }
-async function persistJob(job: Job): Promise<void> { const tab = await chrome.tabs.get(job.tabId).catch(() => null); job.search.currentStateKey = tab?.url ?? job.search.currentStateKey; job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); await SearchRepository.save(job.search); }
-async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; let leads: Lead[] = []; if (search) { leads = await LeadRepository.listBySearch(search.id); if (upgradeCheckpoint(search, leads.map((lead) => resultKeyForRecord(lead)))) await SearchRepository.save(search); } return progressForStored(search, leads); }
+async function stopDiscovery(): Promise<void> {
+  if (activeJob) {
+    activeJob.stopped = true;
+    activeJob.search.stopRequested = true;
+    ensureCampaign(activeJob.search).stopRequested = true;
+    activeJob.resumeResolvers.splice(0).forEach((resolve) => resolve());
+    await persistJob(activeJob);
+    await publishProgress('Stopping campaign…');
+    return;
+  }
+  const stored = (await SearchRepository.list()).find((search) => ACTIVE_STATUSES.has(search.status));
+  if (!stored) return;
+  const campaign = ensureCampaign(stored);
+  campaign.stopRequested = true;
+  const running = campaign.tasks.find((task) => task.status === 'running');
+  if (running) {
+    running.status = running.newCount > 0 ? 'completed-with-errors' : 'skipped';
+    running.error = 'Stopped by user.';
+    running.skipReason = running.newCount > 0 ? null : 'stopped-by-user';
+    running.completedAt = nowIso();
+  }
+  skipPendingTasks(campaign, 'stopped-by-user');
+  finishCampaign(campaign, stored.uniqueCount, true);
+  stored.stopRequested = true;
+  stored.status = 'stopped';
+  stored.currentPhase = 'STOPPED';
+  stored.completedAt = nowIso();
+  stored.updatedAt = nowIso();
+  await SearchRepository.save(stored);
+  await publishProgress('Campaign stopped. Saved businesses were preserved.');
+}
+
+async function setPhase(job: Job, phase: DiscoveryPhase, message?: string): Promise<void> { job.search.currentPhase = phase; updateTaskStage(ensureCampaign(job.search), phase); job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); if (phase === 'PROCESSING') job.search.status = 'processing'; else if (phase === 'EXTRACTING' || phase === 'WAITING_FOR_RESULTS' || phase === 'CHECKING_FOR_MORE' || phase === 'NEXT_RESULTS' || phase === 'SEARCH_INITIALIZED') job.search.status = job.search.status === 'resuming' || job.search.status === 'retrying' ? job.search.status : 'discovering'; await persistJob(job); await publishProgress(message); }
+async function persistJob(job: Job): Promise<void> { const tab = await chrome.tabs.get(job.tabId).catch(() => null); job.search.currentStateKey = tab?.url ?? job.search.currentStateKey; job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); syncCampaignTotals(ensureCampaign(job.search), job.leads.size, job.search.updatedAt); await SearchRepository.save(job.search); }
+async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; let leads: Lead[] = []; if (search) { leads = await LeadRepository.listBySearch(search.id); const hadCampaign = Boolean(search.campaign); const upgraded = upgradeCheckpoint(search, leads.map((lead) => resultKeyForRecord(lead))); ensureCampaign(search); if (upgraded || !hadCampaign) await SearchRepository.save(search); } return progressForStored(search, leads); }
 async function publishProgress(message?: string): Promise<void> { try { await chrome.runtime.sendMessage({ type: 'DISCOVERY_PROGRESS', progress: activeJob ? progressFor(activeJob, message) : await getProgressResponse(), message }); } catch { /* side panel can be closed */ } }
-function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error, tilesScanned: job.tilesScanned, tilesPlanned: job.tilesPlanned, rejectedOutOfArea: job.search.rejectedOutOfAreaCount ?? 0, unverifiedLocation: job.search.unverifiedLocationCount ?? 0 }; }
-function progressForStored(search?: SearchRecord, leads: Lead[] = []): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: leads.length || search?.uniqueCount || 0, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error, rejectedOutOfArea: search?.rejectedOutOfAreaCount ?? 0, unverifiedLocation: search?.unverifiedLocationCount ?? 0 }; }
+function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; const campaign = ensureCampaign(job.search); const processed = campaign.tasks.reduce((sum, task) => sum + task.resultCount + task.invalidCount, 0); return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.currentQuery || job.search.query, location: job.search.location, discovered: campaign.tasks.reduce((sum, task) => sum + task.resultCount, 0), duplicates: campaign.duplicateCount, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: campaign.globalMaxResults, error: job.search.error, tilesScanned: job.tilesScanned, tilesPlanned: job.tilesPlanned, rejectedOutOfArea: campaign.tasks.reduce((sum, task) => sum + task.rejectedOutOfAreaCount, 0), unverifiedLocation: job.search.unverifiedLocationCount ?? 0, enrichmentTotal: campaign.enrichmentTotal, enrichmentCompleted: campaign.enrichmentCompleted, enrichmentFailed: campaign.enrichmentFailed, campaign, updatedAt: job.search.updatedAt }; }
+function progressForStored(search?: SearchRecord, leads: Lead[] = []): DiscoveryProgress { const campaign = search ? ensureCampaign(search) : undefined; return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.currentQuery ?? search?.query ?? '', location: search?.location, discovered: campaign ? campaign.tasks.reduce((sum, task) => sum + task.resultCount, 0) : search?.discoveredCount ?? 0, duplicates: campaign?.duplicateCount ?? search?.duplicateCount ?? 0, unique: leads.length || search?.uniqueCount || 0, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: campaign ? campaign.tasks.reduce((sum, task) => sum + task.resultCount + task.invalidCount, 0) : search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: campaign?.globalMaxResults ?? search?.config?.maxResults, error: search?.error, rejectedOutOfArea: campaign?.tasks.reduce((sum, task) => sum + task.rejectedOutOfAreaCount, 0) ?? search?.rejectedOutOfAreaCount ?? 0, unverifiedLocation: search?.unverifiedLocationCount ?? 0, enrichmentTotal: campaign?.enrichmentTotal, enrichmentCompleted: campaign?.enrichmentCompleted, enrichmentFailed: campaign?.enrichmentFailed, campaign, updatedAt: search?.updatedAt }; }
 async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
 // A single Maps content-script call must answer within this window. Without a
 // timeout, chrome.tabs.sendMessage hangs forever whenever a handler returns true
@@ -1249,6 +1534,7 @@ async function ensureMapsContentScript(tabId: number): Promise<void> {
 async function getActiveMapsContext(): Promise<MapsContext | null> { const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); const tab = tabs[0]; if (!tab?.id || !isMapsUrl(tab.url)) return null; await ensureMapsContentScript(tab.id); const response = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext }; return response.context ?? null; }
 function isUnexpectedSearchContext(context: MapsContext, expected: string): boolean { if (!context.isMaps) return true; if (!context.query || !expected) return false; const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim(); const expectedParts = normalize(expected).split(' near '); return !normalize(context.query).includes(normalize(expectedParts[0])); }
 function isMapsUrl(url?: string): boolean { if (!url) return false; try { const parsed = new URL(url); return /(^|\.)google\.[^/]+$/.test(parsed.hostname) && parsed.pathname.startsWith('/maps'); } catch { return false; } }
+function validCenter(value: { latitude: number; longitude: number } | null | undefined): value is { latitude: number; longitude: number } { return Boolean(value && Number.isFinite(value.latitude) && Number.isFinite(value.longitude) && value.latitude >= -90 && value.latitude <= 90 && value.longitude >= -180 && value.longitude <= 180); }
 function isSearchRoute(url?: string): boolean { return Boolean(url && /\/maps\/search\//.test(url)); }
 // A single typed location (e.g. "paris") often resolves to a /maps/place/ URL
 // rather than a search feed; both are valid "we have navigated" signals.

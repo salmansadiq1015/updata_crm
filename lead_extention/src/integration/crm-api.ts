@@ -380,7 +380,7 @@ function toCrmImportCsv(leads: Lead[]): string {
       // location below, so we no longer drop a non-2-letter country.
       country: lead.country ?? '', phone: cleanPhone(lead.phone, 50) ?? '',
       mobile: '', email: safeEmails(lead.emails)[0] ?? '', website: safeWebsite(lead.website) ?? '',
-      notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: lead.categories.join(', '),
+      notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: [...new Set([...(lead.discoveryCategories ?? []), ...lead.categories])].join(', '),
       latitude: inRange(lead.latitude, -90, 90) ?? '', longitude: inRange(lead.longitude, -180, 180) ?? '',
       searchLocation: lead.searchLocation ?? '',
     };

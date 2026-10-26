@@ -1,5 +1,6 @@
 export type DiscoveryStatus =
   | 'idle'
+  | 'queued'
   | 'starting'
   | 'discovering'
   | 'paused'
@@ -8,6 +9,7 @@ export type DiscoveryStatus =
   | 'retrying'
   | 'enriching'
   | 'completed'
+  | 'completed-with-errors'
   | 'stopped'
   | 'error'
   // Kept for persisted jobs created by earlier extension builds.
@@ -29,6 +31,68 @@ export type DiscoveryPhase =
 export type CrmLeadStatus = 'not-imported' | 'importing' | 'imported' | 'existing' | 'failed';
 
 export type EmailConfidence = 'high' | 'medium' | 'low' | null;
+
+export type CampaignStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'completed-with-errors'
+  | 'failed'
+  | 'cancelled';
+
+export type BusinessTypeTaskStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'completed-with-errors'
+  | 'failed'
+  | 'skipped';
+
+export interface BusinessTypeTask {
+  id: string;
+  businessType: string;
+  order: number;
+  status: BusinessTypeTaskStatus;
+  query: string;
+  stage: DiscoveryPhase | null;
+  resultCount: number;
+  newCount: number;
+  duplicateCount: number;
+  invalidCount: number;
+  rejectedOutOfAreaCount: number;
+  enrichmentTotal: number;
+  enrichmentCompleted: number;
+  enrichmentFailed: number;
+  attempts: number;
+  error: string | null;
+  skipReason: 'global-limit-reached' | 'stopped-by-user' | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number;
+}
+
+export interface DiscoveryCampaign {
+  id: string;
+  status: CampaignStatus;
+  selectedBusinessTypes: string[];
+  queueIndex: number;
+  currentBusinessType: string | null;
+  tasks: BusinessTypeTask[];
+  globalMaxResults: number;
+  uniqueCount: number;
+  duplicateCount: number;
+  invalidCount: number;
+  enrichmentTotal: number;
+  enrichmentCompleted: number;
+  enrichmentFailed: number;
+  startedAt: string;
+  completedAt: string | null;
+  updatedAt: string;
+  lastCheckpointAt: string;
+  stopRequested: boolean;
+}
 
 // Review count per star level, read from a business's Google Maps place page.
 // Only populated when the histogram is actually present — never fabricated.
@@ -75,9 +139,13 @@ export interface Lead {
   emailSource: string | null;
   emailConfidence: EmailConfidence;
   enrichmentStatus: 'not-requested' | 'pending' | 'complete' | 'failed';
+  enrichmentAttempts?: number;
+  enrichmentError?: string | null;
   discoveredAt: string;
   updatedAt: string;
   searchId: string;
+  /** User-selected discovery categories which matched this single business. */
+  discoveryCategories?: string[];
   // The raw selected search location this lead was discovered under (e.g.
   // "Lahore" / "Lahore, Pakistan"). Sent to the CRM as the last-resort fallback
   // for a city/country that could not be scraped from the business itself.
@@ -121,6 +189,8 @@ export interface RawBusinessRecord {
 export interface SearchRecord {
   id: string;
   businessType: string;
+  /** Ordered campaign categories. Older records may contain only businessType. */
+  businessTypes?: string[];
   location: string;
   radiusKm: number | null;
   query: string;
@@ -160,10 +230,13 @@ export interface SearchRecord {
   rejectedOutOfAreaCount?: number;
   unverifiedLocationCount?: number;
   config?: DiscoveryConfig;
+  campaign?: DiscoveryCampaign;
 }
 
 export interface DiscoveryConfig {
   businessType: string;
+  /** Ordered multi-select value; businessType remains as the legacy/current value. */
+  businessTypes?: string[];
   location: string;
   radiusKm: number | null;
   maxResults: number;
@@ -185,12 +258,16 @@ export interface DiscoveryConfig {
   requestDelayMs?: number;
   /** Captured only when the user explicitly chooses the current Maps context. */
   selectedCenter?: { latitude: number; longitude: number } | null;
+  /** Optional user-entered authoritative centre for a radius/area sweep. */
+  centerLatitude?: number | null;
+  centerLongitude?: number | null;
 }
 
 export interface DiscoveryProgress {
   searchId: string;
   status: DiscoveryStatus;
   query: string;
+  location?: string;
   discovered: number;
   duplicates: number;
   unique: number;
@@ -210,6 +287,11 @@ export interface DiscoveryProgress {
   tilesPlanned?: number;
   rejectedOutOfArea?: number;
   unverifiedLocation?: number;
+  enrichmentTotal?: number;
+  enrichmentCompleted?: number;
+  enrichmentFailed?: number;
+  campaign?: DiscoveryCampaign;
+  updatedAt?: string;
 }
 
 export interface MapsScrollState {
@@ -271,6 +353,7 @@ export type ExtensionMessage =
   | { type: 'RESUME_DISCOVERY' }
   | { type: 'STOP_DISCOVERY' }
   | { type: 'RETRY_DISCOVERY' }
+  | { type: 'RETRY_BUSINESS_TYPE'; businessType: string }
   | { type: 'GET_PROGRESS' }
   | { type: 'MARK_EXPORTED'; searchId: string; count: number }
   | { type: 'ENRICH_LEAD'; leadId: string; maxPages: number }

@@ -16,6 +16,10 @@ Thumbs.db
 .claude/
 docs/*
 !docs/AI_CALLING_AUDIT.md
+!docs/ai-calling/
+docs/ai-calling/*
+!docs/ai-calling/UI-REDESIGN-AUDIT.md
+!docs/ai-calling/UI-REDESIGN-IMPLEMENTATION-STATUS.md
 .superpowers/
 .screenshots/
 client/start-local.sh

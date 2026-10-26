@@ -135,8 +135,62 @@ The Call Agent home shows "Send N reminder(s)", which opens the SMS queue in rem
 | Accessibility and trust | ≥ 44 px tap targets, text-size toggle, `role=log` conversation with speaker labels, `progressbar` semantics, keyboard-operable menu and mic, reduced-motion and forced-colours support, company initial and name, "automated assistant" note, privacy/terms links (`LINK_ASSISTANT_PRIVACY_URL`, `…_TERMS_URL`), "I don't want to be contacted" at the top and in the menu |
 | Errors | Network loss: kept and resent automatically ("Try again" to resend now). Server error: the message is marked "Not sent" with "Try again" (same id, never answered twice). Finished chats show a confirmation card and hide the composer |
 | Security | Strict CSP (`default-src 'none'`, self-only scripts and styles), no third-party scripts or trackers, `Referrer-Policy: no-referrer`, `noindex`, httpOnly SameSite cookie, `X-Requested-With` marker on every API call, `textContent` rendering only (no HTML from the server or customer) |
-| Voice: browser tier | Push-to-talk speech recognition + "read replies aloud" where the browser supports it. Shown only when the campaign enables voice; falls back to text |
-| Voice: premium tier (LiveKit + OpenAI Realtime) | **Not wired to the page yet.** The setting exists; the existing browser Live test covers the agent. Needs gate 3 (owner approval) and LiveKit keys |
+| Voice: browser tier | Push-to-talk speech recognition + "read replies aloud" in the text chat, where the browser supports it (`voiceTier: 'browser'` only) |
+| Voice: real-time call (`voiceTier: 'premium'`, default for new campaigns) | **The landing view is a voice call screen** — see §4a. The text chat is the fallback ("Type instead") |
+
+---
+
+## 4a. Real-time voice call on the link page
+
+The customer taps the SMS link, sees a call screen, taps **Start call**, allows the microphone and talks to the assistant like a phone call — in the browser, no app, no phone number, no SIP.
+
+### Why it was a text chat before
+
+The link page (Express-served, `page/`) only had a text chat plus the browser speech tier; the premium tier was a setting with nothing behind it. The real-time agent existed (`server/agent-worker`, used by AI calling) but was never connected to link conversations.
+
+### Architecture (reuses the existing agent)
+
+```
+customer mic/speaker ⇄ WebRTC ⇄ LiveKit Cloud room ⇄ agent worker (OpenAI Realtime, barge-in, server VAD)
+                                                      │  per-conversation agent token
+                                                      ▼
+                                      CRM agent tool API → same CallRecord as the chat
+                                      (questionEngine · answerValidation · statusRules · review)
+```
+
+* **No second engine.** The worker drives the link conversation's existing `CallRecord` through the same tool API as phone calls (`disclose`, `record_answer`, `mark_answer_unknown`, `confirm`, `request_callback`, `request_human`, `do_not_contact`, `decline`, `finish_call`). Chat and voice share answers; a customer can switch at any time.
+* **Server decides.** Every answer is validated server-side (choices must match an option, numbers parsed, spoken dates like "1 December" and e-mails like "ali at example dot com" normalised). `confirm` needs the customer's own reply and is refused unless it is a clear "yes".
+* **Page stays where it is.** It is served by the API (`/c/<token>`), not the Next.js CRM: links already sent keep working, the device cookie stays first-party, and the strict CSP and a small first paint are kept (voice page ≈ 32 KB gzipped: HTML 8.7 · CSS 7.9 · JS 6.6 + 9.2 KB; the 151 KB LiveKit SDK loads on idle). The LiveKit SDK (`livekit-client` 2.22.4, same as the CRM) is served first-party and fetched when the page is idle, never render-blocking.
+
+### Session lifecycle
+
+1. **Start call** → the browser asks for the microphone first (a refusal costs nothing), then `POST /c/<token>/api/voice/start`.
+2. Server checks: device verified · conversation open · kill switch · campaign running (previews exempt) · `voiceTier: premium` + LiveKit configured · daily AI budget · lead not opted out · concurrency (`LINK_VOICE_MAX_CONCURRENT`, default 10). It takes a lease on the conversation (`voice.activeUntil`), returns a **room-scoped LiveKit join token** (no API keys), and dispatches the agent in parallel. A reload rejoins the same room.
+3. The worker joins, loads the context (persona, language, approved FAQ, limits), connects OpenAI Realtime, waits for the customer, posts `/answered` (→ `funnel.voice_started`), then speaks the disclosure.
+4. During the call: answers are saved on every tool call; finished utterances go to `/transcript` (idempotent per item); the page polls saved progress every 2.5 s.
+5. End — customer **End call** / **Human help** (`/voice/end`, `/voice/human` close the room), the agent's `finish_call`, the time limit (`limits.maxVoiceMinutes`, default 10) or the customer leaving: the worker posts `/end` with real token usage → cost charged once per room → if the engine says the conversation is over it is finished like a chat (completed / opted out / callback / human requested → status rules, lead update, opt-out propagation); otherwise it stays open (call again or type; the inactivity sweep sends partial answers to review).
+
+### Call screen
+
+Pre-call (AI disclosure, purpose, duration, privacy, opt-out, **Start call**, "Type instead") · in-call (status pill, real call timer, orb + waveform driven by **real** mic/agent audio levels, state from the agent's published `lk.agent.state`: Connecting / Waiting / Listening / Thinking / Speaking / Muted / Reconnecting, live captions, Mute, Speaker — only if the browser can switch outputs, Transcript, Human help, End call) · result (completed / partial summary of the customer's own saved answers, "Continue the call", "Type instead") · problems (microphone blocked with steps, no microphone, unsupported browser, assistant unavailable, call dropped → Reconnect). Desktop: info · stage · conversation panels; tablet: stage + conversation; phone: full-screen stage, transcript as a bottom sheet. English, Urdu (RTL), Roman Urdu.
+
+### Security
+
+API keys and the LiveKit secret never reach the browser; the join token is limited to one room and expires after the call limit. The worker's token is scoped to one conversation (another conversation → 403). Only voice pages allow the LiveKit host in `connect-src`. Link tokens are redacted from request logs (`/c/[link]`).
+
+### Measured (2026-10-22, isolated test server, LiveKit Cloud UAE, OpenAI gpt-realtime, Chromium; customer = synthetic speech fed as the microphone)
+
+| | Result |
+|---|---|
+| Full 10-question English call | ✅ completed by voice, all 10 answers saved and validated, lead processed (2.5 min) |
+| Urdu call | ✅ assistant speaks Urdu; "دفتر ہے" → `office`, "دو ہزار" → `2,000` |
+| Start tap → server ready | 60–100 ms |
+| Start tap → room connected / agent joined | 0.7–2.2 s / 2.9–3.5 s |
+| Start tap → first audible word | 5.2–8.6 s (worker's room join from this dev machine: 3.1 s; OpenAI connect + first reply ≈ 2 s) |
+| Customer stops talking → assistant audible | **p50 ≈ 3.1 s, p95 ≈ 3.5 s** (n = 13, final run). Breakdown: end-of-speech 0.6 s → tool call 0.6 s → second response 0.7 s → first audio |
+| Cost | **≈ $0.12 per minute** from real token usage (2.5-min call ≈ $0.29) |
+
+The 1.5 s reply target is **not met**: each answer needs a tool call (server validation) before the next question is spoken, i.e. two model responses per turn, plus the round trip from Pakistan. Hosting the worker next to LiveKit (LiveKit Cloud agents / a UAE server) removes most of the 3 s join.
 
 ---
 
@@ -158,7 +212,8 @@ Edit these in the web CRM: **AI calling → New campaign → "SMS link → AI ch
 | `fallbackToCall` | off | SIM call campaign for leads who never answer |
 | `limits.maxTurns`, `maxSessionMinutes`, `maxTokensPerTurn` | 40, 30, 220 | Per-conversation limits (then politely ended → review) |
 | `limits.dailySpendCap` | $2 | Model budget per campaign per UTC day. When reached, the campaign **pauses** (no new links), open chats continue with fixed texts, and the owner is notified |
-| `voiceTier` | off | off / browser / premium |
+| `voiceTier` | premium | premium = real-time voice call screen (§4a) · browser = text chat + browser dictation · off = text chat only |
+| `limits.maxVoiceMinutes` | 10 | Longest voice call; the agent says goodbye and the call ends |
 | `transcriptRetentionDays` | 90 | Transcripts are purged after this |
 
 Sending hours = the campaign's `schedule.callWindow` / `daysOfWeek` / `timezone`.
@@ -175,6 +230,11 @@ Sending hours = the campaign's `schedule.callWindow` / `daysOfWeek` / `timezone`
 | `LINK_ASSISTANT_COMPANY_NAME` | — | Fallback company name |
 | `LINK_ASSISTANT_PRIVACY_URL`, `LINK_ASSISTANT_TERMS_URL` | — | Footer links |
 | `OPENAI_API_KEY` | — | Without it, everything works with fixed texts (no model) |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_AGENT_NAME` | — | Voice calls. Without them the link opens the text chat. The agent worker (`server/agent-worker`) must run with the same agent name |
+| `LINK_VOICE_ENABLED` | true | `false` = no voice calls on any link |
+| `LINK_VOICE_MAX_CONCURRENT` | 10 | Voice calls at once (all campaigns) |
+| `LINK_VOICE_AGENT_API_BASE` | `PUBLIC_API_BASE_URL` | Where the worker reaches the agent tool API |
+| `LINK_VOICE_PRICES` | gpt-realtime list prices | JSON override of USD per 1M tokens for cost tracking |
 
 ### Kill switch
 
@@ -190,6 +250,7 @@ Sending hours = the campaign's `schedule.callWindow` / `daysOfWeek` / `timezone`
 | Model, per phrased turn | ≈ 480 prompt + 60 reply tokens ≈ **$0.00011** with gpt-4o-mini |
 | Model, per completed 6-question chat | ≈ 7 phrased turns + ≤ 1 classification ≈ **$0.001** (≈ PKR 0.3) |
 | Voice, browser tier | Free (the customer's browser) |
+| Voice call (real-time) | **≈ $0.12 per minute** measured (OpenAI gpt-realtime tokens) + LiveKit Cloud minutes; a 10-question call ≈ 2.5 min ≈ $0.30. Counted against the daily AI budget; voice stops when it is reached |
 | Hosting | The existing API server |
 
 Each session records its own token usage and cost (`usage.*`). The campaign analytics show "AI cost / completed".
@@ -236,7 +297,12 @@ Campaigns themselves: `/api/v1/ai-calling/campaigns` with `channel: 'web_link'`.
 | `server/tests/unit/linkAssistant.api.test.js` (13) | HTTP end to end: authorise → link → open → chat → answers saved immediately → submit → lead qualified; streaming + cost + **daily cap pauses**; human-claim output replaced; opt-out → SMS suppression + link closed; **second device verify**; clientMessageId replay; expired/revoked/unknown/preview-bot; **kill switch**; sending hours; preview never touches the lead; CRM views + RBAC; abandoned → review; reminders |
 | `server/tests/unit/linkAssistant.browser.test.js` (5) | **Real headless Chromium, Pixel 7**: full flow, numeric keyboard, ≥44 px targets, offline → reconnect (no duplicate), Urdu RTL + opt-out button, **page-weight budget**, **first-token latency p50/p95** |
 | `mobile/src/features/linkAssistant/__tests__`, `communication/__tests__/contactFlows.test.ts` | `{link}` filled from the CRM; never sends a raw `{link}`; funnel stage; reminder grouping |
-| `server/tests/unit/linkAssistant.page.test.js` (12) | Real Chromium against the real template: no horizontal overflow and essential controls visible at 320/360/390/768/1440 px (English + Urdu), tap targets, Urdu RTL with LTR phone numbers, options menu Escape/focus, language switch updates wording + direction, server error → "Try again" with the same id, completed state |
+| `server/tests/unit/linkAssistant.voice.api.test.js` (7) | Voice over HTTP (LiveKit faked): start → join token (no secrets) → rejoin → agent context (persona, FAQ, AI disclosure) → answers validated and saved live → idempotent transcript → `/end` charges real usage once → completed; partial call stays open and resumes; opt-out by voice propagates; Human help; refusals (not offered, not configured, unverified device, kill switch, budget, concurrency, closed); dispatch failure; agent token scoped to one conversation |
+| `server/tests/unit/linkAssistant.voice.engine.test.js` (8) | Voice instructions (AI disclosure, FAQ-only facts, language), cost from token usage, outcome mapping, spoken dates and e-mails |
+| `server/tests/unit/linkAssistant.voice.browser.test.js` (4) | Real Chromium, **scripted LiveKit (control flow, not audio)**: idle → waiting → listening/speaking from agent state, captions, saved answers, mute really disables the mic, transcript sheet, end + cleanup, completed summary, mic refused, agent never joins |
+| `server/agent-worker/test` (16) | Worker helpers incl. turn detection, transcription hints, answer formats |
+| Real voice calls (manual, paid) | Playwright Chromium with synthetic speech as the microphone against LiveKit Cloud + OpenAI: see "Measured" in §4a. **Not yet verified on a physical phone** |
+| `server/tests/unit/linkAssistant.page.test.js` (21) | Real Chromium against the real template: no horizontal overflow and essential controls visible at 320/360/390/768/1440 px (English + Urdu), tap targets, Urdu RTL with LTR phone numbers, options menu Escape/focus, language switch updates wording + direction, server error → "Try again" with the same id, completed state |
 | `client/src/modules/aiCalling/__tests__/link-assistant-panel.test.tsx` (6) | Funnel step conversion, per-question table, server-side status filter, transcript + link activity (no "delivered" without a carrier report), revoke needs confirmation, error → retry, "Preview as customer" |
 | `client/e2e/link-assistant.spec.ts` (6, Playwright, mocked API) | CRM panel, conversation drawer and wizard at 360/768/1440 px: no overflow, filter, revoke confirmation, inline validation, live SMS preview, unsaved-changes guard. `LINK_E2E_SHOTS=<dir>` keeps screenshots |
 
@@ -249,7 +315,9 @@ Campaigns themselves: `/api/v1/ai-calling/campaigns` with `channel: 'web_link'`.
 | Deploy to the live server | **Waiting (gate 1)** | Review the PR, merge, run the "Deploy" workflow |
 | Short link domain | **Waiting (gate 2)** | Choose a domain; point it at the API; set `LINK_ASSISTANT_BASE_URL` |
 | Real-model latency numbers | **Not measured** (paid) | `node scripts/linkAssistantLatency.mjs --confirm` with your approval |
-| Premium voice tier on the page | **Not built** (gate 3) | Approve LiveKit + OpenAI Realtime; then wire the existing agent-worker to link sessions |
+| Voice call on a physical phone | **Not verified** | Open a preview link on your phone (HTTPS or `adb reverse` to localhost) and talk to it; report anything odd |
+| Voice reply latency ≈ 3 s (target 1.5 s) | **Open** | Host the worker next to LiveKit; consider letting the model ask the next question while the answer is validated |
+| Run the agent worker in production | **Waiting (gate 1/3)** | Deploy `server/agent-worker` (LiveKit Cloud agents or a server) with the same `LIVEKIT_AGENT_NAME` |
 | First real SMS batch | **Waiting (gate 4)** | Test on your own number first; the operator currently refuses SMS from both SIMs |
 | "STOP" sent as an **SMS reply** | **Partial** | The client app cannot read SMS (no RECEIVE_SMS). Opt-out works on the page and via the company build's SMS agent. A reply in the Messages app is seen by the user, not the CRM |
 | Invisible bot challenge | **Not built** | Only rate limits + "no JavaScript → no session" + preview-bot handling. A third-party challenge would add a tracker (excluded) |

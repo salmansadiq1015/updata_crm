@@ -2,7 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import {
-  X, Play, Pause, Square, RotateCcw, FlaskConical, ListChecks, Phone, Loader2, Download, Mic, MessageSquareText,
+  X, Play, Pause, Square, RotateCcw, FlaskConical, ListChecks, Phone, Loader2, Download, Mic, MessageSquareText, Pencil,
 } from 'lucide-react';
 import { ConfirmDialog as ConfirmDialogRaw } from '@/shared/components/confirm-dialog';
 import { downloadBlob } from '@/lib/api/download';
@@ -15,6 +15,9 @@ import { WebCallConsole } from './web-call-console';
 import { CallReviewDrawer } from './call-review-drawer';
 import { LinkAssistantPanel } from './link-assistant-panel';
 import { StatusPill } from './status-pill';
+import { DEVICE_WAIT_TEXT, PairedCallHealth } from './paired-call-health';
+import { UpdataVoiceOrb, type UpdataVoiceOrbState } from './updata-voice-orb';
+import type { Campaign } from '../types/ai-calling-types';
 
 // ConfirmDialog is an untyped .jsx; loosen its prop types for this .tsx module.
 const ConfirmDialog = ConfirmDialogRaw as (props: {
@@ -24,7 +27,7 @@ const ConfirmDialog = ConfirmDialogRaw as (props: {
 
 type Tab = 'overview' | 'recipients' | 'simulate' | 'webtest' | 'link';
 
-export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
+export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaignId: string; onClose: () => void; onEdit?: (campaign: Campaign) => void }) {
   const { data: campaign, isLoading, isError, refetch } = useCampaign(campaignId);
   const { start, pause, resume, cancel, retry } = useCampaignMutations();
   const [tab, setTab] = useState<Tab>('overview');
@@ -81,6 +84,11 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
 
               {/* lifecycle actions */}
               <div className="mt-3 flex flex-wrap gap-2">
+                {['draft', 'paused'].includes(campaign.status) && onEdit ? (
+                  <button type="button" disabled={busy} onClick={() => onEdit(campaign)} className={`${btn} border border-border hover:bg-muted`}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </button>
+                ) : null}
                 {canStart ? (
                   <button type="button" disabled={busy} onClick={() => start.mutate({ id: campaignId })} className={`${btn} bg-brand-500 text-white hover:bg-brand-600`}>
                     {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start
@@ -101,7 +109,7 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
                     type="button"
                     disabled={busy}
                     onClick={() => retry.mutate(campaignId)}
-                    title={campaign.status === 'paused' ? 'Re-queues failed/exhausted leads; the campaign stays paused until you resume it' : 'Re-queue failed and exhausted leads'}
+                    title={`${campaign.status === 'paused' ? 'Re-queues failed/exhausted leads; the campaign stays paused until you resume it' : 'Re-queue failed and exhausted leads'}. Calls with an unknown outcome are not included: resolve each one from Recipients.`}
                     className={`${btn} border border-border hover:bg-muted`}
                   >
                     {retry.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Retry failed
@@ -132,6 +140,12 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {tab === 'overview' && s ? (
                 <div className="space-y-4">
+                  {campaign.transport === 'paired_phone' && campaign.status === 'running' && campaign.deviceWait?.reasons?.length ? (
+                    <div role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                      <p className="font-semibold text-amber-800 dark:text-amber-300">Waiting for your paired phone</p>
+                      <p className="mt-0.5 text-muted-foreground">{campaign.deviceWait.reasons.map((r) => DEVICE_WAIT_TEXT[r] || r).join(' · ')}. No lead is called until it is ready.</p>
+                    </div>
+                  ) : null}
                   <LiveCallsPanel campaignId={campaignId} active={['running', 'queued'].includes(campaign.status) || s.inProgress > 0} />
                   <div className="grid grid-cols-3 gap-2">
                     <Metric label="Total" value={s.total} />
@@ -147,6 +161,7 @@ export function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: stri
                     <Metric label="Do not contact" value={s.doNotContact} accent="rose" />
                     <Metric label="Missing phone" value={s.missingPhone} />
                     <Metric label="Needs consent" value={s.consentRequired ?? 0} accent="amber" />
+                    <Metric label="Outcome unknown" value={s.needsReconcile ?? 0} accent="amber" />
                     <Metric label="Failed" value={s.failed} accent="rose" />
                     <Metric label="Retry scheduled" value={s.retryScheduled} />
                   </div>
@@ -187,24 +202,40 @@ function LiveCallsPanel({ campaignId, active }: { campaignId: string; active: bo
   const calls = data ?? [];
   if (!calls.length) return null;
   return (
-    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-        <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>
-        {calls.length} call{calls.length > 1 ? 's' : ''} in progress
+    <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-3" aria-live="polite">
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-300">
+        <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400" /></span>
+        {calls.length} live call activit{calls.length === 1 ? 'y' : 'ies'}
       </div>
       <ul className="space-y-2">
-        {calls.map((c) => (
-          <li key={c.callId} className="flex items-center justify-between gap-3 rounded-md bg-background/60 px-2.5 py-2 text-sm">
-            <div className="min-w-0">
-              <div className="truncate font-medium">{c.leadName}{c.isTest ? <span className="ml-1 text-[10px] text-amber-600">TEST</span> : null}</div>
-              <div className="truncate text-xs text-muted-foreground">{c.currentQuestion || c.phase} · {c.answered}/{c.total} answered</div>
+        {calls.map((c) => {
+          const orbState: UpdataVoiceOrbState = c.gateway?.audioLost
+            ? 'error'
+            : ['queued', 'initiating', 'ringing'].includes(c.state)
+              ? 'connecting'
+              : 'idle';
+          return (
+          <li key={c.callId} className="rounded-lg border border-white/6 bg-background/60 px-2.5 py-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <UpdataVoiceOrb state={orbState} size="compact" />
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{c.leadName}{c.isTest ? <span className="ml-1 text-[10px] text-amber-400">TEST</span> : null}</div>
+                  <div className="truncate text-xs text-muted-foreground">{c.currentQuestion || c.phase} · {c.answered}/{c.total} answered</div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    {c.gateway?.audioLost ? 'Audio path lost' : c.gateway?.audioOpen ? 'Bidirectional gateway audio reported' : c.state === 'in_progress' ? 'Call active · speaker state unavailable here' : 'Waiting for connection'}
+                  </div>
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <StatusPill status={c.state} />
+                <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{Math.floor(c.elapsedSeconds / 60)}:{String(c.elapsedSeconds % 60).padStart(2, '0')}</div>
+              </div>
             </div>
-            <div className="shrink-0 text-right">
-              <StatusPill status={c.state} />
-              <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{Math.floor(c.elapsedSeconds / 60)}:{String(c.elapsedSeconds % 60).padStart(2, '0')}</div>
-            </div>
+            {c.transport === 'paired_phone' ? <PairedCallHealth call={c} /> : null}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );
@@ -252,7 +283,11 @@ function RecipientsTab({ campaignId }: { campaignId: string }) {
                 </td>
                 <td className="py-2"><StatusPill status={r.state} /></td>
                 <td className="py-2 text-right tabular-nums">{r.attemptCount ?? 0}</td>
-                <td className="py-2">{r.qualification ? <StatusPill status={r.qualification} /> : <span className="text-xs text-muted-foreground">{r.finalDisposition || '—'}</span>}</td>
+                <td className="py-2">
+                  {r.qualification ? <StatusPill status={r.qualification} />
+                    : r.finalDisposition === 'needs_reconcile' ? <span className="inline-flex items-center gap-1"><StatusPill status="needs_reconcile" /><span className="text-xs font-medium text-brand-600">Resolve</span></span>
+                      : <span className="text-xs text-muted-foreground">{r.finalDisposition || '—'}</span>}
+                </td>
               </tr>
             );
           })}

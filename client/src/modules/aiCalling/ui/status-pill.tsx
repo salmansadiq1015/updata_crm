@@ -20,13 +20,18 @@ const STYLES: Record<string, string> = {
   answered_completed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   answered_partial: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   no_answer: 'bg-muted text-muted-foreground',
+  needs_reconcile: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  needs_review: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
 };
+
+// A parked call is not a failure: nobody knows yet whether it reached the lead.
+const LABELS: Record<string, string> = { needs_reconcile: 'outcome unknown', needs_review: 'outcome unknown' };
 
 export function StatusPill({ status }: { status: string }) {
   if (!status) return null;
   return (
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize', STYLES[status] || 'bg-muted text-muted-foreground')}>
-      {status.replace(/_/g, ' ')}
+      {LABELS[status] || status.replace(/_/g, ' ')}
     </span>
   );
 }

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { showError, showSuccess } from '@/lib/toast';
 import { aiCallingApi } from '../services/ai-calling-api';
-import type { CreateCampaignInput } from '../types/ai-calling-types';
+import type { CallListFilters, CreateCampaignInput, ReconcileResolution } from '../types/ai-calling-types';
 
 const keys = {
   all: ['ai-calling'] as const,
@@ -14,6 +14,7 @@ const keys = {
   telephony: () => ['ai-calling', 'telephony'] as const,
   languages: () => ['ai-calling', 'languages'] as const,
   leadHistory: (leadId: string) => ['ai-calling', 'lead-history', leadId] as const,
+  calls: () => ['ai-calling', 'calls'] as const,
   consent: (leadId: string) => ['ai-calling', 'consent', leadId] as const,
 };
 
@@ -81,6 +82,14 @@ export function useCall(callId: string | null) {
   });
 }
 
+export function useCalls(params: CallListFilters = {}) {
+  return useQuery({
+    queryKey: [...keys.calls(), params],
+    queryFn: () => aiCallingApi.listCalls(params),
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useReviewCall() {
   const qc = useQueryClient();
   return useMutation({
@@ -95,6 +104,22 @@ export function useReviewCall() {
       qc.invalidateQueries({ queryKey: ['ai-calling', 'campaign'] });
       qc.invalidateQueries({ queryKey: ['ai-calling', 'recipients'] });
       qc.invalidateQueries({ queryKey: ['ai-calling', 'analytics'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'calls'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+    },
+    onError: (e: unknown) => showError(e),
+  });
+}
+
+/** Resolve a call whose outcome is unknown: the only way it leaves review (never redialed on its own). */
+export function useReconcileCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; resolution: ReconcileResolution; qualification?: string | null; note?: string }) =>
+      aiCallingApi.reconcileCall(id, payload),
+    onSuccess: (_data, vars) => {
+      showSuccess(vars.resolution === 'retry' ? 'Outcome resolved · the lead will be called again' : 'Outcome resolved');
+      qc.invalidateQueries({ queryKey: ['ai-calling'] });
       qc.invalidateQueries({ queryKey: ['leads'] });
     },
     onError: (e: unknown) => showError(e),
@@ -142,6 +167,11 @@ export function useCampaignMutations() {
     onSuccess: () => { showSuccess('Campaign created'); invalidate(); },
     onError: (e: unknown) => showError(e),
   });
+  const update = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<CreateCampaignInput> }) => aiCallingApi.updateCampaign(id, input),
+    onSuccess: () => { showSuccess('Campaign updated'); invalidate(); },
+    onError: (e: unknown) => showError(e),
+  });
   const start = useMutation({
     mutationFn: ({ id, scheduledAt }: { id: string; scheduledAt?: string | null }) => aiCallingApi.start(id, scheduledAt ?? null),
     onSuccess: () => { showSuccess('Campaign started'); invalidate(); },
@@ -172,5 +202,5 @@ export function useCampaignMutations() {
     onError: (e: unknown) => showError(e),
   });
 
-  return { create, start, pause, resume, cancel, retry };
+  return { create, update, start, pause, resume, cancel, retry };
 }

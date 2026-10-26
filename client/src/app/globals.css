@@ -262,6 +262,56 @@
   display: none;
 }
 
+/* State-driven AI voice identity. Transform-only SVG animation keeps this
+   inexpensive and isolated from WebRTC/audio processing. */
+@keyframes updata-orb-drift {
+  0%, 100% { transform: translate3d(-1px, 1px, 0) rotate(-1deg); }
+  50% { transform: translate3d(2px, -2px, 0) rotate(1.5deg); }
+}
+@keyframes updata-orb-counter-drift {
+  0%, 100% { transform: translate3d(0, -1px, 0) rotate(.5deg); }
+  50% { transform: translate3d(-2px, 2px, 0) rotate(-1deg); }
+}
+@keyframes updata-orb-breathe {
+  0%, 100% { opacity: .62; transform: scale(.985); }
+  50% { opacity: 1; transform: scale(1.015); }
+}
+@keyframes updata-orb-particles {
+  0%, 100% { opacity: .58; }
+  50% { opacity: 1; }
+}
+@keyframes updata-orb-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes updata-orb-state-pulse {
+  0%, 100% { filter: saturate(.9) brightness(.9); }
+  50% { filter: saturate(1.18) brightness(1.12); }
+}
+
+.updata-orb-drift { transform-origin: 50% 50%; animation: updata-orb-drift 5.8s ease-in-out infinite; }
+.updata-orb-counter-drift { transform-origin: 50% 50%; animation: updata-orb-counter-drift 7.2s ease-in-out infinite; }
+.updata-orb-breathe { transform-origin: 50% 50%; animation: updata-orb-breathe 4.8s ease-in-out infinite; }
+.updata-orb-particles { animation: updata-orb-particles 3.6s ease-in-out infinite; }
+.updata-orb-slow-spin { transform-origin: 50% 50%; animation: updata-orb-spin 28s linear infinite; }
+.updata-orb-connecting { animation: updata-orb-state-pulse 1.7s ease-in-out infinite; }
+.updata-orb-listening { animation: updata-orb-state-pulse 2.6s ease-in-out infinite; }
+.updata-orb-speaking { animation: updata-orb-state-pulse .9s ease-in-out infinite; }
+.updata-orb-processing { animation: updata-orb-state-pulse 1.25s ease-in-out infinite; }
+.updata-orb-reconnecting { animation: updata-orb-state-pulse 1.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .updata-orb-drift,
+  .updata-orb-counter-drift,
+  .updata-orb-breathe,
+  .updata-orb-particles,
+  .updata-orb-slow-spin,
+  .updata-orb-connecting,
+  .updata-orb-listening,
+  .updata-orb-speaking,
+  .updata-orb-processing,
+  .updata-orb-reconnecting { animation: none !important; }
+}
+
 @page {
   size: landscape;
   margin: 10mm;
@@ -1007,6 +1057,12 @@ ul[data-type="taskList"] li > div > p {
 ul[data-type="taskList"] li[data-checked="true"] > div {
   color: var(--muted-foreground);
   text-decoration: line-through;
+}
+
+/* The issue-report control belongs to the app shell. Keep it out of the
+   Agent Test Studio, where it would overlap the modal's content. */
+body.agent-test-studio-open .feedback-fab-ignore {
+  display: none;
 }
 
 /* Nested task lists keep a small indent. */

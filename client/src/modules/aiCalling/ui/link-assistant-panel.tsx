@@ -182,6 +182,7 @@ export function LinkAssistantPanel({ campaignId }: { campaignId: string }) {
                   <span className="min-w-0 truncate font-medium">
                     {s.leadName || 'Unnamed lead'}
                     {s.isTest ? <span className="ml-1.5 rounded bg-amber-500/15 px-1 py-px text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-400">Preview</span> : null}
+                    {s.voice?.calls ? <span className="ml-1.5 rounded bg-brand-500/10 px-1 py-px text-[10px] font-semibold uppercase text-brand-600 dark:text-brand-300">{s.voice.live ? 'On call' : 'Voice'}</span> : null}
                   </span>
                   <SessionStatusPill status={s.status} />
                   <span className="col-span-2 text-xs text-muted-foreground sm:col-span-1 sm:text-right">
@@ -366,7 +367,7 @@ function SessionSheet({ sessionId, onClose }: { sessionId: string | null; onClos
             {data?.isTest ? <span className="rounded bg-amber-500/15 px-1 py-px text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-400">Preview</span> : null}
           </SheetTitle>
           <SheetDescription className="">
-            {data ? `${data.campaignName ? `${data.campaignName} · ` : ''}${LANGUAGE_LABEL[data.language] ?? data.language} · ${data.turns} messages · link valid until ${fmtWhen(data.expiresAt)}` : 'Loading…'}
+            {data ? `${data.campaignName ? `${data.campaignName} · ` : ''}${LANGUAGE_LABEL[data.language] ?? data.language} · ${data.turns} messages${data.voice?.calls ? ` · ${data.voice.calls} voice call${data.voice.calls === 1 ? '' : 's'} (${Math.round(data.voice.seconds / 60)} min, $${data.voice.cost.toFixed(2)})` : ''}${data.voice?.live ? ' · on a call now' : ''} · link valid until ${fmtWhen(data.expiresAt)}` : 'Loading…'}
           </SheetDescription>
         </SheetHeader>
 

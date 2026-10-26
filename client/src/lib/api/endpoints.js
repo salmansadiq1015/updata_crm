@@ -922,8 +922,10 @@ export const ENDPOINTS = Object.freeze({
     RECIPIENTS: (id) => `/ai-calling/campaigns/${id}/recipients`,
     ACTIVE_CALLS: (id) => `/ai-calling/campaigns/${id}/active-calls`,
     EXPORT: (id) => `/ai-calling/campaigns/${id}/export`,
+    CALLS: '/ai-calling/calls',
     CALL: (id) => `/ai-calling/calls/${id}`,
     CALL_REVIEW: (id) => `/ai-calling/calls/${id}/review`,
+    CALL_RECONCILE: (id) => `/ai-calling/calls/${id}/reconcile`,
     LEAD_HISTORY: (leadId) => `/ai-calling/leads/${leadId}/history`,
     LEAD_TRANSITIONS: (leadId) => `/ai-calling/leads/${leadId}/transitions`,
     LEAD_CONSENT: (leadId) => `/ai-calling/leads/${leadId}/consent`,
@@ -932,6 +934,19 @@ export const ENDPOINTS = Object.freeze({
     SUPPRESSIONS: '/ai-calling/suppressions',
     TELEPHONY_HEALTH: '/ai-calling/telephony/health',
     LANGUAGES: '/ai-calling/languages',
+    SETTINGS: '/ai-calling/settings',
+  },
+  // Paired-phone calling (server/src/modules/pairedPhone): the owner's phone via the ESP32 gateway.
+  PAIRED_PHONE: {
+    DEVICES: '/paired-phone/devices',
+    PAIRING_CODE: '/paired-phone/devices/pairing-code',
+    DEVICE: (id) => `/paired-phone/devices/${id}`,
+    REVOKE: (id) => `/paired-phone/devices/${id}/revoke`,
+    VERIFY_AUDIO: (id) => `/paired-phone/devices/${id}/verify-audio`,
+    ROTATE_KEY: (id) => `/paired-phone/devices/${id}/rotate-key`,
+    CLEAR: (id) => `/paired-phone/devices/${id}/clear`,
+    TAKEOVER: (callId) => `/paired-phone/calls/${callId}/takeover`,
+    HANGUP: (callId) => `/paired-phone/calls/${callId}/hangup`,
   },
   // SMS link assistant (server/src/modules/linkAssistant): personal chat links sent by SMS.
   LINK_ASSISTANT: {

@@ -151,6 +151,52 @@ for (const width of [360, 768, 1440]) {
   });
 }
 
+for (const [width, height] of [[1440, 900], [1280, 720], [390, 844]]) {
+  test(`${width}×${height}: the AI calling page scrolls; no section is squeezed or clipped`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'AI Voice Calling' })).toBeVisible();
+    const header = page.locator('header').filter({ has: page.getByRole('heading', { name: 'AI Voice Calling' }) });
+    for (const name of ['Test agent', 'New campaign']) {
+      const button = header.getByRole('button', { name });
+      await expect(button).toBeVisible();
+      const [b, h] = [await button.boundingBox(), await header.boundingBox()];
+      expect(b!.y + b!.height).toBeLessThanOrEqual(h!.y + h!.height); // inside the header, not cut off
+    }
+    // Every section of the workspace keeps its full height (the page scrolls instead).
+    // (Measured from in-flow content; decorative absolutely-positioned glows may overflow on purpose.)
+    const squeezed = await header.evaluate((el) => Array.from(el.parentElement!.children).filter((section) => {
+      const box = section.getBoundingClientRect();
+      const contentBottom = Math.max(box.top, ...Array.from(section.children)
+        .filter((c) => getComputedStyle(c).position !== 'absolute')
+        .map((c) => c.getBoundingClientRect().bottom));
+      return contentBottom > box.bottom + 1;
+    }).map((section) => section.textContent?.trim().slice(0, 40)));
+    expect(squeezed).toEqual([]);
+    await shot(page, `ai-calling-header-${width}x${height}`);
+  });
+}
+
+test('agent test studio: the orb is centred and never overlaps the title', async ({ page }) => {
+  // The studio tests voice campaigns: serve one next to the link campaign (registered later → wins).
+  const voice = { ...campaign, _id: 'c-voice', id: 'c-voice', name: 'Voice demo', channel: 'voice', agentConfig: { ...campaign.agentConfig, agentName: 'Salman' } };
+  await page.route((url) => url.pathname.endsWith('/api/v1/ai-calling/campaigns'), (route) => (route.request().method() === 'GET'
+    ? respond(route, envelope([campaign, voice], { page: 1, limit: 25, total: 2, pages: 1 }))
+    : route.fallback()));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: /Test agent/ }).first().click();
+  const dialog = page.getByRole('dialog');
+  const orb = dialog.getByRole('img', { name: 'Voice agent is idle' }).first();
+  await expect(orb).toBeVisible();
+  const title = dialog.getByText(/^Talk to /).first();
+  await expect(title).toBeVisible();
+  const [o, t] = [await orb.boundingBox(), await title.boundingBox()];
+  expect(o!.y + o!.height).toBeLessThanOrEqual(t!.y + 1); // orb ends above the title
+  expect(Math.abs((o!.x + o!.width / 2) - (t!.x + t!.width / 2))).toBeLessThan(4); // centred on the same axis
+  await shot(page, 'agent-test-studio-1440');
+});
+
 test('status filter is applied by the server; revoking a link needs confirmation', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });

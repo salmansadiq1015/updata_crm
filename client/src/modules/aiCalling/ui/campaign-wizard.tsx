@@ -2,16 +2,19 @@
 
 import { useMemo, useState, type ReactElement } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { X, Plus, Trash2, ChevronRight, ChevronLeft, GripVertical, Bot, MessageSquareText, PhoneCall, AlertCircle, Check, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, ChevronRight, ChevronLeft, GripVertical, MessageSquareText, PhoneCall, AlertCircle, Check, Loader2, ShieldCheck, Clock3, Headphones, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api/client';
 import { ConfirmDialog as ConfirmDialogRaw } from '@/shared/components/confirm-dialog';
-import { useCampaignMutations } from '../hooks/use-ai-calling';
+import { useCampaignMutations, useTelephonyHealth } from '../hooks/use-ai-calling';
 import type {
-  AgentConfig, CampaignChannel, CreateCampaignInput, LinkConfig, LinkLanguage, Question, QuestionType, RuleAction, Schedule, StatusRule,
+  AgentConfig, CallTransport, Campaign, CampaignChannel, CreateCampaignInput, LinkConfig, LinkLanguage, Question, QuestionType, RuleAction, Schedule, StatusRule,
 } from '../types/ai-calling-types';
 import { ConditionEditor, type ConditionValue, type FieldOption } from './condition-editor';
+import { usePairedDevices } from '../hooks/use-paired-phone';
+import { DEVICE_WAIT_TEXT } from './paired-call-health';
 import { LanguageSelect } from './language-select';
+import { UpdataVoiceOrb } from './updata-voice-orb';
 
 /** Number inputs: an emptied field is NaN/0 — snap back into the server's accepted range. */
 function clampInt(value: number | undefined, min: number, max: number): number {
@@ -77,10 +80,10 @@ const LINK_LANGUAGES: { value: LinkLanguage; label: string }[] = [
 
 const DEFAULT_LINK_CONFIG: LinkConfig = {
   expiryDays: 7, languages: ['en', 'ur', 'roman_ur'], defaultLanguage: 'en', personaName: 'Ayesha', personaTone: 'warm',
-  reason: '', estimatedMinutes: 3, faq: [], voiceTier: 'off',
+  reason: '', estimatedMinutes: 3, faq: [], voiceTier: 'premium',
   reminders: { enabled: false, afterHours: 24, max: 1 },
   fallbackToCall: { enabled: false, simCallCampaignId: null, afterHours: 24 },
-  limits: { maxTurns: 40, maxTokensPerTurn: 220, maxSessionMinutes: 30, dailySpendCap: 2 },
+  limits: { maxTurns: 40, maxTokensPerTurn: 220, maxSessionMinutes: 30, dailySpendCap: 2, maxVoiceMinutes: 10 },
   transcriptRetentionDays: 90,
 };
 
@@ -96,34 +99,57 @@ function useSimCallCampaigns(enabled: boolean) {
   });
 }
 
-export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
+export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }: {
   onClose: () => void;
   onCreated: (id: string) => void;
   /** When provided, the campaign calls exactly these leads instead of a filter. */
   initialLeadIds?: string[];
+  /** Draft/paused campaign to edit. Lead selection, channel, and test mode stay immutable. */
+  campaign?: Campaign;
 }) {
-  const { create } = useCampaignMutations();
+  const { create, update } = useCampaignMutations();
+  const editing = Boolean(campaign);
   const [step, setStep] = useState(0);
   const explicitLeadIds = initialLeadIds && initialLeadIds.length ? initialLeadIds : null;
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(campaign?.name ?? '');
+  const [description, setDescription] = useState(campaign?.description ?? '');
   const [agent, setAgent] = useState<AgentConfig>({
     agentName: 'Alex', organizationName: '', objective: '', language: 'en', voice: 'alloy',
     speakingStyle: 'professional', maxCallSeconds: 300, recordCall: false, disclosure: DEFAULT_DISCLOSURE,
+    ...(campaign?.agentConfig ?? {}),
   });
-  const [questions, setQuestions] = useState<Question[]>([blankQuestion(1)]);
-  const [rules, setRules] = useState<StatusRule[]>([]);
+  const [questions, setQuestions] = useState<Question[]>(() => campaign?.questionnaire.questions?.length
+    ? [...campaign.questionnaire.questions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    : [blankQuestion(1)]);
+  const [rules, setRules] = useState<StatusRule[]>(campaign?.statusRules ?? []);
   const [schedule, setSchedule] = useState<Schedule>({
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    callWindow: { start: '09:00', end: '18:00' }, daysOfWeek: [1, 2, 3, 4, 5],
+    daysOfWeek: [1, 2, 3, 4, 5],
     maxConcurrency: 1, maxAttemptsPerLead: 2, retryDelayMinutes: 120, maxCallsPerDay: 100,
+    ...(campaign?.schedule ?? {}),
+    callWindow: { start: '09:00', end: '18:00', ...(campaign?.schedule.callWindow ?? {}) },
   });
-  const [filters, setFilters] = useState<{ status?: string; country?: string; city?: string; businessType?: string }>({});
-  const [isTest, setIsTest] = useState(false);
-  const [channel, setChannel] = useState<CampaignChannel>('voice');
-  const [link, setLink] = useState<LinkConfig>(DEFAULT_LINK_CONFIG);
+  const [filters, setFilters] = useState<{ status?: string; country?: string; city?: string; businessType?: string }>(() => (
+    campaign?.selection?.mode === 'filters' ? campaign.selection.filters : {}
+  ) as { status?: string; country?: string; city?: string; businessType?: string });
+  const [isTest, setIsTest] = useState(Boolean(campaign?.isTest));
+  const [channel, setChannel] = useState<CampaignChannel>(campaign?.channel ?? 'voice');
+  const [link, setLink] = useState<LinkConfig>(() => ({
+    ...DEFAULT_LINK_CONFIG,
+    ...(campaign?.linkConfig ?? {}),
+    reminders: { ...DEFAULT_LINK_CONFIG.reminders, ...(campaign?.linkConfig?.reminders ?? {}) },
+    fallbackToCall: { ...DEFAULT_LINK_CONFIG.fallbackToCall, ...(campaign?.linkConfig?.fallbackToCall ?? {}) },
+    limits: { ...DEFAULT_LINK_CONFIG.limits, ...(campaign?.linkConfig?.limits ?? {}) },
+  }));
   const isLink = channel === 'web_link';
+  const [transport, setTransport] = useState<CallTransport>(campaign?.transport ?? 'cloud_sip');
+  const [pairedDeviceId, setPairedDeviceId] = useState<string>(campaign?.pairedDeviceId ?? '');
+  const paired = usePairedDevices(!isLink);
+  const telephony = useTelephonyHealth();
+  const pairedDevices = (paired.data ?? []).filter((d) => !d.revoked);
+  const selectedDevice = pairedDevices.find((d) => d.id === pairedDeviceId) || null;
+  const usesPairedPhone = !isLink && transport === 'paired_phone';
   const simCampaigns = useSimCallCampaigns(isLink && link.fallbackToCall.enabled);
 
   const fieldKeys = useMemo(() => questions.filter((q) => q.label).map((q) => q.fieldKey), [questions]);
@@ -132,10 +158,11 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
   const [stepError, setError] = useState<StepError | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Unsaved-changes guard: compare against the form as it was first rendered.
-  const snapshot = JSON.stringify({ name, description, agent, questions, rules, schedule, filters, isTest, channel, link });
+  const snapshot = JSON.stringify({ name, description, agent, questions, rules, schedule, filters, isTest, channel, link, transport, pairedDeviceId });
   const [initialSnapshot] = useState(snapshot);
   const dirty = snapshot !== initialSnapshot;
-  const requestClose = () => { if (dirty && !create.isPending) setConfirmDiscard(true); else onClose(); };
+  const saving = create.isPending || update.isPending;
+  const requestClose = () => { if (dirty && !saving) setConfirmDiscard(true); else onClose(); };
   const error = stepError && stepError.at === snapshot ? stepError : null;
   const fieldError = (field: string) => (error && error.field === field ? error.message : undefined);
 
@@ -154,10 +181,20 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
 
   function validateStep(key: StepKey): StepError | null {
     if (key === 'campaign' && !name.trim()) return { step: key, field: 'name', message: 'Give the campaign a name.' };
+    if (key === 'campaign' && !isLink && !agent.agentName?.trim()) return { step: key, field: 'agent', message: 'Give the voice agent a name.' };
+    if (key === 'campaign' && !isLink && !agent.organizationName?.trim()) return { step: key, field: 'company', message: 'Add the company name the agent discloses.' };
+    if (key === 'campaign' && !agent.objective?.trim()) return { step: key, field: 'objective', message: 'Describe the outcome this agent should achieve.' };
+    if (key === 'campaign' && !isLink && !agent.disclosure?.trim()) return { step: key, field: 'disclosure', message: 'Add the disclosure the agent speaks before collecting answers.' };
     if (key === 'assistant') {
       if (!agent.organizationName?.trim()) return { step: key, field: 'company', message: 'Add the company name. It is shown to the lead in the first message.' };
       if (!link.languages.length) return { step: key, field: 'languages', message: 'Choose at least one language.' };
       if (link.faq.some((f) => !f.question.trim() || !f.answer.trim())) return { step: key, field: 'faq', message: 'Every FAQ entry needs a question and an answer, or remove the empty entry.' };
+    }
+    if (key === 'schedule' && usesPairedPhone && !pairedDeviceId) {
+      return { step: key, field: 'device', message: 'Choose the paired phone this campaign calls from, or switch to cloud calling.' };
+    }
+    if (key === 'schedule' && !editing && !explicitLeadIds && !Object.values(filters).some((value) => String(value || '').trim())) {
+      return { step: key, field: 'selection', message: 'Choose at least one lead filter, or start the campaign builder from selected leads.' };
     }
     if (key === 'questions') {
       if (!questions.length) return { step: key, message: 'Add at least one question.' };
@@ -206,6 +243,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
       agentConfig: agent,
       schedule,
       channel,
+      ...(isLink ? {} : { transport, pairedDeviceId: usesPairedPhone ? pairedDeviceId : null }),
       ...(isLink ? {
         linkConfig: {
           ...link,
@@ -219,8 +257,21 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
       isTest,
     };
     try {
-      const campaign = await create.mutateAsync(payload);
-      onCreated(campaign._id);
+      const saved = campaign
+        ? await update.mutateAsync({
+            id: campaign._id,
+            input: {
+              name: payload.name,
+              description: payload.description,
+              questionnaire: payload.questionnaire,
+              statusRules: payload.statusRules,
+              agentConfig: payload.agentConfig,
+              schedule: payload.schedule,
+              ...(isLink ? { linkConfig: payload.linkConfig } : { transport: payload.transport, pairedDeviceId: payload.pairedDeviceId }),
+            },
+          })
+        : await create.mutateAsync(payload);
+      onCreated(saved._id);
     } catch {
       /* toast handled in mutation */
     }
@@ -229,19 +280,21 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) requestClose(); }}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-open:animate-in data-open:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#02040a]/80 backdrop-blur-sm data-open:animate-in data-open:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby="wizard-step-label"
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           onPointerDownOutside={(e) => { e.preventDefault(); requestClose(); }}
-          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card focus:outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[88vh] sm:w-[calc(100%-2rem)] sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-border sm:shadow-theme-lg"
+          className="dark fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0a1020] text-slate-100 focus:outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[92vh] sm:w-[calc(100%-2rem)] sm:max-w-5xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-white/10 sm:shadow-[0_32px_100px_rgba(0,0,0,.68)]"
         >
         {/* header + stepper */}
-        <div className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+        <div className="border-b border-white/8 bg-[#0b1223] px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <Bot className="h-5 w-5 shrink-0 text-brand-500" aria-hidden="true" />
-              <DialogPrimitive.Title className="truncate text-base font-bold">{isLink ? 'New SMS link campaign' : 'New calling campaign'}</DialogPrimitive.Title>
+              <UpdataVoiceOrb state="idle" size="compact" />
+              <DialogPrimitive.Title className="truncate text-base font-bold">
+                {editing ? `Edit ${isLink ? 'SMS link' : 'calling'} campaign` : isLink ? 'New SMS link campaign' : 'New calling campaign'}
+              </DialogPrimitive.Title>
               {dirty ? <span className="hidden shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 sm:inline dark:text-amber-400">Unsaved</span> : null}
             </div>
             <button type="button" onClick={requestClose} aria-label="Close" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
@@ -283,9 +336,10 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
           {current === 'campaign' ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Channel">
-                <ChannelCard active={!isLink} onClick={() => setChannel('voice')} icon={PhoneCall} title="AI phone call" text="The AI calls the lead from a cloud phone number (needs a SIP number + LiveKit)." />
-                <ChannelCard active={isLink} onClick={() => setChannel('web_link')} icon={MessageSquareText} title="SMS link → AI chat" text="You text each lead a personal link from your own SIM; an AI assistant collects the answers in a chat." />
+                <ChannelCard active={!isLink} disabled={editing} onClick={() => setChannel('voice')} icon={PhoneCall} title="AI phone call" text="The AI calls the lead from a cloud phone line or from your own paired phone (chosen under Schedule & leads)." />
+                <ChannelCard active={isLink} disabled={editing} onClick={() => setChannel('web_link')} icon={MessageSquareText} title="SMS link → AI chat" text="You text each lead a personal link from your own SIM; an AI assistant collects the answers in a chat." />
               </div>
+              {editing ? <p className="text-xs text-slate-500">Channel, lead selection, and test mode are locked after campaign creation. Draft and paused campaign configuration can still be updated safely.</p> : null}
               <Field label="Campaign name" required error={fieldError('name')}>
                 <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Q1 heating-system qualification" aria-invalid={Boolean(fieldError('name'))} autoFocus />
               </Field>
@@ -293,10 +347,10 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                 <textarea className={inputCls} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
               </Field>
               <div className={isLink ? 'hidden' : 'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
-                <Field label="Agent name"><input className={inputCls} value={agent.agentName} onChange={(e) => setAgent({ ...agent, agentName: e.target.value })} /></Field>
-                <Field label="Company name (disclosed)"><input className={inputCls} value={agent.organizationName} onChange={(e) => setAgent({ ...agent, organizationName: e.target.value })} placeholder="MB Boiler & Heizung AG" /></Field>
+                <Field label="Agent name" error={fieldError('agent')}><input className={inputCls} value={agent.agentName} onChange={(e) => setAgent({ ...agent, agentName: e.target.value })} aria-invalid={Boolean(fieldError('agent'))} /></Field>
+                <Field label="Company name (disclosed)" error={fieldError('company')}><input className={inputCls} value={agent.organizationName} onChange={(e) => setAgent({ ...agent, organizationName: e.target.value })} placeholder="MB Boiler & Heizung AG" aria-invalid={Boolean(fieldError('company'))} /></Field>
               </div>
-              <Field label={isLink ? 'Objective (for the AI, not shown to the lead)' : 'Call objective'}><input className={inputCls} value={agent.objective} onChange={(e) => setAgent({ ...agent, objective: e.target.value })} placeholder="Qualify interest in a heating-system service contract" /></Field>
+              <Field label={isLink ? 'Objective (for the AI, not shown to the lead)' : 'Call objective'} error={fieldError('objective')}><input className={inputCls} value={agent.objective} onChange={(e) => setAgent({ ...agent, objective: e.target.value })} placeholder="Qualify interest in a heating-system service contract" aria-invalid={Boolean(fieldError('objective'))} /></Field>
               {isLink ? null : (<>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Field label="Language"><LanguageSelect className={inputCls} value={agent.language || 'en'} onChange={(language) => setAgent({ ...agent, language })} /></Field>
@@ -311,8 +365,8 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                   </select>
                 </Field>
               </div>
-              <Field label="AI disclosure (spoken at the start)">
-                <textarea className={inputCls} rows={2} value={agent.disclosure} onChange={(e) => setAgent({ ...agent, disclosure: e.target.value })} />
+              <Field label="AI disclosure (spoken at the start)" error={fieldError('disclosure')}>
+                <textarea className={inputCls} rows={2} value={agent.disclosure} onChange={(e) => setAgent({ ...agent, disclosure: e.target.value })} aria-invalid={Boolean(fieldError('disclosure'))} />
                 <p className="mt-1 text-[11px] text-muted-foreground">{'{company}'} is replaced with the company name. Disclosing AI involvement is required in many jurisdictions.</p>
               </Field>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -419,7 +473,13 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-background p-3">
                 <h3 className="mb-2 text-sm font-semibold">{isLink ? 'Which leads to text' : 'Which leads to call'}</h3>
-                {explicitLeadIds ? (
+                {editing ? (
+                  <p className="text-sm text-muted-foreground">
+                    Lead selection is preserved from campaign creation ({campaign?.selection?.mode === 'explicit'
+                      ? `${campaign.selection.leadIds.length} explicitly selected lead${campaign.selection.leadIds.length === 1 ? '' : 's'}`
+                      : 'saved lead filters'}). Editing configuration never replaces or silently re-enrols recipients.
+                  </p>
+                ) : explicitLeadIds ? (
                   <p className="text-sm text-muted-foreground">Calling the <strong className="text-foreground">{explicitLeadIds.length}</strong> lead{explicitLeadIds.length > 1 ? 's' : ''} you selected. Only those with a valid phone number and no do-not-call flag will be called.</p>
                 ) : (
                   <>
@@ -434,9 +494,52 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                 )}
               </div>
               {isLink ? <LinkScheduleFields link={link} setLink={setLink} simCampaigns={simCampaigns.data ?? []} /> : null}
+              {isLink ? null : (
+                <fieldset className="rounded-lg border border-border bg-background p-3">
+                  <legend className="px-1 text-sm font-semibold">Calls from</legend>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {([
+                      { value: 'cloud_sip', title: 'Cloud phone line', hint: 'LiveKit SIP trunk; several calls at once.' },
+                      { value: 'paired_phone', title: 'My paired phone', hint: 'Your Android phone + SIM through the ESP32 bridge; one call at a time.' },
+                    ] as const).map((o) => (
+                      <label key={o.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${transport === o.value ? 'border-brand-500 bg-brand-500/5' : 'border-border'}`}>
+                        <input type="radio" name="transport" className="mt-1" checked={transport === o.value} onChange={() => setTransport(o.value)} />
+                        <span><span className="font-medium">{o.title}</span><span className="block text-xs text-muted-foreground">{o.hint}</span></span>
+                      </label>
+                    ))}
+                  </div>
+                  {usesPairedPhone ? (
+                    <div className="mt-3 space-y-2">
+                      {paired.isLoading ? <p className="text-xs text-muted-foreground">Loading paired phones…</p> : pairedDevices.length === 0 ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-400">No paired phone yet. Add one under AI Calling → Paired phones first.</p>
+                      ) : (
+                        <Field label="Paired phone" error={fieldError('device')}>
+                          <select className={inputCls} value={pairedDeviceId} onChange={(e) => setPairedDeviceId(e.target.value)} aria-invalid={Boolean(fieldError('device'))}>
+                            <option value="">Choose…</option>
+                            {pairedDevices.map((d) => (
+                              <option key={d.id} value={d.id}>{d.name}{d.phoneLabel ? ` · ${d.phoneLabel}` : ''} — {d.readiness.ok ? 'ready' : d.audioVerified ? 'not ready now' : 'audio not verified'}</option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
+                      {selectedDevice ? (
+                        <p className={`text-xs ${selectedDevice.readiness.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                          {selectedDevice.readiness.ok
+                            ? `Ready. Up to ${selectedDevice.limits.maxCallsPerHour} calls/hour, ${selectedDevice.limits.cooldownSeconds}s between calls.`
+                            : `Not ready right now: ${selectedDevice.readiness.reasons.map((r) => DEVICE_WAIT_TEXT[r] || r).join(' · ')}.${selectedDevice.audioVerified ? ' The campaign waits for it.' : ' The campaign cannot start until call audio is verified.'}`}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </fieldset>
+              )}
               <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3">
                 {isLink ? null : (<>
+                {usesPairedPhone ? (
+                  <Field label="Concurrency"><input className={inputCls} value="1 (one phone)" disabled readOnly /></Field>
+                ) : (
                 <Field label="Concurrency"><input type="number" min={1} max={25} className={inputCls} value={schedule.maxConcurrency} onChange={(e) => setSchedule({ ...schedule, maxConcurrency: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxConcurrency: clampInt(x.maxConcurrency, 1, 25) }))} /></Field>
+                )}
                 <Field label="Max attempts/lead"><input type="number" min={1} max={10} className={inputCls} value={schedule.maxAttemptsPerLead} onChange={(e) => setSchedule({ ...schedule, maxAttemptsPerLead: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxAttemptsPerLead: clampInt(x.maxAttemptsPerLead, 1, 10) }))} /></Field>
                 <Field label="Max calls/day"><input type="number" min={1} className={inputCls} value={schedule.maxCallsPerDay} onChange={(e) => setSchedule({ ...schedule, maxCallsPerDay: Number(e.target.value) })} onBlur={() => setSchedule((x) => ({ ...x, maxCallsPerDay: clampInt(x.maxCallsPerDay, 1, 100000) }))} /></Field>
                 </>)}
@@ -445,7 +548,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
                 <Field label="Timezone"><input className={inputCls} value={schedule.timezone} onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })} /></Field>
               </div>
               <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" className="mt-1" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} />
+                <input type="checkbox" className="mt-1" checked={isTest} disabled={editing} onChange={(e) => setIsTest(e.target.checked)} />
                 <span>Test campaign — build and simulate only; never changes lead data.</span>
               </label>
             </div>
@@ -453,8 +556,40 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
 
           {current === 'review' ? (
             <div className="space-y-3 text-sm">
+              <div className="mb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Preflight</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{editing ? 'Saving keeps recipients and prior attempts intact. Server-side readiness still runs before subsequent calls.' : 'Creation saves a draft. A second server-side readiness check still runs before any real call.'}</p>
+                  </div>
+                  <span className="rounded-full border border-blue-400/20 bg-blue-400/8 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-300">{editing ? `${campaign?.status} edit` : 'Draft only'}</span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <PreflightItem icon={ShieldCheck} title="Calling safety" detail="Consent, suppression, calling hours and retry limits are rechecked by the server." status="pass" />
+                  <PreflightItem icon={Users} title="Lead eligibility" detail={editing ? 'Existing recipients stay enrolled; eligibility and policy checks run again before each call.' : explicitLeadIds ? `${explicitLeadIds.length} selected lead${explicitLeadIds.length === 1 ? '' : 's'}; valid phone and policy checks run on save.` : 'Filters resolve on the server; ineligible leads are reported, not dialled.'} status="pass" />
+                  <PreflightItem icon={Clock3} title="Schedule" detail={`${schedule.callWindow?.start}–${schedule.callWindow?.end} in ${schedule.timezone}`} status="pass" />
+                  {isLink ? (
+                    <PreflightItem icon={MessageSquareText} title="SMS link delivery" detail="Links are sent later from the approved SIM workflow; STOP remains an opt-out." status="pass" />
+                  ) : usesPairedPhone ? (
+                    <PreflightItem
+                      icon={PhoneCall}
+                      title="Paired-phone transport"
+                      detail={selectedDevice?.readiness.ok ? `${selectedDevice.name} currently reports ready.` : selectedDevice ? `Draft can be saved, but start is blocked until: ${selectedDevice.readiness.messages.join(' · ')}` : 'Choose a paired phone before saving.'}
+                      status={selectedDevice?.readiness.ok ? 'pass' : 'warn'}
+                    />
+                  ) : (
+                    <PreflightItem
+                      icon={Headphones}
+                      title="Cloud SIP transport"
+                      detail={telephony.data?.configured && telephony.data?.eligible ? 'LiveKit SIP currently reports eligible.' : 'Draft can be saved, but a configured and verified outbound SIP route is required to start.'}
+                      status={telephony.data?.configured && telephony.data?.eligible ? 'pass' : 'warn'}
+                    />
+                  )}
+                </div>
+              </div>
               <Summary label="Campaign" value={name} />
               <Summary label="Channel" value={isLink ? 'SMS link → AI chat' : 'AI phone call'} />
+              {isLink ? null : <Summary label="Calls from" value={usesPairedPhone ? `Paired phone: ${selectedDevice?.name || '—'}` : 'Cloud phone line'} />}
               {isLink ? (
                 <>
                   <Summary label="Assistant" value={`${link.personaName} (${link.personaTone}) · ${link.languages.join(', ')}`} />
@@ -472,7 +607,9 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
               <Summary label={isLink ? 'Sending hours' : 'Call window'} value={`${schedule.callWindow?.start}–${schedule.callWindow?.end} ${schedule.timezone}`} />
               <Summary label="Mode" value={isTest ? 'TEST (no CRM changes)' : 'Live'} />
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-                {isLink ? (
+                {editing ? (
+                  <>Saving updates this <strong>{campaign?.status}</strong> campaign. Existing recipients and attempts are preserved; questionnaire edits create a new version for subsequent calls.</>
+                ) : isLink ? (
                   <>The campaign is created as a <strong>draft</strong>. Use <strong>Preview as customer</strong> in its detail panel, then start it and send the links from the mobile app (Call Agent → Text leads from your phone). Every lead is told it is an AI assistant; &quot;STOP&quot; always opts out.</>
                 ) : (
                   <>The campaign is created as a <strong>draft</strong>. Review eligibility and run a browser simulation from its detail panel before starting real calls. OpenAI Realtime + SIP usage is billable.</>
@@ -483,23 +620,23 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds }: {
         </div>
 
         {/* footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
-          <button type="button" onClick={() => (step === 0 ? requestClose() : goTo(step - 1))} disabled={create.isPending} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-60">
+        <div className="flex items-center justify-between gap-2 border-t border-white/8 bg-[#0b1223] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+          <button type="button" onClick={() => (step === 0 ? requestClose() : goTo(step - 1))} disabled={saving} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-60">
             {step === 0 ? 'Cancel' : <><ChevronLeft className="h-4 w-4" /> Back</>}
           </button>
           {step < steps.length - 1 ? (
             <button type="button" onClick={next} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Next <ChevronRight className="h-4 w-4" /></button>
           ) : (
-            <button type="button" onClick={submit} disabled={create.isPending} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-              {create.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</> : 'Create draft campaign'}
+            <button type="button" onClick={submit} disabled={saving} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> {editing ? 'Saving…' : 'Creating…'}</> : editing ? 'Save campaign' : 'Create draft campaign'}
             </button>
           )}
         </div>
         <ConfirmDialog
           open={confirmDiscard}
           onOpenChange={setConfirmDiscard}
-          title="Discard this campaign?"
-          description="Nothing has been saved yet. Closing now loses everything you entered."
+          title={editing ? 'Discard campaign changes?' : 'Discard this campaign?'}
+          description={editing ? 'The saved campaign will stay unchanged.' : 'Nothing has been saved yet. Closing now loses everything you entered.'}
           confirmText="Discard"
           cancelText="Keep editing"
           onConfirm={() => { setConfirmDiscard(false); onClose(); }}
@@ -532,10 +669,34 @@ function Summary({ label, value }: { label: string; value: string }) {
   );
 }
 
-
-function ChannelCard({ active, onClick, icon: Icon, title, text }: { active: boolean; onClick: () => void; icon: React.ComponentType<{ className?: string }>; title: string; text: string }) {
+function PreflightItem({
+  icon: Icon,
+  title,
+  detail,
+  status,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  detail: string;
+  status: 'pass' | 'warn';
+}) {
   return (
-    <button type="button" role="radio" aria-checked={active} onClick={onClick} className={`rounded-xl border p-3 text-left transition ${active ? 'border-brand-500 bg-brand-500/5 ring-1 ring-brand-500' : 'border-border hover:border-brand-500/60'}`}>
+    <div className={`flex items-start gap-2.5 rounded-xl border p-3 ${status === 'pass' ? 'border-emerald-400/15 bg-emerald-400/5' : 'border-amber-400/20 bg-amber-400/6'}`}>
+      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${status === 'pass' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div>
+        <p className="text-xs font-semibold">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+
+function ChannelCard({ active, disabled = false, onClick, icon: Icon, title, text }: { active: boolean; disabled?: boolean; onClick: () => void; icon: React.ComponentType<{ className?: string }>; title: string; text: string }) {
+  return (
+    <button type="button" role="radio" aria-checked={active} disabled={disabled} onClick={onClick} className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-65 ${active ? 'border-brand-500 bg-brand-500/5 ring-1 ring-brand-500' : 'border-border hover:border-brand-500/60'}`}>
       <span className="flex items-center gap-2 text-sm font-semibold"><Icon className="h-4 w-4 text-brand-500" /> {title}</span>
       <span className="mt-1 block text-xs text-muted-foreground">{text}</span>
     </button>
@@ -567,12 +728,13 @@ function LinkAgentFields({ link, setLink, agent, setAgent, fieldError }: {
         <Field label="Takes about (minutes)"><input type="number" min={1} max={30} className={inputCls} value={link.estimatedMinutes} onChange={(e) => setLink({ ...link, estimatedMinutes: clampInt(Number(e.target.value), 1, 30) })} /></Field>
         <Field label="Voice">
           <select className={inputCls} value={link.voiceTier} onChange={(e) => setLink({ ...link, voiceTier: e.target.value as LinkConfig['voiceTier'] })}>
-            <option value="off">Off (text chat)</option>
-            <option value="browser">Browser voice (free)</option>
-            <option value="premium">Premium voice (LiveKit, owner approval)</option>
+            <option value="premium">Real-time voice call (recommended)</option>
+            <option value="browser">Text chat + browser dictation (free)</option>
+            <option value="off">Text chat only</option>
           </select>
         </Field>
       </div>
+      {link.voiceTier === 'premium' ? <p className="text-[11px] text-muted-foreground">The link opens a voice call screen: the lead talks with the AI in the browser (LiveKit + OpenAI Realtime, about $0.12 per minute measured, counted against the daily AI budget). Typing stays available. Needs LiveKit configured and the voice agent worker running; otherwise the link opens the text chat.</p> : null}
       {link.voiceTier === 'browser' ? <p className="text-[11px] text-muted-foreground">The microphone button only appears on phones whose browser supports speech input; everyone else types.</p> : null}
       </FormSection>
 
@@ -729,6 +891,7 @@ function LinkScheduleFields({ link, setLink, simCampaigns }: { link: LinkConfig;
       <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-4">
         <Field label="Link valid (days)"><input type="number" min={1} max={60} className={inputCls} value={link.expiryDays} onChange={(e) => setLink({ ...link, expiryDays: clampInt(Number(e.target.value), 1, 60) })} /></Field>
         <Field label="AI budget per day ($)"><input type="number" min={0} step={0.5} className={inputCls} value={link.limits.dailySpendCap} onChange={(e) => setLink({ ...link, limits: { ...link.limits, dailySpendCap: Math.max(0, Number(e.target.value) || 0) } })} /></Field>
+        {link.voiceTier === 'premium' ? <Field label="Max voice call (minutes)"><input type="number" min={2} max={30} className={inputCls} value={link.limits.maxVoiceMinutes ?? 10} onChange={(e) => setLink({ ...link, limits: { ...link.limits, maxVoiceMinutes: clampInt(Number(e.target.value), 2, 30) } })} /></Field> : null}
         <Field label="Max messages per chat"><input type="number" min={5} max={200} className={inputCls} value={link.limits.maxTurns} onChange={(e) => setLink({ ...link, limits: { ...link.limits, maxTurns: clampInt(Number(e.target.value), 5, 200) } })} /></Field>
         <Field label="Keep transcripts (days)"><input type="number" min={1} max={730} className={inputCls} value={link.transcriptRetentionDays} onChange={(e) => setLink({ ...link, transcriptRetentionDays: clampInt(Number(e.target.value), 1, 730) })} /></Field>
       </div>

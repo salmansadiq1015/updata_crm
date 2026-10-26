@@ -1,220 +1,356 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useState, type ComponentType, type ReactElement } from 'react';
 import {
-  PhoneCall, Phone, PhoneOutgoing, PhoneMissed, CheckCircle2, Users, AlertTriangle,
-  Plus, Clock, TrendingUp, PhoneForwarded, Bot, Loader2,
+  Activity, AlertTriangle, Bot, CheckCircle2, Clock3, Headphones, Mic,
+  Phone, PhoneCall, PhoneMissed, PhoneOutgoing, Plus, RadioTower,
+  ShieldCheck, TrendingUp, Users,
 } from 'lucide-react';
-import { PremiumStatCard as PremiumStatCardRaw } from '@/shared/components/premium-stat-card';
 import { EmptyState as EmptyStateRaw } from '@/shared/components/empty-state';
-import { useCampaigns, useTelephonyHealth } from '../hooks/use-ai-calling';
-import type { TelephonyHealth } from '../types/ai-calling-types';
+import { useAnalytics, useCampaigns, useTelephonyHealth } from '../hooks/use-ai-calling';
+import type { Campaign, TelephonyHealth } from '../types/ai-calling-types';
 import { useAiCallingRealtime } from '../hooks/use-ai-calling-realtime';
 import { AnalyticsPanel } from './analytics-panel';
-
-// The shared cards are untyped .jsx; loosen their prop types for this .tsx module.
-const PremiumStatCard = PremiumStatCardRaw as (props: {
-  label: string; value: number | string; icon?: unknown; accent?: string; suffix?: string;
-}) => ReactElement;
-const EmptyState = EmptyStateRaw as (props: {
-  icon?: unknown; title?: string; description?: string;
-}) => ReactElement;
-import type { Campaign } from '../types/ai-calling-types';
 import { CampaignWizard } from './campaign-wizard';
 import { CampaignDetailDrawer } from './campaign-detail-drawer';
 import { LinkKillSwitch } from './link-kill-switch';
+import { VoiceKillSwitch } from './voice-kill-switch';
+import { PairedPhonesPanel } from './paired-phones-panel';
 import { StatusPill } from './status-pill';
+import { AgentTestLauncher, AgentTestStudio } from './agent-test-studio';
+import { CallHistoryPanel } from './call-history-panel';
+
+const EmptyState = EmptyStateRaw as (props: {
+  icon?: unknown; title?: string; description?: string;
+}) => ReactElement;
 
 function fmtDuration(seconds: number): string {
   if (!seconds) return '0m';
-  const m = Math.round(seconds / 60);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 export function AiCallingWorkspace() {
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [testStudioOpen, setTestStudioOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: campaignsPage, isLoading, isError, refetch } = useCampaigns();
   const { data: telephony, isError: telephonyError } = useTelephonyHealth();
-  useAiCallingRealtime(); // live dashboard updates via socket
+  const { data: analytics } = useAnalytics();
+  useAiCallingRealtime();
 
   const campaigns = campaignsPage?.data ?? [];
-  const active = campaigns.filter((c) => ['running', 'queued', 'scheduled'].includes(c.status)).length;
-
-  // Aggregate live summary across campaigns for the top stat row.
-  const agg = campaigns.reduce(
-    (acc, c) => {
-      acc.eligible += c.summary.eligible || 0;
-      acc.inProgress += c.summary.inProgress || 0;
-      acc.completed += c.summary.completed || 0;
-      acc.qualified += c.summary.qualified || 0;
-      acc.callbacks += c.summary.callbacks || 0;
-      acc.needsReview += c.summary.needsReview || 0;
-      acc.noAnswer += c.summary.noAnswer || 0;
-      return acc;
+  const active = campaigns.filter((campaign) => ['running', 'queued', 'scheduled'].includes(campaign.status)).length;
+  const aggregate = campaigns.reduce(
+    (result, campaign) => {
+      result.eligible += campaign.summary.eligible || 0;
+      result.inProgress += campaign.summary.inProgress || 0;
+      result.completed += campaign.summary.completed || 0;
+      result.qualified += campaign.summary.qualified || 0;
+      result.callbacks += campaign.summary.callbacks || 0;
+      result.needsReview += (campaign.summary.needsReview || 0) + (campaign.summary.needsReconcile || 0);
+      result.failed += campaign.summary.failed || 0;
+      return result;
     },
-    { eligible: 0, inProgress: 0, completed: 0, qualified: 0, callbacks: 0, needsReview: 0, noAnswer: 0 },
+    { eligible: 0, inProgress: 0, completed: 0, qualified: 0, callbacks: 0, needsReview: 0, failed: 0 },
   );
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-y-auto p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500/10 ring-1 ring-brand-500/20">
-            <Bot className="h-5 w-5 text-brand-500" />
+    <div className="dark flex h-full flex-col gap-5 overflow-y-auto bg-[#070b14] p-4 text-slate-100 sm:p-6 [&>*]:shrink-0">
+      <header className="relative overflow-hidden rounded-2xl border border-white/8 bg-[linear-gradient(125deg,#0d1528_0%,#0b1223_55%,#10102a_100%)] px-4 py-5 shadow-[0_24px_64px_rgba(2,6,23,.28)] sm:px-5">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-violet-600/10 blur-3xl" />
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="flex items-center gap-3.5">
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-blue-400/15 bg-blue-500/10">
+              <Bot className="h-5 w-5 text-blue-400" />
+              <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0d1528] bg-blue-400" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight sm:text-2xl">AI Voice Calling</h1>
+                <span className="rounded-md border border-violet-400/15 bg-violet-400/8 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[.16em] text-violet-300">Control room</span>
+              </div>
+              <p className="mt-1 max-w-2xl text-sm text-slate-400">Build safe campaigns, test the real agent, monitor live calls, and review outcomes from one workspace.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">AI Voice Calling</h1>
-            <p className="text-sm text-muted-foreground">Configure questions, call leads with an AI agent, and auto-update your pipeline.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTestStudioOpen(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-400/25 bg-blue-400/8 px-4 text-sm font-semibold text-blue-200 transition hover:bg-blue-400/14 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+            >
+              <Mic className="h-4 w-4" /> Test agent
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditingCampaign(null); setWizardOpen(true); }}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-950/25 transition hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+            >
+              <Plus className="h-4 w-4" /> New campaign
+            </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setWizardOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-theme-sm transition hover:bg-brand-600"
-        >
-          <Plus className="h-4 w-4" /> New campaign
-        </button>
-      </div>
+      </header>
 
-      {/* Telephony status — honest about whether real calls are possible */}
       <TelephonyBanner telephony={telephony} failed={telephonyError} />
-      <LinkKillSwitch />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-        <PremiumStatCard label="Active campaigns" value={active} icon={PhoneCall} accent="violet" />
-        <PremiumStatCard label="Eligible leads" value={agg.eligible} icon={Users} accent="blue" />
-        <PremiumStatCard label="In progress" value={agg.inProgress} icon={PhoneOutgoing} accent="amber" />
-        <PremiumStatCard label="Calls completed" value={agg.completed} icon={CheckCircle2} accent="emerald" />
-        <PremiumStatCard label="Qualified" value={agg.qualified} icon={TrendingUp} accent="emerald" />
-        <PremiumStatCard label="Callbacks" value={agg.callbacks} icon={PhoneForwarded} accent="blue" />
-        <PremiumStatCard label="Needs review" value={agg.needsReview} icon={AlertTriangle} accent="rose" />
+      <AgentTestLauncher
+        campaigns={campaigns}
+        livekitReady={Boolean(telephony?.livekitReady || telephony?.configured)}
+        onOpen={() => setTestStudioOpen(true)}
+      />
+
+      <section aria-label="Calling overview" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8">
+        <ControlMetric label="Active campaigns" value={isLoading ? '—' : active} icon={PhoneCall} tone="violet" />
+        <ControlMetric label="Eligible leads" value={isLoading ? '—' : aggregate.eligible} icon={Users} tone="blue" />
+        <ControlMetric label="In progress" value={isLoading ? '—' : aggregate.inProgress} icon={PhoneOutgoing} tone="amber" live={aggregate.inProgress > 0} />
+        <ControlMetric label="Completed" value={isLoading ? '—' : aggregate.completed} icon={CheckCircle2} tone="emerald" />
+        <ControlMetric label="Answer rate" value={analytics?.answerRate == null ? '—' : `${Math.round(analytics.answerRate * 100)}%`} icon={Headphones} tone="cyan" />
+        <ControlMetric label="Qualified" value={isLoading ? '—' : aggregate.qualified} icon={TrendingUp} tone="emerald" />
+        <ControlMetric label="Needs review" value={isLoading ? '—' : aggregate.needsReview} icon={AlertTriangle} tone="rose" />
+        <ControlMetric label="Failed" value={isLoading ? '—' : aggregate.failed} icon={PhoneMissed} tone="rose" />
+      </section>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <VoiceKillSwitch />
+        <LinkKillSwitch />
       </div>
 
-      {/* Analytics: rates, outcome breakdown, daily trend, CSV export */}
+      <CampaignOverview
+        campaigns={campaigns}
+        total={campaignsPage?.pagination?.total ?? campaigns.length}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        onSelect={setSelectedId}
+      />
+
+      <CallHistoryPanel />
+
+      <PairedPhonesPanel />
+
       <AnalyticsPanel />
 
-      {/* Campaigns table */}
-      <div className="min-h-0 flex-1 rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Campaigns</h2>
-          <span className="text-xs text-muted-foreground">{campaignsPage?.pagination?.total ?? campaigns.length} total</span>
-        </div>
-        {isLoading ? (
-          <div className="flex items-center justify-center p-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
-        ) : isError && !campaignsPage ? (
-          <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-muted-foreground">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            Campaigns could not be loaded.
-            <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
-          </div>
-        ) : campaigns.length === 0 ? (
-          <div className="p-8">
-            <EmptyState
-              icon={Phone}
-              title="No calling campaigns yet"
-              description="Create a campaign, configure the questions your AI agent should ask, and start calling leads."
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-2 font-medium">Campaign</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium text-right">Leads</th>
-                  <th className="px-4 py-2 font-medium text-right">Done</th>
-                  <th className="px-4 py-2 font-medium text-right">Qualified</th>
-                  <th className="px-4 py-2 font-medium text-right">Review</th>
-                  <th className="px-4 py-2 font-medium text-right">Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((c: Campaign) => (
-                  <tr
-                    key={c._id}
-                    onClick={() => setSelectedId(c._id)}
-                    className="cursor-pointer border-b border-border/60 transition hover:bg-muted/50"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 font-medium">
-                        {c.name}
-                        {c.isTest ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">TEST</span> : null}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{c.questionnaire?.questions?.length ?? 0} questions</div>
-                    </td>
-                    <td className="px-4 py-3"><StatusPill status={c.status} /></td>
-                    <td className="px-4 py-3 text-right tabular-nums">{c.summary.eligible}/{c.summary.total}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{c.summary.completed}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-emerald-600">{c.summary.qualified}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-rose-600">{c.summary.needsReview}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtDuration(c.summary.totalCallSeconds)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {wizardOpen ? (
+        <CampaignWizard
+          campaign={editingCampaign ?? undefined}
+          onClose={() => { setWizardOpen(false); setEditingCampaign(null); }}
+          onCreated={(id) => { setWizardOpen(false); setEditingCampaign(null); setSelectedId(id); }}
+        />
+      ) : null}
+      {selectedId ? (
+        <CampaignDetailDrawer
+          campaignId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onEdit={(campaign) => { setEditingCampaign(campaign); setWizardOpen(true); }}
+        />
+      ) : null}
+      {testStudioOpen ? (
+        <AgentTestStudio
+          campaigns={campaigns}
+          telephony={telephony}
+          onClose={() => setTestStudioOpen(false)}
+          onCreateCampaign={() => { setEditingCampaign(null); setWizardOpen(true); }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
-      {wizardOpen ? <CampaignWizard onClose={() => setWizardOpen(false)} onCreated={(id) => { setWizardOpen(false); setSelectedId(id); }} /> : null}
-      {selectedId ? <CampaignDetailDrawer campaignId={selectedId} onClose={() => setSelectedId(null)} /> : null}
+function CampaignOverview({
+  campaigns,
+  total,
+  isLoading,
+  isError,
+  onRetry,
+  onSelect,
+}: {
+  campaigns: Campaign[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <section aria-labelledby="campaign-overview-title" className="overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] shadow-[0_16px_42px_rgba(2,6,23,.18)]">
+      <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300"><Activity className="h-4 w-4" /></span>
+          <div>
+            <h2 id="campaign-overview-title" className="text-sm font-semibold">Campaign overview</h2>
+            <p className="text-[11px] text-slate-500">Open a campaign to control it, inspect recipients, or monitor live calls</p>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-slate-500">{total} total</span>
+      </div>
+      {isLoading ? (
+        <div className="grid gap-2 p-4" role="status" aria-label="Loading campaigns">
+          {[0, 1, 2].map((row) => <div key={row} className="h-16 animate-pulse rounded-xl bg-white/4" />)}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-slate-400">
+          <AlertTriangle className="h-5 w-5 text-amber-400" />
+          Campaigns could not be loaded.
+          <button type="button" onClick={onRetry} className="font-semibold text-blue-300 hover:text-blue-200">Try again</button>
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="p-8 text-slate-300">
+          <EmptyState
+            icon={Phone}
+            title="No calling campaigns yet"
+            description="Create a campaign, choose eligible leads, configure the agent, and verify the flow before starting calls."
+          />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead>
+              <tr className="border-b border-white/7 bg-white/[.018] text-left text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">
+                <th className="px-4 py-2.5">Campaign</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Progress</th>
+                <th className="px-4 py-2.5 text-right">Qualified</th>
+                <th className="px-4 py-2.5 text-right">Callbacks</th>
+                <th className="px-4 py-2.5 text-right">Review</th>
+                <th className="px-4 py-2.5 text-right">Talk time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map((campaign) => {
+                const completed = campaign.summary.completed || 0;
+                const totalLeads = campaign.summary.total || 0;
+                const progress = totalLeads ? Math.min(100, Math.round((completed / totalLeads) * 100)) : 0;
+                return (
+                  <tr
+                    key={campaign._id}
+                    tabIndex={0}
+                    role="button"
+                    onClick={() => onSelect(campaign._id)}
+                    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(campaign._id); } }}
+                    className="cursor-pointer border-b border-white/6 text-slate-300 outline-none transition last:border-0 hover:bg-blue-400/[.045] focus-visible:bg-blue-400/[.065]"
+                  >
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2 font-semibold text-slate-100">
+                        {campaign.name}
+                        {campaign.isTest ? <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">TEST</span> : null}
+                        {campaign.transport === 'paired_phone' ? <span title="Paired phone transport" className="rounded bg-blue-400/10 px-1.5 py-0.5 text-[9px] font-bold text-blue-300">SIM</span> : null}
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">{campaign.questionnaire?.questions?.length ?? 0} questions · {campaign.agentConfig.agentName}</div>
+                    </td>
+                    <td className="px-4 py-3"><StatusPill status={campaign.status} /></td>
+                    <td className="min-w-48 px-4 py-3">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500"><span>{completed}/{totalLeads}</span><span>{progress}%</span></div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6"><span className="block h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500" style={{ width: `${progress}%` }} /></div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-emerald-300">{campaign.summary.qualified}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-blue-300">{campaign.summary.callbacks}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-rose-300">{(campaign.summary.needsReview || 0) + (campaign.summary.needsReconcile || 0)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-500">{fmtDuration(campaign.summary.totalCallSeconds)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const TONE: Record<string, { icon: string; value: string; surface: string }> = {
+  blue: { icon: 'text-blue-300', value: 'text-blue-200', surface: 'bg-blue-400/10' },
+  cyan: { icon: 'text-cyan-300', value: 'text-cyan-200', surface: 'bg-cyan-400/10' },
+  violet: { icon: 'text-violet-300', value: 'text-violet-200', surface: 'bg-violet-400/10' },
+  emerald: { icon: 'text-emerald-300', value: 'text-emerald-200', surface: 'bg-emerald-400/10' },
+  amber: { icon: 'text-amber-300', value: 'text-amber-200', surface: 'bg-amber-400/10' },
+  rose: { icon: 'text-rose-300', value: 'text-rose-200', surface: 'bg-rose-400/10' },
+};
+
+function ControlMetric({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  live = false,
+}: {
+  label: string;
+  value: string | number;
+  icon: ComponentType<{ className?: string }>;
+  tone: keyof typeof TONE;
+  live?: boolean;
+}) {
+  const color = TONE[tone];
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] p-3.5 shadow-[0_12px_32px_rgba(2,6,23,.14)]">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-500">{label}</p>
+          <p className={`mt-2 text-2xl font-bold tabular-nums tracking-tight ${color.value}`}>{value}</p>
+        </div>
+        <span className={`relative flex h-9 w-9 items-center justify-center rounded-xl ${color.surface}`}>
+          <Icon className={`h-4 w-4 ${color.icon}`} />
+          {live ? <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-emerald-400 ring-2 ring-[#0b1223]" /> : null}
+        </span>
+      </div>
     </div>
   );
 }
 
 function TelephonyBanner({ telephony, failed }: { telephony?: TelephonyHealth; failed?: boolean }) {
   if (!telephony) {
-    if (!failed) return null;
+    if (!failed) {
+      return <div className="h-14 animate-pulse rounded-2xl border border-white/6 bg-white/3" aria-label="Checking calling readiness" role="status" />;
+    }
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span>Telephony status could not be checked. Real calls may not be possible until it can be verified.</span>
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/7 px-4 py-3 text-sm text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+        <div><p className="font-semibold">Readiness could not be verified</p><p className="mt-0.5 text-xs text-amber-100/70">Do not assume calls can be placed until the health endpoint responds.</p></div>
       </div>
     );
   }
+
   const warnings = telephony.operations?.warnings ?? [];
-  const ops = warnings.length ? (
-    <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-400">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-      <div>
-        <p className="font-semibold">Calling pipeline needs attention</p>
-        <ul className="mt-1 list-disc pl-4 text-xs">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-      </div>
-    </div>
-  ) : null;
-  if (telephony.configured) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>Telephony is configured (LiveKit + SIP trunk). Real outbound calls are possible once a SIP test call has been verified end to end.</span>
-        </div>
-        {ops}
-      </div>
-    );
-  }
-  if (telephony.livekitReady) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-400">
-        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-        <span>
-          LiveKit + OpenAI are configured — the browser <strong>Live test</strong> (talk to the agent with your mic) works now.
-          To place real <strong>phone</strong> calls, add a LiveKit SIP outbound trunk (<code>LIVEKIT_SIP_OUTBOUND_TRUNK_ID</code>).
-        </span>
-      </div>
-    );
-  }
+  const browserReady = Boolean(telephony.livekitReady || telephony.configured);
+  const sipReady = Boolean(telephony.configured && telephony.eligible);
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
-      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-      <span>
-        Telephony is not configured, so no real calls will be placed. You can still build campaigns and test the
-        conversation in the browser <strong>Simulate</strong> console. Configure LiveKit + OpenAI Realtime to enable voice.
+    <section aria-label="Calling readiness" className="grid overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] md:grid-cols-[1fr_auto]">
+      <div className="flex items-start gap-3 px-4 py-3.5">
+        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${browserReady ? 'bg-blue-400/10 text-blue-300' : 'bg-amber-400/10 text-amber-300'}`}>
+          {browserReady ? <RadioTower className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+        </span>
+        <div>
+          <p className="text-sm font-semibold">{browserReady ? 'Browser agent route configured' : 'Voice infrastructure needs setup'}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
+            {browserReady
+              ? `Browser tests can connect through LiveKit and OpenAI. ${sipReady ? 'Cloud SIP is configured for real phone calls.' : 'Cloud SIP is not ready; use a verified paired phone for SIM campaigns.'}`
+              : 'Campaign design and text simulation are available, but a real browser or phone voice session cannot start.'}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 border-t border-white/8 md:border-l md:border-t-0">
+        <ReadinessFact label="Browser" value={browserReady ? 'Configured' : 'Offline'} ok={browserReady} />
+        <ReadinessFact label="Cloud SIP" value={sipReady ? 'Eligible' : 'Not ready'} ok={sipReady} />
+        <ReadinessFact label="Operations" value={warnings.length ? `${warnings.length} alert${warnings.length === 1 ? '' : 's'}` : 'Clear'} ok={!warnings.length} />
+      </div>
+      {warnings.length ? (
+        <div className="col-span-full flex items-start gap-2 border-t border-rose-400/15 bg-rose-400/6 px-4 py-2.5 text-xs text-rose-100">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-300" />
+          <span><strong className="font-semibold">Action required:</strong> {warnings.join(' · ')}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ReadinessFact({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex min-w-24 flex-col justify-center px-3 py-2.5 text-center">
+      <span className="text-[9px] font-bold uppercase tracking-[.13em] text-slate-600">{label}</span>
+      <span className={`mt-1 inline-flex items-center justify-center gap-1 text-[11px] font-semibold ${ok ? 'text-emerald-300' : 'text-slate-400'}`}>
+        {ok ? <ShieldCheck className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{value}
       </span>
     </div>
   );

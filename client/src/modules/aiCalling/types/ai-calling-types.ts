@@ -78,7 +78,7 @@ export interface Schedule {
 export interface CampaignSummary {
   total: number; eligible: number; ineligible: number; queued: number; inProgress: number;
   completed: number; answered: number; noAnswer: number; failed: number; retryScheduled: number;
-  qualified: number; unqualified: number; callbacks: number; needsReview: number;
+  qualified: number; unqualified: number; callbacks: number; needsReview: number; needsReconcile?: number;
   doNotContact: number; suppressed: number; missingPhone: number; consentRequired?: number;
   totalCallSeconds: number; actualCost: number;
 }
@@ -96,6 +96,13 @@ export interface Campaign {
   summary: CampaignSummary;
   channel?: CampaignChannel;
   linkConfig?: LinkConfig;
+  /** Voice: cloud SIP trunk, or the owner's own phone through the ESP32 gateway. */
+  transport?: CallTransport;
+  pairedDeviceId?: string | null;
+  /** Saved lead selection. Editing keeps this immutable so recipients cannot be silently replaced. */
+  selection?: CreateCampaignInput['selection'] & { selectedAt?: string };
+  /** Paired phone: why the campaign is waiting for its device (readiness reason codes). */
+  deviceWait?: { reasons: string[]; at: string | null };
   isTest?: boolean;
   scheduledAt?: string | null;
   startedAt?: string | null;
@@ -115,9 +122,13 @@ export interface CreateCampaignInput {
     | { mode: 'filters'; filters: Record<string, unknown> };
   channel?: CampaignChannel;
   linkConfig?: LinkConfig;
+  transport?: CallTransport;
+  pairedDeviceId?: string | null;
   isTest?: boolean;
   scheduledAt?: string | null;
 }
+
+export type CallTransport = 'cloud_sip' | 'paired_phone';
 
 /** 'voice' = AI phone calls (cloud); 'web_link' = SMS link → AI chat page. */
 export type CampaignChannel = 'voice' | 'web_link';
@@ -136,7 +147,7 @@ export interface LinkConfig {
   voiceTier: 'off' | 'browser' | 'premium';
   reminders: { enabled: boolean; afterHours: number; max: number };
   fallbackToCall: { enabled: boolean; simCallCampaignId: string | null; afterHours: number };
-  limits: { maxTurns: number; maxTokensPerTurn: number; maxSessionMinutes: number; dailySpendCap: number };
+  limits: { maxTurns: number; maxTokensPerTurn: number; maxSessionMinutes: number; dailySpendCap: number; maxVoiceMinutes?: number };
   transcriptRetentionDays: number;
   whatsappShare?: boolean;
 }
@@ -154,6 +165,8 @@ export interface LinkSession {
   outcome: string | null;
   language: string;
   turns: number;
+  /** Real-time voice calls on this conversation (SMS link voice screen). */
+  voice?: { calls: number; seconds: number; cost: number; live: boolean };
   funnel: Record<string, string | null>;
   isTest: boolean;
   reminders: { sent: number; lastSentAt: string | null };
@@ -239,8 +252,31 @@ export interface CallRecord {
   reviewRequired: boolean;
   cost?: { amount: number; currency: string };
   createdAt?: string;
+  initiatedAt?: string | null;
+  answeredAt?: string | null;
+  endedAt?: string | null;
   campaignId?: { _id: string; name: string } | string;
+  leadId?: { _id: string; leadNumber?: string; name?: string } | string;
+  provider?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  /** Set on a call whose outcome is unknown (state needs_reconcile) until the owner resolves it. */
+  reconciliation?: { needed: boolean; note: string | null; resolvedAt: string | null; resolution: ReconcileResolution | null };
 }
+
+export interface CallListFilters {
+  page?: number;
+  limit?: number;
+  campaignId?: string;
+  state?: string;
+  disposition?: string;
+  reviewRequired?: boolean;
+  search?: string;
+  includeTests?: boolean;
+}
+
+/** How the owner resolves a call with an unknown outcome (POST /ai-calling/calls/:id/reconcile). */
+export type ReconcileResolution = 'reached' | 'not_reached' | 'retry';
 
 /** One entry of GET /ai-calling/languages (server aiCalling.languages.js). */
 export interface AgentLanguage {
@@ -288,6 +324,53 @@ export interface ActiveCall {
   total: number;
   elapsedSeconds: number;
   isTest: boolean;
+  transport?: CallTransport;
+  /** Paired-phone calls only: live state reported by the laptop gateway. */
+  gateway?: null | {
+    state: 'queued' | 'claimed' | 'dialing' | 'ended' | 'cancelled' | null;
+    audioOpen: boolean;
+    audioLost: boolean;
+    takenOver: boolean;
+    command: 'takeover' | 'hangup' | null;
+    audioAgeSeconds: number | null;
+    audio: null | {
+      rxLevelDbfs: number | null; txLevelDbfs: number | null; upFrames: number | null; downFrames: number | null;
+      upSeqGaps: number | null; downUnderruns: number | null; downOverruns: number | null; firstAiAudioMs: number | null; agentConnected: boolean;
+    };
+  };
+}
+
+export interface VoiceSettings { voicePaused: boolean; pausedByEnv: boolean; pausedReason: string; pausedAt: string | null }
+
+export interface DeviceLimits { cooldownSeconds: number; maxCallsPerHour: number; maxCallsPerDay: number; ringTimeoutSeconds: number }
+
+/** A paired phone: the owner's Android phone + SIM behind an ESP32 Bluetooth hands-free bridge. */
+export interface PairedDevice {
+  id: string;
+  name: string;
+  phoneLabel: string;
+  kind: 'esp32_hfp';
+  revoked: boolean;
+  revokedAt: string | null;
+  online: boolean;
+  lastHeartbeatAt: string | null;
+  gateway: { version: string | null; platform: string | null; hostname: string | null };
+  board: { connected: boolean; port: string | null; bdaddr: string | null; firmware: string | null; idf: string | null; chipRevision: number | null; keyProvisioned: boolean };
+  state: { device: string; hfp: string; call: number; callsetup: number; audio: string; codec: string; signal: number | null; battery: number | null; peer: string | null };
+  stats: Record<string, number> | null;
+  lastError: { code: string; message: string; at: string } | null;
+  keyState: 'pending' | 'delivered' | 'provisioned';
+  audioVerified: boolean;
+  audioVerifiedAt: string | null;
+  audioVerification?: { note: string; inboundPhraseHeard: boolean; outboundPhraseHeard: boolean; firmware: string | null };
+  limits: DeviceLimits;
+  currentCallId: string | null;
+  currentCallSince: string | null;
+  lastCallEndedAt: string | null;
+  attention: { needed: boolean; reason: string; at: string } | null;
+  readiness: { ok: boolean; reasons: string[]; messages: string[]; blocking: boolean };
+  usage: { callsLastHour: number; callsToday: number } | null;
+  createdAt: string;
 }
 
 export interface Analytics {

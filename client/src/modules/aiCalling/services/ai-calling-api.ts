@@ -1,7 +1,7 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import type {
-  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallRecord, CreateCampaignInput, LeadTransition, SimResult, SimState, TelephonyHealth,
+  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallListFilters, CallRecord, CreateCampaignInput, LeadTransition, SimResult, SimState, TelephonyHealth, ReconcileResolution,
 } from '../types/ai-calling-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
@@ -65,6 +65,9 @@ export const aiCallingApi = {
   async startWebTest(id: string, leadId?: string): Promise<{ callId: string; roomName: string; url: string; token: string }> {
     return unwrap(await apiClient.post(ENDPOINTS.AI_CALLING.WEB_TEST(id), leadId ? { leadId } : {}));
   },
+  async listCalls(params: CallListFilters = {}): Promise<Paged<CallRecord>> {
+    return paged<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALLS, { params }));
+  },
   async getCall(id: string): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALL(id)));
   },
@@ -73,6 +76,9 @@ export const aiCallingApi = {
     payload: { answers?: Array<{ questionFieldKey: string; normalizedValue?: unknown; validation?: string }>; qualification?: string | null },
   ): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.post(ENDPOINTS.AI_CALLING.CALL_REVIEW(id), payload));
+  },
+  async reconcileCall(id: string, payload: { resolution: ReconcileResolution; qualification?: string | null; note?: string }): Promise<CallRecord> {
+    return unwrap<CallRecord>(await apiClient.post(ENDPOINTS.AI_CALLING.CALL_RECONCILE(id), payload));
   },
   async leadHistory(leadId: string): Promise<{ data: CallRecord[]; transitions: LeadTransition[] }> {
     const [history, transitions] = await Promise.all([

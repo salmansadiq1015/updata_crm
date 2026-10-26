@@ -70,10 +70,11 @@ describe('LeadLinkSessions', () => {
     await renderWithProviders(<LeadLinkSessions leadId="l1" />);
     expect(screen.getByLabelText('SMS chat assistant')).toBeTruthy(); // skeleton while loading
 
-    expect(await screen.findByText("Couldn't load the chat status.")).toBeTruthy();
+    // Generous waits: the full suite runs many workers and the default 1 s is tight.
+    expect(await screen.findByText("Couldn't load the chat status.", {}, { timeout: 5000 })).toBeTruthy();
     fail = false;
     await fireEvent.press(screen.getByText('Try again'));
-    await waitFor(() => expect(screen.queryByText("Couldn't load the chat status.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Couldn't load the chat status.")).toBeNull(), { timeout: 5000 });
     expect(linkAssistantApi.leadSessions).toHaveBeenCalledTimes(2);
   });
   it('shows nothing (no error) when the server does not have the chat assistant yet (404)', async () => {

@@ -7,6 +7,7 @@ import {
   MessageSquare,
   PhoneCall,
   Smartphone,
+  Bluetooth,
 } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -121,6 +122,13 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
             title={t('callCampaign.action.title')}
             hint={t('callCampaign.action.hint')}
             onPress={() => navigation.navigate('CallCampaigns')}
+          />
+          <ActionTile
+            icon={Bluetooth}
+            tone="info"
+            title={t('pairedPhone.tile')}
+            hint={t('pairedPhone.tileHint')}
+            onPress={() => navigation.navigate('PairedPhones')}
           />
           <ActionTile
             icon={ListOrdered}

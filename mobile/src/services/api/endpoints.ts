@@ -66,8 +66,18 @@ export const ENDPOINTS = {
     cancel: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/cancel`,
     retry: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/retry`,
     call: (id: string) => `/ai-calling/calls/${encodeURIComponent(id)}`,
+    reconcile: (id: string) => `/ai-calling/calls/${encodeURIComponent(id)}/reconcile`,
     leadHistory: (leadId: string) => `/ai-calling/leads/${encodeURIComponent(leadId)}/history`,
     analytics: '/ai-calling/analytics',
+    activeCalls: (id: string) => `/ai-calling/campaigns/${encodeURIComponent(id)}/active-calls`,
+    settings: '/ai-calling/settings',
+  },
+  // Paired phone: the user's phone + SIM via the ESP32 Bluetooth gateway (server/src/modules/pairedPhone).
+  pairedPhone: {
+    devices: '/paired-phone/devices',
+    clear: (id: string) => `/paired-phone/devices/${encodeURIComponent(id)}/clear`,
+    takeover: (callRecordId: string) => `/paired-phone/calls/${encodeURIComponent(callRecordId)}/takeover`,
+    hangup: (callRecordId: string) => `/paired-phone/calls/${encodeURIComponent(callRecordId)}/hangup`,
   },
   // SIM call campaigns: AI-assisted calling from THIS phone's SIM (server/src/modules/simCall).
   simCalls: {

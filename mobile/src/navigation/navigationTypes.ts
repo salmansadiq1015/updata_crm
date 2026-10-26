@@ -52,6 +52,8 @@ export type RootStackParamList = {
   CallAudioCheck: undefined;
   CallCampaigns: undefined;
   MobileReadiness: undefined;
+  // Paired phone (ESP32 gateway) status; not deep-linkable.
+  PairedPhones: undefined;
   SmsQueue: { leadIds: string[]; linkCampaignId?: string; linkPurpose?: 'initial' | 'reminder' };
   CallCampaignCreate: { leadIds: string[] };
   CallCampaignDetail: { campaignId: string };

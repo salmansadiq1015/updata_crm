@@ -17,6 +17,7 @@ import { CallCampaignDetailScreen } from '@/features/callCampaign/screens/CallCa
 import { CallCampaignRunScreen } from '@/features/callCampaign/screens/CallCampaignRunScreen';
 import { CallCampaignsScreen } from '@/features/callCampaign/screens/CallCampaignsScreen';
 import { MobileReadinessScreen } from '@/features/readiness/screens/MobileReadinessScreen';
+import { PairedPhonesScreen } from '@/features/pairedPhone/screens/PairedPhonesScreen';
 import { SmsQueueScreen } from '@/features/smsQueue/screens/SmsQueueScreen';
 import { SimSmsConversationScreen } from '@/features/smsAgent/screens/SimSmsConversationScreen';
 import { SimSmsLaunchScreen } from '@/features/smsAgent/screens/SimSmsLaunchScreen';
@@ -163,6 +164,15 @@ export function RootNavigator() {
               options={{
                 headerShown: true,
                 title: t('readiness.title'),
+                headerBackTitle: t('common.back'),
+              }}
+            />
+            <Stack.Screen
+              name="PairedPhones"
+              component={PairedPhonesScreen}
+              options={{
+                headerShown: true,
+                title: t('pairedPhone.title'),
                 headerBackTitle: t('common.back'),
               }}
             />

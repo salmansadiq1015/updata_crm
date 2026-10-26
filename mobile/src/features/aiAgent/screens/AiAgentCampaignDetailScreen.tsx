@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, XCircle } from 'lucide-react-native';
+import { HelpCircle, Pause, Play, RotateCcw, XCircle } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -14,6 +14,10 @@ import { tKey } from '@/features/communication/i18n';
 import { useSingleFlight } from '@/hooks/useSingleFlight';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { showSuccessToast } from '@/utils/toast';
+
+import { LiveCallsCard } from '@/features/pairedPhone/components/LiveCallsCard';
+import { pairedCampaignReadiness } from '@/features/pairedPhone/domain/pairedPhoneDomain';
+import { usePairedDevices } from '@/features/pairedPhone/hooks/usePairedPhone';
 
 import { ReadinessNotice } from '../components/ReadinessNotice';
 import { Loading, ReasonList, Stat } from '../components/ReviewPanels';
@@ -52,6 +56,7 @@ const CALL_STATS = [
   'failed',
   'qualified',
   'needsReview',
+  'needsReconcile',
   'callbacks',
   'doNotContact',
 ] as const;
@@ -68,7 +73,7 @@ const SMS_STATS = [
   'ineligible',
 ] as const;
 
-export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentCampaignDetail'>) {
+export function AiAgentCampaignDetailScreen({ route, navigation }: RootScreenProps<'AiAgentCampaignDetail'>) {
   const { kind, campaignId } = route.params;
   const { t } = useTranslation();
 
@@ -83,9 +88,24 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
   const recipients = kind === 'call' ? callRecipients : smsRecipients;
 
   const needsReadiness = status === 'draft' || status === 'paused';
-  const telephony = useTelephonyHealth(kind === 'call' && needsReadiness);
+  // Paired-phone campaigns call from the user's own phone: the cloud trunk is irrelevant to them.
+  const paired =
+    kind === 'call' &&
+    campaign !== undefined &&
+    'transport' in campaign &&
+    campaign.transport === 'paired_phone';
+  const telephony = useTelephonyHealth(kind === 'call' && needsReadiness && !paired);
+  const pairedDevices = usePairedDevices(paired && needsReadiness);
   const messaging = useMessagingHealth(kind === 'sms' && needsReadiness);
-  const readiness = kind === 'call' ? callReadiness(telephony) : smsReadiness(messaging);
+  const readiness =
+    kind === 'call'
+      ? paired
+        ? pairedCampaignReadiness(
+            pairedDevices,
+            'pairedDeviceId' in campaign ? campaign.pairedDeviceId : null,
+          )
+        : callReadiness(telephony)
+      : smsReadiness(messaging);
 
   const action = useCampaignAction();
   const retry = useRetryFailedCalls();
@@ -162,7 +182,11 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
         </View>
         {kind === 'call' ? (
           <AppText variant="caption" tone="muted">
-            {t('aiAgent.detail.cloudNote')}
+            {t(
+              'transport' in campaign && campaign.transport === 'paired_phone'
+                ? 'aiAgent.detail.pairedNote'
+                : 'aiAgent.detail.cloudNote',
+            )}
           </AppText>
         ) : null}
         <AppText variant="caption" tone="muted">
@@ -190,6 +214,8 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
       </AppCard>
 
       {needsReadiness ? <ReadinessNotice channel={kind} readiness={readiness} /> : null}
+
+      {kind === 'call' ? <LiveCallsCard campaignId={campaignId} active={active} /> : null}
 
       <View className="flex-row flex-wrap gap-2">
         {campaign.status === 'draft' ? (
@@ -271,6 +297,15 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
                       </AppText>
                       <RecipientStateBadge kind="call" state={recipient.state} />
                     </View>
+                    {recipient.finalDisposition === 'needs_reconcile' && recipient.lastCallId ? (
+                      <AppButton
+                        title={t('aiAgent.reconcile.open')}
+                        leftIcon={HelpCircle}
+                        variant="soft"
+                        size="sm"
+                        onPress={() => navigation.navigate('AiCallDetail', { callId: recipient.lastCallId! })}
+                      />
+                    ) : null}
                     {recipient.attemptCount > 0 ? (
                       <AppText variant="caption" tone="muted">
                         {t('aiAgent.detail.attempts', { count: recipient.attemptCount })}
@@ -313,6 +348,7 @@ export function AiAgentCampaignDetailScreen({ route }: RootScreenProps<'AiAgentC
         key={String(confirmingStart)}
         visible={confirmingStart}
         channel={kind}
+        pairedPhone={'transport' in campaign && campaign.transport === 'paired_phone'}
         eligible={toContact}
         excluded={paused ? 0 : Math.max(0, total - eligible)}
         segments={kind === 'sms' ? segments : null}

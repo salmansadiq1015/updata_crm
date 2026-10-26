@@ -15,6 +15,7 @@ import {
   type CallCampaignInput,
   type SmsCampaign,
   type SmsCampaignInput,
+  type ReconcileResolution,
 } from '../types';
 import type { CampaignAction } from '../domain/agentDomain';
 
@@ -217,6 +218,22 @@ export function useStartCampaign() {
       kind === 'call' ? aiAgentApi.startCallCampaign(id) : aiAgentApi.startSmsCampaign(id),
     onSuccess: (campaign, { kind }) => {
       client.setQueryData(queryKeys.aiAgent.campaign(kind, campaign.id), campaign);
+      void client.invalidateQueries({ queryKey: queryKeys.aiAgent.all });
+    },
+    onError: showApiErrorToast,
+  });
+}
+
+export function useReconcileCall(callId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (resolution: ReconcileResolution) => aiAgentApi.reconcileCall(callId, resolution),
+    onSuccess: (_call, resolution) => {
+      showSuccessToast(
+        i18next.t('aiAgent.reconcile.resolved', {
+          resolution: i18next.t(`aiAgent.reconcile.resolution.${resolution}`),
+        }),
+      );
       void client.invalidateQueries({ queryKey: queryKeys.aiAgent.all });
     },
     onError: showApiErrorToast,

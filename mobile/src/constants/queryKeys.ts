@@ -74,6 +74,11 @@ export const queryKeys = {
     events: (id: string) => ['call-campaigns', 'events', id] as const,
     callbacks: (status: string) => ['call-campaigns', 'callbacks', status] as const,
   },
+  pairedPhone: {
+    devices: ['paired-phone', 'devices'] as const,
+    voice: ['paired-phone', 'voice-settings'] as const,
+    activeCalls: (campaignId: string) => ['paired-phone', 'active-calls', campaignId] as const,
+  },
   notifications: {
     all: ['notifications'] as const,
     feed: ['notifications', 'feed'] as const,

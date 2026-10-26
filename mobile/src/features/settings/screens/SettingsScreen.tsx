@@ -200,6 +200,13 @@ export function SettingsScreen() {
             label={t('readiness.title')}
             onPress={() => navigation.navigate('MobileReadiness')}
           />
+          <AppListItem
+            icon={Smartphone}
+            iconTone="primary"
+            layout="inline"
+            label={t('pairedPhone.title')}
+            onPress={() => navigation.navigate('PairedPhones')}
+          />
         </AppListGroup>
       </Appear>
 

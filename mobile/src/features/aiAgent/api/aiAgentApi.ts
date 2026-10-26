@@ -23,6 +23,7 @@ import {
   telephonyHealthSchema,
   type CallCampaignInput,
   type SmsCampaignInput,
+  type ReconcileResolution,
 } from '../types';
 
 /** Lists are page-based on both modules; the max page size the server allows. */
@@ -142,6 +143,11 @@ export const aiAgentApi = {
   },
   async getCall(id: string, signal?: AbortSignal) {
     const { data } = await api.get(ENDPOINTS.aiCalling.call(id), callRecordSchema, { signal });
+    return data;
+  },
+  /** Resolve a call with an unknown outcome: the only way it leaves review (never redialed on its own). */
+  async reconcileCall(id: string, resolution: ReconcileResolution) {
+    const { data } = await api.post(ENDPOINTS.aiCalling.reconcile(id), { resolution }, callRecordSchema);
     return data;
   },
   async callAnalytics(filters: { from?: string; to?: string } = {}, signal?: AbortSignal) {

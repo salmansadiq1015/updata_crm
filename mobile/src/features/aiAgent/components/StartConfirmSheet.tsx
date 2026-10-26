@@ -15,6 +15,8 @@ import type { AgentChannel } from '../types';
 type Props = {
   visible: boolean;
   channel: AgentChannel;
+  /** Calls go out through the user's paired phone (ESP32 gateway), not the cloud number. */
+  pairedPhone?: boolean;
   eligible: number;
   excluded: number;
   segments?: SegmentEstimate | null;
@@ -28,6 +30,7 @@ type Props = {
  * and requires an explicit acknowledgement before the confirm button works.
  */
 export function StartConfirmSheet({
+  pairedPhone = false,
   visible,
   channel,
   eligible,
@@ -65,9 +68,16 @@ export function StartConfirmSheet({
     >
       <View className="gap-3">
         <AppText variant="title">
-          {t(channel === 'call' ? 'aiAgent.confirm.callBody' : 'aiAgent.confirm.smsBody', {
-            count: eligible,
-          })}
+          {t(
+            channel === 'call'
+              ? pairedPhone
+                ? 'aiAgent.confirm.callBodyPaired'
+                : 'aiAgent.confirm.callBody'
+              : 'aiAgent.confirm.smsBody',
+            {
+              count: eligible,
+            },
+          )}
         </AppText>
         {channel === 'sms' && segments ? (
           <AppText>
@@ -81,7 +91,13 @@ export function StartConfirmSheet({
         ) : null}
         <AppAlert
           tone="warning"
-          message={t(channel === 'call' ? 'aiAgent.channel.callCloud' : 'aiAgent.channel.smsReal')}
+          message={t(
+            channel === 'call'
+              ? pairedPhone
+                ? 'aiAgent.channel.callPaired'
+                : 'aiAgent.channel.callCloud'
+              : 'aiAgent.channel.smsReal',
+          )}
         />
         <Pressable
           accessibilityRole="checkbox"

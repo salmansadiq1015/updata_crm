@@ -1,8 +1,10 @@
-import { Bot, CalendarClock, Clock3, ListChecks, PhoneCall, UserRound } from 'lucide-react-native';
+import { Bot, CalendarClock, Clock3, HelpCircle, ListChecks, PhoneCall, UserRound } from 'lucide-react-native';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { AppAlert } from '@/components/feedback/AppAlert';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { Screen } from '@/components/layout/Screen';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
@@ -17,7 +19,8 @@ import type { RootScreenProps } from '@/navigation/navigationTypes';
 import { formatDateTime } from '@/utils/date';
 
 import { RecipientStateBadge } from '../components/StatusBadges';
-import { useAiCall } from '../hooks/useAiAgent';
+import { useAiCall, useReconcileCall } from '../hooks/useAiAgent';
+import { needsReconcile, RECONCILE_RESOLUTIONS, type CallRecord, type ReconcileResolution } from '../types';
 
 export function AiCallDetailScreen({ route, navigation }: RootScreenProps<'AiCallDetail'>) {
   const { t, i18n } = useTranslation();
@@ -80,7 +83,9 @@ export function AiCallDetailScreen({ route, navigation }: RootScreenProps<'AiCal
         ) : null}
       </AppCard>
 
-      {call.reviewRequired ? (
+      {needsReconcile(call) ? (
+        <ReconcileCard call={call} />
+      ) : call.reviewRequired ? (
         <AppAlert tone="warning" message={t('aiAgent.callHistory.reviewRequired')} />
       ) : null}
       {call.failureCode || call.failureMessage ? (
@@ -151,6 +156,59 @@ export function AiCallDetailScreen({ route, navigation }: RootScreenProps<'AiCal
         </AppText>
       </AppCard>
     </Screen>
+  );
+}
+
+const RESOLUTION_TEXT = {
+  reached: { label: 'aiAgent.reconcile.reached', hint: 'aiAgent.reconcile.reachedHint' },
+  not_reached: { label: 'aiAgent.reconcile.notReached', hint: 'aiAgent.reconcile.notReachedHint' },
+  retry: { label: 'aiAgent.reconcile.retry', hint: 'aiAgent.reconcile.retryHint' },
+} as const satisfies Record<ReconcileResolution, { label: string; hint: string }>;
+
+/**
+ * A call whose outcome is unknown (the phone or the gateway lost track of it). It is never
+ * redialed on its own: the owner checks the phone's call log and records what happened.
+ */
+function ReconcileCard({ call }: { call: CallRecord }) {
+  const { t } = useTranslation();
+  const reconcile = useReconcileCall(call.id);
+  const [choice, setChoice] = useState<ReconcileResolution | null>(null);
+  return (
+    <AppCard className="gap-3">
+      <View className="flex-row items-center gap-2">
+        <Icon icon={HelpCircle} size="md" color="warning" />
+        <AppText variant="h3" accessibilityRole="header">
+          {t('aiAgent.reconcile.title')}
+        </AppText>
+      </View>
+      <AppText tone="muted">{t('aiAgent.reconcile.body')}</AppText>
+      {RECONCILE_RESOLUTIONS.map((resolution) => (
+        <View key={resolution} className="gap-1">
+          <AppButton
+            title={t(RESOLUTION_TEXT[resolution].label)}
+            variant={resolution === 'reached' ? 'primary' : 'outline'}
+            disabled={reconcile.isPending}
+            onPress={() => setChoice(resolution)}
+            fullWidth
+          />
+          <AppText variant="caption" tone="muted">
+            {t(RESOLUTION_TEXT[resolution].hint)}
+          </AppText>
+        </View>
+      ))}
+      <ConfirmDialog
+        visible={choice !== null}
+        title={t('aiAgent.reconcile.confirmTitle')}
+        description={choice ? `${t(RESOLUTION_TEXT[choice].label)}. ${t('aiAgent.reconcile.confirmBody')}` : ''}
+        confirmLabel={t('aiAgent.reconcile.confirm')}
+        loading={reconcile.isPending}
+        onCancel={() => setChoice(null)}
+        onConfirm={() => {
+          if (!choice) return;
+          reconcile.mutate(choice, { onSettled: () => setChoice(null) });
+        }}
+      />
+    </AppCard>
   );
 }
 

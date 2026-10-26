@@ -180,6 +180,9 @@ export const callCampaignSchema = z
     name: z.string(),
     status: z.string(),
     isTest: bool,
+    // 'paired_phone' = the user's own phone + SIM through the ESP32 gateway; otherwise cloud SIP.
+    transport: str,
+    pairedDeviceId: str,
     summary: callSummarySchema,
     agentConfig: z
       .object({ language: str, agentName: str, voice: str })
@@ -223,6 +226,12 @@ export const callRecipientSchema = z
     attemptCount: num,
     finalDisposition: str,
     qualification: str,
+    // The recipient's latest call (an id, or the populated record).
+    lastCallId: z
+      .union([z.string(), z.object({ _id: z.string().optional(), id: z.string().optional() })])
+      .nullish()
+      .transform((value) => (typeof value === 'string' ? value : value ? idOf(value) : null))
+      .catch(null),
   })
   .transform((raw) => ({ ...raw, id: idOf(raw), lead: raw.leadId }));
 export type CallRecipient = z.infer<typeof callRecipientSchema>;
@@ -282,6 +291,12 @@ export const callRecordSchema = z
     reviewRequired: bool,
     failureCode: str,
     failureMessage: str,
+    provider: str,
+    // Set on a call whose outcome is unknown (state needs_reconcile) until the owner resolves it.
+    reconciliation: z
+      .object({ resolvedAt: str, resolution: str, note: str })
+      .nullish()
+      .catch(null),
     createdAt: str,
   })
   .transform((raw) => ({
@@ -291,6 +306,14 @@ export const callRecordSchema = z
     lead: raw.leadId,
   }));
 export type CallRecord = z.infer<typeof callRecordSchema>;
+
+/** How the owner resolves a call with an unknown outcome (POST /ai-calling/calls/:id/reconcile). */
+export const RECONCILE_RESOLUTIONS = ['reached', 'not_reached', 'retry'] as const;
+export type ReconcileResolution = (typeof RECONCILE_RESOLUTIONS)[number];
+
+/** A parked call the owner still has to resolve. */
+export const needsReconcile = (call: Pick<CallRecord, 'state' | 'reconciliation'>) =>
+  call.state === 'needs_reconcile' && !call.reconciliation?.resolvedAt;
 
 export const callAnalyticsSchema = z.object({
   campaigns: num,

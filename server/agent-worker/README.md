@@ -31,6 +31,10 @@ decides qualification, and never sees other leads — the backend is the authori
 
 ## Run it
 
+**The browser "Live test" / Agent Test Studio and SMS-link voice calls need this worker running.**
+Without it LiveKit accepts the dispatch but no agent joins (the studio then says so after 30 s).
+Locally, in a second terminal next to the API: `cd server && npm run dev:agent`.
+
 ```bash
 cd server/agent-worker
 cp .env.example .env     # fill LIVEKIT_* and OPENAI_API_KEY
@@ -42,6 +46,24 @@ npm start                # registers with LiveKit and waits for dispatches
 `LIVEKIT_AGENT_NAME` here **must equal** the API's `LIVEKIT_AGENT_NAME`, and the
 CRM must set `PUBLIC_API_BASE_URL` to a URL this worker can reach (it is embedded
 in each call's metadata as `agentToolApi`).
+
+Optional tuning:
+
+| Variable | Default | |
+|---|---|---|
+| `OPENAI_REALTIME_TURN_DETECTION` | server VAD | `semantic` = OpenAI semantic VAD (measured 2.5–5 s per reply on browser calls) |
+| `OPENAI_REALTIME_SILENCE_MS` | 600 | Silence that ends the person's turn (server VAD) |
+| `OPENAI_REALTIME_TRANSCRIBE_MODEL` | gpt-4o-mini-transcribe | Written transcript only; the model hears the audio itself |
+| `AGENT_IDLE_PROCESSES` | production: up to 4 · dev: 0 | Pre-started job processes (≈ 1 s faster call start) |
+
+## Browser calls (SMS link page and the CRM "Live test")
+
+No SIP and no phone number: the customer's browser joins the LiveKit room. The
+worker connects OpenAI Realtime while the browser joins, waits for the customer,
+then speaks. For SMS link conversations the CRM adds the persona, language and
+approved FAQ to the context, and the worker forwards finished utterances to
+`/transcript`. The customer leaving the room ends the call. See
+`docs/SMS-LINK-ASSISTANT.md` §4a.
 
 ## Telephony prerequisites (the part that costs money)
 

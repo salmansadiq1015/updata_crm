@@ -1,0 +1,27 @@
+menu "Updata HFP bridge"
+
+    config UPDATA_UART_BAUD
+        int "USB serial baud rate"
+        default 921600
+        help
+            CVSD audio needs ~17 KB/s each way plus framing; 921600 baud gives ~92 KB/s.
+            CP2102(N) and CH340 bridges both support it.
+
+    config UPDATA_DEVICE_NAME
+        string "Bluetooth name prefix (the last 2 address bytes are appended)"
+        default "Updata Phone Bridge"
+
+    config UPDATA_MIN_DIAL_INTERVAL_S
+        int "Minimum seconds between dials (enforced by the firmware)"
+        default 20
+
+    config UPDATA_MAX_DIALS_PER_HOUR
+        int "Maximum dials per hour (enforced by the firmware, 0 disables dialing, max 64)"
+        range 0 64
+        default 30
+
+    config UPDATA_HOST_TIMEOUT_MS
+        int "End an active call when the host has been silent this long (ms)"
+        default 5000
+
+endmenu

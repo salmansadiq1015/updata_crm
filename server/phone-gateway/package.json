@@ -1,0 +1,26 @@
+{
+  "name": "updata-phone-gateway",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Paired-phone gateway: connection lifecycle, ESP32 HFP bridge host (src/esp32, bin/esp32-probe.mjs, esp32/firmware), macOS probe (macos/), Linux BlueZ probe (linux/).",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:macos": "sh macos/test.sh",
+    "test:linux": "python3 -m unittest discover -s linux/tests",
+    "test:linux:docker": "sh linux/test-docker.sh",
+    "test:esp32:firmware": "sh esp32/firmware/test/host/run.sh",
+    "build:esp32": "cd esp32/firmware && . ~/esp/esp-idf-v5.5.6/export.sh >/dev/null && idf.py build"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "1.1.0",
+    "serialport": "13.0.0"
+  },
+  "bin": {
+    "esp32-probe": "bin/esp32-probe.mjs",
+    "updata-gateway": "bin/updata-gateway.mjs"
+  }
+}

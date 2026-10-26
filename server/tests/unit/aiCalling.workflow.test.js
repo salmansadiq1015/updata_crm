@@ -129,6 +129,34 @@ describe('aiCalling campaign creation + eligibility', () => {
     await expect(service.createCampaign(input, actor)).rejects.toThrow(/Duplicate question fieldKey/);
   });
 
+  it('edits only an owned draft while preserving its enrolled recipients', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(
+      baseInput({ selection: { mode: 'explicit', leadIds: [String(lead._id)] } }), actor,
+    );
+    const beforeRecipients = await CampaignRecipient.countDocuments({ campaignId: campaign._id });
+    const questions = [...campaign.questionnaire.questions.map((question) => ({ ...question }))];
+    questions[0].text = 'Are you still operating?';
+
+    const updated = await service.updateCampaign(campaign._id, {
+      name: 'Updated qualification run', questionnaire: { questions },
+    }, actor);
+
+    expect(updated.name).toBe('Updated qualification run');
+    expect(updated.questionnaireVersion).toBe(campaign.questionnaireVersion + 1);
+    expect(updated.questionnaire.questions[0].text).toBe('Are you still operating?');
+    expect(await CampaignRecipient.countDocuments({ campaignId: campaign._id })).toBe(beforeRecipients);
+    await expect(service.updateCampaign(campaign._id, { name: 'Intruder edit' }, new mongoose.Types.ObjectId())).rejects.toThrow(/not found/i);
+
+    const recipient = await CampaignRecipient.findOne({ campaignId: campaign._id });
+    await CallCampaign.updateOne({ _id: campaign._id }, { $set: { status: 'paused' } });
+    await CallRecord.create({
+      campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
+      internalCallId: `edit_guard_${campaign._id}`, attemptNumber: 1, state: 'in_progress', createdBy: actor,
+    });
+    await expect(service.updateCampaign(campaign._id, { name: 'Unsafe mid-call edit' }, actor)).rejects.toThrow(/active calls/i);
+  });
+
   it('requires evidence-backed call consent and rechecks eligibility after a grant', async () => {
     process.env.AI_CALLING_REQUIRE_CONSENT = 'true';
     try {
@@ -437,6 +465,44 @@ describe('aiCalling analytics', () => {
     expect(csv.startsWith('﻿')).toBe(true);
     expect(csv).toContain('date,calls,answered,qualified');
     expect(csv).toContain('TOTAL,2,1,1');
+  });
+});
+
+describe('aiCalling call history', () => {
+  it('lists only the owner\'s production calls and supports lead search and review filters', async () => {
+    const lead = await makeLead({ name: 'History Search Lead' });
+    const campaign = await service.createCampaign(
+      baseInput({ selection: { mode: 'explicit', leadIds: [String(lead._id)] } }), actor,
+    );
+    const recipient = await CampaignRecipient.findOne({ campaignId: campaign._id });
+    const other = new mongoose.Types.ObjectId();
+    await CallRecord.create([
+      {
+        campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
+        internalCallId: `history_prod_${recipient._id}`, attemptNumber: 1,
+        state: 'completed', disposition: 'answered_partial', reviewRequired: true, createdBy: actor,
+      },
+      {
+        campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
+        internalCallId: `history_test_${recipient._id}`, attemptNumber: -1,
+        state: 'completed', provider: 'livekit_web', isTest: true, createdBy: actor,
+      },
+      {
+        campaignId: campaign._id, recipientId: recipient._id, leadId: lead._id,
+        internalCallId: `history_other_${recipient._id}`, attemptNumber: 2,
+        state: 'failed', createdBy: other,
+      },
+    ]);
+
+    const result = await service.listCalls(actor, { search: 'History Search', reviewRequired: true });
+    expect(result.pagination.total).toBe(1);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({ internalCallId: `history_prod_${recipient._id}`, reviewRequired: true });
+    expect(result.data[0].leadId).toMatchObject({ name: 'History Search Lead' });
+
+    const withTests = await service.listCalls(actor, { includeTests: true });
+    expect(withTests.pagination.total).toBe(2);
+    expect(withTests.data.map((call) => call.internalCallId)).not.toContain(`history_other_${recipient._id}`);
   });
 });
 

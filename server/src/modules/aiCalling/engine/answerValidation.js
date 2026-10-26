@@ -29,6 +29,18 @@ const YES_UR_SCRIPT = /^(جی|ہاں|بالکل|درست|ٹھیک)(\s|$|[،۔!])
 const NO_UR_SCRIPT = /^(نہیں|جی نہیں|بالکل نہیں)(\s|$|[،۔!])/;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_IN_TEXT = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/i;
+
+/** The address inside a spoken answer: "It's ali@example.com." or "ali at example dot com". */
+function extractEmail(text) {
+  const found = String(text).match(EMAIL_IN_TEXT);
+  if (found) return found[0].toLowerCase();
+  const spoken = String(text).toLowerCase()
+    .replace(/\s+at\s+/g, '@').replace(/\s+dot\s+/g, '.')
+    .replace(/\s*@\s*/g, '@').replace(/\s*\.\s*(?=[a-z0-9])/g, '.')
+    .match(EMAIL_IN_TEXT);
+  return spoken ? spoken[0] : null;
+}
 const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
 
 const isUnknown = (text) => UNKNOWN_PATTERNS.some((re) => re.test(String(text ?? '').trim()));
@@ -58,6 +70,58 @@ function matchChoice(text, options) {
   return null;
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MONTH_WORD = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const pad = (n) => String(n).padStart(2, '0');
+
+/** YYYY-MM-DD for a real calendar day, else null (no time zone involved). */
+function ymd(y, m, d) {
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? `${y}-${pad(m)}-${pad(d)}` : null;
+}
+
+/**
+ * Dates as people say them: "2026-12-01", "1 December", "December 1st 2026", "1/12/2026"
+ * (day first). Without a year, the next time that day comes round. Never guesses from
+ * free text (Date.parse would turn "1 December" into 2001 and shift days across zones).
+ */
+export function parseSpokenDate(text, now = new Date()) {
+  const t = String(text || '').toLowerCase().replace(/(\d+)(st|nd|rd|th)\b/g, '$1');
+  let m = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (m) return ymd(Number(m[1]), Number(m[2]), Number(m[3]));
+  m = t.match(/\b(\d{1,2})[/.](\d{1,2})[/.](\d{2}|\d{4})\b/);
+  if (m) return ymd(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1]));
+  let day; let month;
+  m = t.match(new RegExp(`\\b(\\d{1,2})\\s+(?:of\\s+)?${MONTH_WORD}\\b`));
+  if (m) { day = Number(m[1]); month = MONTHS.indexOf(m[2].slice(0, 3)) + 1; } else {
+    m = t.match(new RegExp(`\\b${MONTH_WORD}\\s+(?:the\\s+)?(\\d{1,2})\\b`));
+    if (m) { month = MONTHS.indexOf(m[1].slice(0, 3)) + 1; day = Number(m[2]); }
+  }
+  if (!month || !day) return null;
+  const year = t.match(/\b(20\d{2})\b/);
+  if (year) return ymd(Number(year[1]), month, day);
+  const today = ymd(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate());
+  const thisYear = ymd(now.getUTCFullYear(), month, day);
+  if (thisYear && thisYear >= today) return thisYear;
+  return ymd(now.getUTCFullYear() + 1, month, day);
+}
+
+const AFFIRM = /\b(yes|yeah|yep|yup|correct|right|exactly|absolutely|sure|ok|okay|confirm(?:ed)?|perfect|ji|jee|haan|han|bilkul|theek|thik|sahi)\b|that'?s it/i;
+const AFFIRM_UR = /(جی|ہاں|بالکل|درست|ٹھیک|صحیح)/;
+const DENY = /\b(no|not|nope|nah|wrong|incorrect|isn'?t|nahi|nahin|galat)\b/i;
+const DENY_UR = /(نہیں|غلط)/;
+
+/**
+ * Did the person confirm a read-back? "Yes, this is my email", "that's correct",
+ * "ji haan" — yes. Anything with a no / wrong / correction, or no yes at all
+ * ("thank you, goodbye") — no.
+ */
+export function isConfirmation(text) {
+  const t = String(text || '');
+  if (DENY.test(t) || DENY_UR.test(t)) return false;
+  return AFFIRM.test(t) || AFFIRM_UR.test(t);
+}
+
 const ok = (value) => ({ validation: 'valid', normalizedValue: value });
 const bad = (reason) => ({ validation: 'invalid', normalizedValue: null, reason });
 const dunno = () => ({ validation: 'unknown', normalizedValue: null });
@@ -65,9 +129,10 @@ const dunno = () => ({ validation: 'unknown', normalizedValue: null });
 /**
  * @param {object} question - the configured question (type, options, min, max, …)
  * @param {string} rawAnswer - the transcribed spoken answer
+ * @param {Date} [now] - reference for dates said without a year
  * @returns {{validation:'valid'|'invalid'|'unknown', normalizedValue:*, reason?:string}}
  */
-export function validateAnswer(question, rawAnswer) {
+export function validateAnswer(question, rawAnswer, now = new Date()) {
   const type = question?.type || 'short_text';
   const text = String(rawAnswer ?? '').trim();
 
@@ -117,8 +182,8 @@ export function validateAnswer(question, rawAnswer) {
       return matched.length ? ok(matched) : bad('no_matching_option');
     }
     case 'email': {
-      const value = text.replace(/\s+/g, '').toLowerCase();
-      return EMAIL_RE.test(value) ? ok(value) : bad('invalid_email');
+      const value = extractEmail(text);
+      return value && EMAIL_RE.test(value) ? ok(value) : bad('invalid_email');
     }
     case 'url': {
       const value = text.replace(/\s+/g, '');
@@ -130,9 +195,8 @@ export function validateAnswer(question, rawAnswer) {
       return count >= 7 && count <= 15 ? ok(digits) : bad('invalid_phone');
     }
     case 'date': {
-      const parsed = Date.parse(text);
-      if (!Number.isNaN(parsed)) return ok(new Date(parsed).toISOString().slice(0, 10));
-      return bad('unparseable_date');
+      const date = parseSpokenDate(text, now);
+      return date ? ok(date) : bad('unparseable_date');
     }
     case 'time': {
       const m = text.match(/\b([01]?\d|2[0-3])[:.h ]([0-5]\d)\b/) || text.match(/\b(1[0-2]|0?\d)\s*(am|pm)\b/i);

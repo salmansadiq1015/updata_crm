@@ -86,7 +86,8 @@ const linkConfigSchema = new mongoose.Schema({
   estimatedMinutes: { type: Number, default: 3, min: 1, max: 30 },
   faq: { type: [faqSchema], default: [] },
   smsTemplates: { type: mongoose.Schema.Types.Mixed, default: null }, // { en, ur, roman_ur, … } overrides
-  voiceTier: { type: String, enum: ['off', 'browser', 'premium'], default: 'off' },
+  // premium = real-time voice call in the browser (LiveKit + OpenAI Realtime agent worker).
+  voiceTier: { type: String, enum: ['off', 'browser', 'premium'], default: 'premium' },
   reminders: {
     enabled: { type: Boolean, default: false },
     afterHours: { type: Number, default: 24, min: 1, max: 336 },
@@ -102,6 +103,7 @@ const linkConfigSchema = new mongoose.Schema({
     maxTokensPerTurn: { type: Number, default: 220, min: 60, max: 800 },
     maxSessionMinutes: { type: Number, default: 30, min: 5, max: 240 },
     dailySpendCap: { type: Number, default: 2, min: 0 },
+    maxVoiceMinutes: { type: Number, default: 10, min: 2, max: 30 },
   },
   transcriptRetentionDays: { type: Number, default: 90, min: 1, max: 730 },
   whatsappShare: { type: Boolean, default: false },
@@ -118,6 +120,15 @@ const campaignSchema = new mongoose.Schema({
   agentConfig: { type: agentConfigSchema, default: () => ({}) },
   // 'voice' = AI phone calls (cloud); 'web_link' = SMS link → AI chat page.
   channel: { type: String, enum: ['voice', 'web_link'], default: 'voice', index: true },
+  // Voice only: who places the call. 'cloud_sip' = LiveKit SIP trunk; 'paired_phone' = the
+  // owner's own phone + SIM through the ESP32 Bluetooth gateway (pairedPhone module).
+  transport: { type: String, enum: ['cloud_sip', 'paired_phone'], default: 'cloud_sip' },
+  pairedDeviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'PairedDevice', default: null },
+  // Why a paired-phone campaign is waiting for its device (readiness reasons), for the UI.
+  deviceWait: {
+    reasons: { type: [String], default: [] },
+    at: { type: Date, default: null },
+  },
   linkConfig: { type: linkConfigSchema, default: undefined },
   schedule: { type: scheduleSchema, default: () => ({ ...DEFAULT_SCHEDULE }) },
 
@@ -143,6 +154,7 @@ const campaignSchema = new mongoose.Schema({
     unqualified: { type: Number, default: 0 },
     callbacks: { type: Number, default: 0 },
     needsReview: { type: Number, default: 0 },
+    needsReconcile: { type: Number, default: 0 }, // uncertain outcomes parked for a human
     doNotContact: { type: Number, default: 0 },
     suppressed: { type: Number, default: 0 },
     missingPhone: { type: Number, default: 0 },

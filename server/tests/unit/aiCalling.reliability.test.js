@@ -19,6 +19,7 @@ const createOutboundCall = jest.fn();
 const roomStatus = jest.fn(async () => 'unknown');
 const endCall = jest.fn(async () => ({ ended: true }));
 const dispatchAgent = jest.fn(async () => ({ outcome: 'accepted', provider: 'livekit_sip', providerCallId: 'disp1' }));
+const waitForAgentWorker = jest.fn(async () => 'running');
 
 jest.unstable_mockModule('../../src/shared/queue/QueueManager.js', () => ({
   default: { addJob, getQueueStats: jest.fn(async () => ({})) },
@@ -40,6 +41,8 @@ jest.unstable_mockModule('../../src/modules/aiCalling/providers/livekitSip.provi
     roomStatus: (...a) => roomStatus(...a),
     endCall: (...a) => endCall(...a),
     dispatchAgent: (...a) => dispatchAgent(...a),
+    waitForAgentWorker: (...a) => waitForAgentWorker(...a),
+    agentName: 'crm-voice-agent',
     issueJoinToken: () => 'join-token',
   },
 }));
@@ -511,6 +514,17 @@ describe('CRM sync preserves human decisions', () => {
 });
 
 describe('browser web test isolation', () => {
+  it('fails fast with the real cause when no agent worker claims the dispatch', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    waitForAgentWorker.mockResolvedValueOnce('no_worker');
+    endCall.mockClear();
+    await expect(service.startWebTest(campaign._id, actor, {})).rejects.toThrow(/No voice agent worker is online for "crm-voice-agent"/);
+    const call = await CallRecord.findOne({ campaignId: campaign._id, isTest: true }).sort({ createdAt: -1 }).lean();
+    expect(call).toMatchObject({ state: 'failed', disposition: 'failed' });
+    expect(endCall).toHaveBeenCalledWith({ roomName: call.roomName });
+  });
+
   it('uses negative attempt numbers and never touches the recipient or the lead', async () => {
     const lead = await makeLead();
     const campaign = await service.createCampaign(baseInput([lead._id]), actor);

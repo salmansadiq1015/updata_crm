@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "dev:agent": "cd agent-worker && AGENT_HEALTH_PORT=${AGENT_HEALTH_PORT:-8094} node src/agent.js dev",
     "start:legacy": "nodemon index.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --passWithNoTests",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
@@ -57,6 +58,7 @@
     "ioredis": "^5.6.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
+    "livekit-client": "2.22.4",
     "mailparser": "^3.9.16",
     "mongo-sanitize": "^1.1.0",
     "mongoose": "^9.7.2",

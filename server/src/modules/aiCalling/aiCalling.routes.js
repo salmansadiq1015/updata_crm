@@ -25,7 +25,9 @@ router.get('/campaigns/:id/export', authenticate, requirePermission('ai-calling:
 router.get('/campaigns/:id/active-calls', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.activeCalls(req, res, next));
 
 // Calls
+router.get('/calls', authenticate, requirePermission('ai-calling:read'), validate(schemas.listCalls), (req, res, next) => controller.listCalls(req, res, next));
 router.get('/calls/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.callId), (req, res, next) => controller.getCall(req, res, next));
+router.post('/calls/:id/reconcile', authenticate, requirePermission('ai-calling:write'), validate(schemas.reconcileCall), (req, res, next) => controller.reconcileCall(req, res, next));
 router.post('/calls/:id/review', authenticate, requirePermission('ai-calling:write'), validate(schemas.reviewAnswers), (req, res, next) => controller.reviewAnswers(req, res, next));
 
 // Lead history + analytics + admin
@@ -38,6 +40,9 @@ router.get('/leads/:leadId/consent', authenticate, requirePermission('ai-calling
 router.put('/leads/:leadId/consent', authenticate, requirePermission('ai-calling:write'), validate(schemas.callConsentUpdate), (req, res, next) => controller.updateConsent(req, res, next));
 router.get('/languages', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.languages(req, res, next));
 router.get('/telephony/health', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.telephonyHealth(req, res, next));
+// Global voice kill switch (stops cloud SIP and paired-phone dialing).
+router.get('/settings', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.getVoiceSettings(req, res, next));
+router.put('/settings', authenticate, requirePermission('ai-calling:admin'), validate(schemas.voiceSettings), (req, res, next) => controller.setVoiceSettings(req, res, next));
 
 /**
  * Agent tool API — invoked by the LiveKit voice agent worker during a live call,
@@ -51,10 +56,11 @@ agentToolRoutes.post('/:callId/answered', authenticateAgentCall, validate(schema
 agentToolRoutes.post('/:callId/disclose', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDisclose(req, res, next));
 agentToolRoutes.post('/:callId/record-answer', authenticateAgentCall, validate(schemas.agentRecordAnswer), (req, res, next) => controller.agentRecordAnswer(req, res, next));
 agentToolRoutes.post('/:callId/mark-unknown', authenticateAgentCall, validate(schemas.agentFieldOnly), (req, res, next) => controller.agentMarkUnknown(req, res, next));
-agentToolRoutes.post('/:callId/confirm', authenticateAgentCall, validate(schemas.agentFieldOnly), (req, res, next) => controller.agentConfirm(req, res, next));
+agentToolRoutes.post('/:callId/confirm', authenticateAgentCall, validate(schemas.agentConfirm), (req, res, next) => controller.agentConfirm(req, res, next));
 agentToolRoutes.post('/:callId/request-callback', authenticateAgentCall, validate(schemas.agentCallback), (req, res, next) => controller.agentCallback(req, res, next));
 agentToolRoutes.post('/:callId/do-not-contact', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDoNotContact(req, res, next));
 agentToolRoutes.post('/:callId/decline', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDecline(req, res, next));
+agentToolRoutes.post('/:callId/transcript', authenticateAgentCall, validate(schemas.agentTranscript), (req, res, next) => controller.agentTranscript(req, res, next));
 agentToolRoutes.post('/:callId/end', authenticateAgentCall, validate(schemas.agentEnd), (req, res, next) => controller.agentEnd(req, res, next));
 
 // Telephony provider webhooks (signature-verified inside the controller).

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { waitForSipAnswer, once, silenceAction, waitUntilQuiet } from '../src/callControl.js';
+import { waitForSipAnswer, once, silenceAction, waitUntilQuiet, openCall } from '../src/callControl.js';
 import { actionToInstruction, withCurrentStep } from '../src/toolApi.js';
 
 class FakeRoom extends EventEmitter {
@@ -119,4 +119,107 @@ test('thinking that turns into speech waits for the speech to end', async () => 
   assert.equal(resolved, false);
   session.emit('agent_state_changed', { newState: 'listening' });
   await p;
+});
+
+test('turn detection defaults to server VAD; semantic is opt-in', async () => {
+  const { turnDetection, transcription } = await import('../src/agent.js');
+  assert.equal(turnDetection({}).type, 'server_vad');
+  assert.equal(turnDetection({}).silence_duration_ms, 600);
+  assert.equal(turnDetection({ OPENAI_REALTIME_SILENCE_MS: '800' }).silence_duration_ms, 800);
+  assert.deepEqual(turnDetection({ OPENAI_REALTIME_TURN_DETECTION: 'semantic' }).type, 'semantic_vad');
+  assert.equal(transcription('en').language, 'en');
+  assert.equal(transcription('ur').language, 'ur');
+  assert.ok(transcription('roman_ur').prompt);
+});
+
+test('answers in any language reach the server as options / digits it can validate', () => {
+  const choice = actionToInstruction({ type: 'ask', question: { fieldKey: 'place', text: 'What kind of place?', type: 'single_choice', options: ['office', 'shop'] } });
+  assert.match(choice, /exactly as one of: office \| shop/);
+  const number = actionToInstruction({ type: 'clarify', question: { fieldKey: 'size', text: 'How big?', type: 'integer' } });
+  assert.match(number, /as digits/);
+  assert.doesNotMatch(actionToInstruction({ type: 'ask', question: { fieldKey: 'note', text: 'Anything else?', type: 'text' } }), /digits|exactly as one of/);
+});
+
+test('heard: confirmations use the transcript of the newest turn, waiting briefly for it', async () => {
+  const { createHeard } = await import('../src/callControl.js');
+  const heard = createHeard();
+  heard.onSpeaking();
+  heard.onTranscript('salman@outlook.com');
+  assert.equal(await heard.latest(50), 'salman@outlook.com');
+  heard.onSpeaking(); // the person says "Yes" — its transcript lands after the tool call
+  const pending = heard.latest(1000);
+  setTimeout(() => heard.onTranscript('Yes.'), 20);
+  assert.equal(await pending, 'Yes.');
+  heard.onSpeaking(); // transcript never arrives → no evidence, not the older sentence
+  assert.equal(await heard.latest(30), null);
+});
+
+// ---- opening an answered phone call ----
+function opener() {
+  const session = new EventEmitter();
+  const state = { user: 'listening', agent: 'listening', generated: 0 };
+  const io = { userState: () => state.user, agentState: () => state.agent, generate: () => { state.generated += 1; } };
+  const user = (s) => { state.user = s; session.emit('user_state_changed', { newState: s }); };
+  const agent = (s) => { state.agent = s; session.emit('agent_state_changed', { newState: s }); };
+  return { session, state, io, user, agent };
+}
+
+test('a silent callee gets the opener after the quiet period', async () => {
+  const o = opener();
+  const done = openCall(o.session, o.io, { quietMs: 30, maxGreetingMs: 500, retryAfterMs: 200 });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(o.state.generated, 1);
+  o.agent('speaking');
+  assert.equal(await done, 'spoke');
+});
+
+test('a callee saying "Hello?" is let finish before the agent speaks', async () => {
+  const o = opener();
+  const done = openCall(o.session, o.io, { quietMs: 30, maxGreetingMs: 500, retryAfterMs: 200 });
+  o.user('speaking');
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(o.state.generated, 0, 'never talks over the greeting');
+  o.user('listening');
+  assert.equal(o.state.generated, 1);
+  o.agent('speaking');
+  assert.equal(await done, 'spoke');
+});
+
+test('a swallowed opener is retried once instead of waiting for the silence timer', async () => {
+  const o = opener();
+  const done = openCall(o.session, o.io, { quietMs: 10, maxGreetingMs: 500, retryAfterMs: 40 });
+  await new Promise((r) => setTimeout(r, 70));
+  assert.equal(o.state.generated, 2);
+  o.agent('speaking');
+  assert.equal(await done, 'retried');
+});
+
+test('an endless greeting (noise) does not block the opener forever', async () => {
+  const o = opener();
+  const done = openCall(o.session, o.io, { quietMs: 10, maxGreetingMs: 50, retryAfterMs: 200 });
+  o.user('speaking');
+  await new Promise((r) => setTimeout(r, 70));
+  assert.equal(o.state.generated, 1);
+  o.agent('speaking');
+  assert.equal(await done, 'spoke');
+});
+
+// ---- one questionnaire step per thing the person said ----
+test('an answer the person never gave is refused; each new speech turn allows one step', async () => {
+  const { createHeard, createAnswerGate } = await import('../src/callControl.js');
+  const heard = createHeard();
+  const gate = createAnswerGate(heard);
+  heard.onSpeaking(); // "Hello?" before the opener
+  gate.reset(); // the opener (disclosure) is sent
+  assert.equal(gate.allow(), false, 'a "Hello?" is not agreement to continue');
+  heard.onSpeaking(); // "Yes, go ahead."
+  assert.equal(gate.allow(), true);
+  gate.advance(); // disclose
+  assert.equal(gate.allow(), false, 'the model cannot record an answer the lead has not given yet (E2E 2026-10-23)');
+  heard.onSpeaking(); // "No, we closed the business last year."
+  assert.equal(gate.allow(), true);
+  gate.advance(); // record_answer
+  heard.onSpeaking();
+  heard.onSpeaking(); // a long answer split into two turns still allows the next step
+  assert.equal(gate.allow(), true);
 });

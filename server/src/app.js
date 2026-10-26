@@ -7,11 +7,11 @@ import Sentry from "./config/sentry.js";
 // Middleware
 import { requestIdMiddleware } from './shared/middleware/requestId.js';
 import { responseEnvelope } from './shared/middleware/responseEnvelope.js';
-import { requestLogger } from './shared/middleware/requestLogger.js';
+import { redactPath, requestLogger } from './shared/middleware/requestLogger.js';
 import { securityHeaders } from './shared/middleware/securityHeaders.js';
 import { corsMiddleware } from './shared/middleware/cors.js';
 import { compressionMiddleware } from './shared/middleware/compression.js';
-import { globalLimiter, agentToolLimiter, providerWebhookLimiter } from './shared/middleware/rateLimiter.js';
+import { globalLimiter, agentToolLimiter, providerWebhookLimiter, gatewayLimiter, gatewayPairLimiter } from './shared/middleware/rateLimiter.js';
 import { mongoSanitizeMiddleware } from './shared/utils/sanitize.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { notFoundHandler } from './shared/middleware/notFound.js';
@@ -66,6 +66,7 @@ import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.ro
 import extensionRoutes from './modules/extension/extension.routes.js';
 import messagingRoutes, { messagingWebhookRoutes } from './modules/messaging/messaging.routes.js';
 import aiCallingRoutes, { agentToolRoutes, aiCallingWebhookRoutes } from './modules/aiCalling/aiCalling.routes.js';
+import pairedPhoneRoutes, { gatewayRoutes as pairedPhoneGatewayRoutes } from './modules/pairedPhone/pairedPhone.routes.js';
 import linkAssistantRoutes from './modules/linkAssistant/linkAssistant.routes.js';
 import linkAssistantPublicRoutes from './modules/linkAssistant/linkAssistant.public.routes.js';
 import simSmsRoutes from './modules/simSms/simSms.routes.js';
@@ -93,6 +94,7 @@ export function createApp() {
   app.use(compressionMiddleware);
 
   // Logging
+  morgan.token("url", (req) => redactPath(req.originalUrl || req.url));
   app.use(morgan("dev"));
   // app.use(morgan('combined'));
 
@@ -128,6 +130,8 @@ export function createApp() {
     if (req.path.startsWith('/socket.io')) return next();
     // AI-calling worker + provider webhooks have dedicated limiters (mounted below).
     if (req.path.startsWith('/api/v1/ai-calling/agent/') || req.path.startsWith('/api/v1/webhooks/ai-calling/')) return next();
+    // The paired-phone gateway has its own per-device limiter (mounted below).
+    if (req.path.startsWith('/api/v1/paired-phone/gateway/')) return next();
     // The SMS link assistant's public page has its own per-IP / per-link limiters.
     if (req.path.startsWith('/c/')) return next();
     return globalLimiter(req, res, next);
@@ -169,6 +173,10 @@ export function createApp() {
   app.use("/c", linkAssistantPublicRoutes);
   app.use("/api/v1/ai-calling/agent", agentToolLimiter, agentToolRoutes);
   app.use("/api/v1/webhooks/ai-calling", providerWebhookLimiter, aiCallingWebhookRoutes);
+  // Paired-phone calling (owner's phone via the ESP32 Bluetooth gateway): owner API + gateway API.
+  app.use("/api/v1/paired-phone/gateway/pair", gatewayPairLimiter);
+  app.use("/api/v1/paired-phone/gateway", gatewayLimiter, pairedPhoneGatewayRoutes);
+  app.use("/api/v1/paired-phone", pairedPhoneRoutes);
   // AI SMS agent over the user's own phone SIM (Android private build).
   app.use("/api/v1/sim-sms", simSmsRoutes);
   app.use("/api/v1/sim-calls", simCallRoutes);

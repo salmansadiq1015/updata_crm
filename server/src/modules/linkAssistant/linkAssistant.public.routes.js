@@ -9,16 +9,18 @@ import Joi from 'joi';
 import logger from '../../shared/logger/index.js';
 import { linkMessageLimiter, linkMissLimiter, linkPageLimiter } from '../../shared/middleware/rateLimiter.js';
 import service from './linkAssistant.service.js';
+import voice from './linkVoice.service.js';
 import { DEVICE_COOKIE, MAX_MESSAGE_CHARS } from './linkAssistant.constants.js';
 import { generateDeviceId } from './engine/linkTokens.js';
-import { assetByPath, CSP, renderChatPage, renderErrorPage } from './page/template.js';
+import { assetByPath, cspFor, renderChatPage, renderErrorPage } from './page/template.js';
 
 const router = express.Router();
 
 const PREVIEW_BOTS = /(whatsapp|facebookexternalhit|facebot|telegrambot|twitterbot|slackbot|skypeuripreview|discordbot|linkedinbot|googlebot|bingbot|applebot|embedly|preview)/i;
 
-function pageHeaders(res) {
-  res.setHeader('Content-Security-Policy', CSP);
+function pageHeaders(res, { voice: withVoice = false } = {}) {
+  // The LiveKit signalling host is allowed only on pages that offer a voice call.
+  res.setHeader('Content-Security-Policy', cspFor({ voice: withVoice }));
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -39,7 +41,8 @@ function deviceId(req, res) {
 const sendError = (res, error) => {
   const status = error?.statusCode || 500;
   const code = error?.code && /^[A-Z_]+$/.test(error.code) ? error.code : 'ERROR';
-  if (status >= 500) logger.error('link assistant public error', { module: 'link-assistant', error: error?.message });
+  // Expected refusals (voice unavailable, budget, link states) are not server errors.
+  if (status >= 500 && !error?.isLinkRefusal) logger.error('link assistant public error', { module: 'link-assistant', error: error?.message });
   res.status(status).json({ success: false, code });
 };
 
@@ -68,6 +71,7 @@ router.get('/:token', linkPageLimiter, linkMissLimiter, async (req, res) => {
   const device = deviceId(req, res);
   try {
     const model = await service.pageModel(req.params.token, device);
+    if (model.voice?.available) pageHeaders(res, { voice: true });
     return res.status(200).type('html').send(renderChatPage(model));
   } catch (error) {
     const code = error?.code || 'LINK_NOT_FOUND';
@@ -116,6 +120,27 @@ router.post('/:token/api/language', linkPageLimiter, linkMissLimiter, guard, asy
     const { value, error } = Joi.object({ language: Joi.string().valid('en', 'ur', 'roman_ur').required() }).validate(req.body || {});
     if (error) return res.status(400).json({ success: false, code: 'BAD_LANGUAGE' });
     return res.json(await service.setLanguage(req.params.token, req.deviceId, value.language));
+  } catch (error) { return sendError(res, error); }
+});
+
+// ---- real-time voice call (LiveKit room + agent worker); see linkVoice.service.js
+router.post('/:token/api/voice/start', linkPageLimiter, linkMissLimiter, linkMessageLimiter, guard, async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json(await voice.start(req.params.token, req.deviceId));
+  } catch (error) { return sendError(res, error); }
+});
+
+router.post('/:token/api/voice/end', linkPageLimiter, linkMissLimiter, guard, async (req, res) => {
+  try {
+    const { value } = Joi.object({ reason: Joi.string().valid('customer_hangup', 'page_closed', 'agent_unavailable', 'call_dropped').default('customer_hangup') }).validate(req.body || {}, { stripUnknown: true });
+    return res.json(await voice.end(req.params.token, req.deviceId, value?.reason || 'customer_hangup'));
+  } catch (error) { return sendError(res, error); }
+});
+
+router.post('/:token/api/voice/human', linkPageLimiter, linkMissLimiter, linkMessageLimiter, guard, async (req, res) => {
+  try {
+    return res.json(await voice.requestHuman(req.params.token, req.deviceId));
   } catch (error) { return sendError(res, error); }
 });
 

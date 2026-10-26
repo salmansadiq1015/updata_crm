@@ -47,6 +47,7 @@ import {
 import { DEFAULT_SMS_TEMPLATES, templateStats } from './engine/smsTemplates.js';
 import { addCost, linkEvent, observeFirstReply } from './linkAssistant.metrics.js';
 import { modelSettings } from './engine/modelSettings.js';
+import livekit from '../aiCalling/providers/livekitSip.provider.js';
 
 export { modelSettings };
 
@@ -57,7 +58,7 @@ const DAY = 24 * HOUR;
 const TURN_LOCK_MS = 45_000;
 
 
-const linkConfigOf = (campaign) => ({
+export const linkConfigOf = (campaign) => ({
   ...DEFAULT_LINK_CONFIG,
   ...(campaign.linkConfig || {}),
   reminders: { ...DEFAULT_LINK_CONFIG.reminders, ...(campaign.linkConfig?.reminders || {}) },
@@ -65,8 +66,39 @@ const linkConfigOf = (campaign) => ({
   limits: { ...DEFAULT_LINK_CONFIG.limits, ...(campaign.linkConfig?.limits || {}) },
 });
 
-const companyOf = (campaign) => campaign.agentConfig?.organizationName || process.env.LINK_ASSISTANT_COMPANY_NAME || 'our team';
+export const companyOf = (campaign) => campaign.agentConfig?.organizationName || process.env.LINK_ASSISTANT_COMPANY_NAME || 'our team';
 const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
+
+/** Real-time voice is offered when the campaign chose it and LiveKit is configured (the agent worker joins per call). */
+export function voiceInfo(cfg, session, now = new Date()) {
+  const enabled = cfg.voiceTier === 'premium' && process.env.LINK_VOICE_ENABLED !== 'false';
+  return {
+    available: enabled && livekit.livekitReady,
+    reason: !enabled ? 'off' : (livekit.livekitReady ? null : 'not_configured'),
+    maxMinutes: cfg.limits.maxVoiceMinutes,
+    active: Boolean(session?.voice?.activeUntil && session.voice.activeUntil > now),
+  };
+}
+
+function displayValue(question, value) {
+  if (value == null || value === '') return '';
+  if (Array.isArray(value)) return value.map((v) => displayValue(question, v)).join(', ');
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return value.toLocaleString('en-US');
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const option = (question.options || []).find((o) => (o && typeof o === 'object' ? o.value : o) === value);
+  if (option && typeof option === 'object') return String(option.label || option.value);
+  return String(value).slice(0, 200);
+}
+
+/** The customer's own saved answers, for the end-of-call summary on their verified device. */
+export function answerSummary(questionnaire, state) {
+  const answers = state?.answers || {};
+  return [...(questionnaire?.questions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .filter((q) => answers[q.fieldKey]?.validation === 'valid')
+    .map((q) => ({ label: q.label || q.text, value: displayValue(q, answers[q.fieldKey].normalizedValue) }))
+    .filter((a) => a.value);
+}
 
 function e164For(lead) {
   const raw = lead.mobile || lead.phone || '';
@@ -74,7 +106,7 @@ function e164For(lead) {
   return normalized.valid ? normalized.e164 : null;
 }
 
-function emitToOwner(userId, event, payload) {
+export function emitToOwner(userId, event, payload) {
   try { global.io?.to(`user:${userId}`).emit(event, payload); } catch { /* best effort */ }
 }
 
@@ -82,6 +114,7 @@ function emitToOwner(userId, event, payload) {
 export class LinkError extends AppError {
   constructor(code, status = 404) {
     super(code, status, code);
+    this.isLinkRefusal = true;
   }
 }
 
@@ -416,9 +449,14 @@ class LinkAssistantService {
       languages: cfg.languages,
       displayName: session.displayName,
       voiceTier: cfg.voiceTier,
+      voice: voiceInfo(cfg, session),
+      reason: cfg.reason,
+      estimatedMinutes: cfg.estimatedMinutes,
+      summary: state ? answerSummary(campaign.questionnaire, state) : [],
       whatsappShare: false,
       paused,
       status: session.status,
+      outcome: session.outcome,
       greeting: session.greeting,
       transcript: needsVerify ? [] : session.transcript.filter((t) => t.role !== 'system').map((t) => ({ role: t.role, text: t.text })),
       quickReplies: plan?.quickReplies || [],
@@ -927,6 +965,7 @@ class LinkAssistantService {
       callRecordId: String(s.callRecordId),
       status: s.status, outcome: s.outcome, language: s.language, turns: s.turns, funnel: s.funnel, isTest: s.isTest,
       reminders: s.reminders, usage: { cost: s.usage?.cost || 0, modelCalls: s.usage?.modelCalls || 0 },
+      voice: { calls: s.voice?.calls || 0, seconds: s.voice?.seconds || 0, cost: s.voice?.cost || 0, live: Boolean(s.voice?.activeUntil && s.voice.activeUntil > new Date()) },
       expiresAt: s.expiresAt, lastActivityAt: s.lastActivityAt, createdAt: s.createdAt, closedAt: s.closedAt,
     };
   }

@@ -2,7 +2,7 @@ import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import {
   CAMPAIGN_STATUSES, QUESTION_TYPES, RULE_ACTIONS, SPEAKING_STYLES, RECIPIENT_STATES,
-  QUALIFICATION_RESULTS, ANSWER_VALIDATION,
+  QUALIFICATION_RESULTS, ANSWER_VALIDATION, CALL_STATES, DISPOSITIONS,
 } from './aiCalling.constants.js';
 import { canonicalAgentLanguage, isSupportedAgentLanguage } from './aiCalling.languages.js';
 import { isValidTimezone } from './engine/callWindow.js';
@@ -105,7 +105,7 @@ const linkConfig = Joi.object({
     answer: Joi.string().trim().max(1000).required(),
   })).max(50).default([]),
   smsTemplates: Joi.object().pattern(Joi.string().valid('en', 'ur', 'roman_ur', 'fr', 'de', 'ar'), Joi.string().trim().max(500)).allow(null).default(null),
-  voiceTier: Joi.string().valid('off', 'browser', 'premium').default('off'),
+  voiceTier: Joi.string().valid('off', 'browser', 'premium').default('premium'),
   reminders: Joi.object({
     enabled: Joi.boolean().default(false),
     afterHours: Joi.number().integer().min(1).max(336).default(24),
@@ -121,6 +121,7 @@ const linkConfig = Joi.object({
     maxTokensPerTurn: Joi.number().integer().min(60).max(800).default(220),
     maxSessionMinutes: Joi.number().integer().min(5).max(240).default(30),
     dailySpendCap: Joi.number().min(0).max(1000).default(2),
+    maxVoiceMinutes: Joi.number().integer().min(2).max(30).default(10),
   }).default({}),
   transcriptRetentionDays: Joi.number().integer().min(1).max(730).default(90),
   whatsappShare: Joi.boolean().default(false),
@@ -148,6 +149,8 @@ export const createCampaign = { body: Joi.object({
   agentConfig: agentConfig.default({}),
   channel: Joi.string().valid('voice', 'web_link').default('voice'),
   linkConfig: linkConfig.when('channel', { is: 'web_link', then: linkConfig.default({}), otherwise: Joi.forbidden() }),
+  transport: Joi.string().valid('cloud_sip', 'paired_phone').default('cloud_sip'),
+  pairedDeviceId: objectId.when('transport', { is: 'paired_phone', then: Joi.required(), otherwise: Joi.valid(null).optional() }),
   schedule: schedule.default({}),
   selection: Joi.alternatives().try(explicitSelection, filterSelection).required(),
   scheduledAt: Joi.date().iso().greater('now').allow(null),
@@ -161,8 +164,15 @@ export const updateCampaign = { params: Joi.object({ id: objectId.required() }),
   questionnaire: Joi.object({ questions: Joi.array().items(question).min(1).max(40).required() }),
   statusRules: Joi.array().items(statusRule).max(40),
   agentConfig, schedule, linkConfig,
+  transport: Joi.string().valid('cloud_sip', 'paired_phone'),
+  pairedDeviceId: objectId.allow(null),
   scheduledAt: Joi.date().iso().allow(null),
 }).min(1) };
+
+export const voiceSettings = { body: Joi.object({
+  voicePaused: Joi.boolean().required(),
+  reason: Joi.string().trim().max(300).allow('').default(''),
+}) };
 
 export const campaignId = { params: Joi.object({ id: objectId.required() }) };
 export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null) }).default({}) };
@@ -175,6 +185,16 @@ export const simulate = { params: Joi.object({ id: objectId.required() }), body:
 }) };
 export const webTest = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ leadId: objectId.allow(null) }).default({}) };
 export const leadHistory = { params: Joi.object({ leadId: objectId.required() }), query: Joi.object({ page, limit }) };
+export const listCalls = { query: Joi.object({
+  page,
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  campaignId: objectId,
+  state: Joi.string().valid(...CALL_STATES),
+  disposition: Joi.string().valid(...DISPOSITIONS),
+  reviewRequired: Joi.boolean(),
+  search: Joi.string().trim().max(100).allow(''),
+  includeTests: Joi.boolean().default(false),
+}) };
 export const callId = { params: Joi.object({ id: objectId.required() }) };
 export const reviewAnswers = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
   answers: Joi.array().items(Joi.object({
@@ -183,6 +203,12 @@ export const reviewAnswers = { params: Joi.object({ id: objectId.required() }), 
     validation: Joi.string().valid(...ANSWER_VALIDATION),
   })).default([]),
   qualification: Joi.string().valid(...QUALIFICATION_RESULTS).allow(null),
+}) };
+export const reconcileCall = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
+  resolution: Joi.string().valid('reached', 'not_reached', 'retry').required(),
+  // Only a reached lead can be qualified.
+  qualification: Joi.when('resolution', { is: 'reached', then: Joi.string().valid(...QUALIFICATION_RESULTS).allow(null), otherwise: Joi.forbidden() }),
+  note: Joi.string().max(500).allow(''),
 }) };
 export const retryRecipients = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
   recipientIds: Joi.array().items(objectId).max(5000).default([]),
@@ -220,8 +246,13 @@ export const agentRecordAnswer = { params: Joi.object({ callId: Joi.string().max
 export const agentFieldOnly = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
 }) };
+export const agentConfirm = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
+  fieldKey: Joi.string().max(80).required(),
+  reply: Joi.string().max(1000).allow(null),
+}) };
 export const agentCallback = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   when: Joi.string().max(200).allow('', null), note: Joi.string().max(1000).allow('', null),
+  human: Joi.boolean().default(false),
 }).default({}) };
 export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   // Telephony-level outcomes only; business outcomes are derived server-side.
@@ -229,7 +260,13 @@ export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).req
   durationSeconds: Joi.number().min(0).allow(null),
   transcriptRef: Joi.string().max(500).allow(null, ''),
   cost: Joi.object({ amount: Joi.number().min(0), currency: Joi.string().max(3), breakdown: Joi.any() }).allow(null),
+  roomName: Joi.string().max(120).allow(null, ''),
 }).default({}) };
+export const agentTranscript = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
+  role: Joi.string().valid('customer', 'assistant').required(),
+  text: Joi.string().max(4000).allow('').required(),
+  itemId: Joi.string().max(80).pattern(/^[\w.:-]+$/).allow(null),
+}) };
 
 // Shared with the SIM SMS agent (same questionnaire / rule shapes).
 export { question as questionSchema, statusRule as statusRuleSchema };

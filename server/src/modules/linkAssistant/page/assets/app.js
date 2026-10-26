@@ -18,7 +18,7 @@
 
   var COPY = boot.copy || {};
   var lang = boot.language || 'en';
-  var vars = { company: boot.company || '', persona: boot.persona || '' };
+  var vars = { company: boot.company || '', persona: boot.persona || '', minutes: boot.estimatedMinutes || 3 };
   var t = function (k) {
     var s = (COPY[lang] || COPY.en || {})[k] || (COPY.en || {})[k] || '';
     return s.replace(/\{(\w+)\}/g, function (m, key) { return key in vars ? vars[key] : m; });
@@ -350,7 +350,8 @@
     }
   };
   function initVoice() {
-    if (boot.voiceTier === 'off' || !voice.supported) return;
+    // 'premium' has the real-time call screen instead of this push-to-talk tier.
+    if (boot.voiceTier !== 'browser' || !voice.supported) return;
     var mic = $('mic');
     var speakBtn = $('speak');
     mic.hidden = false;
@@ -430,20 +431,47 @@
   try { if (localStorage.getItem('ula:big')) { document.body.classList.add('big'); bigger.setAttribute('aria-pressed', 'true'); } } catch { /* ignore */ }
   $('form').addEventListener('submit', function (e) { e.preventDefault(); var v = input.value.trim(); if (v) submit(v); });
   var optOut = function () { toggleMenu(false); submit(null, '__opt_out', t('optOut')); };
+
+  // ---- bridge for the voice call screen (voice.js)
+  function setMode(mode) {
+    document.body.classList.toggle('mode-voice', mode === 'voice');
+    document.body.classList.toggle('mode-chat', mode !== 'voice');
+  }
+  window.ULA = {
+    boot: boot, t: t, post: post, opened: opened,
+    lang: function () { return lang; },
+    setLanguage: function (code) { setLanguage(code, true); },
+    showChat: function (model) {
+      setMode('chat');
+      if (model) render(model);
+      if (!state.ended) setTimeout(function () { input.focus(); }, 50);
+    },
+    showVoice: function () { setMode('voice'); if (window.ULA.onShowVoice) window.ULA.onShowVoice(); },
+    optOut: function () { setMode('chat'); optOut(); }
+  };
+  if ($('tocall')) $('tocall').addEventListener('click', function () { window.ULA.showVoice(); });
   if ($('optout')) $('optout').addEventListener('click', optOut);
   if ($('optout2')) $('optout2').addEventListener('click', optOut);
 
   if (boot.view === 'verify') {
+    document.body.classList.remove('mode-voice');
+    document.body.classList.add('mode-chat');
     opened();
     showVerify();
     return;
   }
-  list.textContent = '';
-  if (boot.greeting) bubble('assistant', boot.greeting);
-  (boot.transcript || []).forEach(function (m) { bubble(m.role, m.text); });
-  setProgress(boot.progress);
-  if (state.ended) { endConversation(boot.status); if (boot.status !== 'completed') bubble('note', t('done')); }
-  else { setQuick(boot.quickReplies); setInputMode(boot.inputMode); }
+  // (Re)draw the chat from a page model: on load, and when the customer switches
+  // from a voice call to typing (the call's transcript is part of the same conversation).
+  function render(model) {
+    list.textContent = '';
+    if (model.greeting) bubble('assistant', model.greeting);
+    (model.transcript || []).forEach(function (m) { bubble(m.role, m.text); });
+    setProgress(model.progress);
+    state.ended = model.status === 'completed' || model.view === 'completed' || ['abandoned', 'opted_out', 'expired', 'revoked'].indexOf(model.status) !== -1;
+    if (state.ended) { endConversation(model.status); if (model.status !== 'completed') bubble('note', t('done')); }
+    else { setQuick(model.quickReplies); setInputMode(model.inputMode); }
+  }
+  render(boot);
   if (boot.paused) showBanner(t('paused'));
   initVoice();
   opened();

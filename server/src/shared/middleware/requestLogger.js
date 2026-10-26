@@ -9,6 +9,11 @@ import logger from '../logger/index.js';
  */
 const SKIP_PATHS = ['/health/live', '/health/ready', '/metrics'];
 
+/** SMS link tokens are bearer secrets: never write them to logs. */
+export function redactPath(url) {
+  return String(url || '').replace(/^\/c\/[^/?#]+/, '/c/[link]');
+}
+
 export function requestLogger(req, res, next) {
   if (SKIP_PATHS.includes(req.path)) {
     return next();
@@ -23,7 +28,7 @@ export function requestLogger(req, res, next) {
       action: 'http.request',
       requestId: req.requestId,
       method: req.method,
-      path: req.originalUrl,
+      path: redactPath(req.originalUrl),
       statusCode: res.statusCode,
       duration,
       contentLength: res.getHeader('content-length'),

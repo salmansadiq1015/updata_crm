@@ -56,5 +56,21 @@ function isLoopbackOrigin(origin) {
   }
 }
 
-export const corsMiddleware = cors(corsOptions);
+/**
+ * A page served by this API calling this API (e.g. the SMS link page at /c/…) is a
+ * same-origin request: browsers still send Origin on POST, but the allow-list does
+ * not apply. Cross-site requests (Origin host ≠ Host) are checked as before.
+ */
+export function isSameOrigin(req) {
+  const origin = req.headers?.origin;
+  if (!origin) return false;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+const corsHandler = cors(corsOptions);
+export const corsMiddleware = (req, res, next) => (isSameOrigin(req) ? next() : corsHandler(req, res, next));
 export default corsMiddleware;

@@ -42,7 +42,44 @@ const callRecordSchema = new mongoose.Schema({
   fallbackFrom: { type: String, maxlength: 40, default: null },
   fallbackReason: { type: String, maxlength: 500, default: null },
   roomName: { type: String, maxlength: 200, default: null },
+  // Paired-phone calls: the device and the gateway's progress (see pairedPhone.service.js).
+  pairedDeviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'PairedDevice', default: null },
+  gateway: {
+    type: new mongoose.Schema({
+      state: { type: String, enum: ['queued', 'claimed', 'dialing', 'ended', 'cancelled'], default: 'queued' },
+      queuedAt: { type: Date, default: null },
+      claimedAt: { type: Date, default: null },
+      dialedAt: { type: Date, default: null },
+      callRef: { type: Number, default: null },
+      audioOpenedAt: { type: Date, default: null },
+      audioLostAt: { type: Date, default: null },
+      takenOverAt: { type: Date, default: null },
+      codec: { type: String, maxlength: 10, default: null },
+      endReason: { type: String, maxlength: 60, default: null },
+      audio: { type: mongoose.Schema.Types.Mixed, default: null },
+      audioAt: { type: Date, default: null },
+      command: {
+        kind: { type: String, enum: ['takeover', 'hangup', null], default: null },
+        requestedAt: { type: Date, default: null },
+        requestedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+        ackedAt: { type: Date, default: null },
+      },
+    }, { _id: false }),
+    default: undefined,
+  },
   agentSessionId: { type: String, maxlength: 200, default: null },
+  // Paired phone: the agent's /end, held until the gateway reports how the phone call ended
+  // (the agent leaving is no evidence that the line is down). Merged by processCallResults.
+  agentEnd: {
+    type: new mongoose.Schema({
+      at: { type: Date, required: true },
+      disposition: { type: String, maxlength: 40, default: null },
+      durationSeconds: { type: Number, default: null },
+      transcriptRef: { type: String, maxlength: 500, default: null },
+      cost: { type: mongoose.Schema.Types.Mixed, default: null },
+    }, { _id: false }),
+    default: undefined,
+  },
 
   state: { type: String, enum: CALL_STATES, default: 'queued', index: true },
   disposition: { type: String, enum: [...DISPOSITIONS, null], default: null },
@@ -84,6 +121,9 @@ const callRecordSchema = new mongoose.Schema({
     needed: { type: Boolean, default: false },
     note: { type: String, maxlength: 500, default: null },
     resolvedAt: { type: Date, default: null },
+    // Set only by the owner's explicit reconcile action (aiCalling.service reconcileCall).
+    resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    resolution: { type: String, enum: ['reached', 'not_reached', 'retry', null], default: null },
   },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -98,5 +138,7 @@ callRecordSchema.index({ state: 1, initiatedAt: 1 }, { partialFilterExpression: 
 callRecordSchema.index({ processingLeaseUntil: 1 }, { partialFilterExpression: { resultsProcessedAt: null }, name: 'reconcile_processing_lease' });
 // Daily-cap count per campaign.
 callRecordSchema.index({ campaignId: 1, initiatedAt: 1 });
+callRecordSchema.index({ pairedDeviceId: 1, initiatedAt: 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_usage' });
+callRecordSchema.index({ pairedDeviceId: 1, 'gateway.state': 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_queue' });
 
 export default mongoose.model('CallRecord', callRecordSchema);

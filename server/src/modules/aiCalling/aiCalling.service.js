@@ -6,6 +6,9 @@ import CallRecord from './callRecord.model.js';
 import CallProviderAttempt from './callProviderAttempt.model.js';
 import CallSuppression from './callSuppression.model.js';
 import CallConsent from './callConsent.model.js';
+import AiCallingSettings from './aiCallingSettings.model.js';
+import PairedDevice from '../pairedPhone/pairedDevice.model.js';
+import pairedPhoneService from '../pairedPhone/pairedPhone.service.js';
 import { LeadCallTransition, CallWebhookEvent } from './leadCallEvent.model.js';
 import Lead, { LEAD_STATUS } from '../crm/lead.model.js';
 import leadRepository from '../crm/lead.repository.js';
@@ -24,7 +27,7 @@ import { phoneHash, issueAgentToken } from './callAuth.js';
 import {
   OUTBOUND_CALL_QUEUE, ACTION_TO_LEAD_STATUS, PROTECTED_LEAD_STATUSES, normalizeTelephonyStatus,
 } from './aiCalling.constants.js';
-import { validateAnswer } from './engine/answerValidation.js';
+import { isConfirmation, validateAnswer } from './engine/answerValidation.js';
 import * as engine from './engine/questionEngine.js';
 import { evaluateOutcome } from './engine/statusRuleEngine.js';
 import { leadContext, buildSystemPrompt, disclosureText } from './engine/leadContext.js';
@@ -40,6 +43,15 @@ const PROCESSING_LEASE_MS = 2 * 60_000;   // post-call processing claim
 const TICK_LEASE_MS = 90_000;             // one tick at a time per campaign
 const DISPATCH_LEASE_MS = 2 * 60_000;     // claim → provider request window
 const TERMINAL_CALL_STATES = new Set(['completed', 'no_answer', 'busy', 'voicemail', 'failed', 'cancelled']);
+const REACHED_DISPOSITIONS = ['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact'];
+// Paired phone: the gateway still owns the phone call while its leg is in one of these states.
+const PAIRED_GATEWAY_LIVE = new Set(['queued', 'claimed', 'dialing']);
+// How long the gateway gets to report the end of a paired call after the agent left it.
+const PAIRED_END_GRACE_MS = 90_000;
+// Gateway end reasons after an answer that are our failure, not an unanswered call.
+// A recipient parked for an uncertain outcome is changed only by the owner's reconcile/retry.
+const NOT_PARKED = Object.freeze({ finalDisposition: { $ne: 'needs_reconcile' } });
+const PAIRED_SYSTEM_END_REASONS = new Set(['agent_left', 'audio_failed', 'audio_lost', 'max_duration']);
 // Web (browser) voice tests are attached to a real recipient for lead context but
 // must never count as campaign traffic or touch the recipient's state.
 // The same holds for "Preview as customer" sessions of SMS link campaigns.
@@ -126,7 +138,7 @@ async function resolveLeadIds(selection) {
 
 export async function refreshCampaignSummary(campaignId) {
   const cid = new mongoose.Types.ObjectId(campaignId);
-  const [stateRows, reasonRows, qualRows, callAgg] = await Promise.all([
+  const [stateRows, reasonRows, qualRows, callAgg, reconcileCount] = await Promise.all([
     CampaignRecipient.aggregate([{ $match: { campaignId: cid } }, { $group: { _id: '$state', count: { $sum: 1 } } }]),
     CampaignRecipient.aggregate([
       { $match: { campaignId: cid } }, { $unwind: '$eligibility.reasons' },
@@ -146,6 +158,8 @@ export async function refreshCampaignSummary(campaignId) {
         noAnswer: { $sum: { $cond: [{ $in: ['$disposition', ['no_answer', 'busy', 'voicemail']] }, 1, 0] } },
       } },
     ]),
+    // Uncertain outcomes parked for a human (never redialed automatically).
+    CampaignRecipient.countDocuments({ campaignId: cid, state: 'failed', finalDisposition: 'needs_reconcile' }),
   ]);
   const s = Object.fromEntries(stateRows.map((r) => [r._id, r.count]));
   const reasons = Object.fromEntries(reasonRows.map((r) => [r._id, r.count]));
@@ -161,12 +175,13 @@ export async function refreshCampaignSummary(campaignId) {
     completed: s.completed || 0,
     answered: call.answered || 0,
     noAnswer: call.noAnswer || 0,
-    failed: (s.failed || 0),
+    failed: Math.max(0, (s.failed || 0) - reconcileCount), // parked ones are counted in needsReconcile
     retryScheduled: s.retry_scheduled || 0,
     qualified: qual.qualified || 0,
     unqualified: qual.unqualified || 0,
     callbacks: qual.callback || 0,
-    needsReview: qual.review || 0,
+    needsReview: (qual.review || 0) + reconcileCount,
+    needsReconcile: reconcileCount,
     doNotContact: qual.do_not_contact || 0,
     suppressed: s.suppressed || 0,
     missingPhone: reasons.missing_phone || 0,
@@ -238,6 +253,7 @@ class AiCallingService {
   // ---------------------------------------------------------------- campaigns
   async createCampaign(input, actor, meta = {}) {
     assertQuestionnaire(input.questionnaire);
+    const transport = await this._resolveTransport(input, actor);
     const leadIds = await resolveLeadIds(input.selection);
     if (!leadIds.length) throw new ValidationError('No leads match the selected recipients');
 
@@ -254,6 +270,7 @@ class AiCallingService {
       statusRules: input.statusRules || [],
       agentConfig: input.agentConfig || {},
       channel: input.channel || 'voice',
+      ...transport,
       ...(input.channel === 'web_link' ? { linkConfig: input.linkConfig || {} } : {}),
       schedule: input.schedule || {},
       selection: { ...input.selection, leadIds, selectedAt: new Date() },
@@ -319,6 +336,46 @@ class AiCallingService {
     return this.getCampaign(campaign._id, actor);
   }
 
+  // ------------------------------------------------- voice kill switch
+  async isVoicePaused() {
+    if (process.env.AI_VOICE_CALLING_ENABLED === 'false') return true;
+    if (this._voicePausedCache && Date.now() - this._voicePausedCache.at < 5_000) return this._voicePausedCache.value;
+    const doc = await AiCallingSettings.findOne({ key: 'global' }).lean();
+    this._voicePausedCache = { value: Boolean(doc?.voicePaused), at: Date.now() };
+    return this._voicePausedCache.value;
+  }
+
+  async getVoiceSettings() {
+    const doc = await AiCallingSettings.findOne({ key: 'global' }).lean();
+    return {
+      voicePaused: Boolean(doc?.voicePaused) || process.env.AI_VOICE_CALLING_ENABLED === 'false',
+      pausedByEnv: process.env.AI_VOICE_CALLING_ENABLED === 'false',
+      pausedReason: doc?.pausedReason || '',
+      pausedAt: doc?.pausedAt || null,
+    };
+  }
+
+  async setVoicePaused(actor, { voicePaused, reason = '' }, meta = {}) {
+    await AiCallingSettings.updateOne({ key: 'global' }, { $set: {
+      voicePaused: Boolean(voicePaused), pausedReason: voicePaused ? reason : '', pausedAt: voicePaused ? new Date() : null, updatedBy: actor,
+    } }, { upsert: true });
+    this._voicePausedCache = null;
+    auditService.logEvent({
+      eventType: voicePaused ? 'ai_calling.voice_paused' : 'ai_calling.voice_resumed', userId: actor, ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent, result: 'success', module: 'ai-calling', details: { reason },
+    });
+    return this.getVoiceSettings();
+  }
+
+  /** Voice campaigns: cloud SIP or the owner's paired phone (must be theirs and not revoked). */
+  async _resolveTransport({ channel, transport, pairedDeviceId }, actor) {
+    if (channel === 'web_link' || transport !== 'paired_phone') return { transport: 'cloud_sip', pairedDeviceId: null };
+    if (!pairedDeviceId) throw new ValidationError('Choose the paired phone this campaign calls from');
+    const device = await PairedDevice.findOne({ _id: pairedDeviceId, createdBy: actor, revokedAt: null }).select('_id').lean();
+    if (!device) throw new ValidationError('Paired phone not found, or it was revoked');
+    return { transport: 'paired_phone', pairedDeviceId: device._id };
+  }
+
   async getCampaign(id, actor) {
     const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor }).lean();
     if (!campaign) throw new NotFoundError('CallCampaign', id);
@@ -341,12 +398,25 @@ class AiCallingService {
     const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor });
     if (!campaign) throw new NotFoundError('CallCampaign', id);
     if (!['draft', 'paused'].includes(campaign.status)) throw new ConflictError('Only draft or paused campaigns can be edited');
+    if (campaign.status === 'paused') {
+      const inFlight = await CallRecord.exists({
+        campaignId: campaign._id,
+        state: { $in: ['initiating', 'ringing', 'in_progress', 'processing_results'] },
+        resultsProcessedAt: null,
+      });
+      if (inFlight) throw new ConflictError('Wait for active calls to finish before editing this paused campaign');
+    }
     if (input.questionnaire) {
       assertQuestionnaire(input.questionnaire);
       campaign.questionnaire = input.questionnaire;
       campaign.questionnaireVersion += 1;
     }
     if (input.linkConfig !== undefined && campaign.channel !== 'web_link') throw new ValidationError('linkConfig is only for SMS link campaigns');
+    if (input.transport !== undefined || input.pairedDeviceId !== undefined) {
+      const t = await this._resolveTransport({ channel: campaign.channel, transport: input.transport ?? campaign.transport, pairedDeviceId: input.pairedDeviceId ?? campaign.pairedDeviceId }, actor);
+      campaign.transport = t.transport;
+      campaign.pairedDeviceId = t.pairedDeviceId;
+    }
     for (const key of ['name', 'description', 'statusRules', 'agentConfig', 'schedule', 'scheduledAt', 'linkConfig']) {
       if (input[key] !== undefined) campaign[key] = input[key];
     }
@@ -391,6 +461,14 @@ class AiCallingService {
     }
     const eligible = await CampaignRecipient.countDocuments({ campaignId: id, state: { $in: ['draft', 'queued', 'retry_scheduled'] }, 'eligibility.eligible': true });
     if (!eligible) throw new ConflictError('Campaign has no eligible recipients to call');
+    if (campaign.channel !== 'web_link' && await this.isVoicePaused()) {
+      throw new ConflictError('AI voice calling is paused (kill switch). Resume it in AI Calling settings first.');
+    }
+    if (campaign.channel !== 'web_link' && campaign.transport === 'paired_phone') {
+      const device = campaign.pairedDeviceId ? await PairedDevice.findOne({ _id: campaign.pairedDeviceId, createdBy: actor }).lean() : null;
+      if (!device || device.revokedAt) throw new ConflictError('The paired phone for this campaign is missing or revoked; choose another device');
+      if (!device.audioVerifiedAt) throw new ConflictError('Two-way call audio has not been verified on this paired phone yet. Run the audio test and verify it first.');
+    }
 
     const runAt = scheduledAt ? new Date(scheduledAt) : campaign.scheduledAt;
     const delay = runAt && runAt > new Date() ? runAt.getTime() - Date.now() : 0;
@@ -515,6 +593,11 @@ class AiCallingService {
     const campaignId = campaign._id;
     if (['paused', 'cancelled', 'completed', 'draft', 'failed'].includes(campaign.status)) return { stopped: true, status: campaign.status };
     if (campaign.channel === 'web_link') return { stopped: true, reason: 'web_link_never_dials' };
+    if (await this.isVoicePaused()) {
+      await this._scheduleTick(campaignId, 60_000);
+      recordCallMetric('campaign', 'kill_switch_wait');
+      return { voicePaused: true };
+    }
     if (campaign.status === 'scheduled' && campaign.scheduledAt && campaign.scheduledAt > new Date()) {
       await this._scheduleTick(campaignId, campaign.scheduledAt.getTime() - Date.now());
       return { rescheduled: true };
@@ -545,8 +628,21 @@ class AiCallingService {
     // Recover recipients whose dispatch lease expired (crashed worker) — safely.
     await this._recoverExpiredDispatches({ campaignId });
 
+    const isPaired = campaign.transport === 'paired_phone';
+    if (isPaired) {
+      // One phone, one call: wait for the device (cooldown, caps, connection) BEFORE claiming a lead.
+      const ready = await pairedPhoneService.readiness(campaign.pairedDeviceId);
+      if (!ready.ok) {
+        const wait = Math.min(10 * 60_000, Math.max(15_000, ready.retryInMs || 30_000));
+        await CallCampaign.updateOne({ _id: campaignId }, { $set: { deviceWait: { reasons: ready.reasons, at: new Date() } } });
+        await this._scheduleTick(campaignId, wait);
+        recordCallMetric('campaign', 'paired_device_wait');
+        return { deviceNotReady: true, reasons: ready.reasons, retryInMs: wait };
+      }
+      await CallCampaign.updateOne({ _id: campaignId }, { $set: { deviceWait: { reasons: [], at: null } } });
+    }
     const inFlight = await CampaignRecipient.countDocuments({ campaignId, state: { $in: ['dialing', 'in_progress', 'processing'] } });
-    const concurrency = Math.max(1, schedule.maxConcurrency || 1);
+    const concurrency = isPaired ? 1 : Math.max(1, schedule.maxConcurrency || 1);
     let slots = concurrency - inFlight;
     if (slots <= 0) {
       await this._scheduleTick(campaignId, 15_000);
@@ -670,11 +766,24 @@ class AiCallingService {
     const callObjectId = new mongoose.Types.ObjectId();
     const internalCallId = `call_${recipient._id}_${attemptNumber}_${crypto.randomBytes(4).toString('hex')}`;
     const roomName = `crm-call-${internalCallId}`;
+    const isPaired = campaign.transport === 'paired_phone';
+    if (isPaired) {
+      const lock = await pairedPhoneService.acquire(campaign.pairedDeviceId, { callId: callObjectId, recipientId: recipient._id, owner: campaign.createdBy });
+      if (!lock.ok) {
+        await this._releaseClaim(recipient._id, { deferMs: Math.max(15_000, lock.retryInMs || 30_000) });
+        recordCallMetric('dispatch', 'paired_device_not_ready');
+        return { deferred: 'paired_device_not_ready', reasons: lock.reasons };
+      }
+    }
+    const releaseDevice = () => (isPaired ? pairedPhoneService.release(campaign.pairedDeviceId, callObjectId) : Promise.resolve());
     const pointed = await CampaignRecipient.updateOne(
       { _id: recipient._id, state: 'dialing', attemptCount: recipient.attemptCount },
       { $inc: { attemptCount: 1 }, $set: { lastCallId: callObjectId, leaseUntil: new Date(Date.now() + DISPATCH_LEASE_MS) } },
     );
-    if (!pointed.modifiedCount) return { skipped: 'claim_lost' };
+    if (!pointed.modifiedCount) {
+      await releaseDevice();
+      return { skipped: 'claim_lost' };
+    }
 
     await CallRecord.create({
       _id: callObjectId,
@@ -684,7 +793,8 @@ class AiCallingService {
       internalCallId,
       attemptNumber,
       isTest: campaign.isTest,
-      provider: 'livekit_sip',
+      provider: isPaired ? 'paired_phone' : 'livekit_sip',
+      pairedDeviceId: isPaired ? campaign.pairedDeviceId : null,
       roomName,
       state: 'initiating',
       queuedAt: new Date(),
@@ -708,6 +818,7 @@ class AiCallingService {
     const dispatchStarted = Date.now();
     const routed = await routeOutboundCall({
       to: recipient.phoneSnapshot, country: recipient.country, roomName, internalCallId, metadata,
+      transport: isPaired ? 'paired_phone' : 'cloud_sip', pairedDeviceId: campaign.pairedDeviceId, callRecordId: callObjectId,
     });
     observeDispatchLatency(Date.now() - dispatchStarted);
     const { result } = routed;
@@ -728,6 +839,7 @@ class AiCallingService {
       } });
       // The live call now owns the recipient; no lease (the reconciler watches the call).
       await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { leaseUntil: null } });
+      await refreshCampaignSummary(campaign._id);
       emitToOwner(campaign.createdBy, 'ai-calling:call', { campaignId: String(campaign._id), callId: internalCallId, state: 'ringing' });
       return { dialled: true, accepted: true, callId: internalCallId };
     }
@@ -737,6 +849,7 @@ class AiCallingService {
     }
     // Rejected. A permanent rejection (bad number, not configured, policy) is
     // terminal — retrying it only wastes attempts. A transient one may retry.
+    await releaseDevice();
     await CallRecord.updateOne({ _id: callObjectId }, { $set: {
       state: 'failed', disposition: 'failed', failureCode: result.errorCode, failureMessage: result.errorMessage,
       endedAt: new Date(), resultsProcessedAt: new Date(),
@@ -757,13 +870,20 @@ class AiCallingService {
    * failed/needs_reconcile and the owner is told; only a human retry re-dials.
    */
   async _markAmbiguous(callId, recipientId, campaign, code, message) {
-    await CallRecord.updateOne({ _id: callId, resultsProcessedAt: null }, { $set: {
-      state: 'needs_reconcile', failureCode: code || 'AMBIGUOUS_DISPATCH', failureMessage: message || 'Ambiguous dispatch outcome',
+    const res = await CallRecord.updateOne({ _id: callId, resultsProcessedAt: null }, { $set: {
+      state: 'needs_reconcile', reviewRequired: true, failureCode: code || 'AMBIGUOUS_DISPATCH', failureMessage: message || 'Ambiguous dispatch outcome',
       'reconciliation.needed': true, 'reconciliation.note': 'Ambiguous dispatch outcome — not retried automatically',
     } });
-    await CampaignRecipient.updateOne({ _id: recipientId }, { $set: { state: 'failed', leaseUntil: null, finalDisposition: 'needs_reconcile' } });
+    // Processed meanwhile (its end report won the race): the recipient already holds the real outcome.
+    if (!res.matchedCount) return false;
+    await CampaignRecipient.updateOne({ _id: recipientId, lastCallId: callId }, { $set: { state: 'failed', leaseUntil: null, nextAttemptAt: null, finalDisposition: 'needs_reconcile' } });
     await refreshCampaignSummary(campaign._id);
     recordCallMetric('reconcile', 'ambiguous_parked');
+    this._notifyParked(campaign, callId);
+    return true;
+  }
+
+  _notifyParked(campaign, callId) {
     notificationService.create({
       channels: ['IN_APP'], recipientIds: [campaign.createdBy], type: 'ai_calling.needs_reconcile', category: 'CRM', priority: 'HIGH',
       payload: {
@@ -774,6 +894,40 @@ class AiCallingService {
       sourceModule: 'ai-calling', sourceEvent: 'NEEDS_RECONCILE', sourceEntityType: 'CallRecord', sourceEntityId: callId,
       idempotencyKey: `ai-call-reconcile-${callId}`,
     }, campaign.createdBy).catch((e) => logger.warn('reconcile notification failed', { module: 'ai-calling', error: e.message }));
+  }
+
+  /**
+   * The gateway lost track of a call that was already processed. A reached lead stays reached but
+   * goes to review; anything else is parked and its scheduled retry withdrawn, so only the owner
+   * can decide to call again (reconcileCall).
+   */
+  async _parkProcessedCall(callId, code, message) {
+    const call = await CallRecord.findById(callId).lean();
+    if (!call || call.state === 'needs_reconcile' || call.state === 'cancelled' || call.reconciliation?.resolvedAt) return;
+    if (REACHED_DISPOSITIONS.includes(call.disposition)) {
+      await CallRecord.updateOne({ _id: callId }, { $set: { reviewRequired: true, 'reconciliation.note': `${code}: ${message}`.slice(0, 500) } });
+      return;
+    }
+    const parked = await CallRecord.updateOne({ _id: callId, state: { $ne: 'needs_reconcile' }, 'reconciliation.resolvedAt': null }, { $set: {
+      state: 'needs_reconcile', disposition: 'needs_review', reviewRequired: true, failureCode: code, failureMessage: message,
+      'reconciliation.needed': true, 'reconciliation.note': 'Outcome unknown after the call was processed — retry withdrawn',
+    } });
+    if (!parked.modifiedCount) return;
+    await CampaignRecipient.updateOne(
+      { _id: call.recipientId, lastCallId: call._id, state: { $in: ['retry_scheduled', 'exhausted', 'failed'] } },
+      { $set: { state: 'failed', leaseUntil: null, nextAttemptAt: null, finalDisposition: 'needs_reconcile' } },
+    );
+    await refreshCampaignSummary(call.campaignId);
+    recordCallMetric('reconcile', 'ambiguous_parked_late');
+    const campaign = await CallCampaign.findById(call.campaignId).select('createdBy').lean();
+    if (campaign) this._notifyParked(campaign, callId);
+  }
+
+  /** Paired phone gone silent about a call: park it (never redialed) and hold the device. */
+  async _parkPairedSilent(call, code, message) {
+    const campaign = await CallCampaign.findById(call.campaignId).lean();
+    if (!campaign || !(await this._markAmbiguous(call._id, call.recipientId, campaign, code, message))) return;
+    await pairedPhoneService.markAttention(call.pairedDeviceId, call._id, 'The gateway never reported how a call ended; check the phone, end any call by hand, then clear the device');
   }
 
   /**
@@ -808,6 +962,23 @@ class AiCallingService {
         recovered += 1;
         continue;
       }
+      if (call.state === 'initiating' && call.provider === 'paired_phone') {
+        // Only the gateway dials, and only a queued call can be claimed: no queue entry → never dialed;
+        // a queued one is cancelled atomically unless the gateway already claimed it.
+        const neverQueued = !call.gateway?.state;
+        const cancelled = neverQueued ? false : await pairedPhoneService.cancelUndialed(call, 'dispatch interrupted before the call was handed to the gateway');
+        if (neverQueued) {
+          await CallRecord.updateOne({ _id: call._id }, { $set: { state: 'cancelled', failureCode: 'NOT_DISPATCHED', failureMessage: 'Dispatch interrupted before the gateway got the call (recovered)', resultsProcessedAt: new Date(), endedAt: new Date() } });
+          await CampaignRecipient.updateOne({ _id: r._id, state: 'dialing' }, { $set: { state: 'queued', leaseUntil: null }, $inc: { attemptCount: -1 } });
+          await pairedPhoneService.release(call.pairedDeviceId, call._id);
+          recovered += 1;
+          continue;
+        }
+        if (cancelled) {
+          recovered += 1;
+          continue;
+        }
+      }
       if (call.state === 'initiating') {
         const campaign = await CallCampaign.findById(r.campaignId).lean();
         if (campaign) await this._markAmbiguous(call._id, r._id, campaign, 'DISPATCH_INTERRUPTED', 'Dispatch was interrupted before the provider outcome was recorded');
@@ -835,7 +1006,7 @@ class AiCallingService {
     if (['no_answer', 'busy', 'voicemail', 'failed'].includes(call.disposition)) {
       await this._scheduleRetryOrFail(campaign, recipient, call.disposition);
     } else {
-      await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: {
+      await CampaignRecipient.updateOne({ _id: recipient._id, ...NOT_PARKED }, { $set: {
         state: 'completed', leaseUntil: null, finalDisposition: call.disposition, qualification: call.qualification,
       } });
     }
@@ -847,10 +1018,10 @@ class AiCallingService {
     const attempts = recipient.attemptCount; // already incremented
     if (retryable && attempts < (schedule.maxAttemptsPerLead || 2)) {
       const nextAttemptAt = new Date(Date.now() + retryDelayMs(schedule, attempts));
-      await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { state: 'retry_scheduled', nextAttemptAt, leaseUntil: null, finalDisposition: disposition } });
+      await CampaignRecipient.updateOne({ _id: recipient._id, ...NOT_PARKED }, { $set: { state: 'retry_scheduled', nextAttemptAt, leaseUntil: null, finalDisposition: disposition } });
     } else {
       const terminal = retryable ? 'exhausted' : 'failed';
-      await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { state: terminal, leaseUntil: null, finalDisposition: disposition } });
+      await CampaignRecipient.updateOne({ _id: recipient._id, ...NOT_PARKED }, { $set: { state: terminal, leaseUntil: null, finalDisposition: disposition } });
     }
   }
 
@@ -920,6 +1091,8 @@ class AiCallingService {
     if (!call) return { acknowledged: true, changed: false };
     if (!isTestProvider(call.provider)) {
       await CampaignRecipient.updateOne({ _id: call.recipientId, lastCallId: call._id }, { $set: { state: 'in_progress' } });
+      // Keep the "In progress" figure in step with the live-call list (it was only refreshed at the end).
+      await refreshCampaignSummary(call.campaignId);
     }
     recordCallMetric('answered', call.provider);
     emitToOwner(call.createdBy, 'ai-calling:call', { campaignId: String(call.campaignId), callId: internalCallId, state: 'in_progress' });
@@ -963,7 +1136,25 @@ class AiCallingService {
     return this.agentRecordAnswer(internalCallId, { fieldKey, rawAnswer: '' });
   }
 
-  async agentConfirm(internalCallId, { fieldKey }) {
+  /**
+   * A critical answer was read back and confirmed. When the agent passes the person's
+   * reply (the worker passes the transcript, not the model's paraphrase), it must be a
+   * clear yes: "thanks, bye" is not a confirmation. After two unconfirmed read-backs the
+   * call moves on and the answer stays unconfirmed for a person to check — never a loop.
+   */
+  async agentConfirm(internalCallId, { fieldKey, reply = null }) {
+    if (reply != null && !isConfirmation(reply)) {
+      let skipped = false;
+      const { campaign, state } = await this._mutateConversation(internalCallId, (s) => {
+        const entry = s.answers?.[fieldKey];
+        if (!entry) return { state: s };
+        const rejections = (entry.confirmRejections || 0) + 1;
+        skipped = rejections >= 2;
+        return { state: { ...s, answers: { ...s.answers, [fieldKey]: { ...entry, confirmRejections: rejections, ...(skipped ? { confirmSkipped: true } : {}) } } } };
+      });
+      if (!skipped) throw new ConflictError('They did not clearly confirm. Ask them once more to confirm with a yes, or record the corrected answer with record_answer');
+      return { confirmed: false, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+    }
     const { campaign, state } = await this._mutateConversation(internalCallId, (s) => ({ state: engine.markConfirmed(s, fieldKey) }));
     return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
   }
@@ -1007,7 +1198,39 @@ class AiCallingService {
    */
   async agentEndCall(internalCallId, { disposition = null, durationSeconds = null, transcriptRef = null, cost = null } = {}) {
     const { call } = await this._loadCallForAgent(internalCallId);
+    // (Already parked: nothing to wait for; processing saves the answers and keeps it parked.)
+    if (call.provider === 'paired_phone' && !call.resultsProcessedAt && call.state !== 'needs_reconcile'
+      && PAIRED_GATEWAY_LIVE.has(call.gateway?.state)) {
+      return this._deferPairedEnd(call, { disposition, durationSeconds, transcriptRef, cost });
+    }
     return this.processCallResults(call._id, { disposition, durationSeconds, transcriptRef, cost, source: 'agent_end' });
+  }
+
+  /**
+   * Paired phone: only the gateway knows how the phone call ended. The agent leaving (its goodbye,
+   * the phone leg vanishing on a USB unplug, a human takeover) is no evidence that the line is
+   * down, so its /end is kept as a hint for processCallResults and the room is closed: the gateway
+   * then hangs up and reports, or the reconciler parks the call if it never does.
+   */
+  async _deferPairedEnd(call, hint) {
+    if (call.gateway?.state === 'queued') {
+      // Not claimed yet: withdraw it from the gateway atomically. Nothing was dialed; the attempt
+      // still counts (retry policy) so an agent that keeps failing cannot loop forever.
+      const pulled = await CallRecord.updateOne(
+        { _id: call._id, 'gateway.state': 'queued', resultsProcessedAt: null },
+        { $set: { 'gateway.state': 'cancelled', 'gateway.endReason': 'agent_ended_before_claim', failureCode: 'AGENT_ENDED_BEFORE_DIAL', failureMessage: 'The voice agent ended before the phone dialed; nothing was dialed' } },
+      );
+      if (pulled.modifiedCount) return this.processCallResults(call._id, { disposition: 'failed', source: 'agent_end' });
+    }
+    await CallRecord.updateOne(
+      { _id: call._id, resultsProcessedAt: null, 'agentEnd.at': null },
+      { $set: { agentEnd: {
+        at: new Date(), disposition: hint.disposition || null, durationSeconds: hint.durationSeconds ?? null,
+        transcriptRef: hint.transcriptRef || null, cost: hint.cost || null,
+      } } },
+    );
+    if (call.roomName && typeof livekit.endCall === 'function') livekit.endCall({ roomName: call.roomName }).catch(() => {});
+    return { deferred: true, callId: call.internalCallId };
   }
 
   // ------------------------------------------------- post-call processing
@@ -1035,12 +1258,25 @@ class AiCallingService {
 
     const campaign = await CallCampaign.findById(call.campaignId);
     const recipient = await CampaignRecipient.findById(call.recipientId);
+    // Paired phone: the agent's deferred /end (see _deferPairedEnd) fills in what this caller didn't report.
+    const hint = call.agentEnd || {};
+    const reported = {
+      disposition: disposition ?? hint.disposition ?? null,
+      durationSeconds: durationSeconds ?? hint.durationSeconds ?? null,
+      transcriptRef: transcriptRef ?? hint.transcriptRef ?? null,
+      cost: cost ?? hint.cost ?? null,
+    };
+    const gw = call.gateway || {};
     const state = engine.normalizeState(call.conversationState);
+    // Already parked as ambiguous (e.g. the paired-phone gateway lost the call): a later end report
+    // (agent /end, webhook) must not turn it into no_answer/completed, which could schedule a
+    // redial or move the lead. Keep it parked; save what was collected for the human review.
+    const parkedAmbiguous = call.state === 'needs_reconcile';
     const control = state.control || {};
     const prog = engine.progress(campaign.questionnaire, state);
 
     // A re-run after a crash reuses the disposition persisted by the first run.
-    let finalDisposition = call.disposition || sanitizeReportedDisposition(disposition, call);
+    let finalDisposition = call.disposition || sanitizeReportedDisposition(reported.disposition, call);
     if (!finalDisposition) {
       if (state.endedReason === 'do_not_contact') finalDisposition = 'do_not_contact';
       else if (state.endedReason === 'callback_requested') finalDisposition = 'callback_requested';
@@ -1051,6 +1287,17 @@ class AiCallingService {
       // (don't redial as if unanswered), but nothing qualifies → review.
       else if (state.disclosed) finalDisposition = 'answered_partial';
       else finalDisposition = 'no_answer';
+    }
+    // Paired phone: a person took the answered call over on the handset. The lead was reached,
+    // whatever the AI collected or the line reported afterwards (no_answer/failed would redial).
+    if (gw.takenOverAt && !REACHED_DISPOSITIONS.includes(finalDisposition)) finalDisposition = 'answered_partial';
+    // Paired phone: answered, then our side failed (agent gone, call audio failed) before anything
+    // was collected. That is a failed call, not an unanswered one.
+    let systemFailure = null;
+    if (finalDisposition === 'no_answer' && call.provider === 'paired_phone' && (call.answeredAt || gw.audioOpenedAt)
+      && PAIRED_SYSTEM_END_REASONS.has(gw.endReason)) {
+      finalDisposition = 'failed';
+      systemFailure = `PAIRED_${gw.endReason.toUpperCase()}`;
     }
 
     const answerDocs = [];
@@ -1073,35 +1320,52 @@ class AiCallingService {
       hasUnresolvedRequired: prog.unresolvedRequired.length > 0, control,
     });
 
-    const reached = ['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact'].includes(finalDisposition);
+    const reached = REACHED_DISPOSITIONS.includes(finalDisposition);
+    // A parked (uncertain) call is never "no answer"/"failed" in the figures: nobody knows yet.
+    if (parkedAmbiguous && !reached) finalDisposition = 'needs_review';
     const callState = reached ? 'completed'
       : (['no_answer', 'busy', 'voicemail'].includes(finalDisposition) ? finalDisposition : 'failed');
 
     // 1. Persist the call record (authoritative, retained even if later steps fail).
     const endedAt = call.endedAt || now;
     const measured = call.answeredAt ? Math.max(0, Math.round((endedAt - call.answeredAt) / 1000)) : 0;
-    call.state = callState;
+    call.state = parkedAmbiguous ? 'needs_reconcile' : callState;
     call.disposition = finalDisposition;
     call.qualification = outcome.qualification;
     call.answers = answerDocs;
-    call.reviewRequired = outcome.requiresReview;
-    call.durationSeconds = durationSeconds != null ? durationSeconds : (call.durationSeconds || measured);
-    if (transcriptRef) call.transcriptRef = transcriptRef;
+    // Paired phone: lost call audio or a human takeover means the AI's record is incomplete.
+    call.reviewRequired = outcome.requiresReview || parkedAmbiguous || Boolean(gw.audioLostAt || gw.takenOverAt || gw.command?.kind === 'takeover');
+    if (systemFailure && !call.failureCode) {
+      call.failureCode = systemFailure;
+      call.failureMessage = `The call was answered, then ended by the gateway (${gw.endReason}) before the AI collected anything`;
+    }
+    call.durationSeconds = reported.durationSeconds != null ? reported.durationSeconds : (call.durationSeconds || measured);
+    if (reported.transcriptRef) call.transcriptRef = reported.transcriptRef;
     if (recordingRef) call.recordingRef = recordingRef;
-    call.cost = estimateCallCost(call, cost);
+    call.cost = estimateCallCost(call, reported.cost);
     call.endedAt = endedAt;
     await call.save();
 
     // 2. CRM side-effects only for real campaign calls (never browser/test calls).
-    if (!campaign.isTest && !isTestProvider(call.provider)) {
+    if (!campaign.isTest && !isTestProvider(call.provider) && !parkedAmbiguous) {
       await this._applyOutcomeToLead({ call, campaign, recipient, outcome, disposition: finalDisposition });
     }
 
-    // 3. Recipient terminal state / retry (web tests never touch the recipient).
-    if (recipient && !isTestProvider(call.provider)) await this._finalizeRecipient(campaign, recipient, call);
+    // 3. Recipient terminal state / retry (web tests never touch the recipient; an ambiguous call
+    //    already parked its recipient as failed/needs_reconcile: only a human may retry it).
+    if (recipient && !isTestProvider(call.provider) && !parkedAmbiguous) await this._finalizeRecipient(campaign, recipient, call);
 
     // 4. Stamp processed — from here every other finisher is a no-op.
     await CallRecord.updateOne({ _id: call._id }, { $set: { resultsProcessedAt: new Date(), processingLeaseUntil: null } });
+    // A park that landed while this run held the claim (gateway outcome_unknown, reconciler) wins;
+    // _finalizeRecipient already refused to overwrite the parked recipient.
+    if (!parkedAmbiguous) {
+      await CallRecord.updateOne(
+        { _id: call._id, 'reconciliation.needed': true, 'reconciliation.resolvedAt': null, state: { $ne: 'needs_reconcile' } },
+        { $set: { state: 'needs_reconcile', reviewRequired: true, ...(reached ? {} : { disposition: 'needs_review' }) } },
+      );
+    }
+    if (call.pairedDeviceId) await pairedPhoneService.release(call.pairedDeviceId, call._id, { endedAt });
 
     // 5. Hang up: deleting the room ends the SIP leg (otherwise the agent leaving
     // would leave the callee on a silent open line). Best-effort and harmless if
@@ -1338,6 +1602,16 @@ class AiCallingService {
         total: prog.total,
         elapsedSeconds: startedAt ? Math.max(0, Math.round((now - new Date(startedAt).getTime()) / 1000)) : 0,
         isTest: c.isTest,
+        transport: c.provider === 'paired_phone' ? 'paired_phone' : 'cloud_sip',
+        gateway: c.provider === 'paired_phone' ? {
+          state: c.gateway?.state || null,
+          audioOpen: Boolean(c.gateway?.audioOpenedAt) && !c.gateway?.audioLostAt,
+          audioLost: Boolean(c.gateway?.audioLostAt),
+          takenOver: Boolean(c.gateway?.takenOverAt),
+          command: c.gateway?.command?.kind || null,
+          audio: c.gateway?.audio || null,
+          audioAgeSeconds: c.gateway?.audioAt ? Math.round((now - new Date(c.gateway.audioAt).getTime()) / 1000) : null,
+        } : null,
       };
     });
   }
@@ -1354,6 +1628,18 @@ class AiCallingService {
     const RING_GRACE_MS = 5 * 60_000;
     const results = { noAnswer: 0, timedOut: 0, parked: 0, reprocessed: 0, reclaimed: 0, ticksRevived: 0, stillLive: 0 };
 
+    // 0. Paired phone: the agent left, and the gateway never said how the phone call ended.
+    const unreported = await CallRecord.find({
+      provider: 'paired_phone', resultsProcessedAt: null, state: { $in: ['initiating', 'ringing', 'in_progress'] },
+      'agentEnd.at': { $lt: new Date(nowMs - PAIRED_END_GRACE_MS) },
+    }).select('_id campaignId recipientId pairedDeviceId').limit(limit).lean();
+    for (const c of unreported) {
+      // A person still on the phone (taken over) keeps the call open; the gateway reports its end.
+      if (await pairedPhoneService.phoneStillInCall(c.pairedDeviceId, c._id, now)) { results.stillLive += 1; continue; }
+      await this._parkPairedSilent(c, 'GATEWAY_NO_END_REPORT', 'The voice agent left, but the paired-phone gateway never reported how the phone call ended');
+      results.parked += 1;
+    }
+
     // 1. Ringing/initiating long past any ring timeout. Ask the provider first:
     //    a room that still has the SIP leg is a live call we must not touch.
     const ringing = await CallRecord.find({
@@ -1363,7 +1649,23 @@ class AiCallingService {
       $or: [{ state: 'ringing' }, { state: 'initiating', dispatchStartedAt: { $ne: null } }],
     }).select('_id roomName recipientId campaignId provider').limit(limit).lean();
     for (const c of ringing) {
+      if (c.provider === 'paired_phone') {
+        const full = await CallRecord.findById(c._id).lean();
+        if (full?.gateway?.state === 'queued' && await pairedPhoneService.cancelUndialed(full, 'gateway never claimed the call')) {
+          results.reclaimed += 1;
+          continue;
+        }
+      }
       const room = await roomStatus(c.roomName);
+      if (room === 'gone' && c.provider === 'paired_phone') {
+        // The gateway left without reporting how the call ended: it may have reached the lead.
+        const campaign = await CallCampaign.findById(c.campaignId).lean();
+        if (campaign) await this._markAmbiguous(c._id, c.recipientId, campaign, 'GATEWAY_SILENT', 'The paired-phone gateway disappeared without reporting the call outcome');
+        const pd = await CallRecord.findById(c._id).select('pairedDeviceId').lean();
+        await pairedPhoneService.markAttention(pd?.pairedDeviceId, c._id, 'The gateway disappeared during a call; check the phone, then clear the device');
+        results.parked += 1;
+        continue;
+      }
       if (room === 'live') { results.stillLive += 1; continue; }
       if (room === 'gone') {
         await this.processCallResults(c._id, { disposition: 'no_answer', source: 'reconcile' })
@@ -1381,13 +1683,29 @@ class AiCallingService {
       }
     }
 
+    // 1b. Paired-phone calls still queued for a gateway that never claimed them: never dialed.
+    const unclaimed = await CallRecord.find({
+      provider: 'paired_phone', 'gateway.state': 'queued', resultsProcessedAt: null,
+      'gateway.queuedAt': { $lt: new Date(nowMs - 90_000) },
+    }).limit(limit).lean();
+    for (const c of unclaimed) {
+      if (await pairedPhoneService.cancelUndialed(c, 'gateway never claimed the call')) results.reclaimed += 1;
+    }
+
     // 2. in_progress calls past max duration + grace → process what we have (and hang up).
     const active = await CallRecord.find({ state: 'in_progress', resultsProcessedAt: null })
-      .select('_id campaignId answeredAt initiatedAt createdAt').limit(limit).lean();
+      .select('_id campaignId recipientId provider pairedDeviceId answeredAt initiatedAt createdAt').limit(limit).lean();
     for (const c of active) {
       const campaign = await CallCampaign.findById(c.campaignId).select('agentConfig').lean();
       const maxMs = ((campaign?.agentConfig?.maxCallSeconds || 300) + 120) * 1000;
       const started = new Date(c.answeredAt || c.initiatedAt || c.createdAt).getTime();
+      if (nowMs - started > maxMs && c.provider === 'paired_phone') {
+        // The gateway hangs up at its own limit and reports it; silence past that is an unknown outcome.
+        if (await pairedPhoneService.phoneStillInCall(c.pairedDeviceId, c._id, now)) { results.stillLive += 1; continue; }
+        await this._parkPairedSilent(c, 'GATEWAY_NO_END_REPORT', 'The call passed its maximum length without an end report from the paired-phone gateway');
+        results.parked += 1;
+        continue;
+      }
       if (nowMs - started > maxMs) {
         await this.processCallResults(c._id, { source: 'reconcile_timeout' })
           .catch((e) => logger.warn('reconcile timeout failed', { module: 'ai-calling', callId: String(c._id), error: e.message }));
@@ -1470,6 +1788,56 @@ class AiCallingService {
       .populate('campaignId', 'name').populate('leadId', 'leadNumber name').lean();
     if (!call) throw new NotFoundError('CallRecord', callId);
     return call;
+  }
+
+  /**
+   * Owner-scoped, filterable call history for the operations UI. The list is a
+   * bounded summary; full answers and reconciliation controls remain on getCall.
+   */
+  async listCalls(actor, {
+    page = 1,
+    limit = 20,
+    campaignId,
+    state,
+    disposition,
+    reviewRequired,
+    search = '',
+    includeTests = false,
+  } = {}) {
+    const filter = { createdBy: actor };
+    if (!includeTests) Object.assign(filter, NOT_WEB_TEST, { isTest: { $ne: true } });
+    if (campaignId) filter.campaignId = campaignId;
+    if (state) filter.state = state;
+    if (disposition) filter.disposition = disposition;
+    if (reviewRequired !== undefined) filter.reviewRequired = reviewRequired;
+
+    const term = String(search || '').trim();
+    if (term) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      const [leadIds, campaignIds] = await Promise.all([
+        Lead.find({ $or: [{ name: regex }, { leadNumber: regex }] }).distinct('_id'),
+        CallCampaign.find({ createdBy: actor, name: regex }).distinct('_id'),
+      ]);
+      filter.$or = [
+        { leadId: { $in: leadIds } },
+        { campaignId: { $in: campaignIds } },
+        { internalCallId: regex },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      CallRecord.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select('internalCallId attemptNumber state disposition qualification durationSeconds reviewRequired provider failureCode failureMessage reconciliation initiatedAt answeredAt endedAt createdAt campaignId leadId')
+        .populate('campaignId', 'name')
+        .populate('leadId', 'leadNumber name')
+        .lean(),
+      CallRecord.countDocuments(filter),
+    ]);
+    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
   async historyForLead(leadId, actor, { page = 1, limit = 25 } = {}) {
@@ -1606,13 +1974,92 @@ class AiCallingService {
     return call.toObject();
   }
 
+  /**
+   * The owner resolves a call whose outcome is unknown (parked as needs_reconcile), after checking
+   * the phone's call log or speaking to the lead. This is the only way such a call leaves review:
+   *   reached     → the lead was reached: completed (with an optional qualification applied to the lead);
+   *   not_reached → closed as not reached, no further calls;
+   *   retry       → not reached, call again (queued; the campaign's own gates apply at dial time).
+   * One resolution per call (atomic); audited.
+   */
+  async reconcileCall(callId, actor, { resolution, qualification = null, note = '' } = {}, meta = {}) {
+    if (!mongoose.isValidObjectId(callId)) throw new NotFoundError('CallRecord', callId);
+    const call = await CallRecord.findOne({ _id: callId, createdBy: actor });
+    if (!call) throw new NotFoundError('CallRecord', callId);
+    if (call.state !== 'needs_reconcile' || call.reconciliation?.resolvedAt) {
+      throw new ConflictError('Only a call with an unknown outcome can be reconciled, and only once');
+    }
+    if (call.provider === 'paired_phone' && await pairedPhoneService.phoneStillInCall(call.pairedDeviceId, call._id)) {
+      throw new ConflictError('The paired phone still reports a call. End it on the phone first');
+    }
+    const campaign = await CallCampaign.findById(call.campaignId);
+    if (resolution === 'retry' && (!campaign || campaign.status === 'cancelled')) throw new ConflictError('A cancelled campaign cannot call again');
+
+    const now = new Date();
+    const claimed = await CallRecord.updateOne(
+      { _id: call._id, state: 'needs_reconcile', 'reconciliation.resolvedAt': null },
+      { $set: { 'reconciliation.resolvedAt': now, 'reconciliation.resolvedBy': actor, 'reconciliation.resolution': resolution, ...(note ? { 'reconciliation.note': String(note).slice(0, 500) } : {}) } },
+    );
+    if (!claimed.modifiedCount) throw new ConflictError('This call was reconciled meanwhile');
+    // Parked before any end report: save what the AI collected first (stays parked, frees the device lock).
+    if (!call.resultsProcessedAt) await this.processCallResults(call._id, { source: 'reconcile' });
+
+    const fresh = await CallRecord.findById(call._id);
+    const recipient = await CampaignRecipient.findById(fresh.recipientId);
+    const isLatest = recipient && String(recipient.lastCallId) === String(fresh._id);
+    let leadTransition = null;
+    if (resolution === 'reached') {
+      fresh.state = 'completed';
+      if (!REACHED_DISPOSITIONS.includes(fresh.disposition)) fresh.disposition = 'answered_partial';
+      if (qualification) fresh.qualification = qualification;
+      fresh.reviewRequired = !qualification; // answers still to be checked unless the owner settled it
+      await fresh.save();
+      if (isLatest) {
+        await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { state: 'completed', leaseUntil: null, nextAttemptAt: null, finalDisposition: fresh.disposition, qualification: fresh.qualification } });
+      }
+      const action = ({ qualified: 'mark_qualified', unqualified: 'mark_unqualified', do_not_contact: 'mark_do_not_contact', callback: 'schedule_callback' })[qualification];
+      if (action && campaign && !campaign.isTest && !isTestProvider(fresh.provider)) {
+        leadTransition = await this._applyOutcomeToLead({
+          call: fresh, campaign, recipient,
+          outcome: { qualification, action, ruleId: null, reason: 'reconciled', requiresReview: false, callback: null },
+          disposition: fresh.disposition, actorType: 'user', actorId: actor,
+        });
+      }
+    } else {
+      fresh.state = 'failed';
+      fresh.disposition = 'no_answer';
+      fresh.reviewRequired = false;
+      await fresh.save();
+      if (isLatest) {
+        await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: resolution === 'retry'
+          ? { state: 'queued', leaseUntil: null, nextAttemptAt: null, finalDisposition: null }
+          : { state: 'failed', leaseUntil: null, nextAttemptAt: null, finalDisposition: 'no_answer' } });
+      }
+      if (resolution === 'retry' && isLatest && ['completed', 'running'].includes(campaign.status)) {
+        if (campaign.status === 'completed') {
+          await CallCampaign.updateOne({ _id: campaign._id, status: 'completed' }, { $set: { status: 'running', completedAt: null } });
+        }
+        await this._scheduleTick(campaign._id, 0);
+      }
+    }
+    await refreshCampaignSummary(fresh.campaignId);
+    auditService.logEvent({
+      eventType: 'ai_calling.call.reconciled', userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: 'success', module: 'ai-calling', details: { callId: fresh.internalCallId, resolution, qualification, leadTransition },
+    });
+    emitToOwner(actor, 'ai-calling:call', { campaignId: String(fresh.campaignId), callId: fresh.internalCallId, state: fresh.state, disposition: fresh.disposition });
+    return fresh.toObject();
+  }
+
   async retryRecipients(campaignId, actor, { recipientIds = [] } = {}, meta = {}) {
     const campaign = await CallCampaign.findOne({ _id: campaignId, createdBy: actor });
     if (!campaign) throw new NotFoundError('CallCampaign', campaignId);
-    const filter = { campaignId, 'eligibility.eligible': true, state: { $in: ['exhausted', 'failed'] } };
+    // Uncertain outcomes are excluded: the lead may have been reached. They are resolved one by one
+    // (reconcileCall), which is also where the owner can choose to call again.
+    const filter = { campaignId, 'eligibility.eligible': true, state: { $in: ['exhausted', 'failed'] }, ...NOT_PARKED };
     if (recipientIds.length) filter._id = { $in: recipientIds };
     if (['cancelled'].includes(campaign.status)) throw new ConflictError('A cancelled campaign cannot be retried');
-    const result = await CampaignRecipient.updateMany(filter, { $set: { state: 'queued', nextAttemptAt: null, leaseUntil: null } });
+    const result = await CampaignRecipient.updateMany(filter, { $set: { state: 'queued', nextAttemptAt: null, leaseUntil: null, finalDisposition: null } });
     // A paused campaign stays paused (the user resumes it); a finished one restarts.
     if (result.modifiedCount > 0 && ['completed', 'running'].includes(campaign.status)) {
       if (campaign.status === 'completed') {
@@ -1777,6 +2224,17 @@ class AiCallingService {
     if (dispatch.outcome !== 'accepted') {
       await CallRecord.updateOne({ _id: call._id }, { $set: { state: 'failed', disposition: 'failed', failureMessage: dispatch.errorMessage, endedAt: new Date(), resultsProcessedAt: new Date() } });
       throw new ServiceUnavailableError(`Could not dispatch the voice agent: ${dispatch.errorMessage}. Is the agent worker running?`);
+    }
+    // CreateDispatch succeeds even when no worker is online; fail now with the
+    // real cause instead of letting the tester wait in an empty room.
+    const worker = await livekit.waitForAgentWorker({ roomName });
+    if (worker === 'no_worker' || worker === 'failed') {
+      const failureMessage = worker === 'failed'
+        ? 'The voice agent worker accepted the test but failed to start it. Check the agent worker logs (OpenAI key / model) and try again.'
+        : `No voice agent worker is online for "${livekit.agentName}". Start the agent worker (cd server/agent-worker && npm run dev) and make sure its LIVEKIT_URL and LIVEKIT_AGENT_NAME match the API.`;
+      await CallRecord.updateOne({ _id: call._id }, { $set: { state: 'failed', disposition: 'failed', failureMessage, endedAt: new Date(), resultsProcessedAt: new Date() } });
+      await livekit.endCall({ roomName });
+      throw new ServiceUnavailableError(failureMessage);
     }
 
     const token = livekit.issueJoinToken({

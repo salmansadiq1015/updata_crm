@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient } from '../../config/redis.js';
@@ -126,6 +127,29 @@ export const providerWebhookLimiter = createLimiter({
   max: 1200,
   message: 'Too many webhook requests',
   keyGenerator: (req, res) => `webhook:${ipKeyGenerator(req, res)}`,
+});
+
+/**
+ * Paired-phone gateway (ESP32 bridge on a laptop): heartbeats every few seconds and audio stats
+ * during calls, keyed by the gateway's bearer token (hashed) so many laptops behind one NAT
+ * don't share a budget. Pairing itself is per IP and strict (codes are guessable only by brute force).
+ */
+export const gatewayLimiter = createLimiter({
+  windowMs: 60_000,
+  max: 300,
+  message: 'Too many gateway requests',
+  keyGenerator: (req, res) => {
+    const auth = req.get('authorization') || '';
+    if (!auth.startsWith('Bearer ')) return `gateway-ip:${ipKeyGenerator(req, res)}`;
+    return `gateway:${crypto.createHash('sha256').update(auth.slice(7)).digest('hex').slice(0, 32)}`;
+  },
+});
+
+export const gatewayPairLimiter = createLimiter({
+  windowMs: 15 * 60_000,
+  max: 10,
+  message: 'Too many pairing attempts, please try again later',
+  keyGenerator: (req, res) => `gateway-pair:${ipKeyGenerator(req, res)}`,
 });
 
 export { createLimiter };

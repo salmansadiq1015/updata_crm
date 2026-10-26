@@ -293,7 +293,54 @@ export class LiveKitSipProvider {
       if (response.ok) return dispatchAccepted(this.providerName, json.id || roomName, { roomName });
       return dispatchRejected(this.providerName, { message: json.msg || `dispatch failed (${response.status})`, code: `HTTP_${response.status}`, status: response.status });
     } catch (error) {
-      return dispatchAmbiguous(this.providerName, error?.name === 'TimeoutError' ? 'Agent dispatch timed out' : 'Agent dispatch failed');
+      const cause = error?.cause?.code || error?.cause?.message || error?.message || '';
+      return dispatchAmbiguous(this.providerName, error?.name === 'TimeoutError' ? 'Agent dispatch timed out' : `Agent dispatch failed${cause ? ` (${String(cause).slice(0, 80)})` : ''}`);
+    }
+  }
+
+  /**
+   * Agent dispatches that exist for a room: true / false, or null when LiveKit
+   * cannot be asked. Used to resolve an ambiguous dispatch before retrying it, so a
+   * room never gets two agents.
+   */
+  async hasDispatch({ roomName }) {
+    if (!this.livekitReady || !roomName) return null;
+    try {
+      const { response, json } = await this._twirp('AgentDispatchService', 'ListDispatch', { room: roomName }, roomName);
+      if (response.status === 404 || json?.code === 'not_found') return false; // no room → no dispatch
+      if (!response.ok) return null;
+      return (json.agent_dispatches || json.agentDispatches || []).length > 0;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * After a dispatch, wait until an agent worker has claimed its job. LiveKit
+   * keeps the job JS_PENDING with no worker_id while no worker with this agent
+   * name is online, so a missing worker shows up here in seconds instead of as
+   * an empty room. Returns 'running' | 'no_worker' | 'failed' | 'unknown'
+   * ('unknown' = LiveKit could not be asked; callers should not fail on it).
+   */
+  async waitForAgentWorker({ roomName, timeoutMs = 10000, intervalMs = 500 }) {
+    if (!this.livekitReady || !roomName) return 'unknown';
+    const deadline = Date.now() + timeoutMs;
+    let seen = false;
+    for (;;) {
+      try {
+        const { response, json } = await this._twirp('AgentDispatchService', 'ListDispatch', { room: roomName }, roomName);
+        if (response.ok) {
+          seen = true;
+          const jobs = (json.agent_dispatches || json.agentDispatches || [])
+            .filter((d) => (d.agent_name ?? d.agentName) === this.agentName)
+            .flatMap((d) => d.state?.jobs || []);
+          const states = jobs.map((j) => j.state || {});
+          if (states.some((s) => s.status === 'JS_RUNNING' || s.status === 'JS_SUCCESS' || s.worker_id || s.workerId)) return 'running';
+          if (states.length && states.every((s) => s.status === 'JS_FAILED')) return 'failed';
+        }
+      } catch { /* keep polling until the deadline */ }
+      if (Date.now() + intervalMs > deadline) return seen ? 'no_worker' : 'unknown';
+      await new Promise((resolve) => { setTimeout(resolve, intervalMs); });
     }
   }
 

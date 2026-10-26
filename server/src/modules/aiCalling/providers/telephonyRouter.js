@@ -1,8 +1,16 @@
 import primary from './livekitSip.provider.js';
 import twilioFallback from './twilioVoiceFallback.provider.js';
+import pairedPhone from './pairedPhone.provider.js';
 
-/** Dial primary first; only a definite non-acceptance can use the fallback. */
-export async function routeOutboundCall(input, { primaryProvider = primary, fallbackProvider = twilioFallback } = {}) {
+/**
+ * Dial primary first; only a definite non-acceptance can use the fallback.
+ * A paired-phone campaign calls from the owner's own phone only: no other carrier, ever.
+ */
+export async function routeOutboundCall(input, { primaryProvider = primary, fallbackProvider = twilioFallback, pairedPhoneProvider = pairedPhone } = {}) {
+  if (input.transport === 'paired_phone') {
+    const only = await pairedPhoneProvider.createOutboundCall(input);
+    return { result: only, attempts: [only] };
+  }
   const first = await primaryProvider.createOutboundCall(input);
   if (first.outcome !== 'rejected' || first.safeToFallback === false || !fallbackProvider.eligibleFor(input.country)) {
     return { result: first, attempts: [first] };

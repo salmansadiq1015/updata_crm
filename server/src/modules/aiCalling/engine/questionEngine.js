@@ -104,7 +104,7 @@ export function nextAction(questionnaire, state) {
   // All eligible questions have been attempted. Read back critical answers once.
   const needsConfirm = eligible.find(
     (q) => q.confirmCritical && isResolved(answers[q.fieldKey])
-      && answers[q.fieldKey].validation === 'valid' && !answers[q.fieldKey].confirmed,
+      && answers[q.fieldKey].validation === 'valid' && !answers[q.fieldKey].confirmed && !answers[q.fieldKey].confirmSkipped,
   );
   if (needsConfirm) return { type: 'confirm', question: needsConfirm };
 

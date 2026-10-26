@@ -20,7 +20,7 @@ const turnSchema = new mongoose.Schema({
   kind: { type: String, maxlength: 40, default: null },
   // Client idempotency key for customer messages (reconnect / retry).
   clientMessageId: { type: String, maxlength: 64, default: null },
-  source: { type: String, enum: ['model', 'template', 'customer', null], default: null },
+  source: { type: String, enum: ['model', 'template', 'customer', 'voice', null], default: null },
 }, { _id: false });
 
 const linkSessionSchema = new mongoose.Schema({
@@ -70,6 +70,20 @@ const linkSessionSchema = new mongoose.Schema({
     lastSentAt: { type: Date, default: null },
   },
   fallbackCallQueuedAt: { type: Date, default: null },
+  // Real-time voice calls (LiveKit room + agent worker) on the same conversation.
+  // activeUntil != null while a call is live; it is the lease the API checks.
+  voice: {
+    roomName: { type: String, maxlength: 120, default: null },
+    activeUntil: { type: Date, default: null },
+    requestedAt: { type: Date, default: null },
+    connectedAt: { type: Date, default: null },
+    endedAt: { type: Date, default: null },
+    endReason: { type: String, maxlength: 40, default: null },
+    calls: { type: Number, default: 0 },
+    seconds: { type: Number, default: 0 },
+    cost: { type: Number, default: 0 },
+    costedRooms: { type: [String], default: [] },
+  },
   // One customer turn at a time per session (double taps, two tabs).
   turnLockUntil: { type: Date, default: null },
   // FAQ questions the assistant could not answer, passed to the team (bounded).
@@ -83,5 +97,7 @@ const linkSessionSchema = new mongoose.Schema({
 linkSessionSchema.index({ 'tokens.hash': 1 }, { unique: true, sparse: true });
 linkSessionSchema.index({ 'tokens.operationId': 1 }, { sparse: true });
 linkSessionSchema.index({ campaignId: 1, leadId: 1, status: 1 });
+linkSessionSchema.index({ internalCallId: 1 });
+linkSessionSchema.index({ 'voice.activeUntil': 1 }, { sparse: true });
 
 export default mongoose.models.LinkSession || mongoose.model('LinkSession', linkSessionSchema);

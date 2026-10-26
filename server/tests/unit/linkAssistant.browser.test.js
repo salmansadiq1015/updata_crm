@@ -225,8 +225,11 @@ describeIf('SMS link assistant: customer page in a real mobile browser', () => {
     await page.locator('#banner').waitFor({ state: 'visible' });
     await context.setOffline(false);
     await hasText(page.locator('.msg.ai').last(), 'monthly electricity bill', 30000);
-    const session = await LinkSession.findOne({}).sort({ createdAt: -1 }).lean();
-    expect(session.transcript.filter((t) => t.role === 'customer' && t.text === 'yes')).toHaveLength(1);
+    // The reply streams to the page before the turn is written; wait for the write.
+    const customerYes = async () => (await LinkSession.findOne({}).sort({ createdAt: -1 }).lean())
+      .transcript.filter((t) => t.role === 'customer' && t.text === 'yes');
+    await until(async () => (await customerYes()).length > 0, 'turn saved');
+    expect(await customerYes()).toHaveLength(1); // sent once, never duplicated
     await context.close();
   }, 120000);
 

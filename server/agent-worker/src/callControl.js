@@ -102,3 +102,108 @@ export function waitUntilQuiet(session, getState, { minMs = 1500, maxMs = 12_000
     session.on?.('agent_state_changed', onState);
   });
 }
+
+/**
+ * Opening an answered phone call. People answer with "Hello?": speaking over that greeting
+ * makes the realtime model cancel its first reply, and the next one can come out silent, so
+ * the lead waited for the 8 s silence timer (seen in the paired-phone live test). Instead:
+ *   - give the callee `quietMs` to start their greeting; if they do, let them finish (bounded);
+ *   - then deliver the opener;
+ *   - if the agent still has not started speaking `retryAfterMs` later, ask once more.
+ * Resolves with 'spoke' | 'retried' | 'gave_up' (for logs and tests).
+ *
+ * @param {{ on: Function, off: Function }} session emits user_state_changed / agent_state_changed ({ newState })
+ * @param {{ userState: () => string, agentState: () => string, generate: () => void }} io
+ */
+export function openCall(session, io, { quietMs = 1200, maxGreetingMs = 4000, retryAfterMs = 3500 } = {}) {
+  return new Promise((resolve) => {
+    let opened = false;
+    let retried = false;
+    let done = false;
+    const timers = [];
+    const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      timers.forEach(clearTimeout);
+      session.off?.('user_state_changed', onUser);
+      session.off?.('agent_state_changed', onAgent);
+      resolve(result);
+    };
+    const open = () => {
+      if (opened) return;
+      opened = true;
+      io.generate();
+      later(retryAfterMs, () => {
+        if (io.agentState() === 'speaking') return;
+        retried = true;
+        io.generate();
+        later(retryAfterMs, () => finish(io.agentState() === 'speaking' ? 'retried' : 'gave_up'));
+      });
+    };
+    const onUser = (ev) => {
+      if (opened) return;
+      // The greeting ended: answer it.
+      if (ev?.newState === 'listening' || ev?.newState === 'away') open();
+    };
+    const onAgent = (ev) => {
+      if (ev?.newState === 'speaking' && opened) finish(retried ? 'retried' : 'spoke');
+    };
+    session.on?.('user_state_changed', onUser);
+    session.on?.('agent_state_changed', onAgent);
+    later(quietMs, () => { if (io.userState() !== 'speaking') open(); });
+    later(maxGreetingMs, open); // a long greeting or noise: speak anyway
+  });
+}
+
+/**
+ * What the person actually said last, from the realtime transcript (not the model's
+ * paraphrase). Speech turns and final transcripts are counted; latest() waits briefly
+ * for the transcript of the newest turn, which can land just after the model's tool call,
+ * and returns null if it never comes.
+ */
+export function createHeard() {
+  let turns = 0;
+  let transcribed = 0;
+  let text = null;
+  let waiters = [];
+  return {
+    turns() { return turns; },
+    onSpeaking() { turns += 1; },
+    onTranscript(value) {
+      const clean = String(value || '').trim();
+      if (!clean) return;
+      transcribed = Math.max(transcribed + 1, turns);
+      text = clean;
+      waiters.forEach((w) => w());
+      waiters = [];
+    },
+    async latest(timeoutMs = 2500) {
+      if (transcribed < turns) {
+        await new Promise((resolve) => {
+          const timer = setTimeout(resolve, timeoutMs);
+          waiters.push(() => { clearTimeout(timer); resolve(); });
+        });
+      }
+      // Newest turn still not transcribed: no evidence either way (never an older sentence).
+      return transcribed >= turns ? text : null;
+    },
+  };
+}
+
+/**
+ * One questionnaire step per thing the person said. The realtime model sometimes records an
+ * answer the person never gave (found by the paired-phone E2E: it disclosed, then saved "yes, still
+ * operating" before the lead had said a word, and the lead's real answer was "no, we closed").
+ * A step that moves the questionnaire on (disclose, record_answer, mark_answer_unknown) is only
+ * accepted after a new speech turn since the previous step, or since the opener was sent (what
+ * they said before hearing the disclosure is not agreement).
+ */
+export function createAnswerGate(heard) {
+  let mark = heard.turns();
+  return {
+    reset() { mark = heard.turns(); },
+    allow() { return heard.turns() > mark; },
+    advance() { mark = heard.turns(); },
+  };
+}

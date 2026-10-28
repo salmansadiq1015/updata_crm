@@ -201,9 +201,22 @@ export function createHeard() {
  */
 export function createAnswerGate(heard) {
   let mark = heard.turns();
+  let active = null;
   return {
     reset() { mark = heard.turns(); },
-    allow() { return heard.turns() > mark; },
+    allow() { return !active && heard.turns() > mark; },
     advance() { mark = heard.turns(); },
+    busy() { return active != null; },
+    claim() {
+      if (active || heard.turns() <= mark) return null;
+      const token = Symbol();
+      const turn = heard.turns();
+      active = token;
+      return {
+        turn,
+        complete() { mark = Math.max(mark, turn); },
+        release() { if (active === token) active = null; },
+      };
+    },
   };
 }

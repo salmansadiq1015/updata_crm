@@ -248,7 +248,8 @@ describe('SMS link voice call', () => {
     await agent.post('/record-answer', { fieldKey: 'email', rawAnswer: "It's ali@example.com." }).expect(200);
     // A goodbye is not a confirmation.
     const notYes = await agent.post('/confirm', { fieldKey: 'email', reply: 'thank you, goodbye' });
-    expect(notYes.status).toBe(409);
+    expect(notYes.status).toBe(200);
+    expect(notYes.body.data).toMatchObject({ confirmed: false, skipped: false, nextAction: { type: 'confirm' } });
     const yes = await agent.post('/confirm', { fieldKey: 'email', reply: 'Yes, this is my email.' });
     expect(yes.status).toBe(200);
     expect(yes.body.data.nextAction).toMatchObject({ type: 'finish' });
@@ -296,7 +297,9 @@ describe('SMS link voice call', () => {
     await agent.post('/record-answer', { fieldKey: 'bill', rawAnswer: '120' });
     await agent.post('/record-answer', { fieldKey: 'email', rawAnswer: 'ali@example.com' });
     for (let attempt = 0; attempt < 3; attempt++) {
-      expect((await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' })).status).toBe(409);
+      const retry = await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' });
+      expect(retry.status).toBe(200);
+      expect(retry.body.data).toMatchObject({ confirmed: false, skipped: false, nextAction: { type: 'confirm' } });
     }
     const second = await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' });
     expect(second.status).toBe(200);

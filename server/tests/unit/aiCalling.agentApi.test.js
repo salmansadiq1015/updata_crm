@@ -158,9 +158,53 @@ describe('agent tool API over HTTP', () => {
     const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
     await request(serve(app)).post(`/agent/${internalCallId}/disclose`).set(auth).send({}).expect(200);
     await request(serve(app)).post(`/agent/${internalCallId}/record-answer`).set(auth).send({ fieldKey: 'active', rawAnswer: 'yes' }).expect(200);
-    await request(serve(app)).post(`/agent/${internalCallId}/confirm`).set(auth).send({ fieldKey: 'active', reply: null }).expect(409);
+    const unclear = await request(serve(app)).post(`/agent/${internalCallId}/confirm`).set(auth).send({ fieldKey: 'active', reply: null }).expect(200);
+    expect(unclear.body.data).toMatchObject({ confirmed: false, skipped: false, nextAction: { type: 'confirm' } });
     expect((await CallRecord.findOne({ internalCallId })).conversationState.answers.active.confirmed).toBe(false);
     await request(serve(app)).post(`/agent/${internalCallId}/confirm`).set(auth).send({ fieldKey: 'active', reply: 'yes' }).expect(200);
+  });
+
+  it('shares three read-back repeats across silence and unclear speech and deduplicates lost acknowledgements', async () => {
+    const { internalCallId } = await setupCall();
+    const record = await CallRecord.findOne({ internalCallId });
+    await CallCampaign.updateOne({ _id: record.campaignId }, { $set: { 'questionnaire.questions.0.confirmCritical': true } });
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const post = (path, body) => request(serve(app)).post(`/agent/${internalCallId}/${path}`).set(auth).send(body);
+    await post('disclose', {}).expect(200);
+    await post('record-answer', { fieldKey: 'active', rawAnswer: 'yes' }).expect(200);
+    const unclear = { fieldKey: 'active', reply: 'I did not hear you', requestId: randomUUID() };
+    await Promise.all([1, 2, 3].map(() => post('confirm', unclear).expect(200)));
+    expect((await CallRecord.findOne({ internalCallId })).conversationState.answers.active.confirmRejections).toBe(1);
+    for (let attempt = 2; attempt <= 4; attempt++) {
+      const res = attempt === 3
+        ? await post('confirm', { ...unclear, requestId: randomUUID() }).expect(200)
+        : await post('no-response', { fieldKey: 'active', reason: 'silence', requestId: randomUUID() }).expect(200);
+      expect(res.body.data.nextAction.type).toBe(attempt < 4 ? 'confirm' : 'finish');
+    }
+    await post('confirm', unclear).expect(200); // delivery replay remains safe after advancing
+    const entry = (await CallRecord.findOne({ internalCallId })).conversationState.answers.active;
+    expect(entry).toMatchObject({ normalizedValue: true, confirmed: false, confirmSkipped: true, confirmRejections: 2, noResponseCount: 2 });
+    await post('confirm', { fieldKey: 'active', reply: 'yes', requestId: randomUUID() }).expect(409);
+    await post('record-answer', { fieldKey: 'active', rawAnswer: 'no' }).expect(200);
+    await post('confirm', unclear).expect(200); // an old reply cannot consume the corrected answer's budget
+    expect((await CallRecord.findOne({ internalCallId })).conversationState.answers.active.confirmRejections).toBeUndefined();
+    await post('confirm', { fieldKey: 'active', reply: 'yes', requestId: randomUUID() }).expect(200);
+    expect((await CallRecord.findOne({ internalCallId })).conversationState.answers.active).toMatchObject({ normalizedValue: false, confirmed: true });
+  });
+
+  it('rejects out-of-order confirmations without changing the retry budget', async () => {
+    const { internalCallId } = await setupCall();
+    const record = await CallRecord.findOne({ internalCallId });
+    await CallCampaign.updateOne({ _id: record.campaignId }, { $set: { 'questionnaire.questions.0.confirmCritical': true } });
+    await CallCampaign.updateOne({ _id: record.campaignId }, { $push: { 'questionnaire.questions': { fieldKey: 'backup', label: 'Backup', text: 'Need support?', type: 'boolean', order: 2 } } });
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const post = (path, body) => request(serve(app)).post(`/agent/${internalCallId}/${path}`).set(auth).send(body);
+    await post('confirm', { fieldKey: 'active', reply: null }).expect(409);
+    await post('disclose', {}).expect(200);
+    await post('record-answer', { fieldKey: 'active', rawAnswer: 'yes' }).expect(200);
+    const version = (await CallRecord.findOne({ internalCallId })).stateVersion;
+    for (const fieldKey of ['active', 'backup', 'invented']) await post('confirm', { fieldKey, reply: 'maybe' }).expect(409);
+    expect((await CallRecord.findOne({ internalCallId })).stateVersion).toBe(version);
   });
 
   it('mints an owner-scoped receive-only listener token and rejects ended, taken-over or unconfigured calls', async () => {

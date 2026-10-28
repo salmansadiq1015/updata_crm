@@ -24,3 +24,17 @@ test('a rejected no-response control is never retried as another event', async t
   await assert.rejects(api.noResponse('old-question', 'unrelated'), /Question changed/);
   assert.equal(requests, 1);
 });
+
+test('confirmation retries preserve the same speech receipt after a lost acknowledgement', async t => {
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    if (bodies.length === 1) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, json: async () => ({ data: { confirmed: false, skipped: false } }) };
+  });
+  const api = new ToolApi({ apiBase: 'https://fixture.test/agent', token: 'fixture', callId: 'call-1' });
+  assert.equal((await api.confirm('phone', 'could you repeat that?')).confirmed, false);
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[0], bodies[1]);
+  assert.match(bodies[0].requestId, /^[0-9a-f-]{36}$/);
+});

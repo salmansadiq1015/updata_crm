@@ -207,15 +207,30 @@ export default defineAgent({
     // The person's own words for confirmations (the model tends to pass the value instead).
     const heard = createHeard();
     const gate = createAnswerGate(heard);
-    const noResponseRequests = new Map();
+    const responseRequests = new Map();
+    const responseId = (kind, fieldKey, turn) => {
+      const key = `${kind}:${fieldKey}:${turn}`;
+      if (!responseRequests.has(key)) responseRequests.set(key, randomUUID());
+      if (responseRequests.size > 100) responseRequests.delete(responseRequests.keys().next().value);
+      return responseRequests.get(key);
+    };
     // A step the person has not answered yet is refused, so the model asks and waits instead.
     const gated = (fn) => guarded(async (args) => {
-      if (!gate.allow()) {
+      if (gate.busy()) return 'A previous response is still being saved. Wait for its tool result before continuing.';
+      const claim = gate.claim();
+      if (!claim) {
         return 'Refused: they have not said anything since your last step. Ask the question (or for their agreement) and wait for their reply. Never assume an answer.';
       }
-      const result = await fn(args);
-      gate.advance();
-      return result;
+      try {
+        const result = await fn(args, claim.turn);
+        claim.complete();
+        return result;
+      } finally {
+        claim.release();
+        // A tool result may not cause another SDK state transition (e.g. after a
+        // failed generation). Keep the silence recovery armed for the next step.
+        if (opened) silenceWatchdog?.arm();
+      }
     });
     const finish = async (disposition = null, delayMs = 1500) => {
       // Let the goodbye play out BEFORE /end: the CRM deletes the room as soon as it has
@@ -245,10 +260,8 @@ export default defineAgent({
       no_response: llm.tool({
         description: 'The person spoke but did not answer the current question: their reply was unrelated or unintelligible. Never save it as a valid answer. The CRM decides whether to repeat or move to the next question.',
         parameters: z.object({ fieldKey: z.string(), reason: z.enum(['unrelated', 'unintelligible']) }),
-        execute: gated(async ({ fieldKey, reason }) => {
-          const key = `${fieldKey}:${heard.turns()}`;
-          if (!noResponseRequests.has(key)) noResponseRequests.set(key, randomUUID());
-          return `No answer recorded. Next: ${await nextFrom(await api.noResponse(fieldKey, reason, noResponseRequests.get(key)))}`;
+        execute: gated(async ({ fieldKey, reason }, turn) => {
+          return `No answer recorded. Next: ${await nextFrom(await api.noResponse(fieldKey, reason, responseId('no-response', fieldKey, turn)))}`;
         }),
       }),
       mark_answer_unknown: llm.tool({
@@ -259,10 +272,13 @@ export default defineAgent({
       confirm: llm.tool({
         description: 'The person said yes to your read-back of a critical answer.',
         parameters: z.object({ fieldKey: z.string() }),
-        execute: gated(async ({ fieldKey }) => {
-          const res = await api.confirm(fieldKey, await heard.latest());
+        execute: gated(async ({ fieldKey }, turn) => {
+          const res = await api.confirm(fieldKey, await heard.latest(), responseId('confirm', fieldKey, turn));
           const next = await nextFrom(res);
-          return res.confirmed === false ? `Not confirmed; a person will check it later. Do not ask again. Next: ${next}` : `Confirmed. Next: ${next}`;
+          if (res.confirmed === false) return res.skipped
+            ? `Not confirmed; a person will check it later. Do not ask again. Next: ${next}`
+            : `No clear confirmation received. Do not claim it was confirmed. Next: ${next}`;
+          return `Confirmed. Next: ${next}`;
         }),
       }),
       disclose: llm.tool({
@@ -329,7 +345,7 @@ export default defineAgent({
     let introRepeats = 0;
     silenceWatchdog = createSilenceWatchdog({
       timeoutMs: Math.max(2, Number(config.silenceTimeoutSeconds) || 8) * 1000,
-      isBusy: () => !opened || userSpeaking || ['initializing', 'thinking', 'speaking'].includes(agentState),
+      isBusy: () => !opened || userSpeaking || gate.busy() || ['initializing', 'thinking', 'speaking'].includes(agentState),
       warn: error => warn('question silence retry failed', { callId, error: error?.message }),
       onSilence: async () => {
         if (pendingAction?.type === 'disclose') {

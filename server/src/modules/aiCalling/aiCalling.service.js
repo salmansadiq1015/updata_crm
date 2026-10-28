@@ -1573,25 +1573,30 @@ class AiCallingService {
    * clear yes: "thanks, bye" is not a confirmation. After the original read-back and three repeats without confirmation the
    * call moves on and the answer stays unconfirmed for a person to check — never a loop.
    */
-  async agentConfirm(internalCallId, { fieldKey, reply = null }) {
-    if (reply == null || !isConfirmation(reply)) {
-      let skipped = false;
-      const { campaign, state } = await this._mutateConversation(internalCallId, (s) => {
-        const entry = s.answers?.[fieldKey];
-        if (!entry) return { state: s };
-        const rejections = (entry.confirmRejections || 0) + 1;
-        skipped = rejections > engine.VOICE_QUESTION_REPEATS;
-        return { state: { ...s, answers: { ...s.answers, [fieldKey]: { ...entry, confirmRejections: rejections, ...(skipped ? { confirmSkipped: true } : {}) } } } };
-      });
-      if (!skipped) throw new ConflictError('They did not clearly confirm. Ask them to confirm with a clear yes, or record the corrected answer with record_answer');
-      return { confirmed: false, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
-    }
+  async agentConfirm(internalCallId, { fieldKey, reply = null, requestId }) {
     const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
+      if (!s.disclosed || s.endedReason) throw new ConflictError('The questionnaire is not accepting responses');
+      if (requestId) {
+        const seen = Object.entries(s.answers).find(([, entry]) => entry.confirmResponseIds?.includes(requestId));
+        if (seen) {
+          if (seen[0] !== fieldKey) throw new ConflictError('This confirmation event belongs to another question');
+          return { state: s };
+        }
+      }
       const action = engine.nextAction(c.questionnaire, s, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
       if (action.type !== 'confirm' || action.question?.fieldKey !== fieldKey) throw new ConflictError('Only the current read-back can be confirmed');
-      return { state: engine.markConfirmed(s, fieldKey) };
+      const entry = { ...s.answers[fieldKey] };
+      if (requestId) entry.confirmResponseIds = [...(entry.confirmResponseIds || []), requestId].slice(-12);
+      if (reply != null && isConfirmation(reply)) entry.confirmed = true;
+      else {
+        entry.confirmRejections = (entry.confirmRejections || 0) + 1;
+        if (engine.confirmationMisses(entry) > engine.VOICE_QUESTION_REPEATS) entry.confirmSkipped = true;
+      }
+      return { state: { ...s, answers: { ...s.answers, [fieldKey]: entry } } };
     });
-    return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
+    const entry = state.answers[fieldKey];
+    emitToOwner(campaign.createdBy, 'ai-calling:answer', { campaignId: String(campaign._id), callId: internalCallId, fieldKey });
+    return { confirmed: Boolean(entry.confirmed), skipped: Boolean(entry.confirmSkipped), nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
   }
 
   /** Clear one answer so the question is asked again (customer edits an answer before submitting). */

@@ -227,3 +227,23 @@ test('an answer the person never gave is refused; each new speech turn allows on
   heard.onSpeaking(); // a long answer split into two turns still allows the next step
   assert.equal(gate.allow(), true);
 });
+
+test('parallel tools cannot consume the same speech turn and delayed saves preserve newer speech', async () => {
+  const { createHeard, createAnswerGate } = await import('../src/callControl.js');
+  const heard = createHeard();
+  const gate = createAnswerGate(heard);
+  heard.onSpeaking();
+  const first = gate.claim();
+  assert.equal(first.turn, 1);
+  assert.equal(gate.busy(), true);
+  assert.equal(gate.claim(), null);
+  heard.onSpeaking(); // A new reply arrives while the first save is in flight.
+  first.complete(); first.release();
+  assert.equal(gate.allow(), true);
+  const next = gate.claim();
+  assert.equal(next.turn, 2);
+  next.release(); // Failed request: the same turn may be retried.
+  const retry = gate.claim();
+  retry.complete(); retry.release();
+  assert.equal(gate.allow(), false);
+});

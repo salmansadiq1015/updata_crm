@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-const mock = vi.hoisted(() => ({ monitor: vi.fn(), rooms: [] as Array<Record<string, unknown>>, tracks: [] as Array<{ attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> }> }));
+const mock = vi.hoisted(() => ({ monitor: vi.fn(), connect: vi.fn(), rooms: [] as Array<Record<string, unknown>>, tracks: [] as Array<{ attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> }> }));
 vi.mock('../services/ai-calling-api', () => ({ aiCallingApi: { monitorCall: mock.monitor } }));
 vi.mock('livekit-client', () => ({
-  RoomEvent: { TrackSubscribed: 'subscribed', TrackUnsubscribed: 'unsubscribed', AudioPlaybackStatusChanged: 'playback', Disconnected: 'disconnected' },
+  RoomEvent: { TrackSubscribed: 'subscribed', TrackUnsubscribed: 'unsubscribed', AudioPlaybackStatusChanged: 'playback', Disconnected: 'disconnected', Reconnecting: 'reconnecting', SignalReconnecting: 'signalReconnecting', Reconnected: 'reconnected' },
   Track: { Kind: { Audio: 'audio' } },
   Room: class {
     canPlaybackAudio = true;
-    connect = vi.fn(async () => {}); disconnect = vi.fn(async () => {}); startAudio = vi.fn(async () => {});
+    connect = mock.connect; disconnect = vi.fn(async () => {}); startAudio = vi.fn(async () => {});
     removeAllListeners = vi.fn(); on = vi.fn(() => this);
     remoteParticipants = new Map();
     constructor() {
@@ -25,6 +25,7 @@ vi.mock('livekit-client', () => ({
 const { CallAudioMonitor } = await import('../ui/call-audio-monitor');
 beforeEach(() => {
   vi.clearAllMocks(); mock.rooms.length = 0; mock.tracks.length = 0;
+  mock.connect.mockResolvedValue(undefined);
   mock.monitor.mockResolvedValue({ url: 'wss://voice.example.test', token: 'receive-only-token' });
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
 });
@@ -33,8 +34,8 @@ describe('live conversation speakers', () => {
     render(<CallAudioMonitor callId="call-1" live />);
     fireEvent.click(screen.getByRole('button', { name: 'Listen to both voices' }));
     expect(await screen.findByRole('button', { name: 'Stop listening' })).toBeTruthy();
-    expect(mock.monitor).toHaveBeenCalledWith('call-1');
-    expect(mock.rooms[0].connect).toHaveBeenCalledWith('wss://voice.example.test', 'receive-only-token', { autoSubscribe: true });
+    expect(mock.monitor).toHaveBeenCalledWith('call-1', expect.any(AbortSignal));
+    expect(mock.rooms[0].connect).toHaveBeenCalledWith('wss://voice.example.test', 'receive-only-token', { autoSubscribe: true, peerConnectionTimeout: 15_000, websocketTimeout: 15_000 });
     expect(mock.tracks).toHaveLength(2);
     for (const track of mock.tracks) expect(track.attach).toHaveBeenCalledOnce();
     fireEvent.change(screen.getByLabelText('Speaker volume'), { target: { value: '40' } });
@@ -70,5 +71,49 @@ describe('live conversation speakers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Listen to both voices' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Enable audio' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Enable audio' })).toBeNull());
+  });
+
+  it('cancels pending credentials and ignores their late arrival', async () => {
+    let resolve!: (value: unknown) => void;
+    mock.monitor.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    render(<CallAudioMonitor callId="call-1" live />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to both voices' }));
+    const signal = mock.monitor.mock.calls[0][1] as AbortSignal;
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel connection' }));
+    expect(signal.aborted).toBe(true);
+    await act(async () => { resolve({ url: 'wss://voice.example.test', token: 'late' }); });
+    expect(mock.rooms).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Listen to both voices' })).toBeEnabled();
+  });
+
+  it('disconnects an in-flight room and never attaches late audio after cancellation', async () => {
+    let resolve!: () => void;
+    mock.connect.mockReturnValueOnce(new Promise<void>(done => { resolve = done; }));
+    render(<CallAudioMonitor callId="call-1" live />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to both voices' }));
+    await waitFor(() => expect(mock.rooms).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel connection' }));
+    expect(mock.rooms[0].disconnect).toHaveBeenCalled();
+    await act(async () => { resolve(); });
+    for (const track of mock.tracks) expect(track.attach).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('audio')).toHaveLength(0);
+  });
+
+  it('shows reconnection progress and returns to listening when the room recovers', async () => {
+    render(<CallAudioMonitor callId="call-1" live />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to both voices' }));
+    await screen.findByRole('button', { name: 'Stop listening' });
+    const emit = (event: string) => {
+      const on = mock.rooms[0].on as ReturnType<typeof vi.fn>;
+      const handler = on.mock.calls.find(([name]) => name === event)?.[1] as () => void;
+      act(handler);
+    };
+    emit('reconnecting');
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting audio');
+    emit('reconnected');
+    expect(screen.getByRole('status')).toHaveTextContent('Listening to AI agent and lead');
+    emit('disconnected');
+    expect(screen.getByRole('alert')).toHaveTextContent('Live audio disconnected');
+    expect(document.querySelectorAll('audio')).toHaveLength(0);
   });
 });

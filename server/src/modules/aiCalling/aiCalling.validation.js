@@ -268,6 +268,7 @@ export const agentNoResponse = { params: agentFieldOnly.params, body: Joi.object
 export const agentConfirm = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
   reply: Joi.string().max(1000).allow(null),
+  requestId: Joi.string().guid(),
 }) };
 export const agentCallback = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   when: Joi.string().max(200).allow('', null), note: Joi.string().max(1000).allow('', null),

@@ -80,7 +80,9 @@ export const aiCallingApi = {
   async listCalls(params: CallListFilters = {}): Promise<Paged<CallRecord>> {
     return paged<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALLS, { params }));
   },
-  async monitorCall(id: string): Promise<{ url: string; token: string; roomName: string; callId: string }> { return unwrap(await apiClient.post(`/ai-calling/calls/${id}/monitor`)); },
+  async monitorCall(id: string, signal?: AbortSignal): Promise<{ url: string; token: string; roomName: string; callId: string }> {
+    return unwrap(await apiClient.post(`/ai-calling/calls/${id}/monitor`, undefined, { signal, timeout: 15_000 }));
+  },
   async getCall(id: string): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALL(id)));
   },

@@ -131,6 +131,8 @@ export function applyAnswer(rawState, fieldKey, result) {
         clarifications,
         noResponseCount: result.validation === 'valid' ? 0 : prev.noResponseCount || 0,
         noResponseIds: prev.noResponseIds || [],
+        // Keep delivery receipts across corrections, but start a fresh read-back budget.
+        confirmResponseIds: prev.confirmResponseIds || [],
         confirmed: result.confirmed ?? prev.confirmed ?? false,
       },
     },
@@ -181,6 +183,9 @@ export function progress(questionnaire, state) {
 
 /** A voice question gets its original ask plus three repeats. Silence is never an answer. */
 export const VOICE_QUESTION_REPEATS = 3;
+export function confirmationMisses(entry = {}) {
+  return (entry.noResponseCount || 0) + (entry.confirmRejections || 0);
+}
 export function applyNoResponse(rawState, fieldKey, { requestId, reason, confirming = false }) {
   const state = normalizeState(rawState);
   const prev = state.answers[fieldKey] || { clarifications: 0 };
@@ -192,6 +197,6 @@ export function applyNoResponse(rawState, fieldKey, { requestId, reason, confirm
     normalizedValue: confirming ? prev.normalizedValue : null,
     rawAnswer: prev.rawAnswer || '', reason: `no_response:${reason}`,
     noResponseCount, noResponseIds: [...(prev.noResponseIds || []), requestId].slice(-12),
-    ...(confirming && noResponseCount > VOICE_QUESTION_REPEATS ? { confirmSkipped: true } : {}),
+    ...(confirming && confirmationMisses({ ...prev, noResponseCount }) > VOICE_QUESTION_REPEATS ? { confirmSkipped: true } : {}),
   } } };
 }

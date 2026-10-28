@@ -41,15 +41,17 @@ export class ToolApi {
   disclose() { return this._post('/disclose'); }
   recordAnswer(fieldKey, rawAnswer) { return this._post('/record-answer', { fieldKey, rawAnswer }); }
   recordAnswers(answers) { return this._post('/record-answers', { answers }); }
-  async noResponse(fieldKey, reason, requestId = randomUUID()) {
-    const body = { fieldKey, reason, requestId };
-    try { return await this._post('/no-response', body); } catch (error) {
+  async _postEvent(path, body) {
+    try { return await this._post(path, body); } catch (error) {
       if (error.status && error.status < 500) throw error;
-      return this._post('/no-response', body); // A lost acknowledgement must not consume two retries.
+      return this._post(path, body); // A lost acknowledgement must not consume two retries.
     }
   }
+  noResponse(fieldKey, reason, requestId = randomUUID()) {
+    return this._postEvent('/no-response', { fieldKey, reason, requestId });
+  }
   markUnknown(fieldKey) { return this._post('/mark-unknown', { fieldKey }); }
-  confirm(fieldKey, reply = null) { return this._post('/confirm', { fieldKey, reply }); }
+  confirm(fieldKey, reply = null, requestId = randomUUID()) { return this._postEvent('/confirm', { fieldKey, reply, requestId }); }
   requestCallback(when, note, human = false) { return this._post('/request-callback', { when, note, human }); }
   doNotContact() { return this._post('/do-not-contact'); }
   decline() { return this._post('/decline'); }

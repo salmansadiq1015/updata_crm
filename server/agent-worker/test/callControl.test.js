@@ -51,9 +51,11 @@ test('once() runs the end-of-call report exactly once under concurrent triggers'
   assert.equal(calls, 1);
 });
 
-test('silence policy: prompt first, then end', () => {
+test('disclosure silence policy: three repeats, then stop without agreement', () => {
   assert.equal(silenceAction(1), 'prompt');
-  assert.equal(silenceAction(2), 'end');
+  assert.equal(silenceAction(2), 'prompt');
+  assert.equal(silenceAction(3), 'prompt');
+  assert.equal(silenceAction(4), 'end');
 });
 
 test('engine actions render to constrained instructions', () => {
@@ -127,9 +129,11 @@ test('turn detection defaults to server VAD; semantic is opt-in', async () => {
   assert.equal(turnDetection({}).silence_duration_ms, 600);
   assert.equal(turnDetection({ OPENAI_REALTIME_SILENCE_MS: '800' }).silence_duration_ms, 800);
   assert.deepEqual(turnDetection({ OPENAI_REALTIME_TURN_DETECTION: 'semantic' }).type, 'semantic_vad');
-  assert.equal(transcription('en').language, 'en');
-  assert.equal(transcription('ur').language, 'ur');
-  assert.ok(transcription('roman_ur').prompt);
+  assert.equal(transcription('en', {}).language, undefined);
+  assert.equal(transcription('ur', {}).language, undefined);
+  assert.match(transcription('ur', {}).prompt, /language switches/);
+  assert.ok(transcription('roman_ur', {}).prompt);
+  assert.equal(transcription('ur', { OPENAI_REALTIME_TRANSCRIBE_LANGUAGE: 'en' }).language, 'en');
 });
 
 test('answers in any language reach the server as options / digits it can validate', () => {

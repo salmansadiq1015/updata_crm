@@ -10,8 +10,9 @@ import { hostname as osHostname } from 'node:os';
 
 import { CallRunner } from './callRunner.js';
 import { LiveKitLeg } from './livekitLeg.js';
+import { performSetup } from './setup.js';
 
-export const GATEWAY_VERSION = '0.2.0';
+export const GATEWAY_VERSION = '0.3.2';
 
 const NUM_STATS = ['uptimeMs', 'heapFree', 'heapMin', 'audioUpFrames', 'audioDownFrames', 'downUnderruns', 'downOverruns', 'upDrops', 'rxCrcErrors', 'rxResyncs', 'downSeqGaps', 'downLevelBytes'];
 
@@ -32,6 +33,7 @@ export class GatewayDaemon {
       reconnectMinMs: 2_000,
       reconnectMaxMs: 30_000,
       hfpRetryMs: 20_000,
+      agentGainDb: 0,
       ...options,
     };
     this.conn = null; // { device, port, info }
@@ -40,7 +42,12 @@ export class GatewayDaemon {
     this.lastError = null;
     this.server = { voicePaused: false, readiness: null, activeCampaigns: 0 };
     this.lastHfpAttempt = 0;
+    this.autoConnect = true;
+    this.setupBusy = false;
+    this.settingsLoaded = false;
     this.reconnectDelay = this.o.reconnectMinMs;
+    this.connecting = null;
+    this.reconnectTimer = null;
     this.timers = [];
   }
 
@@ -50,14 +57,28 @@ export class GatewayDaemon {
     this.scheduleHeartbeat(0);
     this.timers.push(setInterval(() => this.tryClaim().catch((err) => this.fail('claim_failed', err)), this.o.claimEveryMs));
     this.timers.push(setInterval(() => this.outbox.flush().catch(() => {}), 5_000));
+    this.timers.push(setInterval(() => { if (this.conn) this.onBoardState(this.conn.device.state || {}); }, 2_000));
   }
 
   // ---- board ----------------------------------------------------------------------------------
 
   async connectBoard() {
     if (this.stopped || this.conn) return;
+    // The retry timer and a CRM Connect action can arrive together. Share one
+    // open attempt so they cannot race for the exclusive port or lose a session.
+    if (this.connecting) return this.connecting;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.connecting = this.openBoard();
+    try { await this.connecting; } finally { this.connecting = null; }
+  }
+
+  async openBoard() {
     try {
-      this.conn = await this.openDevice();
+      const conn = await this.openDevice();
+      if (this.stopped) { await this.closeDevice(conn); return; }
+      this.conn = conn;
+      this.portLabel = conn.port?.path || this.portLabel;
       this.reconnectDelay = this.o.reconnectMinMs;
       this.lastError = null;
       const { device, info } = this.conn;
@@ -76,10 +97,13 @@ export class GatewayDaemon {
   }
 
   retryBoard() {
-    if (this.stopped) return;
+    if (this.stopped || this.reconnectTimer) return;
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(this.o.reconnectMaxMs, this.reconnectDelay * 2);
-    this.timers.push(setTimeout(() => this.connectBoard(), delay));
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connectBoard();
+    }, delay);
   }
 
   onBoardLost(reason) {
@@ -93,7 +117,7 @@ export class GatewayDaemon {
 
   /** Keep the phone's hands-free link up while idle (the phone drops it after a while). */
   onBoardState(s) {
-    if (this.runner || !this.conn) return;
+    if (this.runner || this.setupBusy || !this.conn || !this.autoConnect || !this.settingsLoaded || this.stopped) return;
     if (s.hfp === 'disconnected' && Date.now() - this.lastHfpAttempt > this.o.hfpRetryMs) {
       this.lastHfpAttempt = Date.now();
       this.conn.device.hfpConnect().then(
@@ -112,7 +136,7 @@ export class GatewayDaemon {
       ? Object.fromEntries(NUM_STATS.filter((k) => Number.isFinite(c.device.stats[k])).map((k) => [k, c.device.stats[k]]))
       : undefined;
     return {
-      gateway: { version: GATEWAY_VERSION, platform: process.platform, hostname: osHostname().slice(0, 120) },
+      gateway: { monitorSafe: true, version: GATEWAY_VERSION, platform: process.platform, hostname: osHostname().slice(0, 120), playbackGainDb: this.o.agentGainDb, autoConnect: this.autoConnect },
       board: c ? {
         connected: true,
         port: this.portLabel,
@@ -139,6 +163,18 @@ export class GatewayDaemon {
     try {
       const res = await this.crm.heartbeat(this.heartbeatBody());
       this.server = res;
+      this.settingsLoaded = true;
+      if (res.setup) {
+        this.autoConnect = res.setup.autoConnect !== false;
+        const db = res.setup.playbackGainDb;
+        if (Number.isFinite(db) && db >= 0 && db <= 12) {
+          if (db !== this.o.agentGainDb) this.log('playback_gain_applied', { db });
+          this.o.agentGainDb = db;
+          if (this.runner) this.runner.o.agentGainDb = db;
+        }
+        if (res.setup.command?.state === 'pending' && !this.setupBusy) this.runSetup(res.setup.command).catch(err => this.fail('setup_failed', err));
+      }
+      if (this.conn) this.onBoardState(this.conn.device.state || {});
       for (const cmd of res.commands || []) {
         if (this.runner && cmd.callId === this.runner.job.callId) this.runner.command(cmd.type);
       }
@@ -160,7 +196,7 @@ export class GatewayDaemon {
 
   canClaim() {
     const c = this.conn;
-    return !this.stopped && !this.runner && c && c.info.keyProvisioned && c.device.state?.hfp === 'slc'
+    return !this.stopped && this.settingsLoaded && !this.runner && !this.setupBusy && c && c.info.keyProvisioned && c.device.state?.hfp === 'slc'
       && !c.device.state.call && !c.device.state.callsetup && !this.server.voicePaused;
   }
 
@@ -170,13 +206,47 @@ export class GatewayDaemon {
     if (!job) return;
     this.log('call_claimed', { callId: job.callId });
     const leg = new LiveKitLeg({ rtc: this.rtc, url: job.livekit?.url, token: job.livekit?.token, identity: job.livekit?.identity });
-    this.runner = new CallRunner({ device: this.conn.device, job, outbox: this.outbox, crm: this.crm, leg, log: this.log });
+    this.runner = new CallRunner({ device: this.conn.device, job, outbox: this.outbox, crm: this.crm, leg, log: this.log, options: { agentGainDb: this.o.agentGainDb } });
     this.keepAwake.set(true);
     this.scheduleHeartbeat(0);
     try {
       await this.runner.start();
     } finally {
       this.runner = null;
+      this.scheduleHeartbeat(0);
+    }
+  }
+
+  async runSetup(command) {
+    if (this.setupBusy || this.runner || this.stopped) return;
+    this.setupBusy = true;
+    let claimed = false;
+    let result = { succeeded: false, code: 'failed' };
+    try {
+      await this.crm.claimSetup(command.id);
+      claimed = true;
+      await performSetup({ action: command.action, device: this.conn?.device, info: this.conn?.info, crm: this.crm, stopped: () => this.stopped,
+        reconnect: async () => {
+          const old = this.conn; this.conn = null;
+          if (old) await this.closeDevice(old);
+          await this.connectBoard();
+          if (!this.conn) throw Object.assign(new Error('no_board'), { code: 'no_board' });
+          return this.conn;
+        } });
+      result = { succeeded: true };
+      this.provisionHinted = false;
+      this.lastError = null;
+    } catch (e) {
+      result.code = ['no_presence', 'no_peer', 'no_board', 'busy'].includes(e.code) ? e.code : 'failed';
+      this.log('setup_action_failed', { action: command.action, code: result.code });
+    } finally {
+      if (claimed) {
+        for (let n = 0; n < 3; n++) {
+          try { await this.crm.completeSetup(command.id, result); break; }
+          catch { if (n < 2) await new Promise(r => setTimeout(r, 500)); }
+        }
+      }
+      this.setupBusy = false;
       this.scheduleHeartbeat(0);
     }
   }
@@ -189,6 +259,7 @@ export class GatewayDaemon {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
+    clearTimeout(this.reconnectTimer);
     for (const t of this.timers) {
       clearTimeout(t);
       clearInterval(t);

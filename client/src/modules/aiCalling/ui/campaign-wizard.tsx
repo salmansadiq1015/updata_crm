@@ -1,20 +1,24 @@
 'use client';
 
-import { useMemo, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { X, Plus, Trash2, ChevronRight, ChevronLeft, GripVertical, MessageSquareText, PhoneCall, AlertCircle, Check, Loader2, ShieldCheck, Clock3, Headphones, Users } from 'lucide-react';
+import { X, Plus, Trash2, ChevronRight, ChevronLeft, MessageSquareText, PhoneCall, AlertCircle, Check, Loader2, ShieldCheck, Clock3, Headphones, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api/client';
 import { ConfirmDialog as ConfirmDialogRaw } from '@/shared/components/confirm-dialog';
 import { useCampaignMutations, useTelephonyHealth } from '../hooks/use-ai-calling';
 import type {
-  AgentConfig, CallTransport, Campaign, CampaignChannel, CreateCampaignInput, LinkConfig, LinkLanguage, Question, QuestionType, RuleAction, Schedule, StatusRule,
+  AgentConfig, CallTransport, Campaign, CampaignChannel, CreateCampaignInput, LinkConfig, LinkLanguage, Question, Schedule, StatusRule,
 } from '../types/ai-calling-types';
-import { ConditionEditor, type ConditionValue, type FieldOption } from './condition-editor';
+import type { ConditionValue } from './condition-editor';
+import { QuestionEditor, QualificationRulesEditor } from './question-configuration';
 import { usePairedDevices } from '../hooks/use-paired-phone';
-import { DEVICE_WAIT_TEXT } from './paired-call-health';
+import { deviceWaitSentence } from './paired-call-health';
 import { LanguageSelect } from './language-select';
 import { UpdataVoiceOrb } from './updata-voice-orb';
+import { CampaignLeadPicker, MAX_CAMPAIGN_LEADS } from './campaign-lead-picker';
+import { EligibilityNotice, EnrolledRecipientsList } from './campaign-eligibility-notice';
+import type { Lead } from '@/modules/leads/types/lead-types';
 
 /** Number inputs: an emptied field is NaN/0 — snap back into the server's accepted range. */
 function clampInt(value: number | undefined, min: number, max: number): number {
@@ -23,15 +27,7 @@ function clampInt(value: number | undefined, min: number, max: number): number {
   return Math.min(n, max);
 }
 
-const QUESTION_TYPES: QuestionType[] = [
-  'short_text', 'long_text', 'boolean', 'single_choice', 'multiple_choice', 'integer',
-  'decimal', 'currency', 'date', 'time', 'email', 'phone', 'url', 'address', 'rating',
-];
 const CHOICE_TYPES = new Set(['single_choice', 'multiple_choice', 'enum']);
-const ACTIONS: RuleAction[] = [
-  'mark_qualified', 'mark_unqualified', 'mark_not_interested', 'schedule_callback',
-  'request_review', 'mark_do_not_contact', 'mark_contacted',
-];
 const VOICES = ['alloy', 'echo', 'shimmer', 'ash', 'ballad', 'coral', 'sage', 'verse'];
 
 const DEFAULT_DISCLOSURE = 'Hi, this is an AI assistant calling on behalf of {company}. This call may be recorded. Do you have a moment to answer a few quick questions?';
@@ -41,14 +37,6 @@ const newKey = (p: string) => `${p}_${Date.now()}_${keyCounter++}`;
 
 function blankQuestion(order: number): Question {
   return { fieldKey: newKey('q'), label: '', text: '', type: 'short_text', required: true, order, options: [], maxClarifications: 2, confirmCritical: false };
-}
-
-// Only earlier questions can gate a later one (no forward/circular references).
-function earlierFieldOptions(questions: Question[], idx: number): FieldOption[] {
-  return questions.slice(0, idx).filter((q) => q.label).map((q) => ({ value: q.fieldKey, label: q.label }));
-}
-function allFieldOptions(questions: Question[]): FieldOption[] {
-  return questions.filter((q) => q.label).map((q) => ({ value: q.fieldKey, label: q.label }));
 }
 
 function conditionHasClauses(condition: ConditionValue | undefined): boolean {
@@ -130,9 +118,8 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
     ...(campaign?.schedule ?? {}),
     callWindow: { start: '09:00', end: '18:00', ...(campaign?.schedule.callWindow ?? {}) },
   });
-  const [filters, setFilters] = useState<{ status?: string; country?: string; city?: string; businessType?: string }>(() => (
-    campaign?.selection?.mode === 'filters' ? campaign.selection.filters : {}
-  ) as { status?: string; country?: string; city?: string; businessType?: string });
+  // Leads picked in the wizard (when it was not opened from a lead selection).
+  const [pickedLeads, setPickedLeads] = useState<Map<string, Lead>>(() => new Map());
   const [isTest, setIsTest] = useState(Boolean(campaign?.isTest));
   const [channel, setChannel] = useState<CampaignChannel>(campaign?.channel ?? 'voice');
   const [link, setLink] = useState<LinkConfig>(() => ({
@@ -152,32 +139,18 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
   const usesPairedPhone = !isLink && transport === 'paired_phone';
   const simCampaigns = useSimCallCampaigns(isLink && link.fallbackToCall.enabled);
 
-  const fieldKeys = useMemo(() => questions.filter((q) => q.label).map((q) => q.fieldKey), [questions]);
   const steps = isLink ? LINK_STEPS : VOICE_STEPS;
   const current = steps[Math.min(step, steps.length - 1)].key;
   const [stepError, setError] = useState<StepError | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Unsaved-changes guard: compare against the form as it was first rendered.
-  const snapshot = JSON.stringify({ name, description, agent, questions, rules, schedule, filters, isTest, channel, link, transport, pairedDeviceId });
+  const snapshot = JSON.stringify({ name, description, agent, questions, rules, schedule, leads: [...pickedLeads.keys()], isTest, channel, link, transport, pairedDeviceId });
   const [initialSnapshot] = useState(snapshot);
   const dirty = snapshot !== initialSnapshot;
   const saving = create.isPending || update.isPending;
   const requestClose = () => { if (dirty && !saving) setConfirmDiscard(true); else onClose(); };
   const error = stepError && stepError.at === snapshot ? stepError : null;
   const fieldError = (field: string) => (error && error.field === field ? error.message : undefined);
-
-  function updateQuestion(idx: number, patch: Partial<Question>) {
-    setQuestions((qs) => qs.map((q, i) => (i === idx ? { ...q, ...patch } : q)));
-  }
-  function addQuestion() { setQuestions((qs) => [...qs, blankQuestion(qs.length + 1)]); }
-  function removeQuestion(idx: number) { setQuestions((qs) => qs.filter((_, i) => i !== idx).map((q, i) => ({ ...q, order: i + 1 }))); }
-
-  function addRule() {
-    setRules((rs) => [...rs, { id: newKey('rule'), when: { all: [{ field: fieldKeys[0] || '', equals: '' }] }, action: 'mark_qualified', requiresReview: false }]);
-  }
-  function updateRule(idx: number, patch: Partial<StatusRule>) {
-    setRules((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
-  }
 
   function validateStep(key: StepKey): StepError | null {
     if (key === 'campaign' && !name.trim()) return { step: key, field: 'name', message: 'Give the campaign a name.' };
@@ -193,8 +166,12 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
     if (key === 'schedule' && usesPairedPhone && !pairedDeviceId) {
       return { step: key, field: 'device', message: 'Choose the paired phone this campaign calls from, or switch to cloud calling.' };
     }
-    if (key === 'schedule' && !editing && !explicitLeadIds && !Object.values(filters).some((value) => String(value || '').trim())) {
-      return { step: key, field: 'selection', message: 'Choose at least one lead filter, or start the campaign builder from selected leads.' };
+    if (key === 'schedule' && !editing) {
+      const count = explicitLeadIds ? explicitLeadIds.length : pickedLeads.size;
+      if (!count) return { step: key, field: 'selection', message: `Select at least one lead to ${isLink ? 'text' : 'call'}.` };
+      if (count > MAX_CAMPAIGN_LEADS) {
+        return { step: key, field: 'selection', message: `A campaign can include at most ${MAX_CAMPAIGN_LEADS} leads at a time; ${count} are selected. Split them into several campaigns.` };
+      }
     }
     if (key === 'questions') {
       if (!questions.length) return { step: key, message: 'Add at least one question.' };
@@ -251,9 +228,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
           fallbackToCall: { ...link.fallbackToCall, simCallCampaignId: link.fallbackToCall.enabled ? link.fallbackToCall.simCallCampaignId : null },
         },
       } : {}),
-      selection: explicitLeadIds
-        ? { mode: 'explicit', leadIds: explicitLeadIds }
-        : { mode: 'filters', filters },
+      selection: { mode: 'explicit', leadIds: explicitLeadIds ?? [...pickedLeads.keys()] },
       isTest,
     };
     try {
@@ -384,112 +359,25 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
             <LinkAgentFields link={link} setLink={setLink} agent={agent} setAgent={setAgent} fieldError={fieldError} />
           ) : null}
 
-          {current === 'questions' ? (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">Questions are asked in order. The AI rephrases naturally but keeps each question&apos;s meaning. Answers are validated server-side by type.</p>
-              {questions.map((q, idx) => (
-                <div key={q.fieldKey} className={`rounded-lg border bg-background p-3 ${fieldError(`q:${q.fieldKey}`) ? 'border-rose-500/60' : 'border-border'}`}>
-                  <div className="flex items-start gap-2">
-                    <GripVertical className="mt-2 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <input className={inputCls} aria-label={`Question ${idx + 1} label`} placeholder="Label (e.g. Decision maker)" value={q.label} onChange={(e) => updateQuestion(idx, { label: e.target.value })} />
-                        <select className={inputCls} aria-label={`Question ${idx + 1} answer type`} value={q.type} onChange={(e) => updateQuestion(idx, { type: e.target.value as QuestionType })}>
-                          {QUESTION_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-                        </select>
-                      </div>
-                      <input className={inputCls} aria-label={`Question ${idx + 1} text`} placeholder={isLink ? 'Question the assistant asks' : 'Question the agent asks'} value={q.text} onChange={(e) => updateQuestion(idx, { text: e.target.value })} />
-                      {CHOICE_TYPES.has(q.type) ? (
-                        <input
-                          className={inputCls}
-                          placeholder="Options, comma-separated (e.g. yes, no, later)"
-                          value={(q.options || []).map((o) => (typeof o === 'string' ? o : o.value)).join(', ')}
-                          onChange={(e) => updateQuestion(idx, { options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-                        />
-                      ) : null}
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(idx, { required: e.target.checked })} /> Required</label>
-                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={q.confirmCritical} onChange={(e) => updateQuestion(idx, { confirmCritical: e.target.checked })} /> Confirm (read back)</label>
-                        <input className="w-40 max-w-full rounded border border-border bg-card px-2 py-1" aria-label="CRM field (mapTo)" placeholder="CRM field (mapTo)" value={q.mapTo || ''} onChange={(e) => updateQuestion(idx, { mapTo: e.target.value })} />
-                        <code className="text-[10px]">{q.fieldKey}</code>
-                      </div>
-                      {/* Show-if branching: only ask this question when earlier answers match. */}
-                      {idx > 0 ? (
-                        <div className="rounded-md border border-dashed border-border/70 px-2.5 py-2">
-                          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Ask only if</span>
-                          <ConditionEditor
-                            condition={(q.condition as ConditionValue) ?? null}
-                            onChange={(next) => updateQuestion(idx, { condition: next })}
-                            fields={earlierFieldOptions(questions, idx)}
-                            allowEmpty
-                            addLabel="Always ask — add a show-if condition"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                    <button type="button" onClick={() => removeQuestion(idx)} aria-label={`Remove question ${idx + 1}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                </div>
-              ))}
-              <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:border-brand-500 hover:text-brand-500"><Plus className="h-4 w-4" /> Add question</button>
-            </div>
-          ) : null}
-
-          {current === 'rules' ? (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">Rules evaluate the collected answers after the call. The first matching rule wins. A completed call never qualifies a lead unless a rule says so, and incomplete answers always go to review.</p>
-              {rules.map((r, idx) => (
-                <div key={r.id} className="rounded-lg border border-border bg-background p-3">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-start gap-2 text-sm">
-                        <span className="mt-1 shrink-0 text-muted-foreground">If</span>
-                        <div className="flex-1">
-                          <ConditionEditor
-                            condition={r.when as ConditionValue}
-                            onChange={(next) => updateRule(idx, { when: (next || { all: [] }) as StatusRule['when'] })}
-                            fields={allFieldOptions(questions)}
-                            addLabel="add condition"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">then</span>
-                        <select className={smallSel} value={r.action} onChange={(e) => updateRule(idx, { action: e.target.value as RuleAction })}>
-                          {ACTIONS.map((a) => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
-                        </select>
-                        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={r.requiresReview} onChange={(e) => updateRule(idx, { requiresReview: e.target.checked })} /> needs review</label>
-                      </div>
-                    </div>
-                    <button type="button" onClick={() => setRules((rs) => rs.filter((_, i) => i !== idx))} aria-label={`Remove rule ${idx + 1}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                </div>
-              ))}
-              <button type="button" onClick={addRule} disabled={!fieldKeys.length} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:border-brand-500 hover:text-brand-500 disabled:opacity-50"><Plus className="h-4 w-4" /> Add rule</button>
-            </div>
-          ) : null}
+          {current === 'questions' ? <QuestionEditor questions={questions} onChange={setQuestions} isLink={isLink} /> : null}
+          {current === 'rules' ? <QualificationRulesEditor questions={questions} rules={rules} onChange={setRules} /> : null}
 
           {current === 'schedule' ? (
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-background p-3">
                 <h3 className="mb-2 text-sm font-semibold">{isLink ? 'Which leads to text' : 'Which leads to call'}</h3>
-                {editing ? (
-                  <p className="text-sm text-muted-foreground">
-                    Lead selection is preserved from campaign creation ({campaign?.selection?.mode === 'explicit'
-                      ? `${campaign.selection.leadIds.length} explicitly selected lead${campaign.selection.leadIds.length === 1 ? '' : 's'}`
-                      : 'saved lead filters'}). Editing configuration never replaces or silently re-enrols recipients.
-                  </p>
+                {editing && campaign ? (
+                  <EnrolledRecipientsList campaignId={campaign._id} verb={isLink ? 'text' : 'call'} />
                 ) : explicitLeadIds ? (
-                  <p className="text-sm text-muted-foreground">Calling the <strong className="text-foreground">{explicitLeadIds.length}</strong> lead{explicitLeadIds.length > 1 ? 's' : ''} you selected. Only those with a valid phone number and no do-not-call flag will be called.</p>
+                  <>
+                    <p className="text-sm text-muted-foreground">Calling the <strong className="text-foreground">{explicitLeadIds.length}</strong> lead{explicitLeadIds.length > 1 ? 's' : ''} you selected. Only those with a valid phone number and no do-not-call flag will be called.</p>
+                    <EligibilityNotice leadIds={explicitLeadIds} channel={isLink ? 'web_link' : 'voice'} />
+                  </>
                 ) : (
                   <>
-                    <p className="mb-3 text-xs text-muted-foreground">The server resolves these filters to the matching leads. Only leads with a valid phone number and no do-not-call flag will be called.</p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <Field label="Status"><input className={inputCls} placeholder="e.g. new" value={filters.status || ''} onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })} /></Field>
-                      <Field label="Country (ISO-2)"><input className={inputCls} placeholder="CH" value={filters.country || ''} onChange={(e) => setFilters({ ...filters, country: e.target.value || undefined })} /></Field>
-                      <Field label="City"><input className={inputCls} value={filters.city || ''} onChange={(e) => setFilters({ ...filters, city: e.target.value || undefined })} /></Field>
-                      <Field label="Business type"><input className={inputCls} value={filters.businessType || ''} onChange={(e) => setFilters({ ...filters, businessType: e.target.value || undefined })} /></Field>
-                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">Select up to {MAX_CAMPAIGN_LEADS} leads, and open one to see everything on record for it. Leads without a phone number cannot be selected; do-not-call and consent checks still run before every {isLink ? 'message' : 'call'}.</p>
+                    <CampaignLeadPicker selected={pickedLeads} onChange={setPickedLeads} verb={isLink ? 'text' : 'call'} />
+                    <EligibilityNotice leadIds={[...pickedLeads.keys()]} channel={isLink ? 'web_link' : 'voice'} />
                   </>
                 )}
               </div>
@@ -526,7 +414,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
                         <p className={`text-xs ${selectedDevice.readiness.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                           {selectedDevice.readiness.ok
                             ? `Ready. Up to ${selectedDevice.limits.maxCallsPerHour} calls/hour, ${selectedDevice.limits.cooldownSeconds}s between calls.`
-                            : `Not ready right now: ${selectedDevice.readiness.reasons.map((r) => DEVICE_WAIT_TEXT[r] || r).join(' · ')}.${selectedDevice.audioVerified ? ' The campaign waits for it.' : ' The campaign cannot start until call audio is verified.'}`}
+                            : deviceWaitSentence(selectedDevice.readiness.reasons).text}
                         </p>
                       ) : null}
                     </div>
@@ -566,7 +454,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <PreflightItem icon={ShieldCheck} title="Calling safety" detail="Consent, suppression, calling hours and retry limits are rechecked by the server." status="pass" />
-                  <PreflightItem icon={Users} title="Lead eligibility" detail={editing ? 'Existing recipients stay enrolled; eligibility and policy checks run again before each call.' : explicitLeadIds ? `${explicitLeadIds.length} selected lead${explicitLeadIds.length === 1 ? '' : 's'}; valid phone and policy checks run on save.` : 'Filters resolve on the server; ineligible leads are reported, not dialled.'} status="pass" />
+                  <PreflightItem icon={Users} title="Lead eligibility" detail={editing ? 'Existing recipients stay enrolled; eligibility and policy checks run again before each call.' : `${explicitLeadIds?.length ?? pickedLeads.size} selected lead${(explicitLeadIds?.length ?? pickedLeads.size) === 1 ? '' : 's'}; valid phone and policy checks run on save.`} status="pass" />
                   <PreflightItem icon={Clock3} title="Schedule" detail={`${schedule.callWindow?.start}–${schedule.callWindow?.end} in ${schedule.timezone}`} status="pass" />
                   {isLink ? (
                     <PreflightItem icon={MessageSquareText} title="SMS link delivery" detail="Links are sent later from the approved SIM workflow; STOP remains an opt-out." status="pass" />

@@ -45,7 +45,7 @@ export function usePairedDevices(enabled = true) {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [qc, enabled]);
-  return useQuery({ queryKey: pairedKeys.devices, queryFn: () => pairedPhoneApi.devices(), enabled, refetchInterval: 15_000, retry: false });
+  return useQuery({ queryKey: pairedKeys.devices, queryFn: () => pairedPhoneApi.devices(), enabled, refetchInterval: 5_000, retry: false });
 }
 
 export function usePairedDeviceMutations() {

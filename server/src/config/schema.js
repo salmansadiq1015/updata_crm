@@ -17,6 +17,9 @@ const configSchema = Joi.object({
 
   // MongoDB
   MONGODB_URI: Joi.string().uri().required(),
+  MONGODB_SERVER_SELECTION_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
+  MONGODB_CONNECT_ATTEMPTS: Joi.number().integer().min(1).max(10).default(3),
+  MONGODB_CONNECT_RETRY_DELAY_MS: Joi.number().integer().min(0).max(30000).default(2000),
 
   // Redis
   REDIS_URL: Joi.string().default('redis://127.0.0.1:6379'),

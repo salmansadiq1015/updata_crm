@@ -113,6 +113,22 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+### MongoDB startup failures
+
+The API retries transient database connection failures up to three times, with
+a ten-second server-selection timeout per attempt and a two-second pause between
+attempts. Authentication and invalid URI errors fail immediately. Configure these
+limits with `MONGODB_CONNECT_ATTEMPTS`, `MONGODB_SERVER_SELECTION_TIMEOUT_MS`, and
+`MONGODB_CONNECT_RETRY_DELAY_MS` in `server/.env`.
+
+If startup still fails, inspect the database log's `error.servers` entries for
+the underlying DNS, TCP, or TLS error. Atlas's generic IP whitelist message does
+not establish the cause. Check that the cluster is available, your current public
+IP is in the Atlas project's **Network Access** list, and your network permits
+outbound connections to the cluster. See
+[Atlas connection troubleshooting](https://www.mongodb.com/docs/atlas/troubleshoot-connection/).
+Retrying cannot resolve a persistent Atlas access-list or network restriction.
+
 ### 3. Chrome extension (`lead_extention/`)
 
 ```bash

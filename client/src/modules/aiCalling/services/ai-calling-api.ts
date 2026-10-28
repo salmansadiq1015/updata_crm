@@ -1,7 +1,7 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import type {
-  ActiveCall, AgentLanguageList, Analytics, Campaign, CallConsentProfile, CallListFilters, CallRecord, CreateCampaignInput, LeadTransition, SimResult, SimState, TelephonyHealth, ReconcileResolution,
+  ActiveCall, AgentLanguageList, Analytics, Campaign, CampaignRunStatus, CallConsentProfile, CallListFilters, CallRecord, CreateCampaignInput, EligibilityPreview, LeadTransition, SimResult, SimState, TelephonyHealth, ReconcileResolution,
 } from '../types/ai-calling-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
@@ -15,7 +15,7 @@ function paged<T>(res: unknown): Paged<T> {
 }
 
 export const aiCallingApi = {
-  async listCampaigns(params: { page?: number; limit?: number; status?: string } = {}): Promise<Paged<Campaign>> {
+  async listCampaigns(params: { page?: number; limit?: number; status?: string; agentId?: string } = {}): Promise<Paged<Campaign>> {
     return paged<Campaign>(await apiClient.get(ENDPOINTS.AI_CALLING.CAMPAIGNS, { params }));
   },
   async getCampaign(id: string): Promise<Campaign> {
@@ -30,14 +30,17 @@ export const aiCallingApi = {
   async preview(id: string) {
     return unwrap<Record<string, unknown>>(await apiClient.post(ENDPOINTS.AI_CALLING.PREVIEW(id)));
   },
-  async start(id: string, scheduledAt: string | null = null): Promise<Campaign> {
-    return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.START(id), { scheduledAt }));
+  async start(id: string, scheduledAt: string | null = null, startNow = true): Promise<Campaign> {
+    return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.START(id), { scheduledAt, sequential: true, startNow }));
+  },
+  async runStatus(id: string): Promise<CampaignRunStatus> {
+    return unwrap<CampaignRunStatus>(await apiClient.get(ENDPOINTS.AI_CALLING.RUN_STATUS(id)));
   },
   async pause(id: string): Promise<Campaign> {
     return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.PAUSE(id)));
   },
   async resume(id: string): Promise<Campaign> {
-    return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.RESUME(id), {}));
+    return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.RESUME(id), { scheduledAt: null, sequential: true, startNow: true }));
   },
   async cancel(id: string): Promise<Campaign> {
     return unwrap<Campaign>(await apiClient.post(ENDPOINTS.AI_CALLING.CANCEL(id)));
@@ -47,6 +50,15 @@ export const aiCallingApi = {
   },
   async recipients(id: string, params: { page?: number; limit?: number; state?: string } = {}) {
     return paged<Record<string, unknown>>(await apiClient.get(ENDPOINTS.AI_CALLING.RECIPIENTS(id), { params }));
+  },
+  async removeRecipients(id: string, recipientIds: string[]): Promise<{ removed: number; skipped: { id: string; reason: string }[] }> {
+    return unwrap(await apiClient.post(ENDPOINTS.AI_CALLING.REMOVE_RECIPIENTS(id), { recipientIds }));
+  },
+  async previewEligibility(leadIds: string[], channel: 'voice' | 'web_link' = 'voice'): Promise<EligibilityPreview> {
+    return unwrap<EligibilityPreview>(await apiClient.post(ENDPOINTS.AI_CALLING.PREVIEW_ELIGIBILITY, { leadIds, channel }));
+  },
+  async deleteCampaigns(campaignIds: string[]): Promise<{ deleted: number; skipped: { id: string; reason: string }[] }> {
+    return unwrap(await apiClient.post(ENDPOINTS.AI_CALLING.BULK_DELETE_CAMPAIGNS, { campaignIds }));
   },
   async activeCalls(id: string): Promise<ActiveCall[]> {
     return unwrap<ActiveCall[]>(await apiClient.get(ENDPOINTS.AI_CALLING.ACTIVE_CALLS(id)));
@@ -62,12 +74,13 @@ export const aiCallingApi = {
   async simulate(id: string, body: { state?: SimState | null; userText?: string | null; disclose?: boolean }): Promise<SimResult> {
     return unwrap<SimResult>(await apiClient.post(ENDPOINTS.AI_CALLING.SIMULATE(id), body));
   },
-  async startWebTest(id: string, leadId?: string): Promise<{ callId: string; roomName: string; url: string; token: string }> {
+  async startWebTest(id: string, leadId?: string): Promise<{ callId: string; recordId: string; roomName: string; url: string; token: string }> {
     return unwrap(await apiClient.post(ENDPOINTS.AI_CALLING.WEB_TEST(id), leadId ? { leadId } : {}));
   },
   async listCalls(params: CallListFilters = {}): Promise<Paged<CallRecord>> {
     return paged<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALLS, { params }));
   },
+  async monitorCall(id: string): Promise<{ url: string; token: string; roomName: string; callId: string }> { return unwrap(await apiClient.post(`/ai-calling/calls/${id}/monitor`)); },
   async getCall(id: string): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.get(ENDPOINTS.AI_CALLING.CALL(id)));
   },
@@ -80,12 +93,12 @@ export const aiCallingApi = {
   async reconcileCall(id: string, payload: { resolution: ReconcileResolution; qualification?: string | null; note?: string }): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.post(ENDPOINTS.AI_CALLING.CALL_RECONCILE(id), payload));
   },
-  async leadHistory(leadId: string): Promise<{ data: CallRecord[]; transitions: LeadTransition[] }> {
+  async leadHistory(leadId: string, page = 1) {
     const [history, transitions] = await Promise.all([
-      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { limit: 50 } }),
+      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { page, limit: 25 } }),
       apiClient.get(ENDPOINTS.AI_CALLING.LEAD_TRANSITIONS(leadId)),
     ]);
-    return { data: paged<CallRecord>(history).data, transitions: unwrap<LeadTransition[]>(transitions) ?? [] };
+    return { ...paged<CallRecord>(history), transitions: unwrap<LeadTransition[]>(transitions) ?? [] };
   },
   async suppress(input: { phone?: string; leadId?: string | null; reason?: 'do_not_contact' | 'invalid' | 'complaint' | 'admin'; note?: string }) {
     return unwrap<{ suppressed: boolean }>(await apiClient.post(ENDPOINTS.AI_CALLING.SUPPRESSIONS, input));

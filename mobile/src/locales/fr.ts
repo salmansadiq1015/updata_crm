@@ -687,7 +687,19 @@ export const fr: Translations = {
       ineligible: 'Non éligible',
       cancelled: 'Annulée',
     },
+    answerStatus: {
+      answered: 'Réponse validée',
+      unknown: 'Réponse inconnue',
+      needs_clarification: 'À clarifier',
+      needs_confirmation: 'À confirmer',
+      not_applicable: 'Condition non remplie',
+      not_answered: 'Sans réponse',
+      pending: 'Réponse attendue',
+    },
     conversation: {
+      insights: 'Analyse de la conversation',
+      coverage:
+        '{{answered}} sur {{total}} questions applicables validées · {{missing}} réponses obligatoires à vérifier',
       title: 'Conversation SMS',
       answers: 'Réponses collectées',
       noAnswers: 'Pas encore de réponses.',
@@ -1042,7 +1054,8 @@ export const fr: Translations = {
       notReached: 'Non joint · clôturer',
       notReachedHint: 'L’appel n’a jamais abouti. Clôturé sans nouvel appel.',
       retry: 'Non joint · rappeler',
-      retryHint: 'L’appel n’a jamais abouti. Le lead revient dans la file ; horaires d’appel, liste d’opposition et limites s’appliquent toujours.',
+      retryHint:
+        'L’appel n’a jamais abouti. Le lead revient dans la file ; horaires d’appel, liste d’opposition et limites s’appliquent toujours.',
       confirmTitle: 'Enregistrer ce résultat ?',
       confirmBody: 'Possible une seule fois pour cet appel.',
       confirm: 'Enregistrer',

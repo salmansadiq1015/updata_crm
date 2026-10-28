@@ -7,6 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "build:phone-gateway": "npm --prefix phone-gateway run package:gateway",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "dev:agent": "cd agent-worker && AGENT_HEALTH_PORT=${AGENT_HEALTH_PORT:-8094} node src/agent.js dev",

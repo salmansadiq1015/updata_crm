@@ -174,6 +174,7 @@ class LinkVoiceService {
     const company = companyOf(campaign);
     return {
       channel: 'web_link',
+      participantIdentity: `${VOICE_CUSTOMER_IDENTITY_PREFIX}${session._id}`,
       persistTranscript: true,
       // Already disclosed in an earlier call or in the chat: a short hello, then the current step.
       disclosure: state.disclosed

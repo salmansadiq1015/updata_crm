@@ -41,7 +41,7 @@ export function SimSmsConversationScreen({ route }: RootScreenProps<'SimSmsConve
     return (
       <AppErrorState error={query.error} retrying={query.isRefetching} onRetry={() => void query.refetch()} />
     );
-  const { conversation, messages, answers } = query.data;
+  const { conversation, messages, answers, questionCoverage, conversationInsights } = query.data;
 
   return (
     <Screen
@@ -96,22 +96,76 @@ export function SimSmsConversationScreen({ route }: RootScreenProps<'SimSmsConve
 
       <AppCard className="gap-2">
         <AppText variant="label">{t('smsAgent.conversation.answers')}</AppText>
-        {answers.length === 0 ? <AppText tone="muted">{t('smsAgent.conversation.noAnswers')}</AppText> : null}
-        {answers.map((a) => (
-          <View key={a.fieldKey} className="flex-row gap-3">
-            <AppText tone="muted" className="flex-1">
-              {a.label}
-            </AppText>
-            <AppText className="flex-1 text-right">
-              {a.validation === 'valid'
-                ? show(a.normalizedValue)
-                : a.validation === 'unknown'
-                  ? t('smsAgent.answerUnknown')
-                  : t('smsAgent.answerInvalid')}
-            </AppText>
-          </View>
-        ))}
+        {questionCoverage ? (
+          <AppText tone="muted">
+            {tKey(t, 'smsAgent.conversation.coverage', {
+              defaultValue:
+                '{{answered}} of {{total}} applicable questions validated · {{missing}} required answers need review',
+              answered: questionCoverage.answered,
+              total: questionCoverage.applicable,
+              missing: questionCoverage.requiredGaps.length,
+            })}
+          </AppText>
+        ) : null}
+        {answers.length === 0 && !questionCoverage ? (
+          <AppText tone="muted">{t('smsAgent.conversation.noAnswers')}</AppText>
+        ) : null}
+        {questionCoverage
+          ? questionCoverage.questions.map((question) => (
+              <View key={question.fieldKey} className="gap-1 border-b border-border py-3">
+                <AppText variant="label">{question.label}</AppText>
+                <AppText tone="muted">{question.question}</AppText>
+                <AppBadge
+                  label={tKey(t, `smsAgent.answerStatus.${question.status}`, {
+                    defaultValue: question.status.replaceAll('_', ' '),
+                  })}
+                  variant={question.status === 'answered' ? 'success' : 'muted'}
+                />
+                <AppText>
+                  {question.rawAnswer ||
+                    (question.normalizedValue != null
+                      ? show(question.normalizedValue)
+                      : question.status === 'unknown'
+                        ? t('smsAgent.answerUnknown')
+                        : t('smsAgent.conversation.noAnswers'))}
+                </AppText>
+              </View>
+            ))
+          : answers.map((a) => (
+              <View key={a.fieldKey} className="flex-row gap-3">
+                <AppText tone="muted" className="flex-1">
+                  {a.label}
+                </AppText>
+                <AppText className="flex-1 text-right">
+                  {a.validation === 'valid'
+                    ? show(a.normalizedValue)
+                    : a.validation === 'unknown'
+                      ? t('smsAgent.answerUnknown')
+                      : t('smsAgent.answerInvalid')}
+                </AppText>
+              </View>
+            ))}
       </AppCard>
+
+      {conversationInsights ? (
+        <AppCard className="gap-3">
+          <AppText variant="label">
+            {tKey(t, 'smsAgent.conversation.insights', { defaultValue: 'Conversation insights' })}
+          </AppText>
+          {conversationInsights.observations.map((observation) => (
+            <View key={observation.code} className="gap-1">
+              <AppText variant="label">{observation.label}</AppText>
+              <AppText tone="muted">{observation.evidence}</AppText>
+            </View>
+          ))}
+          {conversationInsights.nextSteps.map((step) => (
+            <AppText key={step}>{step}</AppText>
+          ))}
+          <AppText variant="caption" tone="muted">
+            {conversationInsights.limitation}
+          </AppText>
+        </AppCard>
+      ) : null}
 
       <AppText variant="label">{t('smsAgent.conversation.transcript')}</AppText>
       <View className="gap-2">

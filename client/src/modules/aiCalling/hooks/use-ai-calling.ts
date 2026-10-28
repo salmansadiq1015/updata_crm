@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { showError, showSuccess } from '@/lib/toast';
 import { aiCallingApi } from '../services/ai-calling-api';
-import type { CallListFilters, CreateCampaignInput, ReconcileResolution } from '../types/ai-calling-types';
+import type { Campaign, CallListFilters, CreateCampaignInput, ReconcileResolution } from '../types/ai-calling-types';
 
 const keys = {
   all: ['ai-calling'] as const,
@@ -18,7 +18,7 @@ const keys = {
   consent: (leadId: string) => ['ai-calling', 'consent', leadId] as const,
 };
 
-export function useCampaigns(params: { status?: string } = {}) {
+export function useCampaigns(params: { status?: string; page?: number; limit?: number; agentId?: string } = {}) {
   return useQuery({
     queryKey: keys.campaigns(params),
     queryFn: () => aiCallingApi.listCampaigns(params),
@@ -33,9 +33,13 @@ export function useCampaign(id: string | null) {
     enabled: Boolean(id),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === 'running' || status === 'queued' ? 5000 : false;
+      return status === 'completed' || status === 'cancelled' ? 15000 : 5000;
     },
   });
+}
+
+export function useCampaignRunStatus(id: string, enabled = true) {
+  return useQuery({ queryKey: ['ai-calling', 'run-status', id], queryFn: () => aiCallingApi.runStatus(id), enabled, refetchInterval: 5000, retry: false });
 }
 
 export function useRecipients(id: string | null, state?: string, page = 1) {
@@ -79,6 +83,7 @@ export function useCall(callId: string | null) {
     queryKey: ['ai-calling', 'call', callId || ''],
     queryFn: () => aiCallingApi.getCall(callId as string),
     enabled: Boolean(callId),
+    refetchInterval: query => !query.state.data || query.state.error ? 3000 : !query.state.data.endedAt && ['queued', 'initiating', 'ringing', 'in_progress', 'processing_results'].includes(query.state.data.state) ? 1500 : false,
   });
 }
 
@@ -126,11 +131,44 @@ export function useReconcileCall() {
   });
 }
 
-export function useLeadCallHistory(leadId: string | null) {
+export function usePreviewEligibility(leadIds: string[], channel: 'voice' | 'web_link', enabled = true) {
   return useQuery({
-    queryKey: keys.leadHistory(leadId || ''),
-    queryFn: () => aiCallingApi.leadHistory(leadId as string),
+    // Keyed on the sorted lead set so re-ordering the selection does not refetch.
+    queryKey: ['ai-calling', 'eligibility-preview', channel, [...leadIds].sort().join(',')],
+    queryFn: () => aiCallingApi.previewEligibility(leadIds, channel),
+    enabled: enabled && leadIds.length > 0,
+    staleTime: 15_000,
+  });
+}
+
+export function useRemoveRecipients(campaignId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (recipientIds: string[]) => aiCallingApi.removeRecipients(campaignId, recipientIds),
+    onSuccess: (result) => {
+      const skippedInCall = result.skipped.filter((s) => s.reason === 'in_call').length;
+      if (result.removed) {
+        showSuccess(skippedInCall
+          ? `Removed ${result.removed}; ${skippedInCall} kept (currently in a call)`
+          : `Removed ${result.removed} recipient${result.removed === 1 ? '' : 's'}`);
+      } else if (skippedInCall) {
+        showError(`Nothing removed: ${skippedInCall} recipient${skippedInCall === 1 ? ' is' : 's are'} currently in a call`);
+      }
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'recipients', campaignId] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'campaign'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'campaigns'] });
+      qc.invalidateQueries({ queryKey: ['ai-calling', 'analytics'] });
+    },
+    onError: (e: unknown) => showError(e),
+  });
+}
+
+export function useLeadCallHistory(leadId: string | null, page = 1) {
+  return useQuery({
+    queryKey: [...keys.leadHistory(leadId || ''), page],
+    queryFn: () => aiCallingApi.leadHistory(leadId as string, page),
     enabled: Boolean(leadId),
+    refetchInterval: 15_000,
   });
 }
 
@@ -156,10 +194,28 @@ export function useCallConsent(leadId: string | null) {
   return { ...query, update, suppress };
 }
 
+export function useDeleteCampaigns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (campaignIds: string[]) => aiCallingApi.deleteCampaigns(campaignIds),
+    onSuccess: (result) => {
+      if (result.deleted) showSuccess(`Deleted ${result.deleted} campaign${result.deleted === 1 ? '' : 's'}`);
+      if (result.skipped.length) showError(`${result.skipped.length} could not be deleted: ${result.skipped[0]?.reason}`);
+      qc.invalidateQueries({ queryKey: ['ai-calling'] });
+    },
+    onError: (e: unknown) => showError(e),
+  });
+}
+
 export function useCampaignMutations() {
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: keys.all });
+  };
+  const syncCampaign = (campaign: Campaign) => {
+    qc.setQueryData(keys.campaign(campaign._id), campaign);
+    qc.setQueriesData<{ data: Campaign[] }>({ queryKey: ['ai-calling', 'campaigns'] }, old => old ? { ...old, data: old.data.map(c => c._id === campaign._id ? campaign : c) } : old);
+    invalidate();
   };
 
   const create = useMutation({
@@ -173,23 +229,23 @@ export function useCampaignMutations() {
     onError: (e: unknown) => showError(e),
   });
   const start = useMutation({
-    mutationFn: ({ id, scheduledAt }: { id: string; scheduledAt?: string | null }) => aiCallingApi.start(id, scheduledAt ?? null),
-    onSuccess: () => { showSuccess('Campaign started'); invalidate(); },
+    mutationFn: ({ id, scheduledAt, startNow = true }: { id: string; scheduledAt?: string | null; startNow?: boolean }) => aiCallingApi.start(id, scheduledAt ?? null, startNow),
+    onSuccess: (campaign) => { syncCampaign(campaign); showSuccess(campaign.channel === 'web_link' ? 'Campaign started' : campaign.runMode === 'immediate' ? 'Calling started now' : 'Calling scheduled · calls follow your calling hours'); },
     onError: (e: unknown) => showError(e),
   });
   const pause = useMutation({
     mutationFn: (id: string) => aiCallingApi.pause(id),
-    onSuccess: () => { showSuccess('Campaign paused'); invalidate(); },
+    onSuccess: (campaign) => { syncCampaign(campaign); showSuccess('Campaign paused · the current call can finish'); },
     onError: (e: unknown) => showError(e),
   });
   const resume = useMutation({
     mutationFn: (id: string) => aiCallingApi.resume(id),
-    onSuccess: () => { showSuccess('Campaign resumed'); invalidate(); },
+    onSuccess: (campaign) => { syncCampaign(campaign); showSuccess(campaign.runMode === 'immediate' ? 'Calling resumed now' : 'Calling queue resumed'); },
     onError: (e: unknown) => showError(e),
   });
   const cancel = useMutation({
     mutationFn: (id: string) => aiCallingApi.cancel(id),
-    onSuccess: () => { showSuccess('Campaign cancelled'); invalidate(); },
+    onSuccess: (campaign) => { syncCampaign(campaign); showSuccess('Campaign cancelled'); },
     onError: (e: unknown) => showError(e),
   });
   const retry = useMutation({

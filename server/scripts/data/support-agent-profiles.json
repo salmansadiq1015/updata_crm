@@ -1,0 +1,259 @@
+[
+  {
+    "availability": "active",
+    "avatarFileId": null,
+    "statusRules": [],
+    "transport": "cloud_sip",
+    "pairedDeviceId": null,
+    "schedule": {
+      "timezone": "Asia/Karachi",
+      "callWindow": {
+        "start": "09:00",
+        "end": "18:00"
+      },
+      "daysOfWeek": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "maxAttemptsPerLead": 1,
+      "maxConcurrency": 1,
+      "maxCallsPerDay": 100,
+      "retryDelayMinutes": 120
+    },
+    "name": "Aria Customer Support",
+    "title": "Customer Information Specialist",
+    "description": "Welcomes customers and collects basic contact details and communication preferences, with permission.",
+    "avatarPresetId": "aria",
+    "agentConfig": {
+      "organizationName": "Updata",
+      "language": "en",
+      "speakingStyle": "friendly",
+      "customStyle": "Ask one question at a time. Listen patiently, confirm spelling and contact details, and accept skipped optional answers. Do not request passwords, verification codes, government IDs, banking information or sensitive health details. Never claim that a ticket, booking or account update was completed unless a connected tool confirms it.",
+      "maxCallSeconds": 300,
+      "silenceTimeoutSeconds": 8,
+      "maxClarificationsPerQuestion": 2,
+      "allowBargeIn": true,
+      "recordCall": false,
+      "shareLeadNotes": false,
+      "voice": "coral",
+      "objective": "With the customer's permission, collect their name, preferred phone number, email, city, language and contact preference for support follow-up. Explain the purpose, accept refusal, confirm contact details, then summarize. Do not infer missing information or request sensitive identity documents.",
+      "disclosure": "Hello, I am Aria, an AI support assistant for {company}. I would like to collect a few basic contact details so our team can support you. You may skip any question or ask me to stop. May I continue?"
+    },
+    "questionnaire": {
+      "questions": [
+        {
+          "fieldKey": "full_name",
+          "label": "Full name",
+          "text": "What is your full name, and how would you like us to address you?",
+          "type": "short_text",
+          "required": true,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 1
+        },
+        {
+          "fieldKey": "contact_phone",
+          "label": "Preferred phone number",
+          "text": "Which phone number, including the country code, should our support team use to reach you?",
+          "type": "phone",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": true,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 2
+        },
+        {
+          "fieldKey": "contact_email",
+          "label": "Email address",
+          "text": "Which email address would you like us to use for support updates? You can skip this if you prefer.",
+          "type": "email",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": true,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 3
+        },
+        {
+          "fieldKey": "city",
+          "label": "City or area",
+          "text": "Which city or general area are you based in? A full street address is not needed.",
+          "type": "short_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 4
+        },
+        {
+          "fieldKey": "preferred_language",
+          "label": "Preferred language",
+          "text": "Which language would you prefer for future support conversations?",
+          "type": "short_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 5
+        },
+        {
+          "fieldKey": "contact_preference",
+          "label": "Contact preference",
+          "text": "How and when would you prefer our team to contact you? Please include your time zone if you have a preferred time.",
+          "type": "short_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 6
+        }
+      ]
+    }
+  },
+  {
+    "availability": "active",
+    "avatarFileId": null,
+    "statusRules": [],
+    "transport": "cloud_sip",
+    "pairedDeviceId": null,
+    "schedule": {
+      "timezone": "Asia/Karachi",
+      "callWindow": {
+        "start": "09:00",
+        "end": "18:00"
+      },
+      "daysOfWeek": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "maxAttemptsPerLead": 1,
+      "maxConcurrency": 1,
+      "maxCallsPerDay": 100,
+      "retryDelayMinutes": 120
+    },
+    "name": "Atlas Service Support",
+    "title": "Support Services Specialist",
+    "description": "Understands service requests, gathers issue details and urgency, and prepares a clear summary for the support team.",
+    "avatarPresetId": "atlas",
+    "agentConfig": {
+      "organizationName": "Updata",
+      "language": "en",
+      "speakingStyle": "friendly",
+      "customStyle": "Ask one question at a time. Listen patiently, confirm spelling and contact details, and accept skipped optional answers. Do not request passwords, verification codes, government IDs, banking information or sensitive health details. Never claim that a ticket, booking or account update was completed unless a connected tool confirms it.",
+      "maxCallSeconds": 300,
+      "silenceTimeoutSeconds": 8,
+      "maxClarificationsPerQuestion": 2,
+      "allowBargeIn": true,
+      "recordCall": false,
+      "shareLeadNotes": false,
+      "voice": "ash",
+      "objective": "Understand the requested service, the issue, when it began, its impact, troubleshooting already attempted and the desired outcome. Gather information for a human support team. Do not promise fixes, response times, bookings or ticket creation. Respect requests to stop and summarize next steps accurately.",
+      "disclosure": "Hello, I am Atlas, an AI support assistant for {company}. I can collect details about your service request for our support team. Please do not share passwords, verification codes or payment information. You may skip any question or stop at any time. May I continue?"
+    },
+    "questionnaire": {
+      "questions": [
+        {
+          "fieldKey": "service_name",
+          "label": "Service or product",
+          "text": "Which service or product would you like help with?",
+          "type": "short_text",
+          "required": true,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 1
+        },
+        {
+          "fieldKey": "issue_description",
+          "label": "Request or issue",
+          "text": "Could you describe the problem or the support service you need?",
+          "type": "long_text",
+          "required": true,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 2
+        },
+        {
+          "fieldKey": "issue_started",
+          "label": "When it started",
+          "text": "When did this issue begin, and does it happen continuously or only sometimes?",
+          "type": "short_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 3
+        },
+        {
+          "fieldKey": "urgency",
+          "label": "Impact and urgency",
+          "text": "How much is this affecting you: low impact, normal impact, high impact, or a complete service interruption?",
+          "type": "single_choice",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [
+            "Low impact",
+            "Normal impact",
+            "High impact",
+            "Complete service interruption"
+          ],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 4
+        },
+        {
+          "fieldKey": "steps_tried",
+          "label": "Steps already tried",
+          "text": "What have you already tried, and what happened after those steps?",
+          "type": "long_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 5
+        },
+        {
+          "fieldKey": "desired_outcome",
+          "label": "Preferred resolution",
+          "text": "What outcome would help you most, and are there any preferences our support team should know?",
+          "type": "long_text",
+          "required": false,
+          "maxClarifications": 2,
+          "confirmCritical": false,
+          "options": [],
+          "mapTo": null,
+          "sensitive": false,
+          "order": 6
+        }
+      ]
+    }
+  }
+]

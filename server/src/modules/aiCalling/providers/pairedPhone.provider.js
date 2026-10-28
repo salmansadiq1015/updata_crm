@@ -43,6 +43,13 @@ export class PairedPhoneProvider {
         permanent: dispatch.outcome === 'rejected' && dispatch.safeToRetry === false,
       });
     }
+    if (this.livekit.waitForAgentWorker) {
+      const worker = await this.livekit.waitForAgentWorker({ roomName });
+      if (worker !== 'running') {
+        await this.livekit.endCall({ roomName }).catch(() => {});
+        return dispatchRejected(PROVIDER, { message: 'The voice agent is not ready. Start the configured agent worker before testing. The phone was not dialed.', code: 'AGENT_NOT_READY', permanent: false });
+      }
+    }
     await CallRecord.updateOne({ _id: callRecordId }, { $set: {
       pairedDeviceId,
       gateway: { state: 'queued', queuedAt: new Date() },

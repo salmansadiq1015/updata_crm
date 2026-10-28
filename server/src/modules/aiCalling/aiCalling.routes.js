@@ -5,13 +5,19 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticateAgentCall } from './callAuth.js';
 import * as schemas from './aiCalling.validation.js';
 
+import callingAgentRoutes from './callingAgent.routes.js';
+
 const router = Router();
+router.use(callingAgentRoutes);
 
 // Campaigns
 router.get('/campaigns', authenticate, requirePermission('ai-calling:read'), validate(schemas.listCampaigns), (req, res, next) => controller.listCampaigns(req, res, next));
 router.post('/campaigns', authenticate, requirePermission('ai-calling:write'), validate(schemas.createCampaign), (req, res, next) => controller.createCampaign(req, res, next));
+router.post('/campaigns/bulk-delete', authenticate, requirePermission('ai-calling:write'), validate(schemas.deleteCampaigns), (req, res, next) => controller.deleteCampaigns(req, res, next));
 router.get('/campaigns/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.getCampaign(req, res, next));
+router.get('/campaigns/:id/run-status', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.campaignRunStatus(req, res, next));
 router.patch('/campaigns/:id', authenticate, requirePermission('ai-calling:write'), validate(schemas.updateCampaign), (req, res, next) => controller.updateCampaign(req, res, next));
+router.delete('/campaigns/:id', authenticate, requirePermission('ai-calling:write'), validate(schemas.deleteCampaign), (req, res, next) => controller.deleteCampaign(req, res, next));
 router.post('/campaigns/:id/preview', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.previewCampaign(req, res, next));
 router.post('/campaigns/:id/simulate', authenticate, requirePermission('ai-calling:write'), validate(schemas.simulate), (req, res, next) => controller.simulate(req, res, next));
 router.post('/campaigns/:id/web-test', authenticate, requirePermission('ai-calling:write'), validate(schemas.webTest), (req, res, next) => controller.webTest(req, res, next));
@@ -21,12 +27,15 @@ router.post('/campaigns/:id/resume', authenticate, requirePermission('ai-calling
 router.post('/campaigns/:id/cancel', authenticate, requirePermission('ai-calling:write'), validate(schemas.campaignId), (req, res, next) => controller.cancelCampaign(req, res, next));
 router.post('/campaigns/:id/retry', authenticate, requirePermission('ai-calling:write'), validate(schemas.retryRecipients), (req, res, next) => controller.retryRecipients(req, res, next));
 router.get('/campaigns/:id/recipients', authenticate, requirePermission('ai-calling:read'), validate(schemas.listRecipients), (req, res, next) => controller.listRecipients(req, res, next));
+router.post('/campaigns/:id/recipients/remove', authenticate, requirePermission('ai-calling:write'), validate(schemas.removeRecipients), (req, res, next) => controller.removeRecipients(req, res, next));
+router.post('/recipients/preview', authenticate, requirePermission('ai-calling:read'), validate(schemas.previewEligibility), (req, res, next) => controller.previewEligibility(req, res, next));
 router.get('/campaigns/:id/export', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.exportCampaign(req, res, next));
 router.get('/campaigns/:id/active-calls', authenticate, requirePermission('ai-calling:read'), validate(schemas.campaignId), (req, res, next) => controller.activeCalls(req, res, next));
 
 // Calls
 router.get('/calls', authenticate, requirePermission('ai-calling:read'), validate(schemas.listCalls), (req, res, next) => controller.listCalls(req, res, next));
 router.get('/calls/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.callId), (req, res, next) => controller.getCall(req, res, next));
+router.post('/calls/:id/monitor', authenticate, requirePermission('ai-calling:read'), validate(schemas.callId), (req, res, next) => controller.monitorCall(req, res, next));
 router.post('/calls/:id/reconcile', authenticate, requirePermission('ai-calling:write'), validate(schemas.reconcileCall), (req, res, next) => controller.reconcileCall(req, res, next));
 router.post('/calls/:id/review', authenticate, requirePermission('ai-calling:write'), validate(schemas.reviewAnswers), (req, res, next) => controller.reviewAnswers(req, res, next));
 
@@ -55,12 +64,15 @@ agentToolRoutes.get('/:callId/context', authenticateAgentCall, validate(schemas.
 agentToolRoutes.post('/:callId/answered', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentAnswered(req, res, next));
 agentToolRoutes.post('/:callId/disclose', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDisclose(req, res, next));
 agentToolRoutes.post('/:callId/record-answer', authenticateAgentCall, validate(schemas.agentRecordAnswer), (req, res, next) => controller.agentRecordAnswer(req, res, next));
+agentToolRoutes.post('/:callId/record-answers', authenticateAgentCall, validate(schemas.agentRecordAnswers), (req, res, next) => controller.agentRecordAnswers(req, res, next));
+agentToolRoutes.post('/:callId/no-response', authenticateAgentCall, validate(schemas.agentNoResponse), (req, res, next) => controller.agentNoResponse(req, res, next));
 agentToolRoutes.post('/:callId/mark-unknown', authenticateAgentCall, validate(schemas.agentFieldOnly), (req, res, next) => controller.agentMarkUnknown(req, res, next));
 agentToolRoutes.post('/:callId/confirm', authenticateAgentCall, validate(schemas.agentConfirm), (req, res, next) => controller.agentConfirm(req, res, next));
 agentToolRoutes.post('/:callId/request-callback', authenticateAgentCall, validate(schemas.agentCallback), (req, res, next) => controller.agentCallback(req, res, next));
 agentToolRoutes.post('/:callId/do-not-contact', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDoNotContact(req, res, next));
 agentToolRoutes.post('/:callId/decline', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDecline(req, res, next));
 agentToolRoutes.post('/:callId/transcript', authenticateAgentCall, validate(schemas.agentTranscript), (req, res, next) => controller.agentTranscript(req, res, next));
+agentToolRoutes.post('/:callId/activity', authenticateAgentCall, validate(schemas.agentActivity), (req, res, next) => controller.agentActivity(req, res, next));
 agentToolRoutes.post('/:callId/end', authenticateAgentCall, validate(schemas.agentEnd), (req, res, next) => controller.agentEnd(req, res, next));
 
 // Telephony provider webhooks (signature-verified inside the controller).

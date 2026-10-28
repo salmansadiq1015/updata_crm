@@ -13,6 +13,7 @@
 import { EventEmitter } from 'node:events';
 
 const RATE = 8000;
+const isAgent = participant => !String(participant?.identity || '').startsWith('sip-') && !String(participant?.identity || '').startsWith('monitor-');
 const MAX_BACKLOG_MS = 200; // drop phone audio rather than let latency grow without bound
 
 export class LiveKitLeg extends EventEmitter {
@@ -28,21 +29,24 @@ export class LiveKitLeg extends EventEmitter {
     this.closed = false;
     this.stats = { phoneFramesSent: 0, phoneFramesDropped: 0, agentFrames: 0, agentTracks: 0 };
     this.agentConnected = false;
+    this.agentParticipants = new Set();
   }
 
   async connect() {
     const { Room, RoomEvent, AudioSource, LocalAudioTrack, TrackPublishOptions, TrackSource, TrackKind, AudioStream } = this.rtc;
     this.room = new Room();
     this.room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind !== TrackKind.KIND_AUDIO || String(participant.identity).startsWith('sip-')) return;
+      if (track.kind !== TrackKind.KIND_AUDIO || !isAgent(participant)) return;
+      this.agentParticipants.add(participant.identity);
       this.agentConnected = true;
       this.stats.agentTracks += 1;
       this.emit('agentJoined', participant.identity);
       this._readAgent(new AudioStream(track, { sampleRate: RATE, numChannels: 1 }));
     });
     this.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-      if (!String(participant.identity).startsWith('sip-')) {
-        this.agentConnected = false;
+      if (isAgent(participant)) {
+        this.agentParticipants.delete(participant.identity);
+        this.agentConnected = this.agentParticipants.size > 0;
         this.emit('agentLeft', participant.identity);
       }
     });
@@ -57,8 +61,9 @@ export class LiveKitLeg extends EventEmitter {
     await this.room.localParticipant.publishTrack(track, opts);
     // Agents already in the room before we joined.
     for (const participant of this.room.remoteParticipants?.values?.() || []) {
-      if (!String(participant.identity).startsWith('sip-')) this.agentConnected = true;
+      if (isAgent(participant)) this.agentParticipants.add(participant.identity);
     }
+    this.agentConnected = this.agentParticipants.size > 0;
   }
 
   async setCallStatus(status) {

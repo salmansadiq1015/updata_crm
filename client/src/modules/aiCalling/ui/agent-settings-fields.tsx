@@ -1,0 +1,51 @@
+'use client';
+import type { AgentConfig, CallingAgentInput, Schedule } from '../types/ai-calling-types';
+import { usePairedDevices } from '../hooks/use-paired-phone';
+import { LanguageSelect } from './language-select';
+import { AgentField, inputClass, panelClass } from './calling-agent-primitives';
+
+export const defaultAgentInput = (): CallingAgentInput => ({
+  name: '', title: '', description: '', availability: 'draft', avatarFileId: null,
+  agentConfig: { agentName: '', organizationName: '', objective: '', disclosure: 'Hi, this is an AI assistant calling on behalf of {company}. Do you have a moment to answer a few questions?', language: 'en', voice: 'alloy', speakingStyle: 'professional', maxCallSeconds: 300, silenceTimeoutSeconds: 8, maxClarificationsPerQuestion: 3, allowBargeIn: true, recordCall: false, shareLeadNotes: false },
+  questionnaire: { questions: [] }, statusRules: [], transport: 'cloud_sip', pairedDeviceId: null,
+  schedule: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', callWindow: { start: '09:00', end: '18:00' }, daysOfWeek: [1, 2, 3, 4, 5], maxAttemptsPerLead: 2, minMinutesBetweenAttempts: 60, retryDelayMinutes: 120, maxConcurrency: 1, maxCallsPerDay: 200, maxCampaignSpend: 0 },
+});
+
+export function AgentVoiceFields({ value, onChange }: { value: Partial<AgentConfig>; onChange: (next: Partial<AgentConfig>) => void }) {
+  const patch = (change: Partial<AgentConfig>) => onChange({ ...value, ...change });
+  return <div className="space-y-4">
+    <div className="grid gap-4 sm:grid-cols-2"><AgentField label="Company name (disclosed)"><input className={inputClass} value={value.organizationName || ''} maxLength={200} onChange={e => patch({ organizationName: e.target.value })} /></AgentField><AgentField label="Language"><LanguageSelect className={inputClass} value={value.language || 'en'} onChange={language => patch({ language })} /></AgentField></div>
+    <div className="grid gap-4 sm:grid-cols-2"><AgentField label="Voice"><select className={inputClass} value={value.voice || 'alloy'} onChange={e => patch({ voice: e.target.value })}>{['alloy', 'echo', 'shimmer', 'ash', 'ballad', 'coral', 'sage', 'verse'].map(v => <option key={v} value={v}>{v}</option>)}</select></AgentField><AgentField label="Speaking style"><select className={inputClass} value={value.speakingStyle || 'professional'} onChange={e => patch({ speakingStyle: e.target.value as AgentConfig['speakingStyle'] })}>{['professional', 'friendly', 'concise', 'formal', 'custom'].map(v => <option key={v} value={v}>{v}</option>)}</select></AgentField></div>
+    {value.speakingStyle === 'custom' && <AgentField label="Custom speaking instructions"><textarea className={inputClass} maxLength={500} rows={3} value={value.customStyle || ''} onChange={e => patch({ customStyle: e.target.value })} /></AgentField>}
+    <AgentField label="Call objective and instructions"><textarea className={inputClass} rows={3} maxLength={1000} value={value.objective || ''} onChange={e => patch({ objective: e.target.value })} /></AgentField>
+    <AgentField label="AI disclosure" hint="Spoken before collecting answers. {company} is replaced with the company name."><textarea className={inputClass} rows={3} maxLength={2000} value={value.disclosure || ''} onChange={e => patch({ disclosure: e.target.value })} /></AgentField>
+    <div className="grid gap-4 sm:grid-cols-3">{([
+      ['maxCallSeconds', 'Max call duration (seconds)', 30, 1800], ['silenceTimeoutSeconds', 'Silence timeout (seconds)', 2, 60], ['maxClarificationsPerQuestion', 'Question repeats (voice)' , 0, 5],
+    ] as const).map(([key, label, min, max]) => <AgentField key={key} label={label}><input type="number" disabled={key === 'maxClarificationsPerQuestion'} className={inputClass} min={min} max={max} value={key === 'maxClarificationsPerQuestion' ? 3 : value[key] ?? min} onChange={e => patch({ [key]: Number(e.target.value) })} /></AgentField>)}</div>
+    <p className="text-xs text-slate-400">Voice questions repeat up to three times if no usable answer is received, then the agent moves on. Missing answers remain flagged for review.</p>
+    <div className="flex flex-wrap gap-5 text-xs text-slate-300">{([
+      ['allowBargeIn', 'Allow interruptions'], ['recordCall', 'Call recording · unavailable on this connection'], ['shareLeadNotes', 'Include CRM notes in call context'],
+    ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={Boolean(value[key])} disabled={key === 'recordCall' && !value.recordCall} onChange={e => patch({ [key]: e.target.checked })} />{label}</label>)}</div>
+  </div>;
+}
+
+export function CallingWindowFields({ value, onChange }: { value: Schedule; onChange: (next: Schedule) => void }) {
+  return <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3">
+    <AgentField label="Calling window start"><input type="time" className={inputClass} value={value.callWindow?.start || '09:00'} onChange={e => onChange({ ...value, callWindow: { start: e.target.value, end: value.callWindow?.end || '18:00' } })} required /></AgentField>
+    <AgentField label="Calling window end"><input type="time" className={inputClass} value={value.callWindow?.end || '18:00'} onChange={e => onChange({ ...value, callWindow: { start: value.callWindow?.start || '09:00', end: e.target.value } })} required /></AgentField>
+    <AgentField label="Timezone (IANA)"><input className={inputClass} value={value.timezone || 'UTC'} onChange={e => onChange({ ...value, timezone: e.target.value })} placeholder="Asia/Karachi" required /></AgentField></div>
+    <fieldset><legend className="mb-2 text-xs font-medium text-slate-300">Permitted calling days</legend><div className="flex flex-wrap gap-2">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, n) => <label key={day} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs has-focus-visible:ring-2 has-focus-visible:ring-violet-400 ${value.daysOfWeek?.includes(n) ? 'border-violet-400/50 bg-violet-500/15 text-violet-200' : 'border-white/10 text-slate-400'}`}><input type="checkbox" className="sr-only" checked={value.daysOfWeek?.includes(n) || false} onChange={e => onChange({ ...value, daysOfWeek: e.target.checked ? [...(value.daysOfWeek || []), n].sort() : value.daysOfWeek?.filter(d => d !== n) })} />{day}</label>)}</div></fieldset>
+  </div>;
+}
+
+export function AgentExecutionFields({ value, onChange }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void }) {
+  const devices = usePairedDevices();
+  const schedule = value.schedule || {};
+  return <div className="space-y-5">
+    <div className={panelClass}><h3 className="mb-4 text-sm font-semibold">Calling connection</h3><div className="grid gap-4 sm:grid-cols-2"><AgentField label="Calls from"><select className={inputClass} value={value.transport || 'cloud_sip'} onChange={e => onChange({ ...value, transport: e.target.value as CallingAgentInput['transport'], pairedDeviceId: null })}><option value="cloud_sip">Cloud phone line · LiveKit SIP</option><option value="paired_phone">My paired phone · SIM</option></select></AgentField>{value.transport === 'paired_phone' && <AgentField label="Paired phone"><select className={inputClass} value={value.pairedDeviceId || ''} onChange={e => onChange({ ...value, pairedDeviceId: e.target.value || null })}><option value="">Choose a paired phone</option>{devices.data?.filter(d => !d.revoked).map(d => <option value={d.id} key={d.id}>{d.name} · {d.readiness.ok ? 'ready' : 'not ready'}</option>)}</select></AgentField>}</div><p className="mt-3 text-xs text-slate-500">Manage phones, verify call sound, and inspect provider readiness in Connections.</p></div>
+    <div className={panelClass}><h3 className="mb-4 text-sm font-semibold">Default calling hours</h3><CallingWindowFields value={schedule} onChange={next => onChange({ ...value, schedule: next })} /></div>
+    <div className={panelClass}><h3 className="mb-4 text-sm font-semibold">Queue, retries and limits</h3><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{([
+      ['maxConcurrency', 'Concurrent calls', 1, 25, 1], ['maxAttemptsPerLead', 'Maximum attempts per lead', 1, 10, 2], ['minMinutesBetweenAttempts', 'Minimum minutes between attempts', 0, 10080, 60], ['retryDelayMinutes', 'Retry delay (minutes)', 1, 10080, 120], ['maxCallsPerDay', 'Maximum calls per day', 1, 100000, 200], ['maxCampaignSpend', 'Campaign spend cap (0 = none)', 0, 100000, 0],
+    ] as const).map(([key, label, min, max, fallback]) => <AgentField key={key} label={label}><input type="number" className={inputClass} min={min} max={max} step={key === 'maxCampaignSpend' ? 0.01 : 1} disabled={key === 'maxConcurrency' && value.transport === 'paired_phone'} value={key === 'maxConcurrency' && value.transport === 'paired_phone' ? 1 : schedule[key] ?? fallback} onChange={e => onChange({ ...value, schedule: { ...schedule, [key]: Number(e.target.value) } })} /></AgentField>)}</div></div>
+  </div>;
+}

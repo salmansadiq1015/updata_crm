@@ -14,7 +14,7 @@
  */
 
 import { callStateOf } from '../esp32/callScript.js';
-import { levelDbfs } from '../esp32/pcm.js';
+import { levelDbfs, playbackGain } from '../esp32/pcm.js';
 
 const DEFAULTS = Object.freeze({
   audioWaitMs: 4_000, // then ask the phone for the audio link ourselves
@@ -24,6 +24,7 @@ const DEFAULTS = Object.freeze({
   agentLeftMs: 5_000, // agent gone but room still open: don't leave the lead in silence
   statsEveryMs: 2_000,
   speechDbfs: -45,
+  agentGainDb: 0,
 });
 
 export class CallRunner {
@@ -42,6 +43,7 @@ export class CallRunner {
     this.firstAiAudioMs = null;
     this.sawSetup = false;
     this.audioOn = false;
+    this.receivedPhoneAudio = false;
     this.hangupReason = null;
     this.result = null;
     this.unsubs = [];
@@ -132,6 +134,12 @@ export class CallRunner {
       this.cancel('ring');
       this.emit('answered');
       this.leg.setCallStatus('active').catch(() => {});
+      this.timer('mediaFail', this.o.audioFailMs, () => {
+        if (this.phase === 'active' && !this.receivedPhoneAudio) {
+          this.emit('audio_lost', { detail: 'no decoded phone audio after answer' });
+          this.hangup('audio_failed');
+        }
+      });
       if (s.audio !== 'on') this.armAudioWatch();
     }
     this.onAudioState(s);
@@ -178,13 +186,19 @@ export class CallRunner {
 
   onIdle() {
     const p = this.phase;
-    if (p === 'dialing' || p === 'ringing') this.end('not_answered');
+    // Android can open SCO (and report an idle call state) while it is still
+    // creating the outgoing Telecom call. DIAL's ACK only accepts the request;
+    // wait for actual setup before treating idle as a completed attempt.
+    // The existing ring timer still bounds a phone that never starts setup.
+    if ((p === 'dialing' || p === 'ringing') && this.sawSetup) this.end('not_answered');
     else if (p === 'active' || p === 'takeover') this.end('remote_hangup');
     else if (p === 'hanging_up') this.end(this.hangupReason);
   }
 
   onPhoneAudio(pcm) {
     if (this.phase !== 'active') return;
+    this.receivedPhoneAudio = true;
+    this.cancel('mediaFail');
     this.meter('rx', pcm);
     this.leg.pushPhoneAudio(pcm);
   }
@@ -209,6 +223,7 @@ export class CallRunner {
 
   onAgentAudio(pcm) {
     if (this.phase !== 'active') return;
+    pcm = playbackGain(pcm, this.o.agentGainDb);
     if (this.firstAiAudioMs === null && this.answeredAt !== null && levelDbfs(pcm) > this.o.speechDbfs) {
       this.firstAiAudioMs = this.now() - this.answeredAt;
       this.log('first_ai_audio', { ms: this.firstAiAudioMs });

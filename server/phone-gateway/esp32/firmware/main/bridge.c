@@ -7,7 +7,7 @@
 //            STATE on change, STATS every second; enforces the host-loss and discoverable timeouts.
 //
 // Audio: CVSD over HCI (wideband disabled in sdkconfig.defaults) gives 8 kHz s16le PCM. Each SCO
-// packet received from the phone is answered with one packet of the same size from s_down
+// decoded PCM callback wakes the internal codec's outgoing callback, which reads s_down
 // (silence when empty), so the phone's clock paces everything.
 
 #include "bridge.h"
@@ -34,6 +34,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "nvs.h"
+#include "soc/uart_pins.h"
 
 #include "devstate.h"
 #include "dialauth.h"
@@ -222,6 +223,10 @@ static void tx_task(void *arg)
     esp_task_wdt_add(NULL);
     uint32_t last_stats = 0, sent_version = 0;
     uint8_t audio[7 + UP_FRAME_BYTES];
+    // At the project's 100 Hz tick rate, pdMS_TO_TICKS(5) is zero. A zero
+    // timeout spins on core 1 and starves its watched idle task, resetting the
+    // board every five seconds. Always block for at least one tick when idle.
+    const TickType_t wait_ticks = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
     for (;;) {
         esp_task_wdt_reset();
         txmsg_t m;
@@ -269,7 +274,7 @@ static void tx_task(void *arg)
             S.ended_at_us = 0;
             state_changed();
         }
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5));
+        ulTaskNotifyTake(pdTRUE, wait_ticks);
     }
 }
 
@@ -519,33 +524,30 @@ static void rx_task(void *arg)
 
 // ---- Bluetooth callbacks -----------------------------------------------------------------------
 
-static void audio_data_cb(esp_hf_sync_conn_hdl_t hdl, esp_hf_audio_buff_t *in, bool is_bad_frame)
+#if CONFIG_BT_HFP_USE_EXTERNAL_CODEC
+#error "The USB protocol carries decoded PCM; this bridge requires the internal HFP codec"
+#endif
+
+static void audio_incoming_cb(const uint8_t *data, uint32_t n)
 {
-    uint16_t n = in->data_len;
-    if (is_bad_frame) {
-        memset(in->data, 0, n);  // keep the timeline; count it
-        C.bad_sco_frames++;
-    }
-    if (!ring_write(&s_up, in->data, n)) {
+    if (!ring_write(&s_up, data, n)) {
         C.up_drops++;
     }
-    esp_hf_client_audio_buff_free(in);
+    // The SDK's decoded-PCM API is distinct from its external-codec SCO API.
+    esp_hf_client_outgoing_data_ready();
+    xTaskNotifyGive(s_tx_task);
+}
 
-    esp_hf_audio_buff_t *out = esp_hf_client_audio_buff_alloc(n);
-    if (out) {
-        size_t got = ring_read(&s_down, out->data, n);
-        if (got < n) {
-            memset(out->data + got, 0, n - got);
-            if (S.down_started) {
-                C.down_underruns++;
-            }
-        }
-        out->data_len = n;
-        if (esp_hf_client_audio_data_send(hdl, out) != ESP_OK) {
-            esp_hf_client_audio_buff_free(out);
+static uint32_t audio_outgoing_cb(uint8_t *data, uint32_t n)
+{
+    size_t got = ring_read(&s_down, data, n);
+    if (got < n) {
+        memset(data + got, 0, n - got);
+        if (S.down_started) {
+            C.down_underruns++;
         }
     }
-    xTaskNotifyGive(s_tx_task);
+    return n;
 }
 
 static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
@@ -583,7 +585,7 @@ static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
             S.up_index = 0;
             S.down_started = false;
             S.codec = p->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTED_MSBC ? 2 : 1;
-            esp_hf_client_register_audio_data_callback(audio_data_cb);
+            ESP_ERROR_CHECK(esp_hf_client_register_data_callback(audio_incoming_cb, audio_outgoing_cb));
             S.audio = AUDIO_ON;
         } else if (p->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTING) {
             S.audio = AUDIO_CONNECTING;
@@ -739,6 +741,10 @@ void bridge_start(void)
     };
     ESP_ERROR_CHECK(uart_driver_install(UART_PORT, 8192, 8192, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART_PORT, &uc));
+    // With ESP_CONSOLE_NONE, IDF 5.5's UART initialization parks an unassigned
+    // RX signal high. Explicitly restore the DevKit's USB-UART pins after it.
+    ESP_ERROR_CHECK(uart_set_pin(UART_PORT, U0TXD_GPIO_NUM, U0RXD_GPIO_NUM,
+                                UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
     s_txq = xQueueCreate(32, sizeof(txmsg_t));
     xTaskCreatePinnedToCore(tx_task, "updata_tx", 4096, NULL, 10, &s_tx_task, 1);

@@ -1,16 +1,19 @@
 'use client';
 
-import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import {
-  AlertTriangle, BatteryMedium, Bluetooth, Check, CircleDashed, Copy, Cpu, KeyRound, Laptop, Loader2, Mic, Plus,
+  AlertTriangle, BatteryMedium, Bluetooth, Check, ChevronDown, CircleDashed, Copy, Cpu, Info, KeyRound, Laptop, Loader2, Mic, Plus,
   RotateCw, Settings2, ShieldOff, Smartphone, X,
 } from 'lucide-react';
 import { ConfirmDialog as ConfirmDialogRaw } from '@/shared/components/confirm-dialog';
 import { resolveApiUrl } from '@/lib/api/config';
 import { showSuccess } from '@/lib/toast';
 import { usePairedDeviceMutations, usePairedDevices } from '../hooks/use-paired-phone';
+import { pairedPhoneConnection } from '../paired-phone-connection';
 import type { DeviceLimits, PairedDevice } from '../types/ai-calling-types';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { BridgeSetupControls, BridgeSetupGuide } from './bridge-setup-controls';
 
 const ConfirmDialog = ConfirmDialogRaw as (props: {
   open: boolean; onOpenChange: (v: boolean) => void; title: string; description?: string;
@@ -34,35 +37,50 @@ function gatewayApiBase() {
 }
 
 /** Setup checklist derived only from what the gateway actually reported. */
-export function deviceChecklist(d: PairedDevice) {
-  const inCall = Boolean(d.state.call || d.state.callsetup);
+export function deviceChecklist(d: PairedDevice, now = Date.now()) {
+  const connection = pairedPhoneConnection(d, now);
+  const inCall = connection.gatewayOnline && Boolean(d.state.call || d.state.callsetup);
   return [
-    { key: 'gateway', label: 'Laptop gateway online', ok: d.online, detail: d.online ? `${d.gateway.platform || ''} · v${d.gateway.version || '?'} · seen ${ago(d.lastHeartbeatAt)}` : `last seen ${ago(d.lastHeartbeatAt)}`, icon: Laptop },
-    { key: 'board', label: 'ESP32 board connected', ok: d.online && d.board.connected, detail: d.board.firmware ? `firmware ${d.board.firmware} · ESP-IDF ${d.board.idf || '?'}` : 'plug the board into the laptop', icon: Cpu },
-    { key: 'key', label: 'Dial key provisioned', ok: d.keyState === 'provisioned' && d.board.keyProvisioned, detail: d.keyState === 'provisioned' ? 'only the CRM can authorize calls' : 'run: updata-gateway provision (hold BOOT)', icon: KeyRound },
-    { key: 'phone', label: 'Phone connected (hands-free)', ok: d.online && d.board.connected && d.state.hfp === 'slc', detail: d.state.hfp === 'slc' ? `${d.state.peer || 'phone'}${d.state.signal != null ? ` · signal ${d.state.signal}/5` : ''}${d.state.battery != null ? ` · battery ${d.state.battery}/5` : ''}` : `Bluetooth: ${d.state.hfp}`, icon: Bluetooth },
+    { key: 'gateway', label: 'Laptop gateway online', ok: connection.gatewayOnline, detail: connection.gatewayOnline ? `${d.gateway.platform || ''} · v${d.gateway.version || '?'} · seen ${ago(d.lastHeartbeatAt)}` : `last seen ${ago(d.lastHeartbeatAt)}`, icon: Laptop },
+    { key: 'board', label: 'ESP32 board connected', ok: connection.board === 'connected', detail: d.board.firmware ? `firmware ${d.board.firmware} · ESP-IDF ${d.board.idf || '?'}` : 'plug the board into the laptop', icon: Cpu },
+    { key: 'key', label: 'Calling security key saved', ok: d.keyState === 'provisioned' && d.board.keyProvisioned, detail: d.keyState === 'provisioned' && d.board.keyProvisioned ? 'Only your CRM account can authorize calls.' : 'Choose Finish setup, then hold BOOT while saving the security key.', icon: KeyRound },
+    { key: 'phone', label: 'Phone connected (hands-free)', ok: connection.phone === 'connected', detail: connection.phone === 'connected' ? `${d.state.peer || 'phone'}${d.state.signal != null ? ` · signal ${d.state.signal}/5` : ''}${d.state.battery != null ? ` · battery ${d.state.battery}/5` : ''}` : connection.phone === 'unknown' ? 'awaiting a current gateway and board report' : `Bluetooth: ${d.state.hfp}`, icon: Bluetooth },
     { key: 'audio', label: 'Two-way call audio verified', ok: d.audioVerified, detail: d.audioVerified ? `verified ${ago(d.audioVerifiedAt)}${d.audioVerification?.firmware ? ` on firmware ${d.audioVerification.firmware}` : ''}` : 'run the audio test call, then confirm it here', icon: Mic },
-    ...(inCall ? [{ key: 'call', label: 'Phone is in a call', ok: true, detail: d.state.audio === 'on' ? 'call audio flowing' : 'no call audio yet', icon: Smartphone }] : []),
+    ...(inCall ? [{ key: 'call', label: 'Phone is in a call', ok: true, detail: d.state.audio === 'on' ? 'audio link open' : 'no call audio yet', icon: Smartphone }] : []),
   ];
 }
 
 export function PairedPhonesPanel() {
-  const { data: devices, isLoading, isError, refetch } = usePairedDevices();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canManage = isAdmin || ['ai-calling:write', 'ai-calling:admin', 'crm:write', 'crm:admin'].some(hasPermission);
+  const { data: devices, isLoading, isFetching, isError, refetch } = usePairedDevices();
   const [adding, setAdding] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const visible = (devices ?? []).filter((d) => !d.revoked);
   const revoked = (devices ?? []).filter((d) => d.revoked);
   return (
-    <section aria-labelledby="paired-phones-title" className="rounded-xl border border-border bg-card">
+    <section aria-labelledby="paired-phones-title" className="rounded-2xl border border-blue-400/15 bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <h2 id="paired-phones-title" className="flex items-center gap-2 text-sm font-semibold"><Smartphone className="h-4 w-4 text-brand-500" aria-hidden="true" /> Paired phones</h2>
-          <p className="text-xs text-muted-foreground">Your Android phone and SIM, reached through an ESP32 Bluetooth bridge on your laptop.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Connect your Android phone to make calls from its SIM.</p>
         </div>
-        <button type="button" onClick={() => setAdding(true)} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+        <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh bridge status" className={`${btn} border border-border text-muted-foreground hover:bg-muted`}>
+          <RotateCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
+        </button>
+        <button type="button" disabled={!canManage} onClick={() => setAdding(true)} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
           <Plus className="h-3.5 w-3.5" /> Add paired phone
         </button>
+        </div>
       </div>
       <div className="p-4">
+        <div className="mb-3"><BridgeSetupGuide apiBase={gatewayApiBase()} /></div>
+        {!canManage && <p className="mb-3 text-xs text-muted-foreground">Your role can view bridge status. Ask an administrator for AI Calling write permission to set up your own device.</p>}
         {isLoading ? (
           <div className="flex justify-center p-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : isError ? (
@@ -71,14 +89,17 @@ export function PairedPhonesPanel() {
             <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 p-6 text-center">
-            <Smartphone className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ConnectionTile label="ESP32 USB" value="Not linked to CRM" detail="Add this laptop gateway to report the board connection." icon={Cpu} />
+              <ConnectionTile label="Phone Bluetooth" value="Waiting for gateway" detail="Link this Mac to display your phone's Bluetooth connection." icon={Bluetooth} />
+            </div>
             <p className="text-sm font-medium">No paired phone yet</p>
-            <p className="max-w-md text-xs text-muted-foreground">Plug a classic ESP32-WROOM-32 board into your laptop, pair it with your phone over Bluetooth, and the AI can call leads from your own SIM.</p>
+            <p className="text-xs text-muted-foreground">Choose Add paired phone to generate a code and link this Mac. The ESP32 connects to the Mac by USB; your Android phone connects to the ESP32 by Bluetooth.</p>
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {visible.map((d) => <li key={d.id}><DeviceCard device={d} /></li>)}
+          <ul className={`grid grid-cols-1 gap-3 ${visible.length > 1 ? 'xl:grid-cols-2' : ''}`}>
+            {visible.map((d) => <li key={d.id}><DeviceCard device={d} now={now} canManage={canManage} /></li>)}
           </ul>
         )}
         {revoked.length ? <p className="mt-3 text-xs text-muted-foreground">{revoked.length} revoked device{revoked.length > 1 ? 's' : ''} hidden.</p> : null}
@@ -88,20 +109,48 @@ export function PairedPhonesPanel() {
   );
 }
 
+function ConnectionTile({ label, value, detail, icon: Icon, connected = false }: {
+  label: string; value: string; detail: string; icon: typeof Cpu; connected?: boolean;
+}) {
+  return (
+    <div role="group" aria-label={`${label}: ${value}`} className={`min-w-0 rounded-xl border p-3 ${connected ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-border bg-muted/20'}`}>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className={`h-4 w-4 ${connected ? 'text-emerald-400' : ''}`} aria-hidden="true" />{label}</div>
+      <p aria-live="polite" className={`mt-1.5 text-sm font-semibold ${connected ? 'text-emerald-500 dark:text-emerald-300' : ''}`}>{value}</p>
+      <p className="mt-1 break-words text-[11px] text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
 function StatusDot({ ok, pending = false }: { ok: boolean; pending?: boolean }) {
   if (ok) return <Check className="h-4 w-4 shrink-0 text-emerald-500" aria-label="done" />;
   if (pending) return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-label="waiting" />;
   return <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="not yet" />;
 }
 
-function DeviceCard({ device: d }: { device: PairedDevice }) {
+function DeviceCard({ device: d, now, canManage }: { device: PairedDevice; now: number; canManage: boolean }) {
+  const [showMore, setShowMore] = useState(false);
+  const setupActive = Boolean(d.setup?.command && ['pending', 'running'].includes(d.setup.command.state) && new Date(d.setup.command.expiresAt).getTime() > now);
   const m = usePairedDeviceMutations();
   const [dialog, setDialog] = useState<null | 'verify' | 'limits' | 'revoke' | 'rotate' | 'clear'>(null);
-  const checks = deviceChecklist(d);
-  const inCall = Boolean(d.currentCallId);
-  const headline = !d.online ? { text: 'Offline', cls: 'bg-muted text-muted-foreground' }
+  const checks = deviceChecklist(d, now);
+  const connection = pairedPhoneConnection(d, now);
+  const inCall = Boolean(d.currentCallId || d.state.call || d.state.callsetup);
+  const keyReady = d.keyState === 'provisioned' && d.board.keyProvisioned;
+  const nextStep = !connection.gatewayOnline
+    ? { title: 'Open the gateway on your computer', detail: 'The gateway is the small Updata program that links your USB bridge to this website. See Setup guide if it is not installed.' }
+    : connection.board !== 'connected'
+      ? { title: connection.board === 'fault' ? 'The USB bridge needs attention' : 'Reconnect the USB bridge', detail: 'Keep the bridge plugged into your computer, then choose Connect phone. If that fails, unplug and reconnect its USB cable. Your phone may still show Bluetooth connected while the computer cannot check it.' }
+      : connection.phone !== 'connected'
+        ? { title: 'Connect your phone', detail: 'Turn on Bluetooth on Android, then choose Connect phone. For first-time pairing, open Phone setup.' }
+        : !keyReady
+          ? { title: 'One security step left', detail: 'Your phone is connected. Choose Finish setup to save the security key that allows calls from your CRM account. Reconnecting does not need a new key.' }
+          : !d.audioVerified
+            ? { title: 'Check the call sound', detail: 'Open Sound & test call to call your own second phone. After you hear both sides clearly, confirm the sound check.' }
+            : d.readiness.ok ? { title: 'Your phone is ready for CRM calls', detail: 'Keep Bluetooth on, the USB bridge plugged in, and the gateway running on your computer.' }
+              : { title: inCall ? 'Your phone is handling a call' : 'Connected · calls are waiting', detail: d.readiness.reasons.includes('cooldown') ? 'A short pause between calls is in progress. Calling resumes automatically.' : d.readiness.reasons.some(r => ['hourly_cap', 'daily_cap'].includes(r)) ? 'Your call limit has been reached. Open Show more to review the limits.' : 'Open Show more for the current calling checks.' };
+  const headline = !connection.gatewayOnline ? { text: 'Offline', cls: 'bg-muted text-muted-foreground' }
     : d.attention ? { text: 'Needs attention', cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-300' }
-      : inCall ? { text: d.state.audio === 'on' ? 'In call · audio live' : 'In call', cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' }
+      : inCall ? { text: 'In call', cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' }
         : d.readiness.ok ? { text: 'Ready to call', cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' }
           : { text: 'Not ready', cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' };
   return (
@@ -109,10 +158,29 @@ function DeviceCard({ device: d }: { device: PairedDevice }) {
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{d.name}</h3>
-          <p className="truncate text-xs text-muted-foreground">{d.phoneLabel || 'Android phone'}{d.board.bdaddr ? ` · bridge ${d.board.bdaddr}` : ''}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{d.phoneLabel || 'Android phone'}</p>
         </div>
         <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${headline.cls}`} role="status">{headline.text}</span>
       </header>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <ConnectionTile label="Computer" value={connection.gatewayOnline ? 'Online' : 'Offline'}
+          detail={connection.gatewayOnline ? 'Updata gateway is running.' : 'Open the Updata gateway on your computer.'} icon={Laptop} connected={connection.gatewayOnline} />
+        <ConnectionTile label="ESP32 USB"
+          value={connection.board === 'connected' ? 'Connected' : connection.board === 'fault' ? 'Needs attention' : connection.board === 'disconnected' ? 'Not reachable' : 'Cannot check yet'}
+          detail={connection.board === 'connected' ? 'Computer is communicating with your bridge.' : connection.board === 'fault' ? 'Open Show more for the bridge report.' : connection.board === 'disconnected' ? 'Check the USB cable, then choose Connect phone.' : 'Waiting for your computer to come online.'}
+          icon={Cpu} connected={connection.board === 'connected'} />
+        <ConnectionTile label="Phone Bluetooth"
+          value={connection.phone === 'connected' ? 'Connected' : connection.phone === 'connecting' ? 'Connecting…' : connection.phone === 'disconnected' ? 'Not connected' : 'Cannot check yet'}
+          detail={connection.phone === 'connected' ? 'Phone calling connection confirmed by the bridge.' : connection.phone === 'connecting' ? 'Waiting for Android to enable phone calls.' : connection.phone === 'disconnected' ? 'Turn on phone Bluetooth, then choose Connect phone.' : 'Your phone may be connected. Restore the computer link to confirm.'}
+          icon={Bluetooth} connected={connection.phone === 'connected'} />
+      </div>
+
+      {!d.attention && <div className="flex items-start gap-2.5 rounded-lg bg-muted/40 p-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
+        <div><p className="text-sm font-medium">{nextStep.title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{nextStep.detail}</p></div>
+      </div>}
+      {canManage && <BridgeSetupControls device={d} now={now} onVerifyAudio={() => setDialog('verify')} />}
 
       {d.attention ? (
         <div className="flex flex-col gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs sm:flex-row sm:items-center">
@@ -122,7 +190,10 @@ function DeviceCard({ device: d }: { device: PairedDevice }) {
         </div>
       ) : null}
 
-      <ul className="space-y-1.5" aria-label="Setup checks">
+      <div className="border-t border-border pt-3">
+        <button type="button" onClick={() => setShowMore(!showMore)} aria-expanded={showMore} className={`${btn} text-muted-foreground hover:bg-muted`}><Info className="h-4 w-4" aria-hidden="true" />{showMore ? 'Show less' : 'Show more'}<ChevronDown className={`h-4 w-4 transition-transform ${showMore ? 'rotate-180' : ''}`} aria-hidden="true" /></button>
+      {showMore && <section aria-label="Bridge details" className="mt-3 space-y-4">
+      <ul className="grid gap-3 sm:grid-cols-2" aria-label="Setup checks">
         {checks.map((c) => (
           <li key={c.key} className="flex items-start gap-2 text-xs">
             <StatusDot ok={c.ok} />
@@ -133,13 +204,19 @@ function DeviceCard({ device: d }: { device: PairedDevice }) {
           </li>
         ))}
       </ul>
+      <dl className="grid gap-2 text-xs sm:grid-cols-2">
+        <div><dt className="text-muted-foreground">USB port</dt><dd className="break-all">{d.board.port || 'Not reported'}</dd></div>
+        <div><dt className="text-muted-foreground">Bluetooth name</dt><dd>{d.board.bdaddr ? `Updata Phone Bridge ${d.board.bdaddr.replaceAll(':', '').slice(-4)}` : 'Not reported'}</dd></div>
+        <div><dt className="text-muted-foreground">Bridge address</dt><dd>{d.board.bdaddr || 'Not reported'}</dd></div>
+        <div><dt className="text-muted-foreground">Last computer report</dt><dd>{ago(d.lastHeartbeatAt)}</dd></div>
+      </dl>
 
-      {!d.readiness.ok && d.online && !d.attention ? (
+      {!d.readiness.ok && connection.gatewayOnline && !d.attention ? (
         <p className="rounded-lg bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Waiting: </span>{d.readiness.messages.join(' · ')}
         </p>
       ) : null}
-      {d.lastError ? <p className="text-xs text-amber-700 dark:text-amber-400">Last error ({ago(d.lastError.at)}): {d.lastError.message || d.lastError.code}</p> : null}
+      {d.lastError ? <p className="break-words text-xs text-amber-700 dark:text-amber-400">Last diagnostic ({ago(d.lastError.at)}): {d.lastError.message || d.lastError.code}</p> : null}
 
       <dl className="grid grid-cols-3 gap-2 text-center text-xs">
         <div className="rounded-lg bg-muted/50 p-2"><dt className="text-muted-foreground">This hour</dt><dd className="font-semibold tabular-nums">{d.usage?.callsLastHour ?? 0}/{d.limits.maxCallsPerHour}</dd></div>
@@ -148,12 +225,14 @@ function DeviceCard({ device: d }: { device: PairedDevice }) {
       </dl>
 
       <div className="mt-auto flex flex-wrap gap-2">
-        {!d.audioVerified ? (
-          <button type="button" onClick={() => setDialog('verify')} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}><Mic className="h-3.5 w-3.5" /> Verify call audio</button>
-        ) : null}
-        <button type="button" onClick={() => setDialog('limits')} className={`${btn} border border-border hover:bg-muted`}><Settings2 className="h-3.5 w-3.5" /> Limits</button>
-        <button type="button" onClick={() => setDialog('rotate')} disabled={inCall} className={`${btn} border border-border hover:bg-muted`}><RotateCw className="h-3.5 w-3.5" /> New dial key</button>
-        <button type="button" onClick={() => setDialog('revoke')} className={`${btn} border border-rose-500/40 text-rose-600 hover:bg-rose-500/10`}><ShieldOff className="h-3.5 w-3.5" /> Revoke</button>
+        <button type="button" disabled={!canManage} onClick={() => setDialog('limits')} className={`${btn} border border-border hover:bg-muted`}><Settings2 className="h-3.5 w-3.5" /> Limits</button>
+        <button type="button" disabled={!canManage} onClick={() => setDialog('revoke')} className={`${btn} border border-rose-500/40 text-rose-600 hover:bg-rose-500/10`}><ShieldOff className="h-3.5 w-3.5" /> Revoke</button>
+      </div>
+      {canManage && <details className="text-xs"><summary className="cursor-pointer font-medium text-muted-foreground">Advanced security · replace dial key</summary>
+        <p className="my-2 text-muted-foreground">Keep the existing key for normal USB or Bluetooth reconnection. Replacing it stops calls until the new key is written while holding BOOT.</p>
+        {d.keyState === 'pending' ? <p className="text-amber-600">A new key is waiting. Choose Finish setup → Save security key while holding BOOT; you do not need another key or a reboot.</p> : <button type="button" onClick={() => setDialog('rotate')} disabled={inCall || setupActive} className={`${btn} border border-border hover:bg-muted`}><RotateCw className="h-3.5 w-3.5" /> New dial key</button>}
+      </details>}
+      </section>}
       </div>
 
       {dialog === 'verify' ? <VerifyAudioDialog device={d} onClose={() => setDialog(null)} /> : null}
@@ -168,7 +247,7 @@ function DeviceCard({ device: d }: { device: PairedDevice }) {
       <ConfirmDialog
         open={dialog === 'rotate'} onOpenChange={(v) => setDialog(v ? 'rotate' : null)}
         title="Issue a new dial key?"
-        description="The current key stops working at once: this phone can't place calls until you run `updata-gateway provision` on the laptop while holding the ESP32's BOOT button."
+        description="Use this only to replace a lost or compromised key. Routine reconnects keep the existing key. Replacing it stops calls until you choose Finish setup → Save security key while holding BOOT. Firmware and Bluetooth pairing are preserved."
         confirmText="Issue new key" cancelText="Cancel" isLoading={m.rotateKey.isPending}
         onConfirm={() => m.rotateKey.mutate(d.id, { onSuccess: () => setDialog(null) })}
       />
@@ -270,13 +349,11 @@ function AddDeviceDialog({ onClose, existingIds }: { onClose: () => void; existi
           </div>
           <ol className="space-y-3 text-xs">
             <li><p className="mb-1 font-medium">1 · Pair the laptop gateway</p>
-              <CopyBlock text={`cd server/phone-gateway && npm install\nnode bin/updata-gateway.mjs pair --api ${api} --code ${code.code}`} /></li>
-            <li><p className="mb-1 font-medium">2 · Write the dial key into the ESP32 (hold its BOOT button)</p>
-              <CopyBlock text="node bin/updata-gateway.mjs provision" /></li>
-            <li><p className="mb-1 font-medium">3 · Keep the gateway running while campaigns call</p>
+              <CopyBlock text={`# Run inside the extracted gateway package folder\nnode bin/updata-gateway.mjs pair --api '${api.replaceAll("'", "'\\''")}' --code ${code.code}`} /></li>
+            <li><p className="mb-1 font-medium">2 · Keep the gateway running</p>
               <CopyBlock text="node bin/updata-gateway.mjs run" /></li>
-            <li><p className="mb-1 font-medium">4 · Run the two-way audio test once, then confirm it on the device card</p>
-              <p className="text-muted-foreground">docs/paired-phone/ESP32-FIRMWARE.md §4: a call to your own second phone proves both directions.</p></li>
+            <li><p className="mb-1 font-medium">3 · Finish setup with the device card buttons</p><p className="text-muted-foreground">Open Phone setup. Choose Save security key while holding BOOT, then Pair a new phone and Connect phone. Routine reconnects do not need BOOT or a new key.</p></li>
+            <li><p className="mb-1 font-medium">4 · Run Two-way audio test, then Verify call audio</p><p className="text-muted-foreground">Use your own second phone and confirm the AI voice and your spoken test phrase. Setup guide includes automatic startup on macOS.</p></li>
           </ol>
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="mb-2 text-xs font-medium">Live status</p>
@@ -321,20 +398,22 @@ function VerifyAudioDialog({ device, onClose }: { device: PairedDevice; onClose:
     >
       <div className="space-y-4 text-sm">
         <p className="text-xs text-muted-foreground">
-          Campaigns can only use this phone after a real call has carried speech in <strong>both</strong> directions. Run the probe from the laptop to a phone you own:
+          First, use Sound &amp; test call to call your own second phone. Only confirm these checks after you heard clear speech in <strong>both</strong> directions during that call.
         </p>
+        <details className="space-y-2 text-xs"><summary className="cursor-pointer text-muted-foreground">Technical audio check</summary>
         <CopyBlock text={'node bin/esp32-probe.mjs call --port <port> --number <your second phone> --i-own-this-number \\\n  --prompt prompts/prompt-en.wav --out evidence/audio-check'} />
         <p className="text-xs text-muted-foreground">
           The person answering says <em>“the blue whale crosses the river”</em>, then repeats the phrase the AI asks for. Transcribe <code>remote.wav</code> with <code>tools/audio-evidence.mjs</code>.
         </p>
+        </details>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={inbound} onChange={(e) => setInbound(e.target.checked)} />
-          <span>The remote person&apos;s phrase is in the <code>remote.wav</code> transcript (phone → AI works).</span></label>
+          <span>The AI correctly heard and understood what I said on the second phone.</span></label>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={outbound} onChange={(e) => setOutbound(e.target.checked)} />
-          <span>They heard the AI prompt clearly and repeated its phrase (AI → phone works).</span></label>
-        <label className="block"><span className="mb-1 block text-xs font-medium">Evidence note (where the files are, who answered)</span>
+          <span>I heard the AI voice clearly on the second phone.</span></label>
+        <label className="block"><span className="mb-1 block text-xs font-medium">Notes (optional)</span>
           <textarea className={inputCls} rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
-        <p className="text-xs text-muted-foreground">Recorded with firmware {device.board.firmware || 'unknown'}. A firmware change asks for a new check.</p>
+        <p className="text-xs text-muted-foreground">Sound checked with bridge firmware {device.board.firmware || 'unknown'}. Repeat the check after a firmware update.</p>
       </div>
     </Modal>
   );

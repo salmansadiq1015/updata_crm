@@ -30,18 +30,26 @@ import {
 import { isConfirmation, validateAnswer } from './engine/answerValidation.js';
 import * as engine from './engine/questionEngine.js';
 import { evaluateOutcome } from './engine/statusRuleEngine.js';
+import { buildCallNotes } from './engine/callNotes.js';
+import { conversationInsights } from './engine/conversationInsights.js';
 import { leadContext, buildSystemPrompt, disclosureText } from './engine/leadContext.js';
-import { windowState, recipientWindow } from './engine/callWindow.js';
+import { windowState, recipientWindow, nextWindowOpen, nextDialTime } from './engine/callWindow.js';
 import { recordCallMetric, observeDuration, observeDispatchLatency } from './aiCalling.metrics.js';
 import MessageSuppression from '../messaging/suppression.model.js';
 import { destinationHash } from '../messaging/destinationHash.js';
 
 export { windowState };
 
+// Trusted local diagnostic capability; JSON request bodies cannot supply this
+// Symbol. A verification call cannot require the audio proof it is collecting.
+// Only a bounded, single-recipient test may use it; normal campaign gates stay on.
+export const AUDIO_VERIFICATION_TEST = Symbol('owner-supervised-audio-test');
+
 const MAX_FILTERED_RECIPIENTS = 5000;
 const PROCESSING_LEASE_MS = 2 * 60_000;   // post-call processing claim
 const TICK_LEASE_MS = 90_000;             // one tick at a time per campaign
 const DISPATCH_LEASE_MS = 2 * 60_000;     // claim → provider request window
+const AGENT_CONTEXT_TIMEOUT_MS = Number(process.env.AGENT_CONTEXT_TIMEOUT_MS) || 8000; // worker accepted → loads the call
 const TERMINAL_CALL_STATES = new Set(['completed', 'no_answer', 'busy', 'voicemail', 'failed', 'cancelled']);
 const REACHED_DISPOSITIONS = ['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact'];
 // Paired phone: the gateway still owns the phone call while its leg is in one of these states.
@@ -94,11 +102,12 @@ function validDestination(lead) {
 }
 
 /** Validate questionnaire integrity before snapshotting. */
-function assertQuestionnaire(questionnaire) {
+export function assertQuestionnaire(questionnaire) {
   const questions = questionnaire?.questions || [];
   if (!questions.length) throw new ValidationError('A campaign needs at least one question');
   const keys = new Set();
   for (const q of questions) {
+    if (!q.fieldKey?.trim() || !q.label?.trim() || !q.text?.trim()) throw new ValidationError('Every question needs a field key, label and question text');
     if (keys.has(q.fieldKey)) throw new ValidationError(`Duplicate question fieldKey: ${q.fieldKey}`);
     keys.add(q.fieldKey);
     if (['single_choice', 'multiple_choice', 'enum'].includes(q.type) && !(q.options || []).length) {
@@ -114,6 +123,14 @@ function assertQuestionnaire(questionnaire) {
   }
   for (const field of referenced) {
     if (field && !keys.has(field)) throw new ValidationError(`Condition references unknown field: ${field}`);
+  }
+  const ordered = [...questions].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const prior = new Set();
+  for (const q of ordered) {
+    for (const group of ['all', 'any']) for (const clause of q.condition?.[group] || []) {
+      if (clause.field && !prior.has(clause.field)) throw new ValidationError(`Question "${q.label}" must follow the question used in its condition`);
+    }
+    prior.add(q.fieldKey);
   }
 }
 
@@ -192,8 +209,8 @@ export async function refreshCampaignSummary(campaignId) {
   const pending = (s.draft || 0) + (s.queued || 0) + (s.dialing || 0) + (s.in_progress || 0)
     + (s.processing || 0) + (s.retry_scheduled || 0);
   const update = { summary };
-  const campaign = await CallCampaign.findById(campaignId).select('status createdBy').lean();
-  if (pending === 0 && total > 0 && campaign && !['cancelled', 'draft', 'paused'].includes(campaign.status)) {
+  const campaign = await CallCampaign.findById(campaignId).select('status createdBy agentId').lean();
+  if (pending === 0 && campaign && (total > 0 || campaign.agentId) && !['cancelled', 'draft', 'paused'].includes(campaign.status)) {
     update.status = 'completed';
     update.completedAt = new Date();
   }
@@ -251,7 +268,7 @@ export function retryDelayMs(schedule = {}, attemptsSoFar = 1, random = Math.ran
 
 class AiCallingService {
   // ---------------------------------------------------------------- campaigns
-  async createCampaign(input, actor, meta = {}) {
+  async createCampaign(input, actor, meta = {}, origin = {}) {
     assertQuestionnaire(input.questionnaire);
     const transport = await this._resolveTransport(input, actor);
     const leadIds = await resolveLeadIds(input.selection);
@@ -262,6 +279,7 @@ class AiCallingService {
     if (!leads.length) throw new ValidationError('Selected leads are unavailable');
 
     const campaign = await CallCampaign.create({
+      ...origin,
       name: input.name,
       description: input.description || '',
       status: 'draft',
@@ -281,17 +299,43 @@ class AiCallingService {
       updatedBy: actor,
     });
 
-    // Build recipients with eligibility. Suppression + duplicate-phone checks.
-    const candidateHashes = [];
+    // Build recipients with eligibility (same computation as the pre-save preview).
+    const computed = await this._computeEligibility(leads, { isLink: campaign.channel === 'web_link' });
+    const docs = computed.map(({ lead, e164, hash, reasons }) => ({
+      campaignId: campaign._id,
+      leadId: lead._id,
+      phoneSnapshot: e164,
+      phoneHash: hash,
+      country: lead.address?.country || null,
+      state: reasons.length ? (reasons.includes('suppressed') ? 'suppressed' : 'ineligible') : 'draft',
+      eligibility: { eligible: reasons.length === 0, reasons },
+      createdBy: actor,
+    }));
+    await CampaignRecipient.insertMany(docs, { ordered: false });
+    if (origin.initializationPending) await CallCampaign.updateOne({ _id: campaign._id }, { $set: { initializationPending: false } });
+    await refreshCampaignSummary(campaign._id);
+
+    auditService.logEvent({
+      eventType: 'ai_calling.campaign.created', userId: actor, ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent, result: 'success', module: 'ai-calling',
+      details: { campaignId: campaign._id, selected: leadIds.length, isTest: campaign.isTest },
+    });
+    return this.getCampaign(campaign._id, actor);
+  }
+
+  /**
+   * Compute per-lead call/SMS eligibility: missing phone, suppression / do-not-call,
+   * call consent (voice only), and duplicate numbers within the set. Pure read — used
+   * both to build a campaign's recipients and to preview eligibility before saving, so
+   * the two can never disagree. Returns [{ lead, e164, hash, reasons }].
+   */
+  async _computeEligibility(leads, { isLink }) {
     const computed = leads.map((lead) => {
       const e164 = validDestination(lead);
-      const hash = e164 ? phoneHash(e164) : null;
-      if (hash) candidateHashes.push(hash);
-      return { lead, e164, hash };
+      return { lead, e164, hash: e164 ? phoneHash(e164) : null };
     });
-    // Link campaigns reach the lead by SMS: SMS suppression applies, voice-call consent does not
-    // (SMS consent is checked again on every send by the communication authorisation).
-    const isLink = campaign.channel === 'web_link';
+    const candidateHashes = computed.filter((c) => c.hash).map((c) => c.hash);
+    // Link campaigns reach the lead by SMS: SMS suppression applies, voice-call consent does not.
     const needsCallConsent = !isLink && callConsentRequired();
     const smsHashes = isLink ? computed.filter((c) => c.e164).map((c) => destinationHash('sms', c.e164)) : [];
     const [suppressionRows, consentByLead, smsSuppressed] = await Promise.all([
@@ -301,39 +345,42 @@ class AiCallingService {
     ]);
     const suppressed = new Set(suppressionRows.map((d) => d.phoneHash));
     const smsSuppressedSet = new Set(smsSuppressed.map((d) => d.destinationHash));
-
     const seen = new Set();
-    const docs = computed.map(({ lead, e164, hash }) => {
+    return computed.map(({ lead, e164, hash }) => {
       const reasons = [];
       if (!e164) reasons.push('missing_phone');
       if (hash && (suppressed.has(hash) || (isLink && smsSuppressedSet.has(destinationHash('sms', e164))))) reasons.push('suppressed');
       const consent = hash ? consentStatus(consentByLead.get(`${lead._id}:${hash}`)) : 'missing';
-      if (needsCallConsent && hash && consent !== 'granted') {
-        reasons.push(consent === 'expired' ? 'consent_expired' : 'consent_required');
-      }
+      if (needsCallConsent && hash && consent !== 'granted') reasons.push(consent === 'expired' ? 'consent_expired' : 'consent_required');
       if (hash && seen.has(hash)) reasons.push('duplicate_phone');
       if (hash) seen.add(hash);
-      const isSuppressed = reasons.includes('suppressed');
-      return {
-        campaignId: campaign._id,
-        leadId: lead._id,
-        phoneSnapshot: e164,
-        phoneHash: hash,
-        country: lead.address?.country || null,
-        state: reasons.length ? (isSuppressed ? 'suppressed' : 'ineligible') : 'draft',
-        eligibility: { eligible: reasons.length === 0, reasons },
-        createdBy: actor,
-      };
+      return { lead, e164, hash, reasons };
     });
-    await CampaignRecipient.insertMany(docs, { ordered: false });
-    await refreshCampaignSummary(campaign._id);
+  }
 
-    auditService.logEvent({
-      eventType: 'ai_calling.campaign.created', userId: actor, ipAddress: meta.ipAddress || 'internal',
-      userAgent: meta.userAgent, result: 'success', module: 'ai-calling',
-      details: { campaignId: campaign._id, selected: leadIds.length, isTest: campaign.isTest },
+  /**
+   * Preview — before a campaign is created — whether the chosen leads can actually be
+   * reached, so consent / phone / suppression problems surface during selection instead
+   * of only when the campaign is started. Read-only; nothing is persisted.
+   */
+  async previewEligibility(actor, { leadIds = [], channel = 'voice' } = {}) {
+    const ids = [...new Set(leadIds.map(String))];
+    const leads = await Lead.find({ _id: { $in: ids }, isDeleted: false })
+      .select('_id name phone mobile address status').lean();
+    const computed = await this._computeEligibility(leads, { isLink: channel === 'web_link' });
+    const reasonCounts = {};
+    const perLead = computed.map(({ lead, e164, reasons }) => {
+      for (const r of reasons) reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+      return { leadId: String(lead._id), name: lead.name, status: lead.status, phone: e164, eligible: reasons.length === 0, reasons };
     });
-    return this.getCampaign(campaign._id, actor);
+    return {
+      total: ids.length,
+      found: leads.length,
+      unavailable: ids.length - leads.length,
+      eligible: perLead.filter((l) => l.eligible).length,
+      reasonCounts,
+      leads: perLead,
+    };
   }
 
   // ------------------------------------------------- voice kill switch
@@ -376,15 +423,110 @@ class AiCallingService {
     return { transport: 'paired_phone', pairedDeviceId: device._id };
   }
 
+  /** Read-only preflight used before allocating an agent campaign. */
+  async assertLaunchAvailable(config, actor) {
+    if (await this.isVoicePaused()) throw new ConflictError('All calling is stopped. Resume calling in Connections first');
+    const queue = await queueManager.getQueueStats(OUTBOUND_CALL_QUEUE).catch(() => null);
+    if (!queue || !Number.isFinite(queue.workers) || queue.workers < 1) throw new ServiceUnavailableError('The calling service is offline. Reconnect the outbound calling worker');
+    if (config.transport === 'paired_phone') {
+      const device = await PairedDevice.findOne({ _id: config.pairedDeviceId, createdBy: actor, revokedAt: null }).lean();
+      if (!device) throw new ConflictError('Choose an available paired phone in the agent settings');
+      if (!device.audioVerifiedAt) throw new ConflictError('Verify two-way call sound in Connections before launching');
+    } else {
+      const health = await telephonyHealth();
+      if (!health.configured || !health.eligible) {
+        const detail = health.reason === 'no_sip_trunk' ? 'No cloud phone line is configured.' : health.reason ? `Connection check: ${health.reason.replaceAll('_', ' ')}.` : 'Configure and verify the LiveKit SIP route in Connections.';
+        throw new ConflictError(`Cloud calling is unavailable. ${detail} To call through your ESP32 and phone SIM, choose My paired phone in the campaign's calling connection.`);
+      }
+    }
+  }
+
   async getCampaign(id, actor) {
     const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor }).lean();
     if (!campaign) throw new NotFoundError('CallCampaign', id);
     return campaign;
   }
 
-  async listCampaigns(actor, { page = 1, limit = 25, status, channel } = {}) {
+  /** Complete an interrupted agent launch using its persisted lead selection.
+   * Upserts fill only missing recipients; they never reset attempts or outcomes. */
+  async recoverCampaignInitialization(id, actor) {
+    const campaign = await this.getCampaign(id, actor);
+    if (!campaign.initializationPending || campaign.status !== 'draft') return;
+    const leads = await Lead.find({ _id: { $in: campaign.selection.leadIds }, isDeleted: false }).select('_id name phone mobile address status').lean();
+    const computed = await this._computeEligibility(leads, { isLink: false });
+    if (computed.length) await CampaignRecipient.bulkWrite(computed.map(({ lead, e164, hash, reasons }) => ({ updateOne: {
+      filter: { campaignId: campaign._id, leadId: lead._id },
+      update: { $setOnInsert: {
+        campaignId: campaign._id, leadId: lead._id, phoneSnapshot: e164, phoneHash: hash, country: lead.address?.country || null,
+        state: reasons.length ? (reasons.includes('suppressed') ? 'suppressed' : 'ineligible') : 'draft',
+        eligibility: { eligible: reasons.length === 0, reasons }, createdBy: actor,
+      } }, upsert: true,
+    } })), { ordered: false });
+    await CallCampaign.updateOne({ _id: id, createdBy: actor, status: 'draft' }, { $set: { initializationPending: false } });
+    await refreshCampaignSummary(id);
+  }
+
+  /** Owner-scoped calling readiness; reading it never queues or places a call. */
+  async campaignRunStatus(id, actor, now = new Date()) {
+    const campaign = await this.getCampaign(id, actor);
+    const isVoice = campaign.channel !== 'web_link';
+    const [pending, queue, voicePaused, device, pendingRows] = await Promise.all([
+      CampaignRecipient.countDocuments({ campaignId: id, state: { $in: ['draft', 'queued', 'retry_scheduled'] }, 'eligibility.eligible': true }),
+      isVoice ? queueManager.getQueueStats(OUTBOUND_CALL_QUEUE).catch(() => null) : null,
+      isVoice ? this.isVoicePaused() : false,
+      campaign.transport === 'paired_phone' ? PairedDevice.findOne({ _id: campaign.pairedDeviceId, createdBy: actor, revokedAt: null }).lean() : null,
+      CampaignRecipient.find({ campaignId: id, state: { $in: ['draft', 'queued', 'retry_scheduled'] }, 'eligibility.eligible': true }).select('country nextAttemptAt state').lean(),
+    ]);
+    const blockers = [];
+    const waits = [];
+    if (campaign.initializationPending) blockers.push({ code: 'preparing', message: 'This launch is still being prepared. Retry Start Campaign from the agent to recover its original lead selection.' });
+    if (isVoice && (!queue || queue.workers === 0)) blockers.push({ code: 'worker_offline', message: 'The calling service is offline. Ask your administrator to reconnect it, then try again.' });
+    if (voicePaused) blockers.push({ code: 'voice_paused', message: 'All calling is stopped. Choose Resume calling in AI Calling before starting this campaign.' });
+    if (!pending && !campaign.summary?.inProgress) blockers.push({ code: 'no_pending_leads', message: 'There are no eligible leads waiting to be called. Check Recipients for missing phone numbers, consent, or completed calls.' });
+    if (campaign.transport === 'paired_phone') {
+      if (!device) blockers.push({ code: 'device_missing', message: 'Choose an available paired phone for this campaign.' });
+      else {
+        if (!device.audioVerifiedAt) blockers.push({ code: 'audio_not_verified', message: 'Verify two-way call sound in Paired phones first.' });
+        const readiness = await pairedPhoneService.readiness(device._id, now);
+        if (!readiness.ok && pending > 0 && !campaign.summary?.inProgress) waits.push({ code: 'phone_wait', message: 'Your phone is not ready for the next call. Check Paired phones above.', reasons: readiness.reasons });
+      }
+    }
+    const window = windowState(campaign.schedule || {}, now);
+    const immediate = campaign.runMode === 'immediate';
+    const scheduled = campaign.status === 'scheduled' && campaign.scheduledAt > now;
+    if (campaign.executionEndsAt && campaign.executionEndsAt <= now) blockers.push({ code: 'execution_ended', message: 'The campaign execution period has ended. Launch a new campaign to contact remaining leads.' });
+    if (isVoice && !immediate && !window.open) waits.push({ code: 'calling_hours', message: 'Waiting for scheduled calling hours. Choose Start calling now to begin immediately.' });
+    if (scheduled) waits.unshift({ code: 'scheduled', message: 'This campaign will activate automatically at its scheduled launch time.' });
+    const activation = scheduled ? new Date(campaign.scheduledAt) : now;
+    const dueRows = pendingRows.filter(r => !r.nextAttemptAt || r.nextAttemptAt <= now);
+    if (isVoice && (immediate || window.open) && !scheduled && pendingRows.length) {
+      if (!immediate && pendingRows.every(r => !recipientWindow(r.country, { now }).open)) waits.push({ code: 'recipient_quiet_hours', message: 'Waiting for recipients’ local quiet hours to end. Each lead is checked again before calling.' });
+      else if (!dueRows.length) waits.push({ code: pendingRows.every(r => r.state === 'retry_scheduled') ? 'retry_backoff' : 'deferred_leads', message: 'Waiting for the next eligible lead attempt. Retry delays and recipient quiet hours still apply.' });
+    }
+    const starts = new Map();
+    for (const row of pendingRows) {
+      const at = new Date(Math.max(activation.getTime(), row.nextAttemptAt?.getTime() || 0));
+      const key = `${row.country || ''}:${at.getTime()}`;
+      if (!starts.has(key)) starts.set(key, immediate ? at : nextDialTime(campaign.schedule || {}, row.country, at));
+    }
+    const openings = [...starts.values()].filter(Boolean).sort((a, b) => a - b);
+    const opening = openings[0] || (immediate ? activation : nextWindowOpen(campaign.schedule || {}, activation));
+    const candidate = waits.length || scheduled ? opening : campaign.nextTickAt || opening;
+    const nextAt = campaign.executionEndsAt && candidate && candidate >= campaign.executionEndsAt ? null : candidate;
+    return {
+      status: campaign.status, displayStatus: campaign.status === 'running' ? (campaign.summary?.inProgress ? 'calling' : waits.length || campaign.waitReason ? 'waiting' : 'queued') : campaign.status, pending, inProgress: campaign.summary?.inProgress || 0,
+      canStart: (['draft', 'paused', 'scheduled'].includes(campaign.status) || (campaign.status === 'running' && (!immediate || ['calling_hours', 'recipient_quiet_hours'].includes(campaign.waitReason)))) && !blockers.length,
+      runMode: immediate ? 'immediate' : 'scheduled',
+      blockers, waits, nextAt, checkedAt: now,
+      sequential: campaign.transport === 'paired_phone' || (campaign.schedule?.maxConcurrency || 1) === 1,
+      schedule: { timezone: campaign.schedule?.timezone || 'UTC', callWindow: campaign.schedule?.callWindow, daysOfWeek: campaign.schedule?.daysOfWeek },
+    };
+  }
+
+  async listCampaigns(actor, { page = 1, limit = 25, status, channel, agentId } = {}) {
     const filter = { createdBy: actor };
     if (status) filter.status = status;
+    if (agentId) filter.agentId = agentId;
     if (channel === 'web_link') filter.channel = 'web_link';
     else if (channel === 'voice') filter.channel = { $ne: 'web_link' };
     const [data, total] = await Promise.all([
@@ -397,6 +539,7 @@ class AiCallingService {
   async updateCampaign(id, input, actor) {
     const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor });
     if (!campaign) throw new NotFoundError('CallCampaign', id);
+    if (campaign.agentId) throw new ConflictError('Agent campaign configuration is an immutable snapshot. Edit the agent for a future campaign');
     if (!['draft', 'paused'].includes(campaign.status)) throw new ConflictError('Only draft or paused campaigns can be edited');
     if (campaign.status === 'paused') {
       const inFlight = await CallRecord.exists({
@@ -453,35 +596,100 @@ class AiCallingService {
     };
   }
 
-  async startCampaign(id, actor, { scheduledAt = null } = {}, meta = {}) {
+  async _assertAudioVerificationTest(campaign) {
+    if (!campaign.isTest || campaign.transport !== 'paired_phone'
+      || campaign.schedule?.maxAttemptsPerLead !== 1 || campaign.schedule?.maxCallsPerDay !== 1
+      || campaign.schedule?.maxConcurrency !== 1
+      || await CampaignRecipient.countDocuments({ campaignId: campaign._id }) !== 1
+      || await CallRecord.exists({ campaignId: campaign._id })) {
+      throw new ValidationError('An audio verification test must be a fresh, single-recipient paired-phone test with one attempt and one call');
+    }
+  }
+
+  /**
+   * Explain why a start was refused for lack of eligible recipients. Starting only
+   * fails this way when every recipient is held, so the breakdown (how many, for what,
+   * and what to do) is far more useful than "no eligible recipients".
+   */
+  async _noEligibleRecipientsMessage(campaignId, channel) {
+    const cid = new mongoose.Types.ObjectId(campaignId);
+    const rows = await CampaignRecipient.aggregate([
+      { $match: { campaignId: cid, 'eligibility.eligible': { $ne: true } } },
+      { $unwind: '$eligibility.reasons' },
+      { $group: { _id: '$eligibility.reasons', count: { $sum: 1 } } },
+    ]);
+    const total = await CampaignRecipient.countDocuments({ campaignId: cid });
+    if (!total) return 'This campaign has no leads. Add leads to it, then start it.';
+    const verb = channel === 'web_link' ? 'texted' : 'called';
+    // Collapse the consent variants: the fix (record consent) is the same for all three.
+    const counts = new Map();
+    for (const r of rows) {
+      const key = ['consent_required', 'consent_expired', 'consent_revoked'].includes(r._id) ? 'consent' : r._id;
+      counts.set(key, (counts.get(key) || 0) + r.count);
+    }
+    const FIX = {
+      consent: (n) => `${n} lead${n === 1 ? ' needs' : 's need'} recorded call consent — open each lead's AI Calls tab and Record verified consent, then start again`,
+      missing_phone: (n) => `${n} lead${n === 1 ? ' has' : 's have'} no valid phone number`,
+      suppressed: (n) => `${n} lead${n === 1 ? ' is' : 's are'} on the do-not-contact / suppression list`,
+      duplicate_phone: (n) => `${n} share a phone number already used by another recipient`,
+      lead_unavailable: (n) => `${n} lead${n === 1 ? ' is' : 's are'} no longer available (deleted or converted)`,
+    };
+    const parts = [...counts.entries()].filter(([, n]) => n > 0).map(([k, n]) => (FIX[k] ? FIX[k](n) : `${n}: ${k}`));
+    const why = parts.length ? ` ${parts.join('; ')}.` : '';
+    return `None of this campaign's ${total} lead${total === 1 ? '' : 's'} can be ${verb} right now.${why}`;
+  }
+
+  async startCampaign(id, actor, { scheduledAt, sequential = false, startNow = false, [AUDIO_VERIFICATION_TEST]: audioVerificationTest = false } = {}, meta = {}) {
     const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor }).lean();
     if (!campaign) throw new NotFoundError('CallCampaign', id);
-    if (!['draft', 'paused', 'scheduled'].includes(campaign.status)) {
+    if (campaign.executionEndsAt && campaign.executionEndsAt <= new Date()) throw new ConflictError('This campaign execution period has ended. Launch a new campaign from its agent');
+    if (campaign.initializationPending) throw new ConflictError('This launch is still being prepared. Retry Start Campaign from the agent to recover its original lead selection');
+    if (audioVerificationTest) await this._assertAudioVerificationTest(campaign);
+    const immediate = startNow && campaign.channel !== 'web_link';
+    if (immediate && scheduledAt) throw new ValidationError('Choose Start calling now or a future scheduled start');
+    const switchingToImmediate = immediate && campaign.status === 'running'
+      && (campaign.runMode !== 'immediate' || ['calling_hours', 'recipient_quiet_hours'].includes(campaign.waitReason));
+    if (!['draft', 'paused', 'scheduled'].includes(campaign.status) && !switchingToImmediate) {
       throw new ConflictError('Only draft, scheduled or paused campaigns can be started');
     }
     const eligible = await CampaignRecipient.countDocuments({ campaignId: id, state: { $in: ['draft', 'queued', 'retry_scheduled'] }, 'eligibility.eligible': true });
-    if (!eligible) throw new ConflictError('Campaign has no eligible recipients to call');
+    if (!eligible) throw new ConflictError(await this._noEligibleRecipientsMessage(id, campaign.channel));
     if (campaign.channel !== 'web_link' && await this.isVoicePaused()) {
       throw new ConflictError('AI voice calling is paused (kill switch). Resume it in AI Calling settings first.');
     }
     if (campaign.channel !== 'web_link' && campaign.transport === 'paired_phone') {
       const device = campaign.pairedDeviceId ? await PairedDevice.findOne({ _id: campaign.pairedDeviceId, createdBy: actor }).lean() : null;
       if (!device || device.revokedAt) throw new ConflictError('The paired phone for this campaign is missing or revoked; choose another device');
-      if (!device.audioVerifiedAt) throw new ConflictError('Two-way call audio has not been verified on this paired phone yet. Run the audio test and verify it first.');
+      if (!device.audioVerifiedAt && !audioVerificationTest) throw new ConflictError('Two-way call audio has not been verified on this paired phone yet. Run the audio test and verify it first.');
     }
 
-    const runAt = scheduledAt ? new Date(scheduledAt) : campaign.scheduledAt;
+    if (campaign.channel !== 'web_link' && !audioVerificationTest) {
+      const queue = await queueManager.getQueueStats(OUTBOUND_CALL_QUEUE).catch(() => null);
+      if (!queue || queue.workers === 0) throw new ServiceUnavailableError('The calling service is offline. Ask your administrator to reconnect it, then try again.');
+    }
+    // Explicit null means Start now; omission preserves a saved future start.
+    const runAt = immediate ? null : scheduledAt === undefined ? campaign.scheduledAt : scheduledAt ? new Date(scheduledAt) : null;
     const delay = runAt && runAt > new Date() ? runAt.getTime() - Date.now() : 0;
+    const runToken = crypto.randomBytes(8).toString('hex');
     // Compare-and-set on status: a double click or a concurrent pause/cancel can't
     // both win, and a cancelled campaign can never be restarted.
     const started = await CallCampaign.findOneAndUpdate(
-      { _id: id, createdBy: actor, status: campaign.status },
+      { _id: id, createdBy: actor, status: campaign.status,
+        ...(switchingToImmediate ? { tickToken: campaign.tickToken || null } : {}),
+        $or: [{ tickLeaseUntil: null }, { tickLeaseUntil: { $lt: new Date() } }],
+      },
       { $set: {
         status: delay ? 'scheduled' : 'running',
         scheduledAt: runAt || null,
-        startedAt: campaign.startedAt || (delay ? null : new Date()),
+        activatedAt: campaign.activatedAt || new Date(),
+        startedAt: campaign.startedAt || (delay || campaign.agentId ? null : new Date()),
         pausedAt: null,
         updatedBy: actor,
+        runMode: immediate ? 'immediate' : 'scheduled',
+        waitReason: null,
+        ...(switchingToImmediate ? { deviceWait: { reasons: [], at: null } } : {}),
+        ...(campaign.channel !== 'web_link' && !audioVerificationTest ? { tickToken: runToken } : {}),
+        ...(sequential && !campaign.agentId && campaign.channel !== 'web_link' ? { 'schedule.maxConcurrency': 1 } : {}),
       } },
       { returnDocument: 'after' },
     );
@@ -492,12 +700,36 @@ class AiCallingService {
       { campaignId: id, state: 'draft', 'eligibility.eligible': true },
       { $set: { state: 'queued' } },
     );
+    if (immediate) {
+      // Queued leads may have been deferred by a previous scheduled-hours run.
+      // Retry backoff is separate and remains on retry_scheduled recipients.
+      await CampaignRecipient.updateMany({ campaignId: id, state: 'queued', 'eligibility.eligible': true }, { $set: { nextAttemptAt: null } });
+    }
     // A link campaign never dials: its links are sent from the user's phone (SMS queue).
-    if (campaign.channel !== 'web_link') await this._scheduleTick(id, delay);
+    if (campaign.channel !== 'web_link' && !audioVerificationTest) {
+      try { await this._scheduleTick(id, delay, runToken); }
+      catch (error) {
+        // Invalidate a possibly accepted-but-unacknowledged queue job and restore
+        // the prior state only while this start still owns it. Never undo a pause/cancel.
+        const restored = await CallCampaign.updateOne({ _id: id, status: started.status, tickToken: runToken,
+          $or: [{ lastTickAt: null }, { lastTickAt: { $lt: started.updatedAt } }],
+        }, { $set: {
+          status: campaign.status, scheduledAt: campaign.scheduledAt || null, startedAt: campaign.startedAt || null,
+          pausedAt: campaign.pausedAt || null, tickToken: campaign.tickToken || null, nextTickAt: campaign.nextTickAt || null,
+          runMode: campaign.runMode || 'scheduled',
+          ...(sequential && !campaign.agentId ? { 'schedule.maxConcurrency': campaign.schedule?.maxConcurrency || 1 } : {}),
+        } });
+        // A Redis acknowledgement can be lost AFTER a worker took the job.
+        // Its atomic tick claim is stronger evidence than the enqueue error.
+        const workerConfirmed = !restored.modifiedCount && await CallCampaign.exists({ _id: id, status: { $in: ['running', 'scheduled'] }, lastTickAt: { $gte: started.updatedAt } });
+        logger.warn('Campaign enqueue acknowledgement failed', { module: 'ai-calling', campaignId: String(id), workerConfirmed: Boolean(workerConfirmed), error: error.message });
+        if (!workerConfirmed) throw new ServiceUnavailableError('The calling queue is unavailable or did not confirm the start. Check live call status before trying again.');
+      }
+    }
     await refreshCampaignSummary(id);
     auditService.logEvent({
       eventType: 'ai_calling.campaign.started', userId: actor, ipAddress: meta.ipAddress || 'internal',
-      userAgent: meta.userAgent, result: 'success', module: 'ai-calling', details: { campaignId: id, eligible, scheduledAt: runAt },
+      userAgent: meta.userAgent, result: 'success', module: 'ai-calling', details: { campaignId: id, eligible, scheduledAt: runAt, runMode: immediate ? 'immediate' : 'scheduled' },
     });
     return this.getCampaign(id, actor);
   }
@@ -537,6 +769,48 @@ class AiCallingService {
     return this.getCampaign(id, actor);
   }
 
+  /**
+   * Permanently delete a campaign and everything tied to it (recipients, call
+   * attempts, provider attempts, transitions, webhook events). An active campaign
+   * is refused — pause or cancel it first — and so is one with a live call, so a
+   * running dial loop can never reference a deleted campaign.
+   */
+  async deleteCampaign(id, actor) {
+    const campaign = await CallCampaign.findOne({ _id: id, createdBy: actor }).lean();
+    if (!campaign) throw new NotFoundError('CallCampaign', id);
+    if (['running', 'queued', 'scheduled'].includes(campaign.status)) {
+      throw new ConflictError('Pause or cancel the campaign before deleting it');
+    }
+    const activeCall = await CallRecord.exists({ campaignId: id, state: { $in: ['initiating', 'ringing', 'in_progress', 'processing_results'] } });
+    if (activeCall) throw new ConflictError('The campaign has a call in progress; wait for it to finish or cancel the campaign first');
+
+    const callIds = (await CallRecord.find({ campaignId: id }).select('_id').lean()).map((c) => c._id);
+    await Promise.all([
+      CampaignRecipient.deleteMany({ campaignId: id }),
+      LeadCallTransition.deleteMany({ campaignId: id }),
+      callIds.length ? CallWebhookEvent.deleteMany({ callId: { $in: callIds } }) : Promise.resolve(),
+    ]);
+    await CallRecord.deleteMany({ campaignId: id });
+    // CallProviderAttempt is append-only audit evidence and is intentionally left in place.
+    await CallCampaign.deleteOne({ _id: id, createdBy: actor });
+    auditService.logEvent({
+      eventType: 'ai_calling.campaign.deleted', userId: actor, result: 'success', module: 'ai-calling',
+      details: { campaignId: String(id), name: campaign.name, status: campaign.status },
+    });
+    return { deleted: true, campaignId: String(id) };
+  }
+
+  /** Delete several campaigns; each is attempted independently so one refusal does not block the rest. */
+  async deleteCampaigns(campaignIds, actor) {
+    const ids = [...new Set((campaignIds || []).map(String))];
+    const result = { deleted: 0, skipped: [] };
+    for (const id of ids) {
+      try { await this.deleteCampaign(id, actor); result.deleted += 1; }
+      catch (e) { result.skipped.push({ id, reason: e.message }); }
+    }
+    return result;
+  }
+
   async listRecipients(campaignId, actor, { page = 1, limit = 50, state } = {}) {
     await this.getCampaign(campaignId, actor);
     const filter = { campaignId };
@@ -549,14 +823,59 @@ class AiCallingService {
     return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
+  /**
+   * Remove recipients from a campaign (bulk). A recipient that is mid-call — being
+   * dialed, connected, or having its results written, or holding a live dispatch
+   * lease, or with a call still being processed — is skipped, so an in-flight call
+   * is never orphaned. Everything else (draft, ineligible, suppressed, queued,
+   * terminal) is removed; its past call history stays (CallRecords reference the
+   * lead and campaign, not the recipient). The lead is also dropped from the
+   * campaign's explicit selection so it is not re-enrolled.
+   */
+  async removeRecipients(campaignId, actor, { recipientIds = [] } = {}, meta = {}) {
+    const campaign = await this.getCampaign(campaignId, actor);
+    const ids = [...new Set(recipientIds.map(String))];
+    const recipients = await CampaignRecipient.find({ _id: { $in: ids }, campaignId }).lean();
+    const now = Date.now();
+    const ACTIVE = new Set(['dialing', 'in_progress', 'processing']);
+    const removable = [];
+    const skipped = [];
+    const foundIds = new Set(recipients.map((r) => String(r._id)));
+    for (const id of ids) if (!foundIds.has(id)) skipped.push({ id, reason: 'not_found' });
+    await Promise.all(recipients.map(async (r) => {
+      const leased = r.leaseUntil && new Date(r.leaseUntil).getTime() > now;
+      let liveCall = false;
+      if (r.lastCallId && !ACTIVE.has(r.state)) {
+        const call = await CallRecord.findById(r.lastCallId).select('resultsProcessedAt state').lean();
+        liveCall = Boolean(call && !call.resultsProcessedAt && !TERMINAL_CALL_STATES.has(call.state));
+      }
+      if (ACTIVE.has(r.state) || leased || liveCall) skipped.push({ id: String(r._id), reason: 'in_call' });
+      else removable.push(r);
+    }));
+    if (removable.length) {
+      const removableIds = removable.map((r) => r._id);
+      await CampaignRecipient.deleteMany({ _id: { $in: removableIds }, campaignId });
+      const leadIds = [...new Set(removable.map((r) => String(r.leadId)).filter(Boolean))];
+      if (leadIds.length && !campaign.agentId) {
+        await CallCampaign.updateOne({ _id: campaignId, createdBy: actor }, { $pull: { 'selection.leadIds': { $in: leadIds } }, $set: { updatedBy: actor } });
+      }
+      await refreshCampaignSummary(campaignId);
+      auditService.logEvent({
+        eventType: 'ai_calling.recipients_removed', userId: actor, ipAddress: meta.ipAddress || 'internal',
+        userAgent: meta.userAgent, result: 'success', module: 'ai-calling',
+        details: { campaignId: String(campaignId), removed: removable.length, skipped: skipped.length },
+      });
+    }
+    return { removed: removable.length, skipped };
+  }
+
   // ----------------------------------------------------------- queue / tick
   /**
    * Enqueue the next tick for a campaign. Each enqueue mints a fresh tickToken,
    * which supersedes every older pending tick: duplicate chains (double start,
    * resume racing a delayed tick, the watchdog) collapse to exactly one.
    */
-  async _scheduleTick(campaignId, delay = 0) {
-    const token = crypto.randomBytes(8).toString('hex');
+  async _scheduleTick(campaignId, delay = 0, token = crypto.randomBytes(8).toString('hex')) {
     await CallCampaign.updateOne({ _id: campaignId }, { $set: { tickToken: token, nextTickAt: new Date(Date.now() + delay) } });
     await queueManager.addJob(OUTBOUND_CALL_QUEUE, `tick-${campaignId}`, { campaignId: String(campaignId), kind: 'tick', token }, {
       jobId: `tick-${campaignId}-${token}`, delay, attempts: 1,
@@ -570,7 +889,7 @@ class AiCallingService {
    * across restarts: all state lives in Mongo, a stale token exits, and a lease
    * prevents two ticks of one campaign from overlapping.
    */
-  async tickCampaign(campaignId, token = null) {
+  async tickCampaign(campaignId, token = null, { [AUDIO_VERIFICATION_TEST]: audioVerificationTest = false } = {}) {
     const now = new Date();
     const tokenFilter = token ? { tickToken: token } : { tickToken: null };
     const campaign = await CallCampaign.findOneAndUpdate(
@@ -583,17 +902,28 @@ class AiCallingService {
       return { superseded: true };
     }
     try {
-      return await this._runTick(campaign);
+      return await this._runTick(campaign, { audioVerificationTest });
     } finally {
-      await CallCampaign.updateOne({ _id: campaignId, tickLeaseUntil: { $ne: null } }, { $set: { tickLeaseUntil: null } });
+      await CallCampaign.updateOne({ _id: campaignId, tickLeaseUntil: campaign.tickLeaseUntil }, { $set: { tickLeaseUntil: null } });
     }
   }
 
-  async _runTick(campaign) {
+  async _runTick(campaign, { audioVerificationTest = false } = {}) {
     const campaignId = campaign._id;
     if (['paused', 'cancelled', 'completed', 'draft', 'failed'].includes(campaign.status)) return { stopped: true, status: campaign.status };
     if (campaign.channel === 'web_link') return { stopped: true, reason: 'web_link_never_dials' };
+    if (audioVerificationTest) await this._assertAudioVerificationTest(campaign);
+    if (campaign.executionEndsAt && campaign.executionEndsAt <= new Date()) {
+      await CampaignRecipient.updateMany({ campaignId, state: { $in: ['draft', 'queued', 'retry_scheduled'] } },
+        { $set: { state: 'cancelled', leaseUntil: null } });
+      await CallCampaign.updateOne({ _id: campaignId }, { $set: { waitReason: 'execution_ended' } });
+      await refreshCampaignSummary(campaignId);
+      const active = await CampaignRecipient.countDocuments({ campaignId, state: { $in: ['dialing', 'in_progress', 'processing'] } });
+      if (active) await this._scheduleTick(campaignId, 15_000);
+      return { executionEnded: true };
+    }
     if (await this.isVoicePaused()) {
+      await CallCampaign.updateOne({ _id: campaignId }, { $set: { waitReason: 'voice_paused' } });
       await this._scheduleTick(campaignId, 60_000);
       recordCallMetric('campaign', 'kill_switch_wait');
       return { voicePaused: true };
@@ -603,7 +933,7 @@ class AiCallingService {
       return { rescheduled: true };
     }
     if (campaign.status !== 'running') {
-      await CallCampaign.updateOne({ _id: campaignId, status: campaign.status }, { $set: { status: 'running', startedAt: campaign.startedAt || new Date() } });
+      await CallCampaign.updateOne({ _id: campaignId, status: campaign.status }, { $set: { status: 'running', startedAt: campaign.startedAt || (campaign.agentId ? null : new Date()) } });
     }
 
     const schedule = campaign.schedule || {};
@@ -620,10 +950,12 @@ class AiCallingService {
       return { stopped: true, reason: 'spend_cap' };
     }
     const win = windowState(schedule);
-    if (!win.open) {
+    if (!win.open && !audioVerificationTest && campaign.runMode !== 'immediate') {
+      await CallCampaign.updateOne({ _id: campaignId }, { $set: { waitReason: 'calling_hours' } });
       await this._scheduleTick(campaignId, win.delayMs);
       return { outsideWindow: true, retryInMs: win.delayMs };
     }
+    if (campaign.waitReason) await CallCampaign.updateOne({ _id: campaignId }, { $set: { waitReason: null } });
 
     // Recover recipients whose dispatch lease expired (crashed worker) — safely.
     await this._recoverExpiredDispatches({ campaignId });
@@ -631,7 +963,7 @@ class AiCallingService {
     const isPaired = campaign.transport === 'paired_phone';
     if (isPaired) {
       // One phone, one call: wait for the device (cooldown, caps, connection) BEFORE claiming a lead.
-      const ready = await pairedPhoneService.readiness(campaign.pairedDeviceId);
+      const ready = await pairedPhoneService.readiness(campaign.pairedDeviceId, new Date(), { audioVerificationTest });
       if (!ready.ok) {
         const wait = Math.min(10 * 60_000, Math.max(15_000, ready.retryInMs || 30_000));
         await CallCampaign.updateOne({ _id: campaignId }, { $set: { deviceWait: { reasons: ready.reasons, at: new Date() } } });
@@ -652,6 +984,7 @@ class AiCallingService {
     // Daily cap (campaign-local calendar day).
     const todayCalls = await CallRecord.countDocuments({ campaignId, ...NOT_WEB_TEST, initiatedAt: { $gte: startOfLocalDay(schedule.timezone) } });
     if (schedule.maxCallsPerDay && todayCalls >= schedule.maxCallsPerDay) {
+      await CallCampaign.updateOne({ _id: campaignId }, { $set: { waitReason: 'daily_cap' } });
       await this._scheduleTick(campaignId, 30 * 60_000);
       return { dailyCapReached: true };
     }
@@ -665,7 +998,7 @@ class AiCallingService {
       const recipient = await this._claimNextRecipient(campaignId);
       if (!recipient) break;
       try {
-        const result = await this._dispatchCall(campaign, recipient);
+        const result = await this._dispatchCall(campaign, recipient, { audioVerificationTest });
         // "dispatched" = provider requests made (accepted, rejected or ambiguous).
         if (result && ('dialled' in result)) dispatched += 1;
       } catch (error) {
@@ -678,7 +1011,7 @@ class AiCallingService {
     const remaining = await CampaignRecipient.countDocuments({
       campaignId, state: { $in: ['queued', 'retry_scheduled', 'dialing', 'in_progress', 'processing'] },
     });
-    if (remaining > 0) {
+    if (remaining > 0 && !audioVerificationTest) {
       await this._scheduleTick(campaignId, dispatched > 0 ? 10_000 : 20_000);
     } else {
       await refreshCampaignSummary(campaignId);
@@ -710,9 +1043,9 @@ class AiCallingService {
     } });
   }
 
-  async _dispatchCall(campaign, recipient) {
+  async _dispatchCall(campaign, recipient, { audioVerificationTest = false } = {}) {
     // --- Pre-dial gates, re-checked for EVERY call, immediately before dialling.
-    const fresh = await CallCampaign.findById(campaign._id).select('status').lean();
+    const fresh = await CallCampaign.findById(campaign._id).select('status runMode').lean();
     if (fresh?.status !== 'running') {
       await this._releaseClaim(recipient._id, { state: fresh?.status === 'cancelled' ? 'cancelled' : 'queued' });
       return { skipped: 'campaign_not_running' };
@@ -723,8 +1056,20 @@ class AiCallingService {
       await refreshCampaignSummary(campaign._id);
       return { skipped: 'lead_unavailable' };
     }
+    if (!audioVerificationTest) {
+      if (campaign.executionEndsAt && new Date(campaign.executionEndsAt) <= new Date()) {
+        await this._releaseClaim(recipient._id, { state: 'cancelled' });
+        return { skipped: 'execution_ended' };
+      }
+      const gate = windowState(campaign.schedule || {});
+      if (!gate.open && fresh.runMode !== 'immediate') {
+        await this._releaseClaim(recipient._id, { deferMs: gate.delayMs });
+        return { deferred: 'campaign_calling_hours' };
+      }
+    }
     const local = recipientWindow(recipient.country);
-    if (!local.open) {
+    if (!local.open && !audioVerificationTest && fresh.runMode !== 'immediate') {
+      await CallCampaign.updateOne({ _id: campaign._id }, { $set: { waitReason: 'recipient_quiet_hours' } });
       await this._releaseClaim(recipient._id, { deferMs: local.delayMs });
       recordCallMetric('dispatch', 'deferred_recipient_hours');
       return { deferred: 'recipient_quiet_hours' };
@@ -768,7 +1113,7 @@ class AiCallingService {
     const roomName = `crm-call-${internalCallId}`;
     const isPaired = campaign.transport === 'paired_phone';
     if (isPaired) {
-      const lock = await pairedPhoneService.acquire(campaign.pairedDeviceId, { callId: callObjectId, recipientId: recipient._id, owner: campaign.createdBy });
+      const lock = await pairedPhoneService.acquire(campaign.pairedDeviceId, { callId: callObjectId, recipientId: recipient._id, owner: campaign.createdBy, audioVerificationTest });
       if (!lock.ok) {
         await this._releaseClaim(recipient._id, { deferMs: Math.max(15_000, lock.retryInMs || 30_000) });
         recordCallMetric('dispatch', 'paired_device_not_ready');
@@ -815,6 +1160,7 @@ class AiCallingService {
     };
     // Point of no return: from here on a crash leaves an AMBIGUOUS attempt.
     await CallRecord.updateOne({ _id: callObjectId }, { $set: { dispatchStartedAt: new Date() } });
+    if (campaign.agentId) await CallCampaign.updateOne({ _id: campaign._id, startedAt: null }, { $set: { startedAt: new Date() } });
     const dispatchStarted = Date.now();
     const routed = await routeOutboundCall({
       to: recipient.phoneSnapshot, country: recipient.country, roomName, internalCallId, metadata,
@@ -833,6 +1179,7 @@ class AiCallingService {
     })), { ordered: true });
 
     if (result.outcome === 'accepted') {
+      await CallCampaign.updateOne({ _id: campaign._id }, { $set: { waitReason: null } });
       await CallRecord.updateOne({ _id: callObjectId, state: 'initiating' }, { $set: {
         state: 'ringing', provider: result.provider, providerCallId: result.providerCallId,
         fallbackFrom: result.fallbackFrom || null, fallbackReason: result.fallbackReason || null,
@@ -1031,7 +1378,7 @@ class AiCallingService {
     if (!call) throw new NotFoundError('CallRecord', internalCallId);
     // Once a call is processed its answers are evidence; a late or replayed tool
     // call from the worker must not rewrite them.
-    if (mutable && (call.resultsProcessedAt || TERMINAL_CALL_STATES.has(call.state))) {
+    if (mutable && (call.resultsProcessedAt || call.endedAt || TERMINAL_CALL_STATES.has(call.state))) {
       throw new ConflictError('This call has already ended');
     }
     const campaign = await CallCampaign.findById(call.campaignId).lean();
@@ -1050,7 +1397,7 @@ class AiCallingService {
       const version = call.stateVersion || 0;
       const { state, extra = {} } = mutate(engine.normalizeState(call.conversationState), campaign, call);
       const written = await CallRecord.updateOne(
-        { _id: call._id, resultsProcessedAt: null, stateVersion: version || { $in: [0, null] } },
+        { _id: call._id, resultsProcessedAt: null, endedAt: null, stateVersion: version || { $in: [0, null] } },
         { $set: { conversationState: state, ...extra }, $inc: { stateVersion: 1 } },
       );
       if (written.modifiedCount === 1) return { call, campaign, state };
@@ -1069,6 +1416,8 @@ class AiCallingService {
     const state = call.conversationState || engine.initConversationState();
     return {
       callId: internalCallId,
+      persistTranscript: true,
+      participantIdentity: call.provider === 'livekit_web' ? `admin-${call.createdBy}` : `sip-${internalCallId}`,
       agentConfig: campaign.agentConfig,
       disclosure: disclosureText(campaign.agentConfig || {}),
       systemPrompt: buildSystemPrompt({
@@ -1077,8 +1426,40 @@ class AiCallingService {
       }),
       leadContext: leadContext(lead),
       ...(campaign.agentConfig?.shareLeadNotes && lead?.notes ? { leadNotes: String(lead.notes).slice(0, 1000) } : {}),
-      nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)),
+      nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })),
     };
+  }
+
+  /** Save a completed speech turn from the authenticated voice worker. */
+  async agentTranscript(internalCallId, { role, text, itemId = null, interrupted = false, at = null }) {
+    const clean = String(text || '').trim().slice(0, 4000);
+    if (!clean) return { stored: false };
+    const now = new Date();
+    const id = `${role}:${itemId || crypto.randomUUID()}`;
+    const received = at ? new Date(at) : now;
+    const spokenAt = Number.isFinite(received.getTime()) && Math.abs(received.getTime() - now.getTime()) < 24 * 3600_000 ? received : now;
+    // Atomic deduplication handles network retries and concurrent deliveries.
+    // Late final utterances may arrive just after the phone reports hang-up.
+    const result = await CallRecord.findOneAndUpdate({
+      internalCallId, 'transcript.itemId': { $ne: id },
+      $or: [{ endedAt: null }, { endedAt: { $gte: new Date(now.getTime() - 5 * 60_000) } }],
+    }, {
+      $push: { transcript: { $each: [{ itemId: id, role, text: clean, interrupted, at: spokenAt }], $sort: { at: 1 }, $slice: -300 } },
+      $inc: { transcriptVersion: 1 },
+      $set: { transcriptUpdatedAt: now, transcriptExpiresAt: new Date(now.getTime() + 90 * 86400_000) },
+    }, { returnDocument: 'after', projection: { _id: 1, campaignId: 1, createdBy: 1, transcriptVersion: 1 } }).lean();
+    if (!result) return { stored: false };
+    emitToOwner(result.createdBy, 'ai-calling:transcript', { campaignId: String(result.campaignId), recordId: String(result._id), callId: internalCallId, version: result.transcriptVersion });
+    return { stored: true, version: result.transcriptVersion };
+  }
+
+  async agentActivity(internalCallId, { agentState, speaker }) {
+    const call = await CallRecord.findOneAndUpdate({ internalCallId, resultsProcessedAt: null, endedAt: null }, {
+      $set: { agentActivity: { agentState, speaker, at: new Date() } },
+    }, { returnDocument: 'after', projection: { _id: 1, campaignId: 1, createdBy: 1 } }).lean();
+    if (!call) return { stored: false };
+    emitToOwner(call.createdBy, 'ai-calling:activity', { campaignId: String(call.campaignId), recordId: String(call._id), callId: internalCallId });
+    return { stored: true };
   }
 
   /** The callee actually picked up (worker observed SIP callStatus=active). Idempotent. */
@@ -1114,7 +1495,25 @@ class AiCallingService {
   /** Agent acknowledges it has delivered the AI disclosure and the person agreed to continue. */
   async agentDisclose(internalCallId) {
     const { campaign, state } = await this._mutateConversation(internalCallId, (s) => ({ state: engine.markDisclosed(s) }));
-    return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+    return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
+  }
+
+  /** Idempotent question retry, including silence when the model has no speech turn to process. */
+  async agentNoResponse(internalCallId, { fieldKey, requestId, reason }) {
+    const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
+      if (!s.disclosed || s.endedReason) throw new ConflictError('The questionnaire is not accepting responses');
+      const seen = Object.entries(s.answers).find(([, value]) => value.noResponseIds?.includes(requestId));
+      if (seen) {
+        if (seen[0] !== fieldKey) throw new ConflictError('This retry event belongs to another question');
+        return { state: s };
+      }
+      const action = engine.nextAction(c.questionnaire, s, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
+      if (!['ask', 'clarify', 'confirm'].includes(action.type) || action.question?.fieldKey !== fieldKey) throw new ConflictError('Only the current question may be repeated');
+      return { state: engine.applyNoResponse(s, fieldKey, { requestId, reason, confirming: action.type === 'confirm' }) };
+    });
+    emitToOwner(campaign.createdBy, 'ai-calling:answer', { campaignId: String(campaign._id), callId: internalCallId, fieldKey, validation: 'invalid' });
+    const nextAction = this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS }));
+    return { nextAction, repeats: Math.min(engine.VOICE_QUESTION_REPEATS, state.answers[fieldKey]?.noResponseCount || 0), skipped: nextAction.question?.fieldKey !== fieldKey };
   }
 
   /** The constrained record_answer tool. Validation happens server-side; the model's value is untrusted. */
@@ -1124,12 +1523,44 @@ class AiCallingService {
       const question = (c.questionnaire.questions || []).find((q) => q.fieldKey === fieldKey);
       if (!question) throw new ValidationError(`Unknown question: ${fieldKey}`);
       if (!s.disclosed) throw new ConflictError('Deliver the AI disclosure (disclose tool) before recording answers');
+      if (s.endedReason) throw new ConflictError('The conversation has ended; no more answers may be collected');
+      if (!engine.conditionMet(question.condition, s.answers || {})) throw new ConflictError('The question condition is not met');
       const result = validateAnswer(question, rawAnswer);
       validation = result.validation;
-      return { state: engine.applyAnswer(s, fieldKey, { ...result, rawAnswer }) };
+      return { state: engine.applyAnswer(s, fieldKey, { ...result, rawAnswer, confirmed: false }) };
     });
     emitToOwner(campaign.createdBy, 'ai-calling:answer', { campaignId: String(campaign._id), callId: internalCallId, fieldKey, validation });
-    return { accepted: true, validation, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+    return { accepted: true, validation, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
+  }
+
+  /** Capture several explicitly volunteered answers in one speech turn atomically. */
+  async agentRecordAnswers(internalCallId, { answers }) {
+    let validations;
+    const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
+      if (!s.disclosed) throw new ConflictError('Deliver the AI disclosure before recording answers');
+      if (s.endedReason) throw new ConflictError('The conversation has ended; no more answers may be collected');
+      const questions = new Map((c.questionnaire.questions || []).map(q => [q.fieldKey, q]));
+      const supplied = new Map(answers.map(answer => [answer.fieldKey, answer.rawAnswer]));
+      if (supplied.size !== answers.length) throw new ValidationError('Each question may appear only once');
+      for (const fieldKey of supplied.keys()) if (!questions.has(fieldKey)) throw new ValidationError(`Unknown question: ${fieldKey}`);
+      validations = [];
+      let next = s;
+      for (const question of [...questions.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+        if (!supplied.has(question.fieldKey)) continue;
+        if (!engine.conditionMet(question.condition, next.answers || {})) {
+          validations.push({ fieldKey: question.fieldKey, accepted: false, reason: 'condition_not_met' });
+          continue;
+        }
+        const rawAnswer = supplied.get(question.fieldKey);
+        const result = validateAnswer(question, rawAnswer);
+        // A correction to a critical value must be read back again.
+        next = engine.applyAnswer(next, question.fieldKey, { ...result, rawAnswer, confirmed: false });
+        validations.push({ fieldKey: question.fieldKey, accepted: true, validation: result.validation });
+      }
+      return { state: next };
+    });
+    emitToOwner(campaign.createdBy, 'ai-calling:answer', { campaignId: String(campaign._id), callId: internalCallId });
+    return { accepted: true, validations, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
   }
 
   async agentMarkUnknown(internalCallId, { fieldKey }) {
@@ -1139,24 +1570,28 @@ class AiCallingService {
   /**
    * A critical answer was read back and confirmed. When the agent passes the person's
    * reply (the worker passes the transcript, not the model's paraphrase), it must be a
-   * clear yes: "thanks, bye" is not a confirmation. After two unconfirmed read-backs the
+   * clear yes: "thanks, bye" is not a confirmation. After the original read-back and three repeats without confirmation the
    * call moves on and the answer stays unconfirmed for a person to check — never a loop.
    */
   async agentConfirm(internalCallId, { fieldKey, reply = null }) {
-    if (reply != null && !isConfirmation(reply)) {
+    if (reply == null || !isConfirmation(reply)) {
       let skipped = false;
       const { campaign, state } = await this._mutateConversation(internalCallId, (s) => {
         const entry = s.answers?.[fieldKey];
         if (!entry) return { state: s };
         const rejections = (entry.confirmRejections || 0) + 1;
-        skipped = rejections >= 2;
+        skipped = rejections > engine.VOICE_QUESTION_REPEATS;
         return { state: { ...s, answers: { ...s.answers, [fieldKey]: { ...entry, confirmRejections: rejections, ...(skipped ? { confirmSkipped: true } : {}) } } } };
       });
-      if (!skipped) throw new ConflictError('They did not clearly confirm. Ask them once more to confirm with a yes, or record the corrected answer with record_answer');
-      return { confirmed: false, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+      if (!skipped) throw new ConflictError('They did not clearly confirm. Ask them to confirm with a clear yes, or record the corrected answer with record_answer');
+      return { confirmed: false, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
     }
-    const { campaign, state } = await this._mutateConversation(internalCallId, (s) => ({ state: engine.markConfirmed(s, fieldKey) }));
-    return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+    const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
+      const action = engine.nextAction(c.questionnaire, s, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
+      if (action.type !== 'confirm' || action.question?.fieldKey !== fieldKey) throw new ConflictError('Only the current read-back can be confirmed');
+      return { state: engine.markConfirmed(s, fieldKey) };
+    });
+    return { nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
   }
 
   /** Clear one answer so the question is asked again (customer edits an answer before submitting). */
@@ -1167,7 +1602,7 @@ class AiCallingService {
       delete answers[fieldKey];
       return { state: { ...s, answers } };
     });
-    return { state, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state)) };
+    return { state, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
   }
 
   async agentRequestCallback(internalCallId, { when, note, human = false }) {
@@ -1196,14 +1631,24 @@ class AiCallingService {
    * telephony-level outcomes (voicemail/no_answer/busy/failed); a business
    * outcome is always derived server-side from the validated answers.
    */
-  async agentEndCall(internalCallId, { disposition = null, durationSeconds = null, transcriptRef = null, cost = null } = {}) {
-    const { call } = await this._loadCallForAgent(internalCallId);
+  async agentEndCall(internalCallId, { disposition = null, durationSeconds = null, transcriptRef = null, cost = null, failureCode = null, failureMessage = null, callNotes = null } = {}) {
+    const { call, campaign } = await this._loadCallForAgent(internalCallId);
+    // A provider may finish first. A late agent recap enriches the notes once,
+    // without reapplying outcomes or replacing an earlier agent recap.
+    if (call.resultsProcessedAt && callNotes) {
+      const notes = buildCallNotes({ campaign, call, answers: call.answers || [], disposition: call.disposition || 'needs_review', agentNotes: callNotes });
+      notes.blockers = [...new Set([...notes.blockers, ...(call.callNotes?.blockers || [])])].slice(0, 20);
+      await CallRecord.updateOne({ _id: call._id, 'callNotes.source': { $ne: 'ai_agent' } }, { $set: { callNotes: notes } });
+    }
+    if (failureMessage && !call.resultsProcessedAt && !call.failureMessage) {
+      await CallRecord.updateOne({ _id: call._id, failureMessage: null }, { $set: { failureCode: failureCode || 'AGENT_FAILED', failureMessage } });
+    }
     // (Already parked: nothing to wait for; processing saves the answers and keeps it parked.)
     if (call.provider === 'paired_phone' && !call.resultsProcessedAt && call.state !== 'needs_reconcile'
       && PAIRED_GATEWAY_LIVE.has(call.gateway?.state)) {
-      return this._deferPairedEnd(call, { disposition, durationSeconds, transcriptRef, cost });
+      return this._deferPairedEnd(call, { disposition, durationSeconds, transcriptRef, cost, callNotes });
     }
-    return this.processCallResults(call._id, { disposition, durationSeconds, transcriptRef, cost, source: 'agent_end' });
+    return this.processCallResults(call._id, { disposition, durationSeconds, transcriptRef, cost, callNotes, source: 'agent_end' });
   }
 
   /**
@@ -1220,13 +1665,14 @@ class AiCallingService {
         { _id: call._id, 'gateway.state': 'queued', resultsProcessedAt: null },
         { $set: { 'gateway.state': 'cancelled', 'gateway.endReason': 'agent_ended_before_claim', failureCode: 'AGENT_ENDED_BEFORE_DIAL', failureMessage: 'The voice agent ended before the phone dialed; nothing was dialed' } },
       );
-      if (pulled.modifiedCount) return this.processCallResults(call._id, { disposition: 'failed', source: 'agent_end' });
+      if (pulled.modifiedCount) return this.processCallResults(call._id, { disposition: 'failed', callNotes: hint.callNotes, source: 'agent_end' });
     }
     await CallRecord.updateOne(
       { _id: call._id, resultsProcessedAt: null, 'agentEnd.at': null },
       { $set: { agentEnd: {
         at: new Date(), disposition: hint.disposition || null, durationSeconds: hint.durationSeconds ?? null,
         transcriptRef: hint.transcriptRef || null, cost: hint.cost || null,
+        ...(hint.callNotes ? { callNotes: { ...hint.callNotes, source: 'ai_agent', generatedAt: new Date() } } : {}),
       } } },
     );
     if (call.roomName && typeof livekit.endCall === 'function') livekit.endCall({ roomName: call.roomName }).catch(() => {});
@@ -1243,7 +1689,7 @@ class AiCallingService {
    * between leaves an expired claim that the reconciler re-runs (every step is
    * idempotent).
    */
-  async processCallResults(callId, { disposition = null, durationSeconds = null, transcriptRef = null, recordingRef = null, cost = null, source = 'system' } = {}) {
+  async processCallResults(callId, { disposition = null, durationSeconds = null, transcriptRef = null, recordingRef = null, cost = null, callNotes = null, source = 'system' } = {}) {
     const now = new Date();
     const call = await CallRecord.findOneAndUpdate(
       { _id: callId, resultsProcessedAt: null, $or: [{ processingLeaseUntil: null }, { processingLeaseUntil: { $lt: now } }] },
@@ -1275,13 +1721,15 @@ class AiCallingService {
     const control = state.control || {};
     const prog = engine.progress(campaign.questionnaire, state);
 
+    const requiredGaps = (campaign.questionnaire.questions || []).filter(q => q.required && engine.conditionMet(q.condition, state.answers || {}) && (state.answers?.[q.fieldKey]?.validation !== 'valid' || q.confirmCritical && !state.answers?.[q.fieldKey]?.confirmed)).map(q => q.fieldKey);
+
     // A re-run after a crash reuses the disposition persisted by the first run.
     let finalDisposition = call.disposition || sanitizeReportedDisposition(reported.disposition, call);
     if (!finalDisposition) {
       if (state.endedReason === 'do_not_contact') finalDisposition = 'do_not_contact';
       else if (state.endedReason === 'callback_requested') finalDisposition = 'callback_requested';
       else if (state.endedReason === 'declined') finalDisposition = 'declined';
-      else if (prog.unresolvedRequired.length === 0 && prog.total > 0 && prog.answered > 0) finalDisposition = 'answered_completed';
+      else if (requiredGaps.length === 0 && prog.total > 0 && prog.valid > 0) finalDisposition = 'answered_completed';
       else if (prog.answered > 0) finalDisposition = 'answered_partial';
       // Reached a human who heard the disclosure, then hung up: they were reached
       // (don't redial as if unanswered), but nothing qualifies → review.
@@ -1309,7 +1757,7 @@ class AiCallingService {
         questionFieldKey: q.fieldKey, questionnaireVersion: campaign.questionnaireVersion,
         label: q.label, type: q.type, rawAnswer: entry.rawAnswer || '', normalizedValue: entry.normalizedValue,
         mapTo: q.mapTo || null, validation: entry.validation, confirmed: entry.confirmed || false,
-        clarifications: entry.clarifications || 0, source: 'agent_tool',
+        clarifications: entry.clarifications || 0, noResponseCount: entry.noResponseCount || 0, reason: entry.reason || null, source: 'agent_tool',
         reviewStatus: entry.validation === 'valid' ? 'none' : 'pending',
       });
       if (entry.validation === 'valid') validValues[q.fieldKey] = entry.normalizedValue;
@@ -1317,7 +1765,7 @@ class AiCallingService {
 
     const outcome = evaluateOutcome({
       statusRules: campaign.statusRules, answers: validValues, disposition: finalDisposition,
-      hasUnresolvedRequired: prog.unresolvedRequired.length > 0, control,
+      hasUnresolvedRequired: requiredGaps.length > 0, control,
     });
 
     const reached = REACHED_DISPOSITIONS.includes(finalDisposition);
@@ -1344,6 +1792,12 @@ class AiCallingService {
     if (recordingRef) call.recordingRef = recordingRef;
     call.cost = estimateCallCost(call, reported.cost);
     call.endedAt = endedAt;
+    // Always keep a recap, even on disconnects or provider-driven completion.
+    call.callNotes = buildCallNotes({
+      campaign, call, answers: answerDocs, disposition: finalDisposition,
+      unresolvedRequired: requiredGaps,
+      agentNotes: callNotes || hint.callNotes || (call.callNotes?.source === 'ai_agent' ? call.callNotes : null), now,
+    });
     await call.save();
 
     // 2. CRM side-effects only for real campaign calls (never browser/test calls).
@@ -1579,13 +2033,13 @@ class AiCallingService {
     const campaign = await this.getCampaign(campaignId, actor); // ownership
     const calls = await CallRecord.find({
       campaignId, state: { $in: ['ringing', 'initiating', 'in_progress'] },
-    }).sort({ initiatedAt: 1 }).limit(100).populate('leadId', 'leadNumber name').lean();
+    }).sort({ initiatedAt: 1 }).limit(100).select({ transcript: { $slice: -30 } }).populate('leadId', 'leadNumber name').lean();
 
     const now = Date.now();
     return calls.map((c) => {
       const state = c.conversationState || engine.initConversationState();
       const prog = engine.progress(campaign.questionnaire, state);
-      const action = engine.nextAction(campaign.questionnaire, state);
+      const action = engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
       const currentQuestion = action.question?.label
         || ({ disclose: 'Introduction', confirm: 'Confirming answers', finish: 'Wrapping up', end: 'Ending call' })[action.type]
         || null;
@@ -1598,8 +2052,12 @@ class AiCallingService {
         state: c.state,
         phase: action.type,
         currentQuestion,
-        answered: prog.answered,
+        answered: prog.valid,
         total: prog.total,
+        agentName: campaign.agentSnapshot?.name || campaign.agentConfig?.agentName || 'AI agent',
+        agentActivity: c.agentActivity || null,
+        transcriptPreview: c.transcript || [],
+        transcriptVersion: c.transcriptVersion || 0,
         elapsedSeconds: startedAt ? Math.max(0, Math.round((now - new Date(startedAt).getTime()) / 1000)) : 0,
         isTest: c.isTest,
         transport: c.provider === 'paired_phone' ? 'paired_phone' : 'cloud_sip',
@@ -1627,6 +2085,8 @@ class AiCallingService {
     const nowMs = now.getTime();
     const RING_GRACE_MS = 5 * 60_000;
     const results = { noAnswer: 0, timedOut: 0, parked: 0, reprocessed: 0, reclaimed: 0, ticksRevived: 0, stillLive: 0 };
+    // Expiry removes conversation text without deleting the call audit record.
+    await CallRecord.updateMany({ transcriptExpiresAt: { $lte: now }, 'transcript.0': { $exists: true } }, { $set: { transcript: [] } });
 
     // 0. Paired phone: the agent left, and the gateway never said how the phone call ended.
     const unreported = await CallRecord.find({
@@ -1783,10 +2243,48 @@ class AiCallingService {
   }
 
   // ------------------------------------------------- reads / analytics
+  async monitorCall(callId, actor) {
+    const call = await CallRecord.findOne({ _id: callId, createdBy: actor }).lean();
+    if (!call) throw new NotFoundError('CallRecord', callId);
+    if (call.endedAt || call.resultsProcessedAt || !['initiating', 'ringing', 'in_progress'].includes(call.state)) throw new ConflictError('This call is no longer live');
+    if (!call.roomName || call.gateway?.takenOverAt || call.gateway?.audioLostAt) throw new ConflictError('Live audio is unavailable for this call');
+    if (call.provider === 'paired_phone') {
+      const gateway = await PairedDevice.exists({ _id: call.pairedDeviceId, createdBy: actor, revokedAt: null, 'gateway.monitorSafe': true, lastHeartbeatAt: { $gte: new Date(Date.now() - 30_000) } });
+      if (!gateway) throw new ServiceUnavailableError('Update or reconnect the phone gateway before listening to this call');
+    }
+    if (typeof livekit.issueJoinToken !== 'function') throw new ServiceUnavailableError('Live audio monitoring is not configured');
+    const token = livekit.issueJoinToken({ roomName: call.roomName, identity: `monitor-${actor}-${crypto.randomUUID()}`, name: 'Call listener', ttlSeconds: 120, canPublish: false });
+    if (!token || !livekit.wsUrl) throw new ServiceUnavailableError('Live audio monitoring is not configured');
+    return { url: livekit.wsUrl, token, roomName: call.roomName, callId: String(call._id) };
+  }
+
   async getCall(callId, actor) {
     const call = await CallRecord.findOne({ _id: callId, createdBy: actor })
-      .populate('campaignId', 'name').populate('leadId', 'leadNumber name').lean();
+      .populate('campaignId', 'name agentSnapshot agentConfig questionnaire questionnaireVersion').populate('leadId', 'leadNumber name phone mobile email status').lean();
     if (!call) throw new NotFoundError('CallRecord', callId);
+    const campaign = call.campaignId;
+    if (campaign) {
+      const state = engine.normalizeState(call.conversationState);
+      const action = engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
+      const prog = engine.progress(campaign.questionnaire, state);
+      call.callContext = {
+        agentName: campaign.agentSnapshot?.name || campaign.agentConfig?.agentName || 'AI agent',
+        objective: campaign.agentConfig?.objective || '',
+        phase: action.type, currentQuestion: action.question?.text || null,
+        answered: prog.valid, total: prog.total,
+        questions: (campaign.questionnaire?.questions || []).map(q => ({ fieldKey: q.fieldKey, label: q.label, text: q.text, required: q.required })),
+      };
+      if (!call.resultsProcessedAt) call.answers = (campaign.questionnaire?.questions || []).flatMap(q => {
+        const answer = state.answers?.[q.fieldKey];
+        return answer ? [{ questionFieldKey: q.fieldKey, label: q.label, type: q.type, rawAnswer: answer.rawAnswer || '', normalizedValue: answer.normalizedValue, validation: answer.validation, noResponseCount: answer.noResponseCount || 0, reason: answer.reason || null, confirmed: Boolean(answer.confirmed), source: 'agent_tool' }] : [];
+      });
+    }
+    if (call.transcriptExpiresAt && call.transcriptExpiresAt <= new Date()) call.transcript = [];
+    Object.assign(call, conversationInsights({
+      questionnaire: campaign?.questionnaire, state: call.conversationState, answers: call.answers, transcript: call.transcript,
+      disposition: call.disposition, terminal: Boolean(call.endedAt || call.resultsProcessedAt || TERMINAL_CALL_STATES.has(call.state)),
+      incomplete: Boolean(call.gateway?.audioLostAt || call.gateway?.takenOverAt || call.reconciliation?.needed),
+    }));
     return call;
   }
 
@@ -1843,7 +2341,7 @@ class AiCallingService {
   async historyForLead(leadId, actor, { page = 1, limit = 25 } = {}) {
     const filter = { leadId, createdBy: actor };
     const [data, total, transitions] = await Promise.all([
-      CallRecord.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).populate('campaignId', 'name').lean(),
+      CallRecord.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).select('-transcript').populate('campaignId', 'name').lean(),
       CallRecord.countDocuments(filter),
       LeadCallTransition.find({ leadId, createdBy: actor }).sort({ createdAt: -1 }).limit(50).lean(),
     ]);
@@ -2054,6 +2552,7 @@ class AiCallingService {
   async retryRecipients(campaignId, actor, { recipientIds = [] } = {}, meta = {}) {
     const campaign = await CallCampaign.findOne({ _id: campaignId, createdBy: actor });
     if (!campaign) throw new NotFoundError('CallCampaign', campaignId);
+    if (campaign.executionEndsAt && campaign.executionEndsAt <= new Date()) throw new ConflictError('This campaign execution period has ended. Launch a new campaign from the agent to retry');
     // Uncertain outcomes are excluded: the lead may have been reached. They are resolved one by one
     // (reconcileCall), which is also where the owner can choose to call again.
     const filter = { campaignId, 'eligibility.eligible': true, state: { $in: ['exhausted', 'failed'] }, ...NOT_PARKED };
@@ -2146,7 +2645,7 @@ class AiCallingService {
     if (disclose) s = engine.markDisclosed(s);
 
     if (userText != null && s.disclosed && !s.endedReason) {
-      const action = engine.nextAction(campaign.questionnaire, s);
+      const action = engine.nextAction(campaign.questionnaire, s, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
       if (action.type === 'ask' || action.type === 'clarify') {
         const result = validateAnswer(action.question, userText);
         s = engine.applyAnswer(s, action.question.fieldKey, { ...result, rawAnswer: userText });
@@ -2157,7 +2656,7 @@ class AiCallingService {
       }
     }
 
-    const next = engine.nextAction(campaign.questionnaire, s);
+    const next = engine.nextAction(campaign.questionnaire, s, { maxRepeats: engine.VOICE_QUESTION_REPEATS });
     const prog = engine.progress(campaign.questionnaire, s);
     let outcomePreview = null;
     if (next.type === 'finish' || next.type === 'end') {
@@ -2236,13 +2735,37 @@ class AiCallingService {
       await livekit.endCall({ roomName });
       throw new ServiceUnavailableError(failureMessage);
     }
+    // A worker took the job; it loads the call from THIS API first (which marks a browser
+    // test answered). If that never happens, the worker that took it cannot reach this CRM:
+    // typically another environment's worker (e.g. production) registered under the same
+    // agent name on the same LiveKit project. Say so instead of handing over a dead room.
+    if (!(await this._waitForAgentContext(call._id))) {
+      const failureCode = 'AGENT_UNREACHABLE';
+      const failureMessage = worker === 'running'
+        ? `The voice agent that took this test never contacted this CRM (${apiBase}). Another agent worker registered as "${livekit.agentName}" on the same LiveKit project (for example the production server) probably took it, or the worker cannot reach this API. Give this environment its own LIVEKIT_AGENT_NAME in server/.env and server/agent-worker/.env (or set PUBLIC_API_BASE_URL), restart both, and try again.`
+        : `No voice agent loaded this test from this CRM (${apiBase}). Start the agent worker (cd server/agent-worker && npm run dev) with the same LiveKit project and LIVEKIT_AGENT_NAME ("${livekit.agentName}") as this API, and make sure no other environment's worker uses that name.`;
+      await CallRecord.updateOne({ _id: call._id, answeredAt: null }, { $set: { state: 'failed', disposition: 'failed', failureCode, failureMessage: failureMessage.slice(0, 500), endedAt: new Date(), resultsProcessedAt: new Date() } });
+      await livekit.endCall({ roomName });
+      throw new ServiceUnavailableError(failureMessage);
+    }
 
     const token = livekit.issueJoinToken({
       roomName, identity: `admin-${actor}`, name: 'Tester',
       ttlSeconds: (campaign.agentConfig?.maxCallSeconds || 300) + 120,
     });
     auditService.logEvent({ eventType: 'ai_calling.web_test.started', userId: actor, result: 'success', module: 'ai-calling', details: { campaignId, callId: internalCallId } });
-    return { callId: internalCallId, roomName, url: livekit.wsUrl, token };
+    return { callId: internalCallId, recordId: String(call._id), roomName, url: livekit.wsUrl, token };
+  }
+
+  /** True once the agent worker has loaded this browser test's context (see getCallContext). */
+  async _waitForAgentContext(callRecordId, { timeoutMs = AGENT_CONTEXT_TIMEOUT_MS, intervalMs = 250 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const call = await CallRecord.findById(callRecordId).select('answeredAt').lean();
+      if (call?.answeredAt) return true;
+      if (Date.now() + intervalMs > deadline) return false;
+      await new Promise((resolve) => { setTimeout(resolve, intervalMs); });
+    }
   }
 
   // ------------------------------------------------- suppression admin

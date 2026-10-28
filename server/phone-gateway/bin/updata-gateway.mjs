@@ -17,11 +17,12 @@ import { hostname } from 'node:os';
 import { CrmClient, EventOutbox } from '../src/gateway/crmClient.js';
 import { GatewayDaemon, GATEWAY_VERSION } from '../src/gateway/daemon.js';
 import { CONFIG_FILE, OUTBOX_FILE, KeepAwake, acquireLock, deleteConfig, loadConfig, saveConfig } from '../src/gateway/system.js';
-import { closeSerialDevice, findBoardPort, listPorts, openSerialDevice } from '../src/esp32/serial.js';
+import { closeSerialDevice, createBoardOpener, findBoardPort, listPorts, openSerialDevice } from '../src/esp32/serial.js';
+import { manageService } from '../src/gateway/service.js';
 
 const { values: a, positionals } = parseArgs({
   allowPositionals: true,
-  options: { api: { type: 'string' }, code: { type: 'string' }, port: { type: 'string' } },
+  options: { api: { type: 'string' }, code: { type: 'string' }, port: { type: 'string' }, 'presence-wait': { type: 'string', default: '5' }, 'playback-gain-db': { type: 'string', default: '0' } },
 });
 const log = (event, data = {}) => process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), event, ...data })}\n`);
 const die = (msg, code = 2) => {
@@ -43,6 +44,7 @@ async function resolvePort(cfg) {
 }
 
 const commands = {
+  async service() { log('login_service', await manageService(positionals[1])); },
   async pair() {
     if (!a.api || !a.code) die('pair needs --api <CRM API URL ending in /api/v1> and --code <pairing code>');
     const crm = new CrmClient({ apiBase: a.api });
@@ -52,14 +54,16 @@ const commands = {
   },
 
   async provision() {
+    const presenceWait = Number(a['presence-wait']);
+    if (!Number.isInteger(presenceWait) || presenceWait < 5 || presenceWait > 120) die('--presence-wait must be 5–120 seconds');
     const cfg = requireConfig();
     const crm = new CrmClient({ apiBase: cfg.apiBase, token: cfg.token });
     const path = await resolvePort(cfg);
     const conn = await openSerialDevice({ path });
     try {
       const { key } = await crm.takeDialKey();
-      process.stderr.write('Hold the BOOT button on the ESP32 now (5 s)…\n');
-      await sleep(5000);
+      process.stderr.write(`Hold the BOOT button on the ESP32 now (${presenceWait} s)…\n`);
+      await sleep(presenceWait * 1000);
       await conn.device.provisionKey(Buffer.from(key, 'hex'));
       await crm.confirmDialKey(conn.info.bdaddr);
       log('dial_key_provisioned', { bdaddr: conn.info.bdaddr });
@@ -72,18 +76,22 @@ const commands = {
   },
 
   async run() {
+    const agentGainDb = Number(a['playback-gain-db']);
+    if (!Number.isFinite(agentGainDb) || agentGainDb < 0 || agentGainDb > 12) die('--playback-gain-db must be 0–12 dB');
     const cfg = requireConfig();
     const release = acquireLock();
-    const path = await resolvePort(cfg);
+    const path = a.port || cfg.port || null;
     const crm = new CrmClient({ apiBase: cfg.apiBase, token: cfg.token });
     const outbox = new EventOutbox({ client: crm, file: OUTBOX_FILE, log });
     const rtc = await import('@livekit/rtc-node');
     const daemon = new GatewayDaemon({
       crm, outbox, rtc, log, portLabel: path,
       keepAwake: new KeepAwake({ log }),
-      openDevice: () => openSerialDevice({ path, onError: (err) => log('serial_error', { error: err.message }) }),
+      options: { agentGainDb },
+      openDevice: createBoardOpener({ path, onError: (err) => log('serial_error', { error: err.message }) }),
       closeDevice: closeSerialDevice,
     });
+    log('playback_gain', { db: agentGainDb });
     const shutdown = async (signal) => {
       log('signal', { signal });
       await daemon.stop();

@@ -66,6 +66,7 @@ export class Esp32Device extends EventEmitter {
   // ---- session --------------------------------------------------------------------------------
 
   async hello() {
+    if (this.closed) throw new DeviceError('device link is closed', 'closed');
     const ack = this._awaitType(T.HELLO_ACK);
     this._send(T.HELLO, build.hello());
     this.info = await ack;
@@ -317,6 +318,13 @@ export class Esp32Device extends EventEmitter {
           this.emit('state', v);
           break;
         case T.EVENT:
+          if (v.name === 'boot' && this.info) {
+            // PING works without a session, so liveness alone cannot detect a
+            // reset. The old nonce/key status must not survive a device reboot.
+            this.emit('event', v);
+            this._lost('device rebooted; new protocol session required');
+            return;
+          }
           this.emit('event', v);
           break;
         case T.STATS:

@@ -680,7 +680,19 @@ export const ar: Translations = {
       ineligible: 'غير مؤهل',
       cancelled: 'ملغاة',
     },
+    answerStatus: {
+      answered: 'تمت الإجابة',
+      unknown: 'الإجابة غير معروفة',
+      needs_clarification: 'بحاجة إلى توضيح',
+      needs_confirmation: 'بحاجة إلى تأكيد',
+      not_applicable: 'الشرط غير متحقق',
+      not_answered: 'لم تتم الإجابة',
+      pending: 'بانتظار الإجابة',
+    },
     conversation: {
+      insights: 'تحليل المحادثة',
+      coverage:
+        'تم التحقق من {{answered}} من {{total}} سؤالاً منطبقاً · {{missing}} إجابات مطلوبة تحتاج إلى مراجعة',
       title: 'محادثة الرسائل',
       answers: 'الإجابات المجمعة',
       noAnswers: 'لا توجد إجابات بعد.',
@@ -1025,7 +1037,8 @@ export const ar: Translations = {
       notReached: 'لم يتم الوصول · إغلاق',
       notReachedHint: 'لم يتم الاتصال إطلاقًا. تُغلق دون اتصال جديد.',
       retry: 'لم يتم الوصول · الاتصال مجددًا',
-      retryHint: 'لم يتم الاتصال إطلاقًا. يعود العميل إلى قائمة الانتظار؛ وتظل ساعات الاتصال وقائمة عدم الاتصال والحدود سارية.',
+      retryHint:
+        'لم يتم الاتصال إطلاقًا. يعود العميل إلى قائمة الانتظار؛ وتظل ساعات الاتصال وقائمة عدم الاتصال والحدود سارية.',
       confirmTitle: 'تسجيل هذه النتيجة؟',
       confirmBody: 'يمكن ذلك مرة واحدة فقط لهذه المكالمة.',
       confirm: 'تسجيل',

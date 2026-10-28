@@ -5,16 +5,22 @@ import service from './pairedPhone.service.js';
 import * as schemas from './pairedPhone.validation.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import { validate } from '../../shared/validation/validate.js';
+import { downloadGateway } from './gatewayPackage.js';
 
 /** Owner routes: /api/v1/paired-phone */
 const router = Router();
+router.get('/gateway-package', authenticate, requirePermission('ai-calling:write'), downloadGateway);
 router.get('/devices', authenticate, requirePermission('ai-calling:read'), controller.listDevices);
-router.post('/devices/pairing-code', authenticate, requirePermission('ai-calling:admin'), validate(schemas.createPairingCode), controller.createPairingCode);
+router.post('/devices/pairing-code', authenticate, requirePermission('ai-calling:write'), validate(schemas.createPairingCode), controller.createPairingCode);
 router.get('/devices/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.deviceId), controller.getDevice);
-router.patch('/devices/:id', authenticate, requirePermission('ai-calling:admin'), validate(schemas.updateDevice), controller.updateDevice);
-router.post('/devices/:id/revoke', authenticate, requirePermission('ai-calling:admin'), validate(schemas.deviceId), controller.revokeDevice);
-router.post('/devices/:id/verify-audio', authenticate, requirePermission('ai-calling:admin'), validate(schemas.verifyAudio), controller.verifyAudio);
-router.post('/devices/:id/rotate-key', authenticate, requirePermission('ai-calling:admin'), validate(schemas.deviceId), controller.rotateKey);
+router.patch('/devices/:id', authenticate, requirePermission('ai-calling:write'), validate(schemas.updateDevice), controller.updateDevice);
+router.post('/devices/:id/revoke', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.revokeDevice);
+router.post('/devices/:id/verify-audio', authenticate, requirePermission('ai-calling:write'), validate(schemas.verifyAudio), controller.verifyAudio);
+router.post('/devices/:id/rotate-key', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.rotateKey);
+router.post('/devices/:id/setup', authenticate, requirePermission('ai-calling:write'), validate(schemas.setupAction), controller.setupAction);
+router.patch('/devices/:id/setup', authenticate, requirePermission('ai-calling:write'), validate(schemas.setupSettings), controller.setupSettings);
+router.post('/devices/:id/audio-test', authenticate, requirePermission('ai-calling:write'), validate(schemas.audioTest), controller.audioTest);
+router.get('/devices/:id/audio-test/:callId', authenticate, requirePermission('ai-calling:read'), validate(schemas.audioTestResult), controller.audioTestResult);
 router.post('/devices/:id/clear', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.clearAttention);
 router.post('/calls/:callId/takeover', authenticate, requirePermission('ai-calling:write'), validate(schemas.callControl), controller.takeover);
 router.post('/calls/:callId/hangup', authenticate, requirePermission('ai-calling:write'), validate(schemas.callControl), controller.hangup);
@@ -39,6 +45,8 @@ gatewayRoutes.post('/pair', validate(schemas.redeem), controller.redeem);
 gatewayRoutes.post('/heartbeat', authenticateGateway, validate(schemas.heartbeat), controller.heartbeat);
 gatewayRoutes.post('/dial-key', authenticateGateway, controller.takeKey);
 gatewayRoutes.post('/dial-key/confirm', authenticateGateway, validate(schemas.confirmKey), controller.confirmKey);
+gatewayRoutes.post('/setup/:commandId/claim', authenticateGateway, validate(schemas.setupCommandId), controller.claimSetup);
+gatewayRoutes.post('/setup/:commandId/result', authenticateGateway, validate(schemas.setupResult), controller.completeSetup);
 gatewayRoutes.post('/calls/claim', authenticateGateway, validate(schemas.claim), controller.claim);
 gatewayRoutes.post('/calls/:callId/events', authenticateGateway, validate(schemas.event), controller.event);
 

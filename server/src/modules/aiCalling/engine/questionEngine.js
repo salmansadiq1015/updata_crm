@@ -81,7 +81,7 @@ export function eligibleQuestions(questionnaire, answers) {
  * The single next thing the agent should do.
  * @returns {{type:'disclose'|'ask'|'clarify'|'confirm'|'finish'|'end', question?:object, reason?:string}}
  */
-export function nextAction(questionnaire, state) {
+export function nextAction(questionnaire, state, { maxRepeats } = {}) {
   if (state.endedReason) return { type: 'end', reason: state.endedReason };
   if (!state.disclosed) return { type: 'disclose' };
 
@@ -94,8 +94,9 @@ export function nextAction(questionnaire, state) {
     // An invalid answer with clarifications left → clarify; otherwise move on
     // (required+unresolved is surfaced at finish, never looped forever).
     if (entry && entry.validation === 'invalid') {
-      const max = q.maxClarifications ?? 2;
-      if ((entry.clarifications ?? 0) < max) return { type: 'clarify', question: q };
+      const max = maxRepeats ?? q.maxClarifications ?? 2;
+      const failures = (entry.clarifications ?? 0) + (entry.noResponseCount ?? 0);
+      if (maxRepeats != null ? failures <= max : failures < max) return { type: 'clarify', question: q };
       continue; // give up on this one; it remains unresolved
     }
     return { type: 'ask', question: q };
@@ -128,6 +129,8 @@ export function applyAnswer(rawState, fieldKey, result) {
         rawAnswer: result.rawAnswer ?? prev.rawAnswer ?? '',
         reason: result.reason ?? null,
         clarifications,
+        noResponseCount: result.validation === 'valid' ? 0 : prev.noResponseCount || 0,
+        noResponseIds: prev.noResponseIds || [],
         confirmed: result.confirmed ?? prev.confirmed ?? false,
       },
     },
@@ -173,4 +176,22 @@ export function progress(questionnaire, state) {
     valid: valid.length,
     unresolvedRequired: unresolvedRequired(questionnaire, state),
   };
+}
+
+
+/** A voice question gets its original ask plus three repeats. Silence is never an answer. */
+export const VOICE_QUESTION_REPEATS = 3;
+export function applyNoResponse(rawState, fieldKey, { requestId, reason, confirming = false }) {
+  const state = normalizeState(rawState);
+  const prev = state.answers[fieldKey] || { clarifications: 0 };
+  if (prev.noResponseIds?.includes(requestId)) return state;
+  const noResponseCount = (prev.noResponseCount || 0) + 1;
+  return { ...state, answers: { ...state.answers, [fieldKey]: {
+    ...prev,
+    validation: confirming ? prev.validation : 'invalid',
+    normalizedValue: confirming ? prev.normalizedValue : null,
+    rawAnswer: prev.rawAnswer || '', reason: `no_response:${reason}`,
+    noResponseCount, noResponseIds: [...(prev.noResponseIds || []), requestId].slice(-12),
+    ...(confirming && noResponseCount > VOICE_QUESTION_REPEATS ? { confirmSkipped: true } : {}),
+  } } };
 }

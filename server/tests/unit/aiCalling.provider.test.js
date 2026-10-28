@@ -16,6 +16,13 @@ function mockFetch(routes) {
 }
 
 describe('LiveKitSipProvider — carrier-agnostic (no Twilio)', () => {
+  it('issues listeners a short-lived room token that cannot publish microphone or data', () => {
+    const p = new LiveKitSipProvider(LK, mockFetch({}));
+    const claims = jwt.verify(p.issueJoinToken({ roomName: 'call-room', identity: 'monitor-owner', canPublish: false, ttlSeconds: 120 }), LK.LIVEKIT_API_SECRET);
+    expect(claims.video).toEqual({ room: 'call-room', roomJoin: true, canPublish: false, canPublishData: false, canSubscribe: true });
+    expect(claims.exp - claims.nbf).toBe(120);
+  });
+
   it('mints a LiveKit service token without a participant subject', () => {
     const p = new LiveKitSipProvider({ ...LK }, mockFetch({}));
     const claims = jwt.verify(p._token('crm-call-token-test'), LK.LIVEKIT_API_SECRET, { algorithms: ['HS256'] });

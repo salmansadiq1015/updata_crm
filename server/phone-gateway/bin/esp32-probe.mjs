@@ -18,21 +18,14 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { Esp32Device } from '../src/esp32/device.js';
+import { DeviceError } from '../src/esp32/device.js';
+import { listPorts as serialPorts, openSerialDevice, closeSerialDevice } from '../src/esp32/serial.js';
 import { newDeviceKey, normalizeNumber } from '../src/esp32/dialAuth.js';
 import { createEvidence, maskNumber } from '../src/esp32/evidence.js';
 import { DEFAULTS } from '../src/esp32/callScript.js';
 import { readWav, resample, levelDbfs } from '../src/esp32/pcm.js';
 import { runProbeCall } from '../src/esp32/probeSession.js';
 
-const BAUD = 921600;
-const USB_BRIDGES = {
-  '10c4:ea60': 'Silicon Labs CP210x (common on ESP32-WROOM-32 DevKitC)',
-  '1a86:7523': 'WCH CH340',
-  '1a86:55d4': 'WCH CH9102',
-  '0403:6001': 'FTDI FT232R',
-  '0403:6015': 'FTDI FT231X',
-};
 const KEY_DIR = join(homedir(), '.updata', 'esp32');
 
 const timingFlags = Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, { type: 'string' }]));
@@ -62,47 +55,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const keyPath = (bdaddr) => join(KEY_DIR, `${bdaddr.replace(/:/g, '')}.key`);
 
 async function listPorts() {
-  const { SerialPort } = await import('serialport');
-  const ports = await SerialPort.list();
+  const ports = await serialPorts();
   for (const p of ports) {
-    const id = p.vendorId ? `${p.vendorId}:${p.productId}`.toLowerCase() : '';
-    let note = USB_BRIDGES[id] || '';
-    if (id.startsWith('303a:')) note = 'Espressif native USB: ESP32-S2/S3/C3/C6 have NO Classic Bluetooth and cannot do HFP';
-    process.stdout.write(`${p.path}\t${id || '-'}\t${p.manufacturer || ''}\t${note}\n`);
+    const note = p.nativeUsbNoClassicBt ? 'Espressif native USB: ESP32-S2/S3/C3/C6 have NO Classic Bluetooth and cannot do HFP' : p.bridge || '';
+    process.stdout.write(`${p.path}\t${p.id || '-'}\t${p.manufacturer}\t${note}\n`);
   }
-  if (!ports.some((p) => USB_BRIDGES[`${p.vendorId}:${p.productId}`.toLowerCase()])) {
+  if (!ports.some((p) => p.bridge)) {
     process.stdout.write('No USB-serial bridge found. Plug in the ESP32 (data-capable USB cable) and install the CP210x/CH34x driver if needed.\n');
   }
 }
 
 async function openDevice(ev) {
   if (!a.port) die('--port is required (see `esp32-probe ports`; on macOS use /dev/cu.*, not /dev/tty.*)');
-  const { SerialPort } = await import('serialport');
-  const port = new SerialPort({ path: a.port, baudRate: BAUD, autoOpen: false });
-  await new Promise((resolve, reject) => port.open((err) => (err ? reject(err) : resolve())));
-  // DevKits wire DTR/RTS to EN/BOOT: release both so the chip runs, then let it boot.
-  await new Promise((resolve) => port.set({ dtr: false, rts: false }, () => resolve()));
-  await sleep(1500);
-  const device = new Esp32Device(port, { ackTimeoutMs: 2500 });
-  device.on('error', (err) => ev?.('serial_error', { detail: err.message }));
-  let lastErr;
-  for (let i = 0; i < 3; i += 1) {
-    try {
-      const info = await device.hello();
-      return { device, port, info };
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  device.close();
-  port.close();
-  throw lastErr;
+  return openSerialDevice({ path: a.port, onError: (err) => ev?.('serial_error', { detail: err.message }) });
 }
 
-async function closeDevice({ device, port }) {
-  device.close();
-  await new Promise((resolve) => port.close(() => resolve()));
-}
+const closeDevice = closeSerialDevice;
 
 async function info() {
   const ev = createEvidence(a.out);
@@ -140,21 +108,35 @@ async function pair() {
   const ev = createEvidence(a.out);
   const d = await openDevice(ev);
   const seconds = Number(a.seconds);
-  await d.device.setDiscoverable(seconds);
-  ev('pairing_window_open', { seconds, name: 'Updata Phone Bridge XXXX', note: 'On the phone: Bluetooth → pair new device → confirm the number; keep "Phone calls" on' });
-  const result = await new Promise((resolve) => {
-    const t = setTimeout(() => resolve(null), seconds * 1000);
-    d.device.on('event', (e) => {
-      if (e.name === 'auth') {
-        clearTimeout(t);
-        resolve(e);
-      }
+  try {
+    await d.device.setDiscoverable(seconds);
+    ev('pairing_window_open', { seconds, name: 'Updata Phone Bridge XXXX', note: 'On the phone: Bluetooth → pair new device → confirm the number; keep "Phone calls" on' });
+    const result = await new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        d.device.off('event', onEvent);
+        d.device.off('lost', onLost);
+      };
+      const onEvent = (event) => {
+        if (event.name !== 'auth') return;
+        cleanup();
+        resolve(event);
+      };
+      const onLost = (reason) => {
+        cleanup();
+        ev('pairing_link_lost', { reason });
+        reject(new DeviceError(`ESP32 link lost during pairing: ${reason}`, 'link_lost'));
+      };
+      const timer = setTimeout(() => { cleanup(); resolve(null); }, seconds * 1000);
+      d.device.on('event', onEvent);
+      d.device.once('lost', onLost);
     });
-  });
-  ev(result?.ok ? 'paired' : 'pairing_not_completed', result || {});
-  await d.device.setDiscoverable(0).catch(() => {});
-  await closeDevice(d);
-  if (!result?.ok) process.exitCode = 4;
+    ev(result?.ok ? 'paired' : 'pairing_not_completed', result || {});
+    if (!result?.ok) process.exitCode = 4;
+  } finally {
+    await d.device.setDiscoverable(0).catch(() => {});
+    await closeDevice(d);
+  }
 }
 
 async function connect() {

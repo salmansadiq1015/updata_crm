@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Tabs } from 'radix-ui';
 import {
   AlertTriangle,
   ArrowRight,
@@ -264,16 +265,16 @@ function ContactLog({
   );
 }
 
-function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: string }) {
+function ProviderMessageHistory({ leadId, locale, receivedOnly = false }: { leadId: string; locale: string; receivedOnly?: boolean }) {
   const [page, setPage] = useState(1);
   const [channel, setChannel] = useState('all');
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState(receivedOnly ? 'received' : 'all');
   const [provider, setProvider] = useState('all');
   const [campaignId, setCampaignId] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const dateRangeValid = isHistoryDateRangeValid(from, to);
-  const activeFilterCount = activeHistoryFilterCount({ channel: channel as OutreachChannel | 'all', status, provider, campaignId, from, to });
+  const activeFilterCount = activeHistoryFilterCount({ channel: channel as OutreachChannel | 'all', status: receivedOnly ? 'all' : status, provider, campaignId, from, to });
   const campaigns = useQuery({
     queryKey: ['messaging', 'campaigns', 'history-filter'],
     queryFn: () => messagingApi.listCampaigns({ limit: 100 }),
@@ -286,11 +287,12 @@ function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: st
     })),
     enabled: dateRangeValid,
     staleTime: 15_000,
+    refetchInterval: 15_000,
   });
   const entries = query.data?.data ?? [];
   const resetFilters = () => {
     setChannel('all');
-    setStatus('all');
+    setStatus(receivedOnly ? 'received' : 'all');
     setProvider('all');
     setCampaignId('all');
     setFrom('');
@@ -301,7 +303,7 @@ function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: st
     <div className="space-y-3">
       <div className="rounded-xl border border-border/70 bg-muted/[0.16] p-3">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <div><p className="text-xs font-semibold">Provider message evidence</p><p className="mt-0.5 text-[11px] text-muted-foreground">Filter verified outbound and inbound provider records.</p></div>
+          <div><p className="text-xs font-semibold">{receivedOnly ? 'Received messages' : 'Provider message evidence'}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{receivedOnly ? 'Replies received from this lead by email, SMS, and WhatsApp.' : 'Filter verified outbound and inbound provider records.'}</p></div>
           <div className="flex items-center gap-2">
             {query.isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Refreshing history" />}
             {activeFilterCount > 0 && <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={resetFilters}><FilterX className="h-3.5 w-3.5" /> Clear {activeFilterCount}</Button>}
@@ -309,7 +311,7 @@ function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: st
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <Select value={channel} onValueChange={(value) => { setChannel(value); setPage(1); }}><SelectTrigger aria-label="History channel" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All channels</SelectItem><SelectItem value="email">Email</SelectItem><SelectItem value="sms">SMS</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem></SelectContent></Select>
-          <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger aria-label="History status" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{['received', 'draft', 'queued', 'submitting', 'accepted', 'sent', 'delivered', 'read', 'failed', 'undelivered', 'unknown', 'suppressed', 'ineligible', 'cancelled'].map((item) => <SelectItem key={item} value={item}><span className="capitalize">{item}</span></SelectItem>)}</SelectContent></Select>
+          {!receivedOnly && <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger aria-label="History status" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{['received', 'draft', 'queued', 'submitting', 'accepted', 'sent', 'delivered', 'read', 'failed', 'undelivered', 'unknown', 'suppressed', 'ineligible', 'cancelled'].map((item) => <SelectItem key={item} value={item}><span className="capitalize">{item}</span></SelectItem>)}</SelectContent></Select>}
           <Select value={provider} onValueChange={(value) => { setProvider(value); setPage(1); }}><SelectTrigger aria-label="History provider" className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All providers</SelectItem><SelectItem value="existing_email">Email</SelectItem><SelectItem value="meta_whatsapp">Meta</SelectItem><SelectItem value="textbee">TextBee</SelectItem><SelectItem value="twilio">Twilio</SelectItem></SelectContent></Select>
           <Select value={campaignId} onValueChange={(value) => { setCampaignId(value); setPage(1); }} disabled={campaigns.isLoading}><SelectTrigger aria-label="History campaign" className="h-8 text-xs"><SelectValue placeholder="All campaigns" /></SelectTrigger><SelectContent><SelectItem value="all">All campaigns</SelectItem>{(campaigns.data?.data ?? []).map((campaign) => <SelectItem key={campaign._id} value={campaign._id}>{campaign.name}</SelectItem>)}</SelectContent></Select>
           <Input aria-label="History from date" title="History from date" type="date" className="h-8 text-xs" max={to || undefined} value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} />
@@ -330,7 +332,8 @@ function ProviderMessageHistory({ leadId, locale }: { leadId: string; locale: st
                 <span className="rounded-full bg-muted px-2 py-0.5 normal-case capitalize text-foreground">{entry.status}</span>
                 <span>{formatRelativeTime(entry.createdAt, locale)}</span>
               </div>
-              <p className="mt-1 truncate text-sm text-foreground">{entry.rendered?.subject || entry.rendered?.bodyText || campaign || 'Message'}</p>
+              {entry.rendered?.subject && <p className="mt-1 text-sm font-medium text-foreground">{entry.rendered.subject}</p>}
+              <p className={cn('mt-1 text-sm text-foreground', receivedOnly ? 'whitespace-pre-wrap break-words' : 'truncate')}>{entry.rendered?.bodyText || campaign || 'Message content unavailable'}</p>
               {(campaign || evidenceAt) && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{campaign ? `Campaign: ${campaign}` : 'Direct message'}{evidenceAt ? ` · ${entry.status} ${formatRelativeTime(evidenceAt, locale)}` : ''}</p>}
               {entry.error?.message && <p className="mt-0.5 text-xs text-destructive">{entry.error.message}</p>}
               {entry.providerMessageId && <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{entry.providerMessageId}</p>}
@@ -531,6 +534,7 @@ export function LeadDetailDrawer({
   } else {
     body = (
       <LeadDetailBody
+        key={lead.id}
         lead={lead}
         users={users}
         locale={locale}
@@ -827,6 +831,22 @@ function LeadDetailBody({
         </div>
       )}
 
+      <Tabs.Root defaultValue="overview" className="space-y-5">
+        <Tabs.List aria-label={t('leads.drawer.tabs', 'Lead detail sections')} className="sticky top-0 z-10 grid grid-cols-4 gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
+          {[
+            ['overview', t('leads.drawer.tabOverview', 'Overview')],
+            ['responses', t('leads.drawer.tabResponses', 'Responses')],
+            ['calls', t('leads.drawer.tabCalls', 'AI Calls')],
+            ['communication', t('leads.drawer.tabCommunication', 'Activity')],
+            ['business', t('leads.drawer.tabBusiness', 'Business')],
+            ['notes', t('leads.drawer.tabNotes', 'Notes')],
+            ['consent', t('leads.drawer.tabConsent', 'Consent')],
+            ['details', t('leads.drawer.tabDetails', 'Details')],
+          ].map(([value, label]) => (
+            <Tabs.Trigger key={value} value={value} className="min-w-0 rounded-lg px-1 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{label}</Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        <Tabs.Content value="overview" className="space-y-5 outline-none">
       {/* Enrich from website: fills missing contact/social data from the lead's
           site. Needs lead:enrich AND a website (disabled + hinted otherwise). */}
       {canEnrich && (
@@ -987,9 +1007,16 @@ function LeadDetailBody({
         )}
       </Section>
 
+        </Tabs.Content>
+        <Tabs.Content value="consent" className="space-y-5 outline-none">
       <Section title="Consent & suppression">
         <LeadConsentPanel leadId={lead.id} canWrite={canEmail} />
       </Section>
+      <Section title="AI calling consent">
+        <LeadCallsTab leadId={lead.id} view="consent" />
+      </Section>
+        </Tabs.Content>
+        <Tabs.Content value="business" className="space-y-5 outline-none">
 
       {/* Social profiles (website-scraped) — only platforms that actually have a link */}
       {socialLinks.length > 0 && (
@@ -1111,6 +1138,8 @@ function LeadDetailBody({
         </Section>
       )}
 
+        </Tabs.Content>
+        <Tabs.Content value="details" className="space-y-5 outline-none">
       {/* Source & provenance */}
       <Section title={t('leads.drawer.sectionSource', 'Source')}>
         <InfoList label={t('leads.drawer.sectionSource', 'Source')}>
@@ -1220,6 +1249,25 @@ function LeadDetailBody({
         </InfoList>
       </Section>
 
+      {/* Record details */}
+      <Section title={t('leads.drawer.sectionDetails', 'Details')}>
+        <InfoList label={t('leads.drawer.sectionDetails', 'Details')}>
+          <InfoRow icon={CalendarClock} label={t('leads.drawer.created', 'Created')}>
+            {formatLeadDateTime(lead.createdAt, locale)}
+          </InfoRow>
+          <InfoRow icon={User} label={t('leads.drawer.createdBy', 'Created by')}>
+            {creatorName || <span className="text-muted-foreground/70">—</span>}
+          </InfoRow>
+          <InfoRow icon={CalendarClock} label={t('leads.drawer.updated', 'Last updated')}>
+            {formatLeadDateTime(lead.updatedAt, locale)}
+          </InfoRow>
+          <InfoRow icon={Hash} label={t('leads.drawer.leadId', 'Lead ID')}>
+            <code dir="ltr" className="block break-all text-start font-mono text-xs text-muted-foreground">{lead.id}</code>
+          </InfoRow>
+        </InfoList>
+      </Section>
+        </Tabs.Content>
+        <Tabs.Content value="notes" className="space-y-5 outline-none">
       {/* Notes & tags */}
       <Section title={t('leads.drawer.sectionNotes', 'Notes')}>
         {lead.notes || lead.tags.length > 0 ? (
@@ -1244,6 +1292,8 @@ function LeadDetailBody({
         )}
       </Section>
 
+        </Tabs.Content>
+        <Tabs.Content value="communication" className="space-y-5 outline-none">
       {/* Communication: sent e-mails (shared panel) + logged WhatsApp/phone/manual */}
       <Section title={t('leads.drawer.sectionHistory', 'Communication')}>
         <div className="space-y-4">
@@ -1263,28 +1313,22 @@ function LeadDetailBody({
         <LeadMobileCommunications leadId={lead.id} />
       </Section>
 
+        </Tabs.Content>
+        <Tabs.Content value="responses" className="space-y-5 outline-none">
+          <ProviderMessageHistory key={`responses:${lead.id}`} leadId={lead.id} locale={locale} receivedOnly />
+          <Section title={t('leads.drawer.callResponses', 'Responses from AI calls')}>
+            <LeadCallsTab leadId={lead.id} view="responses" />
+          </Section>
+        </Tabs.Content>
+        <Tabs.Content value="calls" className="space-y-5 outline-none">
       {/* AI voice calls: campaigns, dispositions, collected answers, status history */}
       <Section title={t('leads.drawer.sectionAiCalls', 'AI Calls')}>
         <LeadCallsTab leadId={lead.id} />
       </Section>
+        </Tabs.Content>
+      </Tabs.Root>
 
-      {/* Record details */}
-      <Section title={t('leads.drawer.sectionDetails', 'Details')}>
-        <InfoList label={t('leads.drawer.sectionDetails', 'Details')}>
-          <InfoRow icon={CalendarClock} label={t('leads.drawer.created', 'Created')}>
-            {formatLeadDateTime(lead.createdAt, locale)}
-          </InfoRow>
-          <InfoRow icon={User} label={t('leads.drawer.createdBy', 'Created by')}>
-            {creatorName || <span className="text-muted-foreground/70">—</span>}
-          </InfoRow>
-          <InfoRow icon={CalendarClock} label={t('leads.drawer.updated', 'Last updated')}>
-            {formatLeadDateTime(lead.updatedAt, locale)}
-          </InfoRow>
-          <InfoRow icon={Hash} label={t('leads.drawer.leadId', 'Lead ID')}>
-            <code dir="ltr" className="block break-all text-start font-mono text-xs text-muted-foreground">{lead.id}</code>
-          </InfoRow>
-        </InfoList>
-      </Section>
+
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { onSocketConnect } from '@/lib/socket/client';
  * invalidation is debounced to avoid refetch storms; TanStack Query then pulls
  * the authoritative state. Pass a campaignId to narrow which queries refresh.
  */
-const AI_CALLING_EVENTS = ['ai-calling:summary', 'ai-calling:call', 'ai-calling:answer'] as const;
+const AI_CALLING_EVENTS = ['ai-calling:summary', 'ai-calling:call', 'ai-calling:answer', 'ai-calling:transcript', 'ai-calling:activity'] as const;
 
 export function useAiCallingRealtime(campaignId?: string | null) {
   const qc = useQueryClient();
@@ -27,7 +27,13 @@ export function useAiCallingRealtime(campaignId?: string | null) {
       timer.current = setTimeout(() => {
         if (campaignId) qc.invalidateQueries({ queryKey: ['ai-calling', 'campaign', campaignId] });
         qc.invalidateQueries({ queryKey: ['ai-calling', 'campaigns'] });
+        qc.invalidateQueries({ queryKey: ['ai-calling', 'agents'] });
+        qc.invalidateQueries({ queryKey: ['ai-calling', 'agent'] });
         qc.invalidateQueries({ queryKey: ['ai-calling', 'analytics'] });
+        qc.invalidateQueries({ queryKey: ['ai-calling', 'calls'] });
+        qc.invalidateQueries({ queryKey: ['ai-calling', 'call'] });
+        qc.invalidateQueries({ queryKey: campaignId ? ['ai-calling', 'active-calls', campaignId] : ['ai-calling', 'active-calls'] });
+        qc.invalidateQueries({ queryKey: campaignId ? ['ai-calling', 'run-status', campaignId] : ['ai-calling', 'run-status'] });
         if (campaignId) qc.invalidateQueries({ queryKey: ['ai-calling', 'recipients', campaignId] });
       }, 800);
     };

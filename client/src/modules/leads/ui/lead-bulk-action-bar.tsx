@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Mail, MessageCircle, MessageSquareText, PhoneCall, Sparkles, Trash2, UserPlus, UserRound, UserX, X } from 'lucide-react';
+import { Bot, Loader2, Mail, MessageCircle, MessageSquareText, PhoneCall, Sparkles, Trash2, UserPlus, UserRound, UserX, X } from 'lucide-react';
 import {
   Button,
   ConfirmDialog,
@@ -27,6 +27,8 @@ type LeadBulkActionBarProps = {
   canSms?: boolean;
   canEnrich?: boolean;
   canAiCall?: boolean;
+  canAssignAgent?: boolean;
+  onAssignAgent?: () => void;
   /** A bulk request is running: actions are disabled until it settles. */
   isBusy?: boolean;
   /** `null` clears the assignment. */
@@ -54,6 +56,8 @@ export function LeadBulkActionBar({
   canSms = false,
   canEnrich = false,
   canAiCall = false,
+  canAssignAgent = false,
+  onAssignAgent,
   isBusy = false,
   onAssign,
   onDelete,
@@ -101,9 +105,11 @@ export function LeadBulkActionBar({
           {t('common.selectedCountShort', '{count} selected', { count })}
         </span>
 
-        {(canAiCall || canEmail || canSms || canWhatsApp || canEnrich || canAssign || canDelete) && (
+        {(canAssignAgent || canAiCall || canEmail || canSms || canWhatsApp || canEnrich || canAssign || canDelete) && (
           <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         )}
+
+        {canAssignAgent && <Button variant="outline" size="sm" className="gap-1.5" disabled={isBusy} onClick={onAssignAgent}><Bot className="h-3.5 w-3.5" aria-hidden="true" />{t('leads.bulk.assignAgent', 'Assign to agent')}</Button>}
 
         {canAiCall && (
           <Button variant="outline" size="sm" className="gap-1.5" disabled={isBusy} onClick={onAiCall}>

@@ -11,7 +11,7 @@ import {
  * scoped by `createdBy`.
  */
 
-const questionSchema = new mongoose.Schema({
+export const questionSchema = new mongoose.Schema({
   fieldKey: { type: String, required: true, trim: true, maxlength: 80 },
   label: { type: String, required: true, trim: true, maxlength: 200 },
   text: { type: String, required: true, trim: true, maxlength: 1000 },
@@ -30,7 +30,7 @@ const questionSchema = new mongoose.Schema({
   sensitive: { type: Boolean, default: false },
 }, { _id: false });
 
-const statusRuleSchema = new mongoose.Schema({
+export const statusRuleSchema = new mongoose.Schema({
   id: { type: String, required: true, trim: true, maxlength: 80 },
   description: { type: String, trim: true, maxlength: 300, default: '' },
   when: { type: mongoose.Schema.Types.Mixed, required: true }, // { all:[], any:[] }
@@ -38,7 +38,7 @@ const statusRuleSchema = new mongoose.Schema({
   requiresReview: { type: Boolean, default: false },
 }, { _id: false });
 
-const agentConfigSchema = new mongoose.Schema({
+export const agentConfigSchema = new mongoose.Schema({
   agentName: { type: String, trim: true, maxlength: 120, default: 'Assistant' },
   organizationName: { type: String, trim: true, maxlength: 200, default: '' },
   disclosure: { type: String, trim: true, maxlength: 2000, default: '' },
@@ -55,7 +55,7 @@ const agentConfigSchema = new mongoose.Schema({
   shareLeadNotes: { type: Boolean, default: false },
 }, { _id: false });
 
-const scheduleSchema = new mongoose.Schema({
+export const scheduleSchema = new mongoose.Schema({
   timezone: { type: String, default: 'UTC', maxlength: 80 },
   callWindow: {
     start: { type: String, default: '09:00', maxlength: 5 },
@@ -110,6 +110,15 @@ const linkConfigSchema = new mongoose.Schema({
 }, { _id: false });
 
 const campaignSchema = new mongoose.Schema({
+  agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallingAgent', default: null },
+  agentSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+  launchKey: { type: String, default: undefined, maxlength: 100 },
+  launchRequestHash: { type: String, default: null },
+  initializationPending: { type: Boolean, default: false },
+  activatedAt: { type: Date, default: null },
+  executionEndsAt: { type: Date, default: null },
+  continueAcrossDays: { type: Boolean, default: true },
+  waitReason: { type: String, default: null },
   name: { type: String, required: true, trim: true, maxlength: 160 },
   description: { type: String, trim: true, maxlength: 1000, default: '' },
   status: { type: String, enum: CAMPAIGN_STATUSES, default: 'draft', index: true },
@@ -131,6 +140,8 @@ const campaignSchema = new mongoose.Schema({
   },
   linkConfig: { type: linkConfigSchema, default: undefined },
   schedule: { type: scheduleSchema, default: () => ({ ...DEFAULT_SCHEDULE }) },
+  // Launch mode controls activation time; all modes retain permitted calling windows.
+  runMode: { type: String, enum: ['immediate', 'scheduled'], default: 'scheduled' },
 
   selection: {
     mode: { type: String, enum: ['explicit', 'filters'], required: true },
@@ -184,6 +195,10 @@ const campaignSchema = new mongoose.Schema({
 }, { timestamps: true, minimize: false });
 
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
+campaignSchema.index({ createdBy: 1, agentId: 1, createdAt: -1 });
+campaignSchema.index({ createdBy: 1, agentId: 1, launchKey: 1 }, {
+  unique: true, partialFilterExpression: { launchKey: { $type: 'string' }, agentId: { $type: 'objectId' } }, name: 'agent_launch_idempotency',
+});
 campaignSchema.index({ status: 1, scheduledAt: 1 });
 campaignSchema.index({ status: 1, nextTickAt: 1 }); // tick-chain watchdog
 

@@ -1,11 +1,27 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
-import type { DeviceLimits, PairedDevice, VoiceSettings } from '../types/ai-calling-types';
+import type { BridgeAudioTest, DeviceLimits, PairedDevice, SetupAction, VoiceSettings } from '../types/ai-calling-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
 const unwrap = <T,>(res: unknown): T => ((res as { data?: T }).data ?? res) as T;
 
 export const pairedPhoneApi = {
+  async setupAction(id: string, action: SetupAction): Promise<NonNullable<PairedDevice['setup']>> {
+    return unwrap(await apiClient.post(ENDPOINTS.PAIRED_PHONE.SETUP(id), { action }));
+  },
+  async setupSettings(id: string, input: { playbackGainDb?: number; autoConnect?: boolean }): Promise<NonNullable<PairedDevice['setup']>> {
+    return unwrap(await apiClient.patch(ENDPOINTS.PAIRED_PHONE.SETUP(id), input));
+  },
+  async startAudioTest(id: string, input: { destination: string; ownsDestination: boolean }): Promise<BridgeAudioTest> {
+    return unwrap(await apiClient.post(ENDPOINTS.PAIRED_PHONE.AUDIO_TEST(id), input));
+  },
+  async audioTestResult(id: string, callId: string): Promise<BridgeAudioTest> {
+    return unwrap(await apiClient.get(ENDPOINTS.PAIRED_PHONE.AUDIO_TEST_RESULT(id, callId)));
+  },
+  async downloadGateway(): Promise<Blob> {
+    const response = await apiClient.get(ENDPOINTS.PAIRED_PHONE.GATEWAY_PACKAGE, { responseType: 'blob' });
+    return (response as unknown as { data: Blob }).data;
+  },
   async devices(): Promise<PairedDevice[]> {
     return unwrap<PairedDevice[]>(await apiClient.get(ENDPOINTS.PAIRED_PHONE.DEVICES));
   },

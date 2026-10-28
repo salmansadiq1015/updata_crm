@@ -31,6 +31,8 @@ describe('paired-phone readiness', () => {
     [{ lastHeartbeatAt: new Date(now.getTime() - 60_000) }, 'gateway_offline', false],
     [{ board: { connected: false } }, 'board_disconnected', false],
     [{ board: { connected: true, keyProvisioned: false } }, 'key_not_provisioned', true],
+    [{ dialKey: { state: 'pending' } }, 'key_not_provisioned', true],
+    [{ dialKey: { state: 'delivered' } }, 'key_not_provisioned', true],
     [{ state: { hfp: 'connected' } }, 'phone_not_connected', false],
     [{ state: { hfp: 'slc', call: 1 } }, 'phone_in_call', false],
     [{ state: { device: 'fault', hfp: 'slc' } }, 'firmware_fault', true],
@@ -49,6 +51,16 @@ describe('paired-phone readiness', () => {
     expect(deviceReadiness(ready(), { now, callsLastHour: 20 }).reasons).toEqual(['hourly_cap']);
     expect(deviceReadiness(ready(), { now, callsToday: 100 }).reasons).toEqual(['daily_cap']);
     expect(deviceReadiness(null, { now })).toMatchObject({ ok: false, blocking: true });
+  });
+
+  it('a diagnostic audio test skips only prior audio proof and never key, fault or connection gates', () => {
+    const d = ready({ audioVerifiedAt: null });
+    expect(deviceReadiness(d, { now }).reasons).toContain('audio_not_verified');
+    expect(deviceReadiness(d, { now, audioVerificationTest: true }).ok).toBe(true);
+    expect(deviceReadiness({ ...d, board: { connected: true, keyProvisioned: false } }, { now, audioVerificationTest: true }).reasons).toContain('key_not_provisioned');
+    expect(deviceReadiness({ ...d, state: { hfp: 'disconnected' } }, { now, audioVerificationTest: true }).reasons).toContain('phone_not_connected');
+    expect(deviceReadiness({ ...d, attention: { needed: true } }, { now, audioVerificationTest: true }).reasons).toContain('needs_attention');
+    expect(d.audioVerifiedAt).toBeNull();
   });
 });
 

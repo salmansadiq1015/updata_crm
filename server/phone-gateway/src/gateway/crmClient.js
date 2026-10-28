@@ -72,6 +72,9 @@ export class CrmClient {
     return this.request('/dial-key/confirm', { bdaddr });
   }
 
+  claimSetup(id) { return this.request(`/setup/${encodeURIComponent(id)}/claim`); }
+  completeSetup(id, result) { return this.request(`/setup/${encodeURIComponent(id)}/result`, result); }
+
   claim(sessionNonce) {
     return this.request('/calls/claim', { sessionNonce });
   }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Thin client for the CRM AI-calling agent tool API.
  *
@@ -14,20 +15,22 @@ export class ToolApi {
     this.callId = callId;
   }
 
-  async _post(path, body = {}) {
+  async _post(path, body = {}, timeoutMs = 20_000) {
     const res = await fetch(`${this.apiBase}/${this.callId}${path}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error?.message || `tool call failed (${res.status})`);
+    if (!res.ok) { const error = new Error(json?.error?.message || `tool call failed (${res.status})`); error.status = res.status; throw error; }
     return json.data ?? json;
   }
 
   async context() {
     const res = await fetch(`${this.apiBase}/${this.callId}/context`, {
       headers: { Authorization: `Bearer ${this.token}` },
+      signal: AbortSignal.timeout(15000),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error?.message || `context failed (${res.status})`);
@@ -37,13 +40,22 @@ export class ToolApi {
   answered() { return this._post('/answered'); }
   disclose() { return this._post('/disclose'); }
   recordAnswer(fieldKey, rawAnswer) { return this._post('/record-answer', { fieldKey, rawAnswer }); }
+  recordAnswers(answers) { return this._post('/record-answers', { answers }); }
+  async noResponse(fieldKey, reason, requestId = randomUUID()) {
+    const body = { fieldKey, reason, requestId };
+    try { return await this._post('/no-response', body); } catch (error) {
+      if (error.status && error.status < 500) throw error;
+      return this._post('/no-response', body); // A lost acknowledgement must not consume two retries.
+    }
+  }
   markUnknown(fieldKey) { return this._post('/mark-unknown', { fieldKey }); }
   confirm(fieldKey, reply = null) { return this._post('/confirm', { fieldKey, reply }); }
   requestCallback(when, note, human = false) { return this._post('/request-callback', { when, note, human }); }
   doNotContact() { return this._post('/do-not-contact'); }
   decline() { return this._post('/decline'); }
   end(payload) { return this._post('/end', payload); }
-  transcript(role, text, itemId) { return this._post('/transcript', { role, text, itemId }); }
+  transcript(role, text, itemId, interrupted = false, at = null) { return this._post('/transcript', { role, text, itemId, interrupted, ...(at ? { at } : {}) }, 5000); }
+  activity(agentState, speaker) { return this._post('/activity', { agentState, speaker }, 3000); }
 }
 
 /** Render the engine's next action into a short instruction for the model. */
@@ -71,14 +83,14 @@ export function actionToInstruction(action) {
         'call the disclose tool before saying anything else. Do not ask any other question first.';
     case 'ask':
       return `Ask this question naturally (you may rephrase, keep the meaning): "${action.question.text}". ` +
-        `When they answer, call record_answer with fieldKey="${action.question.fieldKey}" and their answer.${answerFormat(action.question)}`;
+        `If they give an unrelated or unintelligible response, call no_response instead of saving it as an answer. When they answer, call record_answer with fieldKey="${action.question.fieldKey}" and their answer.${answerFormat(action.question)}`;
     case 'clarify':
-      return `Their last answer to "${action.question.text}" was unclear. Ask ONE brief clarifying question, then call record_answer with fieldKey="${action.question.fieldKey}" again.${answerFormat(action.question)}`;
+      return `No usable answer was recorded for "${action.question.text}". Repeat this same question politely; do not change its meaning or claim an answer was given. Ask ONE brief clarifying question, then call record_answer with fieldKey="${action.question.fieldKey}" again.${answerFormat(action.question)}`;
     case 'confirm':
       return `Read back their answer to confirm it is correct. If they say yes, call confirm with fieldKey="${action.question.fieldKey}"; ` +
         'if they correct it, call record_answer with the corrected value.';
     case 'finish':
-      return 'All questions are done. Briefly thank them, say goodbye, then call finish_call.';
+      return 'All applicable questions have been attempted. Missing answers remain unanswered and may need review. Briefly thank them, say goodbye, then call finish_call.';
     case 'end':
       return `End the call politely (reason: ${action.reason}). Then call finish_call.`;
     default:

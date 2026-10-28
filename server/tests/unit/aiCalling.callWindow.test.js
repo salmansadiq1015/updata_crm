@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
-  windowState, nextWindowOpen, recipientWindow, recipientTimezone, parseDays, parseHours, isValidTimezone,
+  windowState, nextWindowOpen, nextWindowClose, recipientWindow, recipientTimezone, parseDays, parseHours, isValidTimezone,
 } from '../../src/modules/aiCalling/engine/callWindow.js';
 import { mapLiveKitWebhook } from '../../src/modules/aiCalling/providers/livekitWebhook.js';
 import { normalizeTelephonyStatus } from '../../src/modules/aiCalling/aiCalling.constants.js';
@@ -102,5 +102,27 @@ describe('next calling-window opening (shown to people)', () => {
     // Night of the 25 Oct 2026 change (CEST → CET): 09:00 local is 08:00 UTC.
     expect(nextWindowOpen(zurich, new Date('2026-10-24T22:00:00Z'))?.toISOString()).toBe('2026-10-25T08:00:00.000Z');
     expect(nextWindowOpen({ ...zurich, daysOfWeek: [9] }, new Date())).toBeNull();
+  });
+});
+
+
+describe('execution-window boundaries', () => {
+  it('attributes an overnight window to the day it starts', () => {
+    const schedule = { timezone: 'UTC', callWindow: { start: '22:00', end: '02:00' }, daysOfWeek: [1] };
+    expect(windowState(schedule, new Date('2026-10-19T01:00:00Z')).open).toBe(false);
+    expect(windowState(schedule, new Date('2026-10-19T23:00:00Z')).open).toBe(true);
+    expect(windowState(schedule, new Date('2026-10-20T01:00:00Z')).open).toBe(true);
+    expect(windowState(schedule, new Date('2026-10-20T02:00:00Z')).open).toBe(false);
+    expect(nextWindowClose(schedule, new Date('2026-10-19T23:00:00Z')).toISOString()).toBe('2026-10-20T02:00:00.000Z');
+  });
+  it('finds short windows without skipping them and never opens empty days', () => {
+    const schedule = { timezone: 'UTC', callWindow: { start: '09:07', end: '09:08' }, daysOfWeek: [1] };
+    expect(nextWindowOpen(schedule, new Date('2026-10-19T08:00:00Z')).toISOString()).toBe('2026-10-19T09:07:00.000Z');
+    expect(nextWindowClose(schedule, new Date('2026-10-19T08:00:00Z')).toISOString()).toBe('2026-10-19T09:08:00.000Z');
+    expect(windowState({ ...schedule, daysOfWeek: [] }, new Date('2026-10-19T09:07:00Z')).open).toBe(false);
+  });
+  it('computes the end after a timezone clock change using real instants', () => {
+    const schedule = { timezone: 'America/New_York', callWindow: { start: '00:30', end: '03:30' }, daysOfWeek: [0] };
+    expect(nextWindowClose(schedule, new Date('2026-11-01T04:30:00Z')).toISOString()).toBe('2026-11-01T08:30:00.000Z');
   });
 });

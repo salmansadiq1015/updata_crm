@@ -19,10 +19,28 @@ const answerSchema = new mongoose.Schema({
   validation: { type: String, enum: ANSWER_VALIDATION, default: 'unknown' },
   confirmed: { type: Boolean, default: false },
   clarifications: { type: Number, default: 0 },
+  noResponseCount: { type: Number, default: 0 },
+  reason: { type: String, maxlength: 300, default: null },
   source: { type: String, maxlength: 40, default: 'agent_tool' },
   confidence: { type: Number, default: null },
   reviewStatus: { type: String, enum: ANSWER_REVIEW, default: 'none' },
   recordedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
+const callNotesSchema = new mongoose.Schema({
+  description: { type: String, maxlength: 2000, default: '' },
+  summary: { type: String, maxlength: 4000, default: '' },
+  blockers: { type: [{ type: String, maxlength: 500 }], default: [] },
+  source: { type: String, enum: ['ai_agent', 'call_results'], default: 'call_results' },
+  generatedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
+const transcriptTurnSchema = new mongoose.Schema({
+  itemId: { type: String, required: true, maxlength: 120 },
+  role: { type: String, enum: ['assistant', 'customer'], required: true },
+  text: { type: String, maxlength: 4000, required: true },
+  interrupted: { type: Boolean, default: false },
+  at: { type: Date, default: Date.now },
 }, { _id: false });
 
 const callRecordSchema = new mongoose.Schema({
@@ -77,6 +95,7 @@ const callRecordSchema = new mongoose.Schema({
       durationSeconds: { type: Number, default: null },
       transcriptRef: { type: String, maxlength: 500, default: null },
       cost: { type: mongoose.Schema.Types.Mixed, default: null },
+      callNotes: { type: callNotesSchema, default: undefined },
     }, { _id: false }),
     default: undefined,
   },
@@ -102,6 +121,16 @@ const callRecordSchema = new mongoose.Schema({
   durationSeconds: { type: Number, default: 0 },
 
   answers: { type: [answerSchema], default: [] },
+  transcript: { type: [transcriptTurnSchema], default: [] },
+  transcriptVersion: { type: Number, default: 0 },
+  transcriptUpdatedAt: { type: Date, default: null },
+  transcriptExpiresAt: { type: Date, default: null },
+  agentActivity: {
+    agentState: { type: String, enum: ['initializing', 'idle', 'listening', 'thinking', 'speaking', null], default: null },
+    speaker: { type: String, enum: ['assistant', 'customer', null], default: null },
+    at: { type: Date, default: null },
+  },
+  callNotes: { type: callNotesSchema, default: undefined },
   transcriptRef: { type: String, maxlength: 500, default: null }, // pointer, not inline
   recordingRef: { type: String, maxlength: 500, default: null },
   cost: {

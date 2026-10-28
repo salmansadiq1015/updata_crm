@@ -7,6 +7,7 @@ import type { Campaign } from '../types/ai-calling-types';
 
 const mocks = vi.hoisted(() => ({
   startWebTest: vi.fn(),
+  getCall: vi.fn(),
   connect: vi.fn(),
   disconnect: vi.fn(),
   setMicrophoneEnabled: vi.fn(),
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../services/ai-calling-api', () => ({
-  aiCallingApi: { startWebTest: mocks.startWebTest },
+  aiCallingApi: { startWebTest: mocks.startWebTest, getCall: mocks.getCall },
 }));
 
 vi.mock('livekit-client', () => ({
@@ -42,7 +43,9 @@ vi.mock('livekit-client', () => ({
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
+    ParticipantAttributesChanged: 'participantAttributesChanged',
   },
+  DisconnectReason: { CLIENT_INITIATED: 1, ROOM_DELETED: 5 },
   Track: { Kind: { Audio: 'audio' } },
 }));
 
@@ -71,7 +74,8 @@ beforeEach(() => {
   mocks.callbacks = {};
   mocks.textStreams = {};
   mocks.agentPresent = true;
-  mocks.startWebTest.mockResolvedValue({ callId: 'call-1', roomName: 'room-1', url: 'wss://livekit.test', token: 'token' });
+  mocks.startWebTest.mockResolvedValue({ callId: 'call-1', recordId: 'record-1', roomName: 'room-1', url: 'wss://livekit.test', token: 'token' });
+  mocks.getCall.mockResolvedValue({ failureMessage: null });
   mocks.connect.mockResolvedValue(undefined);
   mocks.disconnect.mockResolvedValue(undefined);
   mocks.setMicrophoneEnabled.mockResolvedValue(undefined);
@@ -223,6 +227,51 @@ describe('WebCallConsole', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows the reason the agent reports (e.g. an expired OpenAI key) instead of "Test call ended"', async () => {
+    const { WebCallConsole } = await import('../ui/web-call-console');
+    render(<WebCallConsole campaignId="campaign-1" agentName="Maya" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start test session' }));
+    await waitFor(() => expect(screen.getByText('Live browser call')).toBeTruthy());
+    const reason = 'OpenAI rejected the voice agent\'s API key (invalid, revoked or expired).';
+    act(() => {
+      mocks.callbacks.participantAttributesChanged?.(
+        { 'updata.agent_error': '' },
+        { identity: 'agent-1', isLocal: false, attributes: { 'updata.agent_error': JSON.stringify({ code: 'OPENAI_KEY_INVALID', message: reason }) } },
+      );
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('revoked or expired');
+    act(() => { mocks.callbacks.disconnected?.(5); });
+    await waitFor(() => expect(screen.getByText('Browser call unavailable')).toBeTruthy());
+    expect(screen.queryByText('Test call ended')).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('revoked or expired');
+  });
+
+  it('falls back to the failure the CRM recorded when the agent closes the room silently', async () => {
+    mocks.getCall.mockResolvedValue({ failureMessage: 'The voice agent could not load this call from the CRM at http://localhost:9097 (Unauthorized).' });
+    const { WebCallConsole } = await import('../ui/web-call-console');
+    render(<WebCallConsole campaignId="campaign-1" agentName="Maya" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start test session' }));
+    await waitFor(() => expect(screen.getByText('Live browser call')).toBeTruthy());
+    act(() => { mocks.callbacks.disconnected?.(5); });
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not load this call from the CRM');
+    expect(mocks.getCall).toHaveBeenCalledWith('record-1');
+    expect(screen.getByText('Browser call unavailable')).toBeTruthy();
+  });
+
+  it('still reports a normal end once the agent has talked', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const { WebCallConsole } = await import('../ui/web-call-console');
+    render(<WebCallConsole campaignId="campaign-1" agentName="Maya" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start test session' }));
+    await waitFor(() => expect(screen.getByText('Live browser call')).toBeTruthy());
+    act(() => {
+      mocks.callbacks.trackSubscribed?.({ kind: 'audio', attach: vi.fn(), mediaStreamTrack: undefined });
+      mocks.callbacks.disconnected?.(5);
+    });
+    await waitFor(() => expect(screen.getByText('Test call ended')).toBeTruthy());
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('closing during the microphone publish waits for it before leaving the room (no orphaned publish)', async () => {

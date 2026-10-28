@@ -148,6 +148,9 @@ beforeEach(() => {
       pagination: { page: 1, limit: 100, total: 1, pages: 1 },
     })),
     http.get(`${BASE}/messaging/leads/:id/history`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/ai-calling/leads/:id/history`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/ai-calling/leads/:id/transitions`, () => HttpResponse.json(ok([]))),
+    http.get(`${BASE}/ai-calling/leads/:id/consent`, () => HttpResponse.json(ok({ status: 'missing', destinationAvailable: true }))),
     http.get(`${BASE}/messaging/leads/:id/consent`, ({ params }) => HttpResponse.json(ok({
       leadId: String(params.id),
       channels: [
@@ -180,6 +183,61 @@ const openDrawer = async (leadId: string, name: string) => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('lead detail drawer — contact actions', () => {
+  it('shows focused sections and supports keyboard navigation between tabs', async () => {
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    const user = userEvent.setup();
+    const overview = within(drawer).getByRole('tab', { name: 'Overview' });
+    expect(overview).toHaveAttribute('aria-selected', 'true');
+    expect(within(drawer).getAllByRole('tab')).toHaveLength(8);
+    expect(within(drawer).queryByText('Channel consent')).not.toBeInTheDocument();
+    expect(within(drawer).queryByText('No emails sent')).not.toBeInTheDocument();
+    overview.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(within(drawer).getByRole('tab', { name: 'Responses' })).toHaveAttribute('aria-selected', 'true');
+    expect(await within(drawer).findByText('Received messages')).toBeInTheDocument();
+    expect(within(drawer).queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument();
+  });
+
+  it('requests only received messages in Responses and preserves multiline reply text', async () => {
+    const requests: URL[] = [];
+    server.use(http.get(`${BASE}/messaging/leads/:id/history`, ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json(ok([{
+        _id: 'reply-1', direction: 'inbound', channel: 'sms', status: 'received', provider: 'textbee',
+        createdAt: new Date().toISOString(), rendered: { bodyText: 'Interested in pricing.\nPlease call tomorrow after 3 pm.' },
+      }]));
+    }));
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    const user = userEvent.setup();
+    await user.click(within(drawer).getByRole('tab', { name: 'Responses' }));
+    const reply = await within(drawer).findByText(/Interested in pricing/);
+    expect(reply).toHaveTextContent('Please call tomorrow after 3 pm.');
+    expect(reply).toHaveClass('whitespace-pre-wrap');
+    expect(requests.every(url => url.searchParams.get('status') === 'received')).toBe(true);
+    expect(within(drawer).queryByRole('combobox', { name: 'History status' })).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole('tab', { name: 'Activity' }));
+    expect(await within(drawer).findByRole('combobox', { name: 'History status' })).toBeInTheDocument();
+    await waitFor(() => expect(requests.some(url => !url.searchParams.has('status'))).toBe(true));
+  });
+
+  it('shows automatic notes under AI Calls and lead answers under Responses', async () => {
+    server.use(http.get(`${BASE}/ai-calling/leads/:id/history`, () => HttpResponse.json(ok([{
+      _id: 'call-1', internalCallId: 'call_test', attemptNumber: 1, state: 'completed', disposition: 'answered_completed',
+      durationSeconds: 45, campaignId: { _id: 'campaign-1', name: 'Pricing follow-up' },
+      answers: [{ questionFieldKey: 'need', label: 'Lead need', rawAnswer: 'We need five seats.', normalizedValue: 'Five seats', validation: 'valid' }],
+      callNotes: { description: 'Discussed the team plan.', summary: 'Send a quote for five seats.', blockers: ['Budget approval pending'], source: 'ai_agent', generatedAt: new Date().toISOString() },
+    }]))));
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    const user = userEvent.setup();
+    await user.click(within(drawer).getByRole('tab', { name: 'AI Calls' }));
+    expect(await within(drawer).findByText('Send a quote for five seats.')).toBeInTheDocument();
+    expect(within(drawer).getByText('Discussed the team plan.')).toBeInTheDocument();
+    expect(within(drawer).getByText('Budget approval pending')).toBeInTheDocument();
+    expect(within(drawer).queryByText('AI calling consent')).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole('tab', { name: 'Responses' }));
+    expect(await within(drawer).findByText('We need five seats.')).toBeInTheDocument();
+  });
+
   it('offers Email, SMS, and WhatsApp when the lead has the data and the user has the rights', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
 
@@ -242,6 +300,7 @@ describe('lead detail drawer — contact actions', () => {
 
   it('shows the communication history: e-mail panel + contact-log entries', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Activity' }));
 
     // The shared e-mail history panel renders its (empty) state.
     expect(await within(drawer).findByText('No emails sent')).toBeInTheDocument();
@@ -253,6 +312,7 @@ describe('lead detail drawer — contact actions', () => {
   it('shows effective channel consent and hides management from read-only users', async () => {
     auth.permissions = ['lead:read'];
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Consent' }));
 
     expect(await within(drawer).findByText('Channel consent')).toBeInTheDocument();
     expect(within(drawer).getByText('Consent granted')).toBeInTheDocument();
@@ -263,6 +323,7 @@ describe('lead detail drawer — contact actions', () => {
 
   it('separates contact availability from consent and exposes a clear recording action', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Consent' }));
 
     expect(await within(drawer).findByText('Channel consent')).toBeInTheDocument();
     expect(within(drawer).getAllByText('Contact available')).toHaveLength(3);
@@ -289,6 +350,7 @@ describe('lead detail drawer — contact actions', () => {
       }),
     );
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Consent' }));
     const user = userEvent.setup();
 
     await user.click(await within(drawer).findByRole('button', { name: 'Manage Email consent' }));
@@ -313,6 +375,7 @@ describe('lead detail drawer — contact actions', () => {
       return HttpResponse.json(ok([]));
     }));
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Activity' }));
     const user = userEvent.setup();
 
     await user.click(await within(drawer).findByRole('combobox', { name: 'History campaign' }));
@@ -325,6 +388,7 @@ describe('lead detail drawer — contact actions', () => {
   it('shows an empty state when there is no contact log', async () => {
     server.use(http.get(`${L}/:id/contact-log`, () => HttpResponse.json(ok([]))));
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('tab', { name: 'Activity' }));
 
     expect(await within(drawer).findByText('No communication logged yet.')).toBeInTheDocument();
   });

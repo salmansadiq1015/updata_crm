@@ -286,7 +286,7 @@ describe('SMS link voice call', () => {
     await agent.post('/record-answer', { fieldKey: 'bill', rawAnswer: '1' }).expect(409);
   });
 
-  it('a read-back the person never confirms is asked twice at most, then the call moves on (no loop)', async () => {
+  it('an unconfirmed read-back is repeated three times, then remains unconfirmed for review', async () => {
     const { path, phone, session } = await openLink();
     await phone.post(`${path}/api/voice/start`).set(H).send({});
     await linkVoice.pendingDispatch;
@@ -295,14 +295,14 @@ describe('SMS link voice call', () => {
     await agent.post('/record-answer', { fieldKey: 'interest', rawAnswer: 'yes' });
     await agent.post('/record-answer', { fieldKey: 'bill', rawAnswer: '120' });
     await agent.post('/record-answer', { fieldKey: 'email', rawAnswer: 'ali@example.com' });
-    // The model passed the value instead of the person's words: refused once…
-    expect((await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' })).status).toBe(409);
-    // …and on the second unconfirmed read-back the call moves on instead of asking forever.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect((await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' })).status).toBe(409);
+    }
     const second = await agent.post('/confirm', { fieldKey: 'email', reply: 'ali@example.com' });
     expect(second.status).toBe(200);
     expect(second.body.data).toMatchObject({ confirmed: false, nextAction: { type: 'finish' } });
     const call = await CallRecord.findById(session.callRecordId);
-    expect(call.conversationState.answers.email).toMatchObject({ confirmed: false, confirmSkipped: true, confirmRejections: 2 });
+    expect(call.conversationState.answers.email).toMatchObject({ confirmed: false, confirmSkipped: true, confirmRejections: 4 });
   });
 
   it('a partial call stays open: hang up, then continue by voice again from the next question', async () => {

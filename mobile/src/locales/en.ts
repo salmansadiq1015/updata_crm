@@ -673,7 +673,19 @@ export const en = {
       ineligible: 'Not eligible',
       cancelled: 'Cancelled',
     },
+    answerStatus: {
+      answered: 'Answered',
+      unknown: 'Lead does not know',
+      needs_clarification: 'Needs clarification',
+      needs_confirmation: 'Needs confirmation',
+      not_applicable: 'Condition not met',
+      not_answered: 'Not answered',
+      pending: 'Awaiting answer',
+    },
     conversation: {
+      insights: 'Conversation insights',
+      coverage:
+        '{{answered}} of {{total}} applicable questions validated · {{missing}} required answers need review',
       title: 'SMS conversation',
       answers: 'Collected answers',
       noAnswers: 'No answers yet.',
@@ -1020,7 +1032,8 @@ export const en = {
       notReached: 'Not reached · close',
       notReachedHint: 'The call never connected. Closed without calling again.',
       retry: 'Not reached · call again',
-      retryHint: 'The call never connected. The lead goes back in the queue; calling hours, do-not-call and limits still apply.',
+      retryHint:
+        'The call never connected. The lead goes back in the queue; calling hours, do-not-call and limits still apply.',
       confirmTitle: 'Record this outcome?',
       confirmBody: 'This can be done only once for this call.',
       confirm: 'Record',

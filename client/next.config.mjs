@@ -59,6 +59,8 @@ const gitDirty = process.env.NEXT_PUBLIC_GIT_DIRTY || (readGit('git status --por
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow isolated QA builds without touching a running development server.
+  distDir: process.env.UPDATA_NEXT_DIST_DIR || '.next',
   // Inlined into the client bundle at build time. Nothing secret: a commit
   // hash of a private repository identifies a version, it does not open one.
   env: {

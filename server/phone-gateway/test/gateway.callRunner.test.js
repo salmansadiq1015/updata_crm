@@ -97,6 +97,47 @@ test('answered call: states mirrored into LiveKit, audio both ways, agent ends i
   c.end();
 });
 
+test('idle before Android creates the outgoing call does not orphan the dial', async (t) => {
+  const c = await setup();
+  t.after(() => { if (c.runner.phase !== 'done') c.runner.finish('test_cleanup'); c.end(); });
+  // Inject synchronously at accepted DIAL; timer polling could miss this phase
+  // on a busy host and leave the test waiting forever.
+  const push = c.ob.push;
+  c.ob.push = (...args) => {
+    push(...args);
+    if (args[1] === 'dialing') {
+      c.runner.onState({ hfp: 'slc', call: 0, callsetup: 0, audio: 'off', codec: 'none' });
+      assert.equal(c.runner.phase, 'dialing');
+      assert.equal(c.leg.closed, false);
+    }
+  };
+  const done = c.runner.start();
+  await c.device.waitForState((s) => s.call === 1, 1000);
+  assert.ok(c.runner.sawSetup);
+  await c.leg.close();
+  const result = await done;
+  assert.equal(result.result, 'ended');
+  assert.equal(c.fake.log.hangups, 1);
+  c.end();
+});
+
+test('configured AI gain reaches the phone without changing the return audio path', async (t) => {
+  const c = await setup({}, {}, {}, { agentGainDb: 20 * Math.log10(2) });
+  t.after(() => { if (c.runner.phase !== 'done') c.runner.finish('test_cleanup'); c.end(); });
+  const done = c.runner.start();
+  await c.device.waitForState((s) => s.audio === 'on', 1000);
+  c.leg.speak(200);
+  await sleep(400);
+  const played = c.fake.played();
+  let peak = 0;
+  for (let i = 0; i < played.length; i += 2) peak = Math.max(peak, Math.abs(played.readInt16LE(i)));
+  assert.equal(peak, 16000);
+  assert.ok(c.leg.phoneFrames > 5);
+  await c.leg.close();
+  await done;
+  c.end();
+});
+
 test('lead hangs up → ended remote_hangup, no hang-up sent by us', async () => {
   const c = await setup({ remoteHangupAfterMs: 200 });
   const res = await c.runner.start();
@@ -142,6 +183,18 @@ test('answered but the audio link never opens → audio_lost + hang up', async (
   assert.deepEqual(c.ob.types().slice(-2), ['audio_lost', 'ended']);
   assert.equal(c.ob.events.at(-1).data.reason, 'audio_failed');
   assert.ok(c.fake.log.commands.includes(0x22), 'gateway asked for the audio link');
+  c.end();
+});
+
+test('SCO connected without decoded PCM fails promptly and hangs up the phone', async () => {
+  const c = await setup({ audioFrames: false });
+  const res = await c.runner.start();
+  assert.equal(res.result, 'ended');
+  assert.ok(c.ob.types().includes('audio_opened'));
+  assert.equal(c.ob.events.find((e) => e.type === 'audio_lost').data.detail, 'no decoded phone audio after answer');
+  assert.equal(c.ob.events.at(-1).data.reason, 'audio_failed');
+  assert.equal(c.fake.log.hangups, 1);
+  assert.equal(c.leg.closed, true);
   c.end();
 });
 

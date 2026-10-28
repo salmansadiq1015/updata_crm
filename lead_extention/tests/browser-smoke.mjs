@@ -165,7 +165,7 @@ try {
         queryExpansion: false, enableEnrichment: false, maxPagesPerWebsite: 1,
         safetyLimit: 60, areaSweep: true, thoroughContacts: false,
         maxAreaTiles: 1, requestDelayMs: 5000,
-        centerLatitude: 48.8566, centerLongitude: 2.3522
+        selectedCenter: { latitude: 48.8566, longitude: 2.3522 }
       }
     });
     await chrome.storage.session.set({ 'crm-access-token': 'browser-smoke-only' });
@@ -175,14 +175,13 @@ try {
   const campaignUi = await evaluate(extensionSession, `(() => ({
     selectedText: document.querySelector('#business-types')?.textContent,
     chips: [...document.querySelectorAll('.type-chip')].map((item) => item.textContent),
-    latitude: document.querySelector('#center-latitude')?.value,
-    longitude: document.querySelector('#center-longitude')?.value,
+    coordinateInputs: document.querySelectorAll('#center-latitude, #center-longitude').length,
     globalLimit: document.querySelector('.effective-limit')?.textContent,
     accessible: document.querySelector('#business-types')?.getAttribute('aria-haspopup')
   }))()`);
   assert(campaignUi.selectedText.includes('2 business types selected') && campaignUi.chips.length === 2, 'Multi-select restores ordered business types as removable chips');
   assert(campaignUi.accessible === 'listbox', 'Multi-select exposes accessible listbox semantics');
-  assert(campaignUi.latitude === '48.8566' && campaignUi.longitude === '2.3522', 'Latitude/longitude campaign center survives panel reload');
+  assert(campaignUi.coordinateInputs === 0, 'Search brief has no manual latitude/longitude inputs');
   assert(campaignUi.globalLimit.includes('4 unique businesses total'), 'UI explains the global cross-type maximum before start');
 
   const keyboardSelection = await evaluate(extensionSession, `(async () => {
@@ -350,7 +349,7 @@ try {
     businessType: 'Hotel', businessTypes: ['Hotel', 'Gym'], location: 'Paris, France',
     radiusKm: 0.5, maxResults: 50, queryExpansion: false, enableEnrichment: false,
     maxPagesPerWebsite: 1, safetyLimit: 60, areaSweep: true, thoroughContacts: false,
-    maxAreaTiles: 1, requestDelayMs: 5000, centerLatitude: 48.8566, centerLongitude: 2.3522
+    maxAreaTiles: 1, requestDelayMs: 5000, selectedCenter: { latitude: 48.8566, longitude: 2.3522 }
   } })`);
   await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
   await waitFor(extensionSession, 'document.querySelector("#business-types")');

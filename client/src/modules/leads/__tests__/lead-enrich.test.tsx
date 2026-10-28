@@ -269,7 +269,7 @@ describe('lead detail drawer — enrichment', () => {
     const { dialog } = await openDrawer('lead-enrich', 'Enrich Me AG');
 
     // Wait for the body to settle, then assert the enrich control is absent.
-    expect(await within(dialog).findByText('Enrichment')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Pipeline')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Enrich from website' })).not.toBeInTheDocument();
   });
 
@@ -283,10 +283,12 @@ describe('lead detail drawer — enrichment', () => {
 
     // The returned lead is reflected: the filled e-mail + the LinkedIn profile appear.
     expect(await within(dialog).findByText('found@enrichme.ch')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('tab', { name: 'Business' }));
     const linkedin = await within(dialog).findByRole('link', { name: 'https://linkedin.com/company/enrichme' });
     expect(linkedin).toHaveAttribute('href', 'https://linkedin.com/company/enrichme');
     expect(linkedin).toHaveAttribute('rel', expect.stringContaining('noopener'));
 
+    await user.click(within(dialog).getByRole('tab', { name: 'Overview' }));
     // The honest summary note claims only the found/applied counts (2 fields filled).
     expect(
       await within(dialog).findByText('Found 1 email(s), 1 social link(s); filled 2 field(s)'),
@@ -298,6 +300,7 @@ describe('lead detail drawer — enrichment', () => {
   it('renders social profile links when the lead already has them', async () => {
     const { dialog } = await openDrawer('lead-social', 'Social AG');
 
+    await userEvent.setup().click(within(dialog).getByRole('tab', { name: 'Business' }));
     expect(await within(dialog).findByText('Social profiles')).toBeInTheDocument();
     const facebook = within(dialog).getByRole('link', { name: 'https://facebook.com/socialag' });
     expect(facebook).toHaveAttribute('href', 'https://facebook.com/socialag');

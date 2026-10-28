@@ -63,6 +63,9 @@ const config = Object.freeze({
 
   db: {
     uri: envVars.MONGODB_URI,
+    serverSelectionTimeoutMS: envVars.MONGODB_SERVER_SELECTION_TIMEOUT_MS,
+    connectAttempts: envVars.MONGODB_CONNECT_ATTEMPTS,
+    connectRetryDelayMS: envVars.MONGODB_CONNECT_RETRY_DELAY_MS,
   },
 
   tasks: {

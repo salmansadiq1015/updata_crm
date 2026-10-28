@@ -55,7 +55,7 @@ vi.mock('@/stores/auth-store', () => {
   const state = {
     user: {
       id: 'u-me',
-      permissions: ['lead:read', 'lead:write', 'lead:convert', 'lead:delete', 'discovery:read', 'crm:write', 'lead:whatsapp'],
+      permissions: ['lead:read', 'lead:write', 'lead:convert', 'lead:delete', 'discovery:read', 'crm:write', 'lead:whatsapp', 'ai-calling:read', 'ai-calling:write'],
     },
     isAuthenticated: true,
     isLoading: false,
@@ -427,6 +427,36 @@ describe('LeadListView', () => {
   });
 
   describe('selection and bulk actions', () => {
+    it.each(['single', 'bulk'])('assigns %s leads to a calling agent without replacing its existing leads', async mode => {
+      const requests: Record<string, unknown>[] = [];
+      const target = { _id: 'agent-support', name: 'Support intake', title: 'Support specialist', availability: 'active', version: 7, assignedLeadIds: ['previous-lead'], avatarUrl: null };
+      server.use(
+        http.get(`${BASE}/ai-calling/agents`, () => HttpResponse.json({ ...ok({ agents: [target], summary: {} }), pagination: { page: 1, pages: 1, total: 1, limit: 24 } })),
+        http.get(`${BASE}/ai-calling/agents/agent-support`, () => HttpResponse.json(ok(target))),
+        http.put(`${BASE}/ai-calling/agents/agent-support/leads`, async ({ request }) => {
+          const body = await request.json() as { leadIds: string[]; version: number; mode: string }; requests.push(body);
+          return HttpResponse.json(ok({ ...target, version: 8, assignedLeadIds: [...target.assignedLeadIds, ...body.leadIds] }));
+        }),
+      );
+      const { user } = renderLeadList();
+      const row = await findRow('Alpine Bakery AG');
+      if (mode === 'single') {
+        await user.click(within(row).getByRole('button', { name: 'Row actions' }));
+        await user.click(await screen.findByRole('menuitem', { name: 'Assign to calling agent' }));
+      } else {
+        await user.click(within(row).getByRole('checkbox'));
+        await user.click(within(await findRow('Basel Dental GmbH')).getByRole('checkbox'));
+        await user.click(within(await screen.findByRole('region', { name: 'Bulk actions' })).getByRole('button', { name: 'Assign to agent' }));
+      }
+      const dialog = await screen.findByRole('dialog', { name: 'Assign leads to agent' });
+      await user.click(await within(dialog).findByRole('radio', { name: 'Select Support intake' }));
+      const count = mode === 'single' ? 1 : 2;
+      const submit = within(dialog).getByRole('button', { name: `Assign ${count} ${count === 1 ? 'lead' : 'leads'}` });
+      await waitFor(() => expect(submit).toBeEnabled()); await user.click(submit);
+      await waitFor(() => expect(requests).toEqual([{ leadIds: mode === 'single' ? ['lead-a'] : ['lead-a', 'lead-b'], version: 7, mode: 'add' }]));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Assign leads to agent' })).not.toBeInTheDocument());
+    });
+
     it('shows the bulk bar while rows are selected and hides it again', async () => {
       const { user } = renderLeadList();
       const row = await findRow('Alpine Bakery AG');
@@ -559,6 +589,7 @@ describe('LeadListView', () => {
       expect(maps.getAttribute('href')).toContain('https://www.google.com/maps/search/?api=1');
       expect(maps.getAttribute('href')).toContain('query_place_id=ChIJ-alpine-bakery');
 
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       // Provenance: source, place id, discovery session, rating.
       expect(within(drawer).getByText('Google Places')).toBeInTheDocument();
       expect(within(drawer).getByText('ChIJ-alpine-bakery')).toBeInTheDocument();
@@ -653,6 +684,7 @@ describe('LeadListView', () => {
       await user.click(await screen.findByRole('button', { name: 'Populated AG' }));
       const drawer = await screen.findByRole('dialog', { name: 'Populated AG' });
 
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       expect(creatorRow(drawer)).toHaveTextContent('Olivia Keller');
       expect(within(drawer).getByText('Created')).toBeInTheDocument();
     });
@@ -663,6 +695,7 @@ describe('LeadListView', () => {
       await user.click(await screen.findByRole('button', { name: 'Directory GmbH' }));
       const drawer = await screen.findByRole('dialog', { name: 'Directory GmbH' });
 
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       await waitFor(() => expect(creatorRow(drawer)).toHaveTextContent('Noah Frei'));
     });
 
@@ -672,6 +705,7 @@ describe('LeadListView', () => {
       await user.click(await screen.findByRole('button', { name: 'Nobody SA' }));
       const drawer = await screen.findByRole('dialog', { name: 'Nobody SA' });
 
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       expect(creatorRow(drawer)).toHaveTextContent('—');
     });
 
@@ -694,14 +728,17 @@ describe('LeadListView', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Known Creator AG' }));
       const drawer = await screen.findByRole('dialog', { name: 'Known Creator AG' });
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       expect(creatorRow(drawer)).toHaveTextContent('Noah Frei');
 
+      await user.click(within(drawer).getByRole('tab', { name: 'Overview' }));
       await user.click(within(drawer).getByRole('combobox', { name: 'Status' }));
       await user.click(await screen.findByRole('option', { name: 'Contacted' }));
 
       // The response landed (the title is now the saved name) ...
       await screen.findByRole('dialog', { name: 'Known Creator AG (saved)' });
       // ... and it carried only a bare id, yet the creator is still named.
+      await user.click(within(drawer).getByRole('tab', { name: 'Details' }));
       expect(creatorRow(drawer)).toHaveTextContent('Noah Frei');
     });
   });

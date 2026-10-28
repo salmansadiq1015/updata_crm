@@ -58,11 +58,11 @@ export function once(fn) {
 }
 
 /**
- * Silence policy: the first "away" prompts the caller, the second ends the call.
+ * Disclosure silence policy: repeat three times, then stop without assuming agreement.
  * Returns the action for the n-th consecutive away period.
  */
 export function silenceAction(consecutiveAway) {
-  return consecutiveAway <= 1 ? 'prompt' : 'end';
+  return consecutiveAway <= 3 ? 'prompt' : 'end';
 }
 
 /**

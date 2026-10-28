@@ -9,6 +9,7 @@
 //
 // Modes:
 //   list                         paired devices (+ HFP audio-gateway role) and CoreAudio devices
+//   inquiry --device <address>   discover one unpaired board and inspect its public SDP services
 //   connect --device <addr|name> open the HFP service-level connection, log features/indicators
 //   call --device <addr|name> --number <e164> --i-own-this-number
 //        [--say "<sentence>"] [--record-seconds 25] [--out <dir>]
@@ -627,7 +628,27 @@ func describeRecords(_ dev: IOBluetoothDevice) {
 }
 
 func runSdp() {
-    guard let key = args["device"], let dev = findDevice(key) else { fail("--device required / not paired") }
+    guard let key = args["device"] else { fail("--device required") }
+    let candidate: IOBluetoothDevice?
+    if flags.contains("unpaired-address") {
+        guard key.range(of: "^[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}$", options: .regularExpression) != nil else {
+            fail("--unpaired-address requires an exact Bluetooth address")
+        }
+        candidate = IOBluetoothDevice(addressString: key)
+    } else {
+        candidate = findDevice(key)
+    }
+    guard let dev = candidate else { fail("Bluetooth device unavailable / not paired") }
+    let alreadyConnected = dev.isConnected()
+    defer {
+        if flags.contains("unpaired-address") && !alreadyConnected {
+            log("sdp.connection_released", ["status": Int(dev.closeConnection())])
+        }
+    }
+    if flags.contains("name") {
+        let status = dev.remoteNameRequest(nil, withPageTimeout: 4096)
+        log("sdp.remote_name", ["status": Int(status), "name": dev.name ?? "", "address": dev.addressString ?? ""])
+    }
     log("sdp.cached_records", ["count": dev.services?.count ?? 0, "last_update": "\(String(describing: dev.getLastServicesUpdate()))"])
     describeRecords(dev)
     if flags.contains("cached") { return } // no radio traffic: decode what macOS already cached
@@ -635,12 +656,55 @@ func runSdp() {
     let r = dev.performSDPQuery(w)
     log("sdp.query_started", ["status": Int(r)])
     pump(Double(args["wait"] ?? "60") ?? 60) { w.done }
+    log("sdp.query_wait_completed", ["callback_received": w.done])
     describeRecords(dev)
+    log("sdp.device_roles", ["hfp_hands_free_device": dev.isHandsFreeDevice,
+                              "hfp_audio_gateway": dev.isHandsFreeAudioGateway])
     if let rec = dev.handsFreeAudioGatewayServiceRecord() {
         var ch: BluetoothRFCOMMChannelID = 0
         _ = rec.getRFCOMMChannelID(&ch)
         log("sdp.hfp_ag", ["rfcomm_channel": Int(ch)])
     } else { log("sdp.hfp_ag", ["record": "none"]) }
+}
+
+final class InquiryObserver: NSObject, IOBluetoothDeviceInquiryDelegate {
+    var done = false
+    var status: IOReturn = kIOReturnSuccess
+    func deviceInquiryComplete(_ sender: IOBluetoothDeviceInquiry!, error: IOReturn, aborted: Bool) {
+        status = error
+        done = true
+    }
+}
+
+/// Radio-only check of the ESP32's discoverability; never pairs or opens HFP.
+func runInquiry() {
+    guard let key = args["device"] else { fail("inquiry requires --device <Bluetooth address>") }
+    let norm = key.lowercased().replacingOccurrences(of: ":", with: "-")
+    let observer = InquiryObserver()
+    guard let inquiry = IOBluetoothDeviceInquiry(delegate: observer) else { fail("Bluetooth inquiry is unavailable") }
+    inquiry.inquiryLength = 10
+    inquiry.updateNewDeviceNames = true
+    let result = inquiry.start()
+    log("inquiry.started", ["status": Int(result), "target": key])
+    guard result == kIOReturnSuccess else { fail("Bluetooth inquiry could not start", ["status": Int(result)]) }
+    pump(45) { observer.done }
+    if !observer.done { _ = inquiry.stop() }
+    let found = (inquiry.foundDevices() as? [IOBluetoothDevice]) ?? []
+    log("inquiry.complete", ["status": Int(observer.status), "completed": observer.done, "count": found.count])
+    guard observer.done && observer.status == kIOReturnSuccess else {
+        fail("macOS inquiry failed; this does not establish whether the board is discoverable", ["status": Int(observer.status)])
+    }
+    guard let dev = found.first(where: { ($0.addressString ?? "").lowercased() == norm }) else {
+        fail("target not discovered; check the board's pairing window and macOS Bluetooth permission")
+    }
+    log("inquiry.target", ["name": dev.name ?? "", "address": dev.addressString ?? "", "class_major": Int(dev.deviceClassMajor)])
+    let waiter = SdpWaiter()
+    let query = dev.performSDPQuery(waiter)
+    log("sdp.query_started", ["status": Int(query)])
+    pump(20) { waiter.done }
+    describeRecords(dev)
+    log("inquiry.target_services", ["hfp_hands_free_device": dev.isHandsFreeDevice,
+                                     "hfp_audio_gateway": dev.isHandsFreeAudioGateway])
 }
 
 // Publishes a Hands-Free (0x111E) SDP record so Android, at pairing time, sees this Mac
@@ -845,6 +909,7 @@ log("start", ["mode": mode, "os": ProcessInfo.processInfo.operatingSystemVersion
 if !flags.contains("no-sdp-fix") { installSdpChannelFix() }
 switch mode {
 case "list": runList()
+case "inquiry": runInquiry()
 case "connect": runConnect()
 case "call": runCall()
 case "sdp": runSdp()

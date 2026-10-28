@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { SETUP_ACTIONS } from './setupCommand.js';
 
 /**
  * A paired phone: the user's own Android phone + SIM, reached through an ESP32 Bluetooth
@@ -30,9 +31,12 @@ const pairedDeviceSchema = new mongoose.Schema({
   revokedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
   gateway: {
+    monitorSafe: { type: Boolean, default: false },
     version: { type: String, maxlength: 40, default: null },
     platform: { type: String, maxlength: 40, default: null },
     hostname: { type: String, maxlength: 120, default: null },
+    playbackGainDb: { type: Number, min: 0, max: 12, default: null },
+    autoConnect: { type: Boolean, default: null },
   },
   board: {
     connected: { type: Boolean, default: false },
@@ -82,6 +86,12 @@ const pairedDeviceSchema = new mongoose.Schema({
   // Gate A for THIS device: an admin attests that a real call carried audio both ways
   // (probe evidence). Campaigns cannot use the device until then.
   audioVerifiedAt: { type: Date, default: null },
+  audioTest: {
+    callId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
+    firmware: { type: String, default: null },
+    playbackGainDb: { type: Number, default: null },
+    createdAt: { type: Date, default: null },
+  },
   audioVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   audioVerification: {
     note: { type: String, maxlength: 1000, default: '' },
@@ -91,6 +101,20 @@ const pairedDeviceSchema = new mongoose.Schema({
   },
 
   limits: { type: limitsSchema, default: () => ({}) },
+  setup: {
+    autoConnect: { type: Boolean, default: true },
+    playbackGainDb: { type: Number, default: 0, min: 0, max: 12 },
+    command: {
+      id: { type: String, default: null },
+      action: { type: String, enum: [...SETUP_ACTIONS, null], default: null },
+      state: { type: String, enum: ['pending', 'running', 'succeeded', 'failed', 'expired', null], default: null },
+      requestedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null },
+      startedAt: { type: Date, default: null },
+      completedAt: { type: Date, default: null },
+      message: { type: String, maxlength: 300, default: '' },
+    },
+  },
   // One call per phone: set atomically before a dial, cleared when the call is processed.
   currentCallId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
   currentRecipientId: { type: mongoose.Schema.Types.ObjectId, default: null },

@@ -120,6 +120,7 @@ beforeAll(async () => {
   const responseEnvelope = (await import('../../src/shared/middleware/responseEnvelope.js')).default;
   const errorHandler = (await import('../../src/shared/middleware/errorHandler.js')).default;
   const { gatewayRoutes } = await import('../../src/modules/pairedPhone/pairedPhone.routes.js');
+  const { default: ownerRoutes } = await import('../../src/modules/pairedPhone/pairedPhone.routes.js');
   ai = (await import('../../src/modules/aiCalling/aiCalling.service.js')).default;
   pp = (await import('../../src/modules/pairedPhone/pairedPhone.service.js')).default;
   Lead = (await import('../../src/modules/crm/lead.model.js')).default;
@@ -132,6 +133,7 @@ beforeAll(async () => {
   app.use(express.json());
   app.use(responseEnvelope);
   app.use('/gw', gatewayRoutes);
+  app.use('/owner', ownerRoutes);
   app.use(errorHandler);
 });
 
@@ -145,6 +147,40 @@ beforeEach(async () => {
   jest.clearAllMocks();
   ai._voicePausedCache = null;
   roomStatusMock.mockResolvedValue('unknown');
+});
+
+describe('supervised audio verification call', () => {
+  it('runs one bounded test before audio attestation, without marking audio verified', async () => {
+    const { AUDIO_VERIFICATION_TEST } = await import('../../src/modules/aiCalling/aiCalling.service.js');
+    const d = await readyDevice();
+    await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { audioVerifiedAt: null } });
+    const c = await pairedCampaign(d.deviceId);
+    await CallCampaign.updateOne({ _id: c._id }, { $set: { isTest: true, 'schedule.maxConcurrency': 1, 'schedule.maxAttemptsPerLead': 1, 'schedule.maxCallsPerDay': 1 } });
+    await expect(ai.startCampaign(c._id, owner)).rejects.toThrow(/audio has not been verified/);
+    // A JSON field is not the trusted diagnostic capability.
+    await expect(ai.startCampaign(c._id, owner, { audioVerificationTest: true })).rejects.toThrow(/audio has not been verified/);
+    const opts = { [AUDIO_VERIFICATION_TEST]: true };
+    await expect(ai.startCampaign(c._id, stranger, opts)).rejects.toThrow();
+    await ai.startCampaign(c._id, owner, opts);
+    const started = await CallCampaign.findById(c._id).lean();
+    expect(await ai.tickCampaign(c._id, started.tickToken, opts)).toMatchObject({ dispatched: 1 });
+    expect(await CallRecord.countDocuments({ campaignId: c._id })).toBe(1);
+    expect((await PairedDevice.findById(d.deviceId).lean()).audioVerifiedAt).toBeNull();
+    const job = (await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data;
+    expect(job.callId).toBeTruthy();
+    expect((await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data).toBeNull();
+  });
+
+  it('rejects normal campaigns and multi-recipient campaigns even with the trusted capability', async () => {
+    const { AUDIO_VERIFICATION_TEST } = await import('../../src/modules/aiCalling/aiCalling.service.js');
+    const d = await readyDevice();
+    const c = await pairedCampaign(d.deviceId, 2);
+    const opts = { [AUDIO_VERIFICATION_TEST]: true };
+    await expect(ai.startCampaign(c._id, owner, opts)).rejects.toThrow(/fresh, single-recipient/);
+    await CallCampaign.updateOne({ _id: c._id }, { $set: { isTest: true, 'schedule.maxConcurrency': 1, 'schedule.maxAttemptsPerLead': 1, 'schedule.maxCallsPerDay': 1 } });
+    await expect(ai.startCampaign(c._id, owner, opts)).rejects.toThrow(/fresh, single-recipient/);
+    expect(dispatchAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe('pairing and gateway authentication', () => {
@@ -177,6 +213,101 @@ describe('pairing and gateway authentication', () => {
     const listed = await pp.getDevice(owner, d.deviceId);
     expect(JSON.stringify(listed)).not.toContain(first.body.data.key);
     expect(listed.keyState).toBe('provisioned');
+  });
+});
+
+describe('CRM manual setup', () => {
+  async function currentGateway() {
+    const d = await readyDevice();
+    await d.gw('/heartbeat').send(hb({ gateway: { version: '0.3.0', platform: 'darwin' } })).expect(200);
+    return d;
+  }
+
+  it('delivers a command only to its device, claims once, reports completion and rejects in-call changes', async () => {
+    const { default: setup } = await import('../../src/modules/pairedPhone/pairedSetup.service.js');
+    const d = await currentGateway();
+    await expect(setup.request(stranger, d.deviceId, 'status')).rejects.toThrow();
+    const s = await setup.request(owner, d.deviceId, 'pair_phone');
+    await expect(setup.request(owner, d.deviceId, 'status')).rejects.toThrow(/progress/);
+    const other = await pairDevice('Other device');
+    await request(serve(app)).post(`/gw/setup/${s.command.id}/claim`).set('Authorization', `Bearer ${other.token}`).send({}).expect(409);
+    await d.gw(`/setup/${s.command.id}/claim`).send({}).expect(200);
+    await d.gw(`/setup/${s.command.id}/claim`).send({}).expect(409);
+    await d.gw(`/setup/${s.command.id}/result`).send({ succeeded: true }).expect(200);
+    expect((await pp.getDevice(owner, d.deviceId)).setup.command.state).toBe('succeeded');
+    await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { 'state.call': 1 } });
+    await expect(setup.request(owner, d.deviceId, 'reconnect_usb')).rejects.toThrow(/End the phone call/);
+  });
+
+  it('expires abandoned commands and does not confirm a newly delivered key from an old board flag', async () => {
+    const { default: setup } = await import('../../src/modules/pairedPhone/pairedSetup.service.js');
+    const d = await currentGateway();
+    const s = await setup.request(owner, d.deviceId, 'status');
+    await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { 'setup.command.expiresAt': new Date(Date.now() - 1) } });
+    await d.gw(`/setup/${s.command.id}/claim`).send({}).expect(409);
+    expect((await pp.getDevice(owner, d.deviceId)).setup.command.state).toBe('expired');
+    await pp.rotateDialKey(owner, d.deviceId);
+    await d.gw('/dial-key').send({}).expect(200);
+    await d.gw('/heartbeat').send(hb()).expect(200);
+    expect((await pp.getDevice(owner, d.deviceId)).keyState).toBe('delivered');
+    expect((await pp.readiness(d.deviceId)).reasons).toContain('key_not_provisioned');
+  });
+
+  it('does not replace a pending key again during routine setup', async () => {
+    const d = await currentGateway();
+    await pp.rotateDialKey(owner, d.deviceId);
+    const first = await PairedDevice.findById(d.deviceId).select('dialKey.issuedAt').lean();
+    await expect(pp.rotateDialKey(owner, d.deviceId)).rejects.toThrow(/already waiting/);
+    const after = await PairedDevice.findById(d.deviceId).select('dialKey.issuedAt').lean();
+    expect(after.dialKey.issuedAt).toEqual(first.dialKey.issuedAt);
+  });
+
+  it('allows an ordinary writer to set up their device while readers, anonymous users and other owners cannot', async () => {
+    const { createRole, createUser } = await import('../helpers/factory.js');
+    await import('../../src/modules/auth/role.model.js');
+    const { default: Permission } = await import('../../src/modules/auth/permission.model.js');
+    const { generateAccessToken } = await import('../../src/shared/utils/crypto.js');
+    const write = await Permission.create({ module: 'ai-calling', action: 'write' });
+    const read = await Permission.create({ module: 'ai-calling', action: 'read' });
+    const role = await createRole({ name: 'Bridge operator', permissions: [write._id, read._id] });
+    await createUser({ _id: owner, role: role._id });
+    const reader = await createUser({ role: (await createRole({ permissions: [read._id] }))._id });
+    const other = await createUser({ role: role._id });
+    const d = await currentGateway();
+    const path = `/owner/devices/${d.deviceId}/setup`;
+    const call = user => request(serve(app)).post(path).set('Authorization', `Bearer ${generateAccessToken({ sub: String(user) })}`).send({ action: 'status' });
+    await request(serve(app)).post(path).send({ action: 'status' }).expect(401);
+    await call(reader._id).expect(403);
+    await call(other._id).expect(404);
+    await call(owner).expect(202);
+    await request(serve(app)).patch(path).set('Authorization', `Bearer ${generateAccessToken({ sub: String(owner) })}`).send({ playbackGainDb: 99 }).expect(400);
+  });
+
+  it('starts a single owned audio test before verification, and keeps its results private', async () => {
+    const { default: audio } = await import('../../src/modules/pairedPhone/audioTest.service.js');
+    const d = await currentGateway();
+    await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { audioVerifiedAt: null } });
+    await expect(audio.start(owner, d.deviceId, { destination: '+923001234567', ownsDestination: false })).rejects.toThrow();
+    const r = await audio.start(owner, d.deviceId, { destination: '+923001234567', ownsDestination: true });
+    expect(await CallRecord.countDocuments({ pairedDeviceId: d.deviceId })).toBe(1);
+    const call = await CallRecord.findById(r.id).lean();
+    expect(call.isTest).toBe(true);
+    expect((await pp.getDevice(owner, d.deviceId)).audioVerified).toBe(false);
+    await expect(audio.result(stranger, d.deviceId, r.id)).rejects.toThrow();
+    const campaign = await CallCampaign.findById(call.campaignId).lean();
+    expect(campaign.schedule.maxAttemptsPerLead).toBe(1);
+    expect(campaign.schedule.maxCallsPerDay).toBe(1);
+  });
+
+  it('never bypasses suppression for a test destination or leaves an eligible orphan campaign', async () => {
+    const { default: audio } = await import('../../src/modules/pairedPhone/audioTest.service.js');
+    const { default: Suppression } = await import('../../src/modules/aiCalling/callSuppression.model.js');
+    const { phoneHash } = await import('../../src/modules/aiCalling/callAuth.js');
+    const d = await currentGateway();
+    await Suppression.create({ phoneHash: phoneHash('+923001234567'), reason: 'do_not_contact', createdBy: owner });
+    await expect(audio.start(owner, d.deviceId, { destination: '+923001234567', ownsDestination: true })).rejects.toThrow(/eligible|can be called/);
+    expect(await CallRecord.countDocuments({ pairedDeviceId: d.deviceId })).toBe(0);
+    expect(await CallCampaign.countDocuments({ pairedDeviceId: d.deviceId, status: 'running' })).toBe(0);
   });
 });
 
@@ -339,6 +470,23 @@ describe('safety', () => {
     expect((await pp.readiness(d.deviceId)).reasons).toContain('needs_attention');
     await tick(campaign._id);
     expect(await CallRecord.countDocuments()).toBe(1);
+  });
+
+  it('keeps the agent recap while waiting for the paired phone to report completion', async () => {
+    const d = await readyDevice();
+    const campaign = await pairedCampaign(d.deviceId);
+    await startAndTick(campaign);
+    const job = (await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data;
+    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'answered' }).expect(200);
+    const callNotes = { description: 'Availability discussion', summary: 'The lead asked for a quote.', blockers: ['Awaiting quote'] };
+    expect(await ai.agentEndCall(job.callId, { durationSeconds: 30, callNotes })).toMatchObject({ deferred: true });
+    const pending = await CallRecord.findOne().lean();
+    expect(pending.resultsProcessedAt).toBeNull();
+    expect(pending.agentEnd.callNotes).toMatchObject(callNotes);
+    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'ended', data: { reason: 'remote_hangup' } }).expect(200);
+    const finished = await CallRecord.findOne().lean();
+    expect(finished.resultsProcessedAt).toBeTruthy();
+    expect(finished.callNotes).toMatchObject({ ...callNotes, blockers: expect.arrayContaining(callNotes.blockers), source: 'ai_agent' });
   });
 
   it('a later end report never turns an ambiguous call into a redial (found by the full-stack E2E)', async () => {

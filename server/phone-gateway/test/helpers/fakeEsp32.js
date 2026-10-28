@@ -19,6 +19,7 @@ export function createFakeEsp32(opts = {}) {
   const o = {
     answerAfterMs: 30,
     audio: 'phone', // 'phone' opens SCO at answer, 'gateway' only on AUDIO_CONNECT, 'never'
+    audioFrames: true,
     remoteHangupAfterMs: null,
     buttonHeld: false,
     key: null,
@@ -85,6 +86,7 @@ export function createFakeEsp32(opts = {}) {
     upIndex = 0;
     state();
     ticker = setInterval(() => {
+      if (!o.audioFrames) return;
       // phone -> host: 20 ms of "remote speech"
       const p = Buffer.alloc(7 + FRAME_BYTES);
       p.writeUInt32LE(upIndex, 0);

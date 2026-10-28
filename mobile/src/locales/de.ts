@@ -691,7 +691,19 @@ export const de: Translations = {
       ineligible: 'Nicht berechtigt',
       cancelled: 'Abgebrochen',
     },
+    answerStatus: {
+      answered: 'Beantwortet',
+      unknown: 'Antwort unbekannt',
+      needs_clarification: 'Klärung erforderlich',
+      needs_confirmation: 'Bestätigung erforderlich',
+      not_applicable: 'Bedingung nicht erfüllt',
+      not_answered: 'Nicht beantwortet',
+      pending: 'Antwort ausstehend',
+    },
     conversation: {
+      insights: 'Gesprächsauswertung',
+      coverage:
+        '{{answered}} von {{total}} zutreffenden Fragen validiert · {{missing}} Pflichtantworten prüfen',
       title: 'SMS-Unterhaltung',
       answers: 'Erfasste Antworten',
       noAnswers: 'Noch keine Antworten.',
@@ -1045,7 +1057,8 @@ export const de: Translations = {
       notReached: 'Nicht erreicht · abschließen',
       notReachedHint: 'Der Anruf kam nie zustande. Wird ohne erneuten Anruf abgeschlossen.',
       retry: 'Nicht erreicht · erneut anrufen',
-      retryHint: 'Der Anruf kam nie zustande. Der Lead kommt zurück in die Warteschlange; Anrufzeiten, Sperrliste und Limits gelten weiterhin.',
+      retryHint:
+        'Der Anruf kam nie zustande. Der Lead kommt zurück in die Warteschlange; Anrufzeiten, Sperrliste und Limits gelten weiterhin.',
       confirmTitle: 'Dieses Ergebnis festhalten?',
       confirmBody: 'Das ist für diesen Anruf nur einmal möglich.',
       confirm: 'Festhalten',

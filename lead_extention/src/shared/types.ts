@@ -258,9 +258,6 @@ export interface DiscoveryConfig {
   requestDelayMs?: number;
   /** Captured only when the user explicitly chooses the current Maps context. */
   selectedCenter?: { latitude: number; longitude: number } | null;
-  /** Optional user-entered authoritative centre for a radius/area sweep. */
-  centerLatitude?: number | null;
-  centerLongitude?: number | null;
 }
 
 export interface DiscoveryProgress {

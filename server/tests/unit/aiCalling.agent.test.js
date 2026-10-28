@@ -182,7 +182,7 @@ describe('agent full happy path → qualified', () => {
     res = await service.agentRecordAnswer(internalCallId, { fieldKey: 'interest', rawAnswer: 'yes definitely' });
     expect(res.nextAction).toMatchObject({ type: 'confirm', question: { fieldKey: 'interest' } });
 
-    res = await service.agentConfirm(internalCallId, { fieldKey: 'interest' });
+    res = await service.agentConfirm(internalCallId, { fieldKey: 'interest', reply: 'yes' });
     expect(res.nextAction).toEqual({ type: 'finish', reason: null });
 
     // The worker ends the call → post-call processing runs.
@@ -214,7 +214,7 @@ describe('agent conditional branching', () => {
 
     res = await service.agentRecordAnswer(internalCallId, { fieldKey: 'interest', rawAnswer: 'maybe later this year' });
     expect(res.nextAction).toMatchObject({ type: 'confirm', question: { fieldKey: 'interest' } });
-    await service.agentConfirm(internalCallId, { fieldKey: 'interest' });
+    await service.agentConfirm(internalCallId, { fieldKey: 'interest', reply: 'yes' });
 
     const out = await service.agentEndCall(internalCallId, { durationSeconds: 40 });
     expect(out).toMatchObject({ disposition: 'answered_completed', qualification: 'callback' });

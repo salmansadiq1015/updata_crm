@@ -26,6 +26,7 @@ export interface Question {
   options?: Array<string | QuestionOption>;
   min?: number | null;
   max?: number | null;
+  maxLength?: number | null;
   maxClarifications?: number;
   confirmCritical?: boolean;
   condition?: { all?: Clause[]; any?: Clause[] } | null;
@@ -54,6 +55,7 @@ export interface AgentConfig {
   language?: string;
   voice?: string;
   speakingStyle?: 'professional' | 'friendly' | 'concise' | 'formal' | 'custom';
+  customStyle?: string;
   objective?: string;
   maxCallSeconds?: number;
   silenceTimeoutSeconds?: number;
@@ -88,6 +90,12 @@ export interface Campaign {
   name: string;
   description?: string;
   status: CampaignStatus;
+  runMode?: 'immediate' | 'scheduled';
+  agentId?: string | null;
+  agentSnapshot?: { name: string; title: string; description: string; avatarFileId: string | null; version: number };
+  executionEndsAt?: string | null;
+  continueAcrossDays?: boolean;
+  waitReason?: string | null;
   questionnaireVersion: number;
   questionnaire: { questions: Question[] };
   statusRules: StatusRule[];
@@ -108,6 +116,16 @@ export interface Campaign {
   startedAt?: string | null;
   completedAt?: string | null;
   createdAt?: string;
+}
+
+export interface CampaignRunStatus {
+  runMode?: 'immediate' | 'scheduled';
+  displayStatus?: string;
+  status: CampaignStatus; pending: number; inProgress: number; canStart: boolean;
+  blockers: Array<{ code: string; message: string }>;
+  waits: Array<{ code: string; message: string; reasons?: string[] }>;
+  nextAt: string | null; checkedAt: string; sequential: boolean;
+  schedule: Pick<Schedule, 'timezone' | 'callWindow' | 'daysOfWeek'>;
 }
 
 export interface CreateCampaignInput {
@@ -240,7 +258,41 @@ export interface CallAnswer {
   normalizedValue: unknown; validation: string; confirmed: boolean; reviewStatus: string;
 }
 
+export interface CallTranscriptTurn {
+  itemId: string;
+  role: 'assistant' | 'customer';
+  text: string;
+  at: string;
+  interrupted?: boolean;
+}
+
+export interface CallAgentActivity {
+  agentState: 'initializing' | 'idle' | 'listening' | 'thinking' | 'speaking' | null;
+  speaker: 'assistant' | 'customer' | null;
+  at: string | null;
+}
+
+export interface QuestionCoverage {
+  total: number; applicable: number; answered: number; unknown: number; needsClarification: number;
+  needsConfirmation: number; unanswered: number; notApplicable: number; requiredGaps: string[];
+  questions: Array<{
+    fieldKey: string; label: string; question: string; required: boolean; eligible: boolean;
+    status: 'answered' | 'unknown' | 'needs_clarification' | 'needs_confirmation' | 'not_applicable' | 'not_answered' | 'pending';
+    rawAnswer: string; normalizedValue: unknown; validation: string | null; confirmed: boolean; source: string | null; noResponseCount?: number; reason?: string | null;
+  }>;
+}
+
+export interface ConversationInsights {
+  version: number; basis: 'recorded_evidence';
+  intent: 'not_established' | 'do_not_contact' | 'human_requested' | 'callback_requested' | 'declined';
+  observations: Array<{ code: string; label: string; evidence: string }>;
+  nextSteps: string[];
+  participation: { agentTurns: number; leadTurns: number; interruptedAgentTurns: number };
+  limitation: string;
+}
+
 export interface CallRecord {
+  gateway?: { takenOverAt?: string | null; audioLostAt?: string | null };
   _id: string;
   internalCallId: string;
   attemptNumber: number;
@@ -249,6 +301,25 @@ export interface CallRecord {
   qualification: string | null;
   durationSeconds: number;
   answers: CallAnswer[];
+  questionCoverage?: QuestionCoverage;
+  conversationInsights?: ConversationInsights;
+  transcript?: CallTranscriptTurn[];
+  transcriptVersion?: number;
+  transcriptUpdatedAt?: string | null;
+  transcriptExpiresAt?: string | null;
+  agentActivity?: CallAgentActivity | null;
+  callContext?: {
+    agentName: string; objective: string; phase: string; currentQuestion: string | null;
+    answered: number; total: number;
+    questions: Array<{ fieldKey: string; label: string; text: string; required?: boolean }>;
+  };
+  callNotes?: {
+    description: string;
+    summary: string;
+    blockers: string[];
+    source: 'ai_agent' | 'call_results';
+    generatedAt: string;
+  };
   reviewRequired: boolean;
   cost?: { amount: number; currency: string };
   createdAt?: string;
@@ -256,7 +327,7 @@ export interface CallRecord {
   answeredAt?: string | null;
   endedAt?: string | null;
   campaignId?: { _id: string; name: string } | string;
-  leadId?: { _id: string; leadNumber?: string; name?: string } | string;
+  leadId?: { _id: string; leadNumber?: string; name?: string; phone?: string | null; mobile?: string | null; email?: string | null; status?: string } | string;
   provider?: string | null;
   failureCode?: string | null;
   failureMessage?: string | null;
@@ -276,6 +347,16 @@ export interface CallListFilters {
 }
 
 /** How the owner resolves a call with an unknown outcome (POST /ai-calling/calls/:id/reconcile). */
+/** Pre-save check of whether chosen leads can actually be reached (see previewEligibility). */
+export type EligibilityPreview = {
+  total: number;
+  found: number;
+  unavailable: number;
+  eligible: number;
+  reasonCounts: Record<string, number>;
+  leads: Array<{ leadId: string; name: string; status?: string; phone: string | null; eligible: boolean; reasons: string[] }>;
+};
+
 export type ReconcileResolution = 'reached' | 'not_reached' | 'retry';
 
 /** One entry of GET /ai-calling/languages (server aiCalling.languages.js). */
@@ -324,6 +405,10 @@ export interface ActiveCall {
   total: number;
   elapsedSeconds: number;
   isTest: boolean;
+  agentName?: string;
+  agentActivity?: CallAgentActivity | null;
+  transcriptPreview?: CallTranscriptTurn[];
+  transcriptVersion?: number;
   transport?: CallTransport;
   /** Paired-phone calls only: live state reported by the laptop gateway. */
   gateway?: null | {
@@ -354,12 +439,14 @@ export interface PairedDevice {
   revokedAt: string | null;
   online: boolean;
   lastHeartbeatAt: string | null;
-  gateway: { version: string | null; platform: string | null; hostname: string | null };
+  gateway: { version: string | null; platform: string | null; hostname: string | null; playbackGainDb?: number | null; autoConnect?: boolean | null };
   board: { connected: boolean; port: string | null; bdaddr: string | null; firmware: string | null; idf: string | null; chipRevision: number | null; keyProvisioned: boolean };
   state: { device: string; hfp: string; call: number; callsetup: number; audio: string; codec: string; signal: number | null; battery: number | null; peer: string | null };
   stats: Record<string, number> | null;
   lastError: { code: string; message: string; at: string } | null;
   keyState: 'pending' | 'delivered' | 'provisioned';
+  setup?: { autoConnect: boolean; playbackGainDb: number; command: { id: string; action: SetupAction; state: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired'; expiresAt: string; message: string } | null };
+  audioTest?: { callId: string | null; firmware: string | null; playbackGainDb: number | null; createdAt: string | null };
   audioVerified: boolean;
   audioVerifiedAt: string | null;
   audioVerification?: { note: string; inboundPhraseHeard: boolean; outboundPhraseHeard: boolean; firmware: string | null };
@@ -373,6 +460,14 @@ export interface PairedDevice {
   createdAt: string;
 }
 
+export type SetupAction = 'status' | 'pair_phone' | 'connect_phone' | 'disconnect_phone' | 'provision_key' | 'reconnect_usb';
+export interface BridgeAudioTest {
+  id: string; state: string; answeredAt: string | null; endedAt: string | null; durationSeconds: number;
+  answers: Array<{ field: string; value: unknown; validation: string }>;
+  audio: { upFrames?: number; downFrames?: number; rxLevelDbfs?: number; txLevelDbfs?: number } | null;
+  failureMessage: string | null;
+}
+
 export interface Analytics {
   campaigns: number; totalCalls: number; answered: number; answerRate: number | null;
   qualified: number; qualificationRate: number | null; callbacks: number;
@@ -380,4 +475,31 @@ export interface Analytics {
   byDisposition: Array<{ _id: string | null; count: number }>;
   byQualification: Array<{ _id: string | null; count: number }>;
   byDay: Array<{ date: string; calls: number; answered: number; qualified: number }>;
+}
+
+export interface CallingAgentInput {
+  name: string; title?: string; description?: string;
+  availability?: 'draft' | 'active' | 'paused' | 'archived';
+  avatarFileId?: string | null;
+  avatarPresetId?: string | null;
+  assignedLeadIds?: string[];
+  agentConfig?: Partial<AgentConfig>;
+  questionnaire?: { questions: Question[] };
+  statusRules?: StatusRule[]; schedule?: Schedule;
+  transport?: CallTransport; pairedDeviceId?: string | null;
+}
+export interface CallingAgent extends CallingAgentInput {
+  _id: string; availability: NonNullable<CallingAgentInput['availability']>; version: number;
+  agentConfig: AgentConfig; questionnaire: { questions: Question[] }; statusRules: StatusRule[]; schedule: Schedule;
+  assignedLeadIds: string[]; avatarUrl: string | null;
+  readiness: { ready: boolean; missing: string[] }; eligibility: EligibilityPreview;
+  metrics: { campaigns: number; activeCampaigns: number; completed: number; answered: number; inProgress: number; failed: number; qualified: number; noAnswer: number; totalCallSeconds: number };
+  latestCampaign: Campaign | null; lastActiveAt: string | null; createdAt: string; updatedAt: string;
+}
+export interface AgentImage { _id: string; name: string; url: string; size: number; createdAt: string; presetId?: string; thumbnailUrl?: string; category?: 'people' | 'ai'; description?: string }
+export interface AgentFilters { page?: number; search?: string; availability?: string; readiness?: string; campaignStatus?: string; sort?: string }
+export interface AgentLaunchInput {
+  idempotencyKey: string; name?: string; mode: 'now' | 'scheduled'; scheduledAt?: string | null;
+  transport?: CallTransport; pairedDeviceId?: string | null;
+  schedule?: Schedule; executionEndsAt?: string | null; continueAcrossDays: boolean;
 }

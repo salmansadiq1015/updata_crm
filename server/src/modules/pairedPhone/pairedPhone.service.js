@@ -31,6 +31,7 @@ import {
   decryptDialKey, encryptDialKey, hashToken, newDialKey, newPairingCode, newToken, normalizePairingCode, signDial,
 } from './deviceCrypto.js';
 import { deviceReadiness, HEARTBEAT_STALE_MS } from './readiness.js';
+import { publicSetup } from './setupCommand.js';
 
 const PAIRING_TTL_MS = 10 * 60_000;
 const MAX_OPEN_PAIRING_CODES = 5;
@@ -73,8 +74,10 @@ export function presentDevice(device, readiness, usage = null) {
     stats: d.stats,
     lastError: d.lastError?.code ? d.lastError : null,
     keyState: d.dialKey?.state || 'pending',
+    setup: publicSetup(d.setup),
     audioVerified: Boolean(d.audioVerifiedAt),
     audioVerifiedAt: d.audioVerifiedAt,
+    audioTest: d.audioTest,
     audioVerification: d.audioVerification,
     limits: d.limits,
     currentCallId: d.currentCallId ? String(d.currentCallId) : null,
@@ -195,6 +198,7 @@ class PairedPhoneService {
     device.audioVerifiedAt = new Date();
     device.audioVerifiedBy = actor;
     device.audioVerification = { note, inboundPhraseHeard: true, outboundPhraseHeard: true, firmware: device.board.firmware };
+    if (device.lastError?.code === 'FIRMWARE_CHANGED') device.lastError = { code: null, message: null, at: null };
     await device.save();
     auditService.logEvent({
       eventType: 'paired_phone.audio_verified', userId: actor, ipAddress: meta.ipAddress || 'internal',
@@ -206,6 +210,8 @@ class PairedPhoneService {
   async rotateDialKey(actor, id, meta = {}) {
     const device = await this._owned(actor, id, { includeKey: true });
     if (device.currentCallId) throw new ConflictError('Wait until the current call ends');
+    if (['pending', 'running'].includes(device.setup?.command?.state) && new Date(device.setup.command.expiresAt) > new Date()) throw new ConflictError('Wait for the setup action to finish before replacing its key');
+    if (device.dialKey?.state === 'pending') throw new ConflictError('A new key is already waiting. Choose Finish setup → Save security key while holding BOOT; no reboot or another key is needed.');
     device.dialKey = { enc: encryptDialKey(newDialKey()), state: 'pending', issuedAt: new Date(), deliveredAt: null, provisionedAt: null };
     device.board.keyProvisioned = false;
     await device.save();
@@ -243,19 +249,20 @@ class PairedPhoneService {
 
   // ------------------------------------------------------------------ scheduler integration
 
-  async readiness(deviceId, now = new Date()) {
+  async readiness(deviceId, now = new Date(), { audioVerificationTest = false } = {}) {
     const device = await PairedDevice.findById(deviceId).lean();
     if (!device) return { ok: false, reasons: ['revoked'], messages: ['Device not found'], blocking: true, retryInMs: null, online: false };
-    return deviceReadiness(device, { now, ...(await usageCounts(device._id, now)) });
+    return deviceReadiness(device, { now, ...(await usageCounts(device._id, now)), audioVerificationTest });
   }
 
   /** Atomically reserve the device for one call. Returns { ok } or { ok:false, reasons, retryInMs }. */
-  async acquire(deviceId, { callId, recipientId, owner }) {
-    const ready = await this.readiness(deviceId);
+  async acquire(deviceId, { callId, recipientId, owner, audioVerificationTest = false }) {
+    const ready = await this.readiness(deviceId, new Date(), { audioVerificationTest });
     if (!ready.ok) return ready;
     const now = new Date();
     const taken = await PairedDevice.findOneAndUpdate(
-      { _id: deviceId, createdBy: owner, currentCallId: null, revokedAt: null, 'attention.needed': { $ne: true } },
+      { _id: deviceId, createdBy: owner, currentCallId: null, revokedAt: null, 'attention.needed': { $ne: true },
+        $or: [{ 'setup.command.state': { $nin: ['pending', 'running'] } }, { 'setup.command.expiresAt': { $lte: now } }] },
       { $set: { currentCallId: callId, currentRecipientId: recipientId, currentCallSince: now } },
       { returnDocument: 'after' },
     );
@@ -327,11 +334,13 @@ class PairedPhoneService {
 
   async heartbeat(device, body = {}) {
     const now = new Date();
-    const set = { lastHeartbeatAt: now };
+    const set = { lastHeartbeatAt: now, 'gateway.monitorSafe': body.gateway?.monitorSafe === true };
     if (body.gateway) {
       set['gateway.version'] = body.gateway.version || null;
       set['gateway.platform'] = body.gateway.platform || null;
       set['gateway.hostname'] = body.gateway.hostname || null;
+      set['gateway.playbackGainDb'] = Number.isFinite(body.gateway.playbackGainDb) ? body.gateway.playbackGainDb : null;
+      set['gateway.autoConnect'] = typeof body.gateway.autoConnect === 'boolean' ? body.gateway.autoConnect : null;
     }
     const b = body.board || {};
     set['board.connected'] = Boolean(b.connected);
@@ -375,11 +384,9 @@ class PairedPhoneService {
         commands.push({ type: call.gateway.command.kind, callId: call.internalCallId });
       }
     }
-    const keyPending = device.dialKey?.state !== 'provisioned' && !b.keyProvisioned;
-    if (b.connected && b.keyProvisioned && device.dialKey?.state === 'delivered') {
-      // The board says it holds a key and we delivered one: count it as provisioned.
-      await PairedDevice.updateOne({ _id: device._id }, { $set: { 'dialKey.state': 'provisioned', 'dialKey.provisionedAt': now } });
-    }
+    // Holding some key does not prove the newly delivered key was written.
+    // Only explicit confirmation after the firmware's provisioning ACK may do that.
+    const keyPending = device.dialKey?.state !== 'provisioned';
     emitToOwner(device.createdBy, 'paired-phone:device', { deviceId: String(device._id), event: 'heartbeat' });
     const fresh = await PairedDevice.findById(device._id).lean();
     const ready = deviceReadiness(fresh, { now, ...(await usageCounts(device._id, now)) });
@@ -393,6 +400,7 @@ class PairedPhoneService {
       // Keeps the laptop awake while campaigns using this phone are running.
       activeCampaigns: await CallCampaign.countDocuments({ pairedDeviceId: device._id, transport: 'paired_phone', status: { $in: ['running', 'scheduled'] } }),
       commands,
+      setup: publicSetup(fresh.setup, now),
     };
   }
 

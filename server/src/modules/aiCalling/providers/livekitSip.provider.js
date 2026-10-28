@@ -348,7 +348,7 @@ export class LiveKitSipProvider {
    * Mint a participant join token so a browser can connect to a room. Scoped to
    * one room with publish+subscribe; short-lived. Returns null when unconfigured.
    */
-  issueJoinToken({ roomName, identity, name, ttlSeconds = 1800 }) {
+  issueJoinToken({ roomName, identity, name, ttlSeconds = 1800, canPublish = true }) {
     if (!this.livekitReady) return null;
     const now = Math.floor(Date.now() / 1000);
     return jwt.sign({
@@ -357,7 +357,7 @@ export class LiveKitSipProvider {
       nbf: now,
       exp: now + ttlSeconds,
       name: name || identity,
-      video: { room: roomName, roomJoin: true, canPublish: true, canSubscribe: true },
+      video: { room: roomName, roomJoin: true, canPublish, canPublishData: canPublish, canSubscribe: true },
     }, this.apiSecret, { algorithm: 'HS256' });
   }
 

@@ -10,7 +10,6 @@ import { FullPageSpinner } from '@/shared/components/loading-spinner';
 import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
 import { useAiStore } from '@/modules/ai/store/ai-store';
 import { cn } from '@/lib/utils';
-import FeedbackFab from '@/modules/support/components/feedback-fab';
 
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
@@ -83,8 +82,6 @@ export default function PlatformLayout({ children }) {
         </Suspense>
       )}
 
-      {/* Global "report an issue" FAB — mounted once here, not per-page */}
-      <FeedbackFab />
     </div>
   );
 }

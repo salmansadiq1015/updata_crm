@@ -973,6 +973,10 @@ describe('messaging campaign operations', () => {
     expect(history.pagination.total).toBe(2);
     expect(history.data[0]).toMatchObject({ direction: 'inbound', status: 'received', rendered: { bodyText: 'Thanks, please call tomorrow.' } });
     expect(history.data[1]).toMatchObject({ direction: 'outbound', status: 'sent' });
+    const responses = await service.historyForLead(leadId, actor, { status: 'received' });
+    expect(responses.pagination.total).toBe(1);
+    expect(responses.data).toHaveLength(1);
+    expect(responses.data[0].rendered.bodyText).toBe('Thanks, please call tomorrow.');
   });
 
   it('stores out-of-order failure evidence without downgrading proven delivery', async () => {

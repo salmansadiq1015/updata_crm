@@ -22,6 +22,7 @@ import logger from '../logger/index.js';
  * seeded with the coarse `projects:write` continue to satisfy them.
  */
 export const PERMISSION_IMPLICATIONS = Object.freeze({
+  'ai-calling:admin': ['ai-calling:read', 'ai-calling:write'],
   'projects:read': [
     'project:read',
     'project:documents:read',

@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
+import { SETUP_ACTIONS } from './setupCommand.js';
 
 const id = { params: Joi.object({ id: objectId.required() }) };
 const bdaddr = Joi.string().pattern(/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/);
@@ -27,6 +28,12 @@ export const verifyAudio = { ...id, body: Joi.object({
   note: short(1000).allow('').default(''),
 }) };
 export const callControl = { params: Joi.object({ callId: objectId.required() }) };
+export const setupAction = { ...id, body: Joi.object({ action: Joi.string().valid(...SETUP_ACTIONS).required() }) };
+export const setupSettings = { ...id, body: Joi.object({ playbackGainDb: Joi.number().min(0).max(12), autoConnect: Joi.boolean() }).min(1) };
+export const setupCommandId = { params: Joi.object({ commandId: Joi.string().guid({ version: 'uuidv4' }).required() }) };
+export const setupResult = { ...setupCommandId, body: Joi.object({ succeeded: Joi.boolean().required(), code: Joi.string().valid('no_presence', 'no_peer', 'no_board', 'busy', 'failed', '').default('') }) };
+export const audioTest = { ...id, body: Joi.object({ destination: Joi.string().pattern(/^\+[1-9]\d{7,14}$/).required(), ownsDestination: Joi.boolean().valid(true).required() }) };
+export const audioTestResult = { params: Joi.object({ id: objectId.required(), callId: objectId.required() }) };
 
 // ---- gateway (device token) ----
 export const redeem = { body: Joi.object({
@@ -39,7 +46,7 @@ const deviceState = Joi.object({
   peer: Joi.alternatives(bdaddr, Joi.valid(null)),
 }).unknown(false);
 export const heartbeat = { body: Joi.object({
-  gateway: Joi.object({ version: short(40), platform: short(40), hostname: short(120).allow('') }),
+  gateway: Joi.object({ version: short(40), platform: short(40), hostname: short(120).allow(''), playbackGainDb: Joi.number().min(0).max(12), autoConnect: Joi.boolean(), monitorSafe: Joi.boolean() }),
   board: Joi.object({
     connected: Joi.boolean().required(), port: short(120).allow(null, ''), bdaddr: Joi.alternatives(bdaddr, Joi.valid(null)),
     firmware: short(40).allow(null), idf: short(40).allow(null), chipRevision: Joi.number().integer().min(0).max(255).allow(null),

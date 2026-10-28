@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PhoneCall, Loader2, Clock, CheckCircle2, AlertTriangle, ShieldCheck, PhoneOff } from 'lucide-react';
+import { PhoneCall, Loader2, Clock, CheckCircle2, AlertTriangle, ShieldCheck, PhoneOff, ArrowRight } from 'lucide-react';
 import { useCallConsent, useLeadCallHistory } from '../hooks/use-ai-calling';
 import type { CallRecord, LeadTransition } from '../types/ai-calling-types';
 
@@ -10,28 +10,30 @@ const CONSENT_LABEL: Record<string, string> = {
 };
 import { StatusPill } from './status-pill';
 import { CallReviewDrawer } from './call-review-drawer';
+import { CallNotes } from './call-notes';
 
 /**
  * AI call history for one lead. Drop into the lead detail drawer as an
  * "AI Calls" tab: <LeadCallsTab leadId={lead._id} />.
  */
-export function LeadCallsTab({ leadId }: { leadId: string }) {
-  const { data, isLoading, isError, refetch } = useLeadCallHistory(leadId);
-  const consent = useCallConsent(leadId);
+export function LeadCallsTab({ leadId, view = 'calls' }: { leadId: string; view?: 'calls' | 'responses' | 'consent' }) {
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useLeadCallHistory(view === 'consent' ? null : leadId, page);
+  const consent = useCallConsent(view === 'consent' ? leadId : null);
   const [reviewCallId, setReviewCallId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState('');
   const [confirmDnc, setConfirmDnc] = useState(false);
 
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
 
-  const calls = data?.data ?? [];
+  const calls = (data?.data ?? []).filter(call => view !== 'responses' || call.answers?.some(a => a.rawAnswer || a.normalizedValue != null));
   const transitions: LeadTransition[] = data?.transitions ?? [];
   const consentStatus = consent.data?.status ?? (consent.data?.consent ? consent.data.consent.status : 'missing');
   const consentBusy = consent.update.isPending || consent.suppress.isPending;
 
   return (
-    <div className="space-y-3 p-1">
-      <div className="rounded-xl border border-border bg-card p-4">
+    <div className="min-w-0 space-y-3">
+      {view === 'consent' && <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex gap-2">
             <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
@@ -79,15 +81,15 @@ export function LeadCallsTab({ leadId }: { leadId: string }) {
             </div>
           </div>
         ) : null}
-      </div>
+      </div>}
 
       {isError && !data ? (
         <p className="p-4 text-center text-sm text-muted-foreground">
           AI call history could not be loaded. <button type="button" onClick={() => refetch()} className="font-semibold text-brand-500 hover:underline">Try again</button>
         </p>
       ) : null}
-      {!calls.length && !isError && <div className="flex flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground"><PhoneCall className="h-8 w-8 opacity-40" /><p>No AI calls for this lead yet.</p></div>}
-      {transitions.length ? (
+      {view !== 'consent' && !calls.length && !isError && <div className="flex flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground"><PhoneCall className="h-8 w-8 opacity-40" /><p>{view === 'responses' ? 'No lead responses captured on this page of calls.' : 'No AI calls for this lead yet.'}</p></div>}
+      {view === 'calls' && transitions.length ? (
         <div className="rounded-lg border border-border bg-background p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status history</p>
           <ul className="space-y-1 text-xs">
@@ -108,41 +110,49 @@ export function LeadCallsTab({ leadId }: { leadId: string }) {
           type="button"
           key={call._id}
           onClick={() => setReviewCallId(call._id)}
-          className="block w-full rounded-lg border border-border bg-card p-3 text-left transition hover:border-brand-500/50 hover:bg-muted/40"
+          className="group block w-full min-w-0 rounded-xl border border-border bg-card p-4 text-start transition hover:border-brand-500/50 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <PhoneCall className="h-4 w-4 text-brand-500" />
-              {typeof call.campaignId === 'object' ? call.campaignId?.name : 'Call'}
-              <span className="text-xs text-muted-foreground">attempt {call.attemptNumber}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {call.qualification ? <StatusPill status={call.qualification} /> : null}
-              {call.disposition ? <StatusPill status={call.disposition} /> : null}
-            </div>
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500">
+              <PhoneCall className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1 pt-1 text-sm font-medium leading-5 [overflow-wrap:anywhere]">
+              {typeof call.campaignId === 'object' ? call.campaignId?.name || 'Call' : 'Call'}
+            </span>
           </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-            <span>{call.createdAt ? new Date(call.createdAt).toLocaleString() : ''}</span>
-            <span>· {Math.round((call.durationSeconds || 0))}s</span>
-            {call.reviewRequired ? <span className="inline-flex items-center gap-1 text-rose-600"><AlertTriangle className="h-3 w-3" /> needs review</span> : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {call.disposition ? <StatusPill status={call.disposition} /> : <StatusPill status={call.state} />}
+            {call.qualification && call.qualification !== 'none' ? <StatusPill status={call.qualification} /> : null}
+            <span className="ms-auto shrink-0 whitespace-nowrap rounded-md bg-muted/60 px-2 py-1 text-[11px] font-medium tabular-nums text-muted-foreground">Attempt {call.attemptNumber}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground">
+            {call.createdAt && <span className="inline-flex items-center gap-1.5"><Clock className="size-3 shrink-0" aria-hidden="true" /><span>{new Date(call.createdAt).toLocaleString()}</span></span>}
+            <span className="whitespace-nowrap tabular-nums">{Math.round((call.durationSeconds || 0))}s duration</span>
+            {call.reviewRequired ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600"><AlertTriangle className="size-3 shrink-0" aria-hidden="true" /> Needs review</span> : null}
           </div>
 
-          {call.answers?.length ? (
+          {view === 'calls' && <CallNotes call={call} />}
+          {view === 'responses' && call.answers?.length ? (
             <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
               {call.answers.map((a) => (
-                <div key={a.questionFieldKey} className="flex items-start justify-between gap-3 text-xs">
-                  <span className="text-muted-foreground">{a.label}</span>
-                  <span className="flex items-center gap-1.5 text-right font-medium">
-                    {a.validation === 'valid' ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : null}
-                    {formatValue(a.normalizedValue) || <em className="text-muted-foreground">{a.validation}</em>}
+                <div key={a.questionFieldKey} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-3 py-1 text-xs leading-5">
+                  <span className="min-w-0 break-words text-muted-foreground">{a.label}</span>
+                  <span className="flex min-w-0 items-start justify-end gap-1.5 text-end font-medium">
+                    {a.validation === 'valid' ? <CheckCircle2 className="mt-1 size-3 shrink-0 text-emerald-500" /> : null}
+                    <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{a.rawAnswer || formatValue(a.normalizedValue) || <em className="text-muted-foreground">{a.validation}</em>}{a.validation !== 'valid' && (a.rawAnswer || a.normalizedValue != null) ? ` (${a.validation})` : ''}</span>
                   </span>
                 </div>
               ))}
             </div>
           ) : null}
-          <p className="mt-2 text-[11px] text-brand-500">Click to review / correct answers →</p>
+          <span className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs font-medium text-brand-500">
+            Review call &amp; answers
+            <ArrowRight className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" aria-hidden="true" />
+          </span>
         </button>
       ))}
+
+      {view !== 'consent' && (data?.pagination?.pages ?? 0) > 1 && <div className="flex items-center justify-between text-xs"><button type="button" className="rounded-lg border px-3 py-2 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous calls</button><span>Page {page} of {data?.pagination?.pages}</span><button type="button" className="rounded-lg border px-3 py-2 disabled:opacity-50" disabled={page >= (data?.pagination?.pages ?? 1)} onClick={() => setPage(p => p + 1)}>Next calls</button></div>}
 
       {reviewCallId ? <CallReviewDrawer callId={reviewCallId} onClose={() => setReviewCallId(null)} /> : null}
     </div>

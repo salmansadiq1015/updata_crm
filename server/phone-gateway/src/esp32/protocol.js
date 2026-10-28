@@ -221,6 +221,9 @@ export const formatBdaddr = (b) => [...b].map((x) => x.toString(16).padStart(2, 
 
 function lpString(buf, off) {
   const n = buf[off];
+  if (n === undefined || n === 0 || off + 1 + n > buf.length) {
+    throw new RangeError('truncated or empty firmware identity string');
+  }
   return [buf.toString('ascii', off + 1, off + 1 + n), off + 1 + n];
 }
 
@@ -228,6 +231,7 @@ const optional = (v) => (v === 0xff ? null : v);
 
 export const parse = {
   [T.HELLO_ACK](p) {
+    if (p.length < 32) throw new RangeError('truncated HELLO_ACK');
     let off = 0;
     const out = {
       protoMajor: p[0],

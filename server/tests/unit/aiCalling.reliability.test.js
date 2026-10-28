@@ -117,6 +117,7 @@ async function dialOne() {
 }
 
 beforeAll(async () => {
+  process.env.AGENT_CONTEXT_TIMEOUT_MS = '400'; // the worker never loads a test's context in some cases below
   mongod = await MongoMemoryServer.create();
   await mongoose.connect(mongod.getUri());
   const mod = await import('../../src/modules/aiCalling/aiCalling.service.js');
@@ -238,6 +239,157 @@ describe('agent tool calls', () => {
 });
 
 describe('tick chain + per-dial gates', () => {
+  it('an immediate start dials with both campaign and recipient time windows closed', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id], { schedule: { timezone: 'UTC', callWindow: { start: '00:00', end: '00:00' }, daysOfWeek: [1] } }), actor);
+    process.env.AI_CALLING_RECIPIENT_HOURS = '00:00-00:00';
+    await service.startCampaign(campaign._id, actor, { startNow: true, sequential: true });
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    expect(saved.runMode).toBe('immediate'); expect(saved.schedule.callWindow.end).toBe('00:00');
+    const status = await service.campaignRunStatus(campaign._id, actor);
+    expect(status.waits.map(w => w.code)).not.toContain('calling_hours');
+    expect(status.waits.map(w => w.code)).not.toContain('recipient_quiet_hours');
+    await service.tickCampaign(campaign._id, saved.tickToken);
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+    expect((await CampaignRecipient.findOne({ campaignId: campaign._id })).attemptCount).toBe(1);
+  });
+
+  it('can start an already waiting campaign now, clears old queued deferrals, and supersedes its delayed tick', async () => {
+    const { campaign, tickToken } = await runningCampaign(1);
+    await CampaignRecipient.updateMany({ campaignId: campaign._id }, { $set: { nextAttemptAt: new Date(Date.now() + 86400000) } });
+    process.env.AI_CALLING_RECIPIENT_HOURS = '00:00-00:00';
+    await service.startCampaign(campaign._id, actor, { startNow: true, sequential: true });
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    expect(saved.tickToken).not.toBe(tickToken);
+    expect((await CampaignRecipient.findOne({ campaignId: campaign._id })).nextAttemptAt).toBeNull();
+    expect(await service.tickCampaign(campaign._id, tickToken)).toEqual({ superseded: true });
+    await service.tickCampaign(campaign._id, saved.tickToken);
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+    await expect(service.startCampaign(campaign._id, actor, { startNow: true })).rejects.toThrow(/Only draft/);
+  });
+
+  it('restarts a legacy immediate run stuck on a calling-hours deferral without duplicate attempts', async () => {
+    const { campaign, tickToken } = await runningCampaign(1);
+    await CallCampaign.updateOne({ _id: campaign._id }, { $set: { runMode: 'immediate', waitReason: 'calling_hours' } });
+    await CampaignRecipient.updateMany({ campaignId: campaign._id }, { $set: { nextAttemptAt: new Date(Date.now() + 86400000) } });
+    expect((await service.campaignRunStatus(campaign._id, actor)).canStart).toBe(true);
+    await service.startCampaign(campaign._id, actor, { startNow: true });
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    expect(saved.waitReason).toBeNull();
+    expect(await service.tickCampaign(campaign._id, tickToken)).toEqual({ superseded: true });
+    await service.tickCampaign(campaign._id, saved.tickToken);
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+    expect(await CallRecord.countDocuments({ campaignId: campaign._id })).toBe(1);
+  });
+
+  it('keeps actual retry backoff when an immediate run is started', async () => {
+    const { campaign } = await runningCampaign(1);
+    const retryAt = new Date(Date.now() + 3600000);
+    await CampaignRecipient.updateMany({ campaignId: campaign._id }, { $set: { state: 'retry_scheduled', nextAttemptAt: retryAt } });
+    await service.startCampaign(campaign._id, actor, { startNow: true });
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    await service.tickCampaign(campaign._id, saved.tickToken);
+    expect(createOutboundCall).not.toHaveBeenCalled();
+    expect((await CampaignRecipient.findOne({ campaignId: campaign._id })).nextAttemptAt).toEqual(retryAt);
+    expect((await service.campaignRunStatus(campaign._id, actor)).waits.map(w => w.code)).toContain('retry_backoff');
+  });
+
+  it('an immediate start still rechecks consent before any provider call', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    await service.startCampaign(campaign._id, actor, { startNow: true, sequential: true });
+    process.env.AI_CALLING_REQUIRE_CONSENT = 'true';
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    await service.tickCampaign(campaign._id, saved.tickToken);
+    expect(createOutboundCall).not.toHaveBeenCalled();
+    expect((await CampaignRecipient.findOne({ campaignId: campaign._id })).state).toBe('suppressed');
+  });
+
+  it('does not combine Start now with a future scheduled time', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    await expect(service.startCampaign(campaign._id, actor, { startNow: true, scheduledAt: new Date(Date.now() + 86400000) })).rejects.toThrow(/Choose Start/);
+    expect((await CallCampaign.findById(campaign._id)).status).toBe('draft');
+  });
+  it('does not start without a calling worker, and reports the blocker only to the owner', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    const { default: queues } = await import('../../src/shared/queue/QueueManager.js');
+    queues.getQueueStats.mockResolvedValueOnce({ workers: 0 });
+    await expect(service.startCampaign(campaign._id, actor, {})).rejects.toThrow(/calling service is offline/);
+    expect((await CallCampaign.findById(campaign._id)).status).toBe('draft');
+    queues.getQueueStats.mockResolvedValueOnce(null);
+    const status = await service.campaignRunStatus(campaign._id, actor);
+    expect(status.canStart).toBe(false);
+    expect(status.blockers.map(b => b.code)).toContain('worker_offline');
+    await expect(service.campaignRunStatus(campaign._id, otherUser)).rejects.toThrow(/not found/i);
+    expect(createOutboundCall).not.toHaveBeenCalled();
+  });
+
+  it('restores a failed start and invalidates its tick instead of leaving a false running state', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id], { schedule: { maxConcurrency: 3 } }), actor);
+    addJob.mockRejectedValueOnce(new Error('Redis unavailable'));
+    await expect(service.startCampaign(campaign._id, actor, { sequential: true })).rejects.toThrow(/queue is unavailable/);
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    expect(saved.status).toBe('draft'); expect(saved.tickToken).toBeNull(); expect(saved.schedule.maxConcurrency).toBe(3);
+    expect(await CallRecord.countDocuments({ campaignId: campaign._id })).toBe(0);
+    await service.startCampaign(campaign._id, actor, {});
+    expect((await CallCampaign.findById(campaign._id)).status).toBe('running');
+  });
+
+  it('a queue failure never undoes a concurrent cancellation', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    addJob.mockImplementationOnce(async () => { await service.cancelCampaign(campaign._id, actor); throw new Error('Redis unavailable'); });
+    await expect(service.startCampaign(campaign._id, actor, {})).rejects.toThrow(/queue is unavailable/);
+    expect((await CallCampaign.findById(campaign._id)).status).toBe('cancelled');
+  });
+
+  it('a lost queue acknowledgement does not roll back or duplicate a call already confirmed by the worker', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    addJob.mockImplementationOnce(async (_queue, _name, data) => {
+      await service.tickCampaign(data.campaignId, data.token);
+      throw new Error('Redis acknowledgement lost');
+    });
+    const started = await service.startCampaign(campaign._id, actor, {});
+    expect(started.status).toBe('running');
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+    await expect(service.startCampaign(campaign._id, actor, {})).rejects.toThrow(/Only draft/);
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('Start calling clears a saved future date and calls two different leads in sequence', async () => {
+    const leads = [await makeLead(), await makeLead()];
+    const campaign = await service.createCampaign(baseInput(leads.map(l => l._id), {
+      scheduledAt: new Date(Date.now() + 86400000),
+      schedule: { timezone: 'UTC', callWindow: { start: '00:00', end: '23:59' }, daysOfWeek: [0,1,2,3,4,5,6], maxConcurrency: 3 },
+    }), actor);
+    await service.startCampaign(campaign._id, actor, { scheduledAt: null, sequential: true });
+    let current = await CallCampaign.findById(campaign._id).lean();
+    expect(current.status).toBe('running'); expect(current.scheduledAt).toBeNull(); expect(current.schedule.maxConcurrency).toBe(1);
+    await service.tickCampaign(current._id, current.tickToken);
+    current = await CallCampaign.findById(campaign._id).lean();
+    await service.tickCampaign(current._id, current.tickToken);
+    expect(createOutboundCall).toHaveBeenCalledTimes(1);
+    const first = await CallRecord.findOne({ campaignId: campaign._id });
+    await service.processCallResults(first._id, { disposition: 'no_answer', durationSeconds: 0 });
+    current = await CallCampaign.findById(campaign._id).lean();
+    await service.tickCampaign(current._id, current.tickToken);
+    expect(createOutboundCall).toHaveBeenCalledTimes(2);
+    const calls = await CallRecord.find({ campaignId: campaign._id }).lean();
+    expect(new Set(calls.map(c => String(c.leadId))).size).toBe(2);
+  });
+
+  it('shows the real next calling window without dispatching or bypassing quiet hours', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id], { schedule: { timezone: 'Asia/Karachi', callWindow: { start: '09:00', end: '18:00' }, daysOfWeek: [1,2,3,4,5] } }), actor);
+    const status = await service.campaignRunStatus(campaign._id, actor, new Date('2026-10-27T18:00:00Z'));
+    expect(status.waits.map(w => w.code)).toContain('calling_hours');
+    expect(new Date(status.nextAt).toISOString()).toBe('2026-10-28T04:00:00.000Z');
+    expect(createOutboundCall).not.toHaveBeenCalled();
+  });
   it('a superseded or overlapping tick does nothing', async () => {
     const { campaign, tickToken } = await runningCampaign(1);
     const newer = await service._scheduleTick(campaign._id, 0);
@@ -514,6 +666,35 @@ describe('CRM sync preserves human decisions', () => {
 });
 
 describe('browser web test isolation', () => {
+  // A healthy worker loads the call from this API as soon as it takes the job.
+  const workerLoadsContext = async ({ roomName }) => {
+    const call = await CallRecord.findOne({ roomName }).lean();
+    await service.getCallContext(call.internalCallId);
+    return 'running';
+  };
+
+  it('names the misrouting when the worker that took the test never contacts this CRM', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    endCall.mockClear();
+    await expect(service.startWebTest(campaign._id, actor, {})).rejects.toThrow(/never contacted this CRM.*"crm-voice-agent".*LIVEKIT_AGENT_NAME/s);
+    const call = await CallRecord.findOne({ campaignId: campaign._id, isTest: true }).sort({ createdAt: -1 }).lean();
+    expect(call).toMatchObject({ state: 'failed', disposition: 'failed', failureCode: 'AGENT_UNREACHABLE' });
+    expect(call.failureMessage.length).toBeLessThanOrEqual(500);
+    expect(endCall).toHaveBeenCalledWith({ roomName: call.roomName });
+  });
+
+  it('records the reason the worker reports when it gives up (e.g. an expired OpenAI key)', async () => {
+    const lead = await makeLead();
+    const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    waitForAgentWorker.mockImplementationOnce(workerLoadsContext);
+    const web = await service.startWebTest(campaign._id, actor, {});
+    await service.agentEndCall(web.callId, { disposition: 'failed', failureCode: 'OPENAI_KEY_INVALID', failureMessage: 'OpenAI rejected the voice agent\'s API key.' });
+    const call = await CallRecord.findById(web.recordId).lean();
+    expect(call).toMatchObject({ failureCode: 'OPENAI_KEY_INVALID', failureMessage: 'OpenAI rejected the voice agent\'s API key.' });
+    expect(call.resultsProcessedAt).toBeTruthy();
+  });
+
   it('fails fast with the real cause when no agent worker claims the dispatch', async () => {
     const lead = await makeLead();
     const campaign = await service.createCampaign(baseInput([lead._id]), actor);
@@ -528,13 +709,13 @@ describe('browser web test isolation', () => {
   it('uses negative attempt numbers and never touches the recipient or the lead', async () => {
     const lead = await makeLead();
     const campaign = await service.createCampaign(baseInput([lead._id]), actor);
+    waitForAgentWorker.mockImplementationOnce(workerLoadsContext);
     const web = await service.startWebTest(campaign._id, actor, {});
     expect(web.token).toBe('join-token');
     const call = await CallRecord.findOne({ internalCallId: web.callId }).lean();
     expect(call.attemptNumber).toBe(-1);
     expect(dispatchAgent.mock.calls.at(-1)[0].metadata.mode).toBe('web');
 
-    await service.getCallContext(web.callId); // browser user present → answered
     await service.agentDisclose(web.callId);
     await service.agentRecordAnswer(web.callId, { fieldKey: 'active', rawAnswer: 'yes' });
     await service.agentRecordAnswer(web.callId, { fieldKey: 'interest', rawAnswer: 'yes' });

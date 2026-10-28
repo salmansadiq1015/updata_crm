@@ -280,14 +280,7 @@ async function startDiscovery(config: DiscoveryConfig): Promise<{ ok: boolean; e
     // query: a query such as "Hotel" is a business type, not a geocodable place.
     const explicitLocation = config.location.trim();
     const usesMapsContext = explicitLocation.toLowerCase() === 'current maps context';
-    const typedCenterProvided = config.centerLatitude !== null && config.centerLatitude !== undefined
-      || config.centerLongitude !== null && config.centerLongitude !== undefined;
-    const typedCenter = typedCenterProvided
-      ? { latitude: Number(config.centerLatitude), longitude: Number(config.centerLongitude) }
-      : null;
-    if (typedCenterProvided && !validCenter(typedCenter)) return { ok: false, error: 'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).' };
-    if (typedCenter && config.areaSweep === false) return { ok: false, error: 'Enable “Scan the entire area” to use a latitude/longitude center.' };
-    const suppliedCenter = typedCenter ?? (validCenter(config.selectedCenter) ? config.selectedCenter! : null);
+    const suppliedCenter = validCenter(config.selectedCenter) ? config.selectedCenter! : null;
     const effectiveConfig: DiscoveryConfig = {
       ...config,
       businessType: businessTypes[0],

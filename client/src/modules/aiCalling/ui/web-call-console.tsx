@@ -9,7 +9,7 @@ import { aiCallingApi } from '../services/ai-calling-api';
 import { UpdataVoiceOrb, type UpdataVoiceOrbState } from './updata-voice-orb';
 import { createVoiceMeter, type VoiceMeter } from './voice-meter';
 
-type LkParticipant = { isLocal?: boolean; identity?: string; name?: string; kind?: unknown; audioLevel?: number };
+type LkParticipant = { isLocal?: boolean; identity?: string; name?: string; kind?: unknown; audioLevel?: number; attributes?: Record<string, string> };
 // agents-js 1.x publishes captions as text streams on this topic (one stream per segment).
 type LkTextStreamReader = AsyncIterable<string> & { info?: { id?: string; attributes?: Record<string, string> } };
 type LkTranscriptSegment = { id: string; text: string; final: boolean; firstReceivedTime?: number };
@@ -32,6 +32,15 @@ type LkRoom = {
 /** How long the room may stay without the voice agent before the test says why. */
 const AGENT_JOIN_TIMEOUT_MS = 30_000;
 const isAgentParticipant = (p?: LkParticipant) => Boolean(p && !p.isLocal && (p.kind === 4 || p.kind === 'agent' || String(p.identity || '').startsWith('agent-')));
+/** The worker publishes why a call cannot run (expired OpenAI key, CRM unreachable…) on this attribute. */
+const AGENT_ERROR_ATTRIBUTE = 'updata.agent_error';
+function agentErrorOf(p?: LkParticipant): string | null {
+  const raw = p?.attributes?.[AGENT_ERROR_ATTRIBUTE];
+  if (!raw) return null;
+  try { return (JSON.parse(raw) as { message?: string }).message || null; } catch { return raw; }
+}
+const AGENT_LEFT_EARLY = 'The voice agent ended the session before it started talking. Check the agent worker logs: its OpenAI key, model or connection to this CRM failed.';
+const CONNECTION_LOST_EARLY = 'The connection to the call was lost before the agent started talking. Check your internet connection and try again.';
 
 export type WebCallPhase = 'idle' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'ended' | 'error';
 export type WebCallStatus = {
@@ -135,6 +144,22 @@ export function WebCallConsole({
   const generationRef = useRef(0);
   const startingRef = useRef(false);
   const agentWaitRef = useRef<number | null>(null);
+  // Why the agent gave up (reported by the worker) and whether it ever produced audio,
+  // so a room closed by a failing agent is shown as an error, not as a finished test.
+  const agentErrorRef = useRef<string | null>(null);
+  const agentHeardRef = useRef(false);
+  const recordIdRef = useRef<string | null>(null);
+  /** The worker's reason, else the one the CRM recorded on the call, else a generic one. */
+  const failureReason = async (fallback: string): Promise<string> => {
+    if (agentErrorRef.current) return agentErrorRef.current;
+    if (!recordIdRef.current) return fallback;
+    try {
+      const call = await aiCallingApi.getCall(recordIdRef.current);
+      return call?.failureMessage || fallback;
+    } catch {
+      return fallback;
+    }
+  };
   // Real audio levels (agent track + microphone) for the orb, read every frame.
   const meterRef = useRef<VoiceMeter | null>(null);
   const meter = () => (meterRef.current ??= createVoiceMeter());
@@ -145,7 +170,7 @@ export function WebCallConsole({
   const trackMic = <T,>(work: Promise<T>): Promise<T> => {
     const settled = work.finally(() => { if (micBusyRef.current === settled) micBusyRef.current = null; });
     micBusyRef.current = settled;
-    return work;
+    return settled;
   };
   const leftRoomsRef = useRef(new WeakSet<LkRoom>());
   const leaveRoom = (room: LkRoom | null | undefined): Promise<void> => {
@@ -222,6 +247,9 @@ export function WebCallConsole({
     setAgentThinking(false);
     setVoiceActivityLevel(0);
     setConfirmEnd(false);
+    agentErrorRef.current = null;
+    agentHeardRef.current = false;
+    recordIdRef.current = null;
     setPhase('starting');
     meter().resume(); // inside the click, so the browser allows audio analysis
 
@@ -229,13 +257,15 @@ export function WebCallConsole({
       const session = await aiCallingApi.startWebTest(campaignId);
       if (generationRef.current !== generation) return;
       setCallId(session.callId);
+      recordIdRef.current = session.recordId || null;
       setPhase('connecting');
 
       const livekit = await import('livekit-client');
       if (generationRef.current !== generation) return;
-      const { Room, RoomEvent, Track } = livekit as unknown as {
+      const { Room, RoomEvent, Track, DisconnectReason } = livekit as unknown as {
         Room: new () => LkRoom;
         RoomEvent: Record<string, string>;
+        DisconnectReason?: { ROOM_DELETED?: number };
         Track: { Kind: { Audio: string }; Source?: { Microphone: string } };
       };
       const room = new Room();
@@ -250,15 +280,24 @@ export function WebCallConsole({
           void audioElRef.current.play().catch(() => {
             setError('Agent audio is connected, but browser playback is blocked. Use the audio control in the address bar to allow sound.');
           });
+          agentHeardRef.current = true;
           setAudioReady(true);
           setAgentConnected(true);
         }
       });
+      const noteAgentError = (participant?: LkParticipant) => {
+        const reason = isAgentParticipant(participant) ? agentErrorOf(participant) : null;
+        if (!reason || generationRef.current !== generation) return;
+        agentErrorRef.current = reason;
+        setError(reason);
+      };
       room.on(RoomEvent.ParticipantConnected, (...args: unknown[]) => {
         if (generationRef.current !== generation || !isAgentParticipant(args[0] as LkParticipant)) return;
+        noteAgentError(args[0] as LkParticipant);
         setAgentConnected(true);
         if (agentWaitRef.current) window.clearTimeout(agentWaitRef.current);
       });
+      room.on(RoomEvent.ParticipantAttributesChanged, (...args: unknown[]) => noteAgentError(args[1] as LkParticipant));
       room.on(RoomEvent.ParticipantDisconnected, () => {
         if (generationRef.current !== generation) return;
         setAgentConnected([...(room.remoteParticipants?.values() || [])].some(isAgentParticipant));
@@ -346,18 +385,29 @@ export function WebCallConsole({
       room.on(RoomEvent.Reconnected, () => {
         if (generationRef.current === generation) setPhase('live');
       });
-      room.on(RoomEvent.Disconnected, () => {
+      room.on(RoomEvent.Disconnected, (...args: unknown[]) => {
         if (generationRef.current !== generation) return;
+        if (agentWaitRef.current) window.clearTimeout(agentWaitRef.current);
         roomRef.current = null;
         startingRef.current = false;
         meterRef.current?.detach('agent');
-    meterRef.current?.detach('user');
-    setPhase('ended');
+        meterRef.current?.detach('user');
         setAgentSpeaking(false);
         setAgentThinking(false);
         setVoiceActivityLevel(0);
         setAgentConnected(false);
         setAudioReady(false);
+        // The agent closed the room without ever talking: that is a failure, not a finished test.
+        if (!agentErrorRef.current && agentHeardRef.current) {
+          setPhase('ended');
+          return;
+        }
+        const roomClosed = DisconnectReason?.ROOM_DELETED === undefined || args[0] === DisconnectReason.ROOM_DELETED;
+        void failureReason(roomClosed ? AGENT_LEFT_EARLY : CONNECTION_LOST_EARLY).then((reason) => {
+          if (generationRef.current !== generation) return;
+          setError(reason);
+          setPhase('error');
+        });
       });
 
       await room.connect(session.url, session.token);
@@ -365,7 +415,9 @@ export function WebCallConsole({
         await leaveRoom(room);
         return;
       }
-      setAgentConnected([...(room.remoteParticipants?.values() || [])].some(isAgentParticipant));
+      const present = [...(room.remoteParticipants?.values() || [])];
+      present.forEach(noteAgentError);
+      setAgentConnected(present.some(isAgentParticipant));
       await trackMic(room.localParticipant.setMicrophoneEnabled(true));
       meter().attach('user', room.localParticipant.getTrackPublication?.(Track.Source?.Microphone || 'microphone')?.track?.mediaStreamTrack);
       if (generationRef.current !== generation) {
@@ -381,12 +433,12 @@ export function WebCallConsole({
         generationRef.current += 1;
         roomRef.current = null;
         void leaveRoom(room);
-        setError('The voice agent did not join the room. Make sure the agent worker is running (cd server/agent-worker && npm run dev) and that its LIVEKIT_AGENT_NAME and LiveKit project match the API.');
         setAgentThinking(false);
         setVoiceActivityLevel(0);
         setAgentConnected(false);
         setAudioReady(false);
-        setPhase('error');
+        void failureReason('The voice agent did not join the room. Make sure the agent worker is running (cd server/agent-worker && npm run dev), that its LIVEKIT_AGENT_NAME and LiveKit project match the API, and that no other environment\'s worker uses the same agent name.')
+          .then((reason) => { setError(reason); setPhase('error'); });
       }, AGENT_JOIN_TIMEOUT_MS);
     } catch (caught) {
       if (generationRef.current !== generation) return;

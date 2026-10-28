@@ -340,6 +340,8 @@ describe('conversation → CRM', () => {
     const transcript = await request(server).get(`/api/v1/sim-sms/conversations/${conv._id}`).set(auth(tokenA)).expect(200);
     expect(transcript.body.data.messages.map((m) => m.direction)).toEqual(['outbound', 'inbound', 'outbound', 'inbound', 'outbound', 'inbound', 'outbound']);
     expect(transcript.body.data.answers.map((a) => a.fieldKey)).toEqual(['interest', 'budget']);
+    expect(transcript.body.data.questionCoverage).toMatchObject({ total: 2, answered: 2, requiredGaps: [] });
+    expect(transcript.body.data.conversationInsights.participation.leadTurns).toBe(3);
     const byLead = await request(server).get(`/api/v1/sim-sms/leads/${lead._id}/conversations`).set(auth(tokenA)).expect(200);
     expect(byLead.body.data).toHaveLength(1);
 

@@ -14,6 +14,7 @@ import { phoneHash } from '../aiCalling/callAuth.js';
 import { ACTION_TO_LEAD_STATUS, PROTECTED_LEAD_STATUSES } from '../aiCalling/aiCalling.constants.js';
 import * as engine from '../aiCalling/engine/questionEngine.js';
 import { evaluateOutcome } from '../aiCalling/engine/statusRuleEngine.js';
+import { conversationInsights } from '../aiCalling/engine/conversationInsights.js';
 import { windowState, recipientWindow, isValidTimezone } from '../aiCalling/engine/callWindow.js';
 import { normalizePhone } from '../businessDiscovery/engine/normalizer.js';
 import { isAiConfigured, createOpenAiClient } from '../../shared/ai/llmFactory.js';
@@ -259,7 +260,11 @@ class SimSmsService {
     const answers = questions.filter((q) => state.answers[q.fieldKey]).map((q) => ({
       fieldKey: q.fieldKey, label: q.label, ...state.answers[q.fieldKey],
     }));
-    return { conversation, messages, answers };
+    return { conversation, messages, answers, ...conversationInsights({
+      questionnaire: conversation.campaignId?.questionnaire, state, answers, disposition: conversation.disposition,
+      terminal: Boolean(conversation.resultsProcessedAt || !ACTIVE_CONVERSATION_STATES.includes(conversation.state)),
+      transcript: messages.filter(m => m.direction === 'inbound' || ['sent', 'delivered'].includes(m.status)).map(m => ({ role: m.direction === 'inbound' ? 'customer' : 'assistant' })),
+    }) };
   }
 
   /** All SIM SMS conversations of one lead (company-wide lead, owner-scoped conversations). */

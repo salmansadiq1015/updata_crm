@@ -57,6 +57,7 @@ fi
 say "Dépendances serveur"
 cd "$ROOT/server"
 npm ci --omit=dev
+npm run build:phone-gateway
 
 say "Migrations"
 # The step that was missing. It is idempotent and holds a lock, so running it

@@ -122,6 +122,56 @@ describe('aiCalling campaign creation + eligibility', () => {
     expect(byLead[String(dupe._id)].eligibility.reasons).toContain('duplicate_phone');
   });
 
+  it('previews eligibility before a campaign is created (same reasons as the real recipients)', async () => {
+    const good = await makeLead({ mobile: '+41791110021' });
+    const noPhone = await makeLead({ mobile: null, phone: null });
+    const dupe = await makeLead({ mobile: '+41791110021' }); // same number as good
+
+    const preview = await service.previewEligibility(actor, { leadIds: [good._id, noPhone._id, dupe._id].map(String), channel: 'voice' });
+    expect(preview).toMatchObject({ total: 3, found: 3, unavailable: 0, eligible: 1 });
+    expect(preview.reasonCounts).toMatchObject({ missing_phone: 1, duplicate_phone: 1 });
+    const byLead = Object.fromEntries(preview.leads.map((l) => [l.leadId, l]));
+    expect(byLead[String(good._id)]).toMatchObject({ eligible: true, phone: '+41791110021' });
+    expect(byLead[String(noPhone._id)].reasons).toContain('missing_phone');
+    expect(byLead[String(dupe._id)].reasons).toContain('duplicate_phone');
+  });
+
+  it('deletes a campaign and its recipients/calls, but refuses a running one', async () => {
+    const lead = await makeLead({ mobile: '+41791110031' });
+    const campaign = await service.createCampaign(
+      baseInput({ selection: { mode: 'explicit', leadIds: [String(lead._id)] } }), actor,
+    );
+    await CallRecord.create({
+      campaignId: campaign._id, recipientId: (await CampaignRecipient.findOne({ campaignId: campaign._id }))._id,
+      leadId: lead._id, internalCallId: `del_${campaign._id}_1`, attemptNumber: 1, state: 'completed', createdBy: actor,
+    });
+
+    // Running → refused.
+    await CallCampaign.updateOne({ _id: campaign._id }, { $set: { status: 'running' } });
+    await expect(service.deleteCampaign(campaign._id, actor)).rejects.toThrow(/Pause or cancel the campaign before deleting/);
+
+    // Paused → deleted, with its recipients and calls gone.
+    await CallCampaign.updateOne({ _id: campaign._id }, { $set: { status: 'paused' } });
+    expect(await service.deleteCampaign(campaign._id, actor)).toMatchObject({ deleted: true });
+    expect(await CallCampaign.findById(campaign._id)).toBeNull();
+    expect(await CampaignRecipient.countDocuments({ campaignId: campaign._id })).toBe(0);
+    expect(await CallRecord.countDocuments({ campaignId: campaign._id })).toBe(0);
+  });
+
+  it('bulk-deletes the deletable campaigns and reports the ones it skipped', async () => {
+    const [a, b] = await Promise.all([
+      service.createCampaign(baseInput({ name: 'Del A', selection: { mode: 'explicit', leadIds: [String((await makeLead({ mobile: '+41791110041' }))._id)] } }), actor),
+      service.createCampaign(baseInput({ name: 'Del B', selection: { mode: 'explicit', leadIds: [String((await makeLead({ mobile: '+41791110042' }))._id)] } }), actor),
+    ]);
+    await CallCampaign.updateOne({ _id: b._id }, { $set: { status: 'running' } }); // not deletable
+
+    const result = await service.deleteCampaigns([String(a._id), String(b._id)], actor);
+    expect(result.deleted).toBe(1);
+    expect(result.skipped).toEqual([{ id: String(b._id), reason: 'Pause or cancel the campaign before deleting it' }]);
+    expect(await CallCampaign.findById(a._id)).toBeNull();
+    expect(await CallCampaign.findById(b._id)).not.toBeNull();
+  });
+
   it('rejects a questionnaire with duplicate field keys', async () => {
     const lead = await makeLead();
     const input = baseInput({ selection: { mode: 'explicit', leadIds: [String(lead._id)] } });
@@ -181,6 +231,40 @@ describe('aiCalling campaign creation + eligibility', () => {
       process.env.AI_CALLING_REQUIRE_CONSENT = 'false';
     }
   });
+
+  it('removes selected recipients, keeps mid-call ones, and drops them from the selection', async () => {
+    const leads = await Promise.all([makeLead({ mobile: '+41791110011' }), makeLead({ mobile: '+41791110012' }), makeLead({ mobile: '+41791110013' })]);
+    const campaign = await service.createCampaign(
+      baseInput({ selection: { mode: 'explicit', leadIds: leads.map((l) => String(l._id)) } }), actor,
+    );
+    const recipients = await CampaignRecipient.find({ campaignId: campaign._id }).sort({ createdAt: 1 }).lean();
+    expect(recipients).toHaveLength(3);
+    // The third recipient is in a live call: it must be skipped, not deleted.
+    await CampaignRecipient.updateOne({ _id: recipients[2]._id }, { $set: { state: 'in_progress' } });
+
+    const result = await service.removeRecipients(campaign._id, actor, { recipientIds: recipients.map((r) => String(r._id)) });
+    expect(result.removed).toBe(2);
+    expect(result.skipped).toEqual([{ id: String(recipients[2]._id), reason: 'in_call' }]);
+
+    const left = await CampaignRecipient.find({ campaignId: campaign._id }).lean();
+    expect(left.map((r) => String(r._id))).toEqual([String(recipients[2]._id)]);
+    const saved = await CallCampaign.findById(campaign._id).lean();
+    expect(saved.selection.leadIds.map(String)).toEqual([String(recipients[2].leadId)]);
+  });
+
+  it('refuses to start with a reason and fix when every lead is held (no consent)', async () => {
+    process.env.AI_CALLING_REQUIRE_CONSENT = 'true';
+    try {
+      const leads = await Promise.all([makeLead({ mobile: '+41791110001' }), makeLead({ mobile: '+41791110002' })]);
+      const campaign = await service.createCampaign(
+        baseInput({ selection: { mode: 'explicit', leadIds: leads.map((l) => String(l._id)) } }), actor,
+      );
+      await expect(service.startCampaign(campaign._id, actor, {}))
+        .rejects.toThrow(/None of this campaign's 2 leads can be called right now\. 2 leads need recorded call consent — open each lead's AI Calls tab and Record verified consent/);
+    } finally {
+      process.env.AI_CALLING_REQUIRE_CONSENT = 'false';
+    }
+  });
 });
 
 describe('aiCalling post-call processing', () => {
@@ -225,6 +309,31 @@ describe('aiCalling post-call processing', () => {
     const second = await service.processCallResults(call._id, { durationSeconds: 60 });
     expect(second.duplicate).toBe(true);
     expect(await LeadCallTransition.countDocuments({ leadId: call.leadId })).toBe(1);
+  });
+
+  it('automatically persists a grounded recap when a call ends without agent notes', async () => {
+    const { call } = await seedCallWithAnswers({}, {
+      active: { validation: 'valid', normalizedValue: true, rawAnswer: 'Yes, we are operating.' },
+    });
+    await service.processCallResults(call._id, {});
+    const saved = await CallRecord.findById(call._id).lean();
+    expect(saved.callNotes).toMatchObject({ source: 'call_results', description: 'Qualification run' });
+    expect(saved.callNotes.summary).toContain('Yes, we are operating.');
+    expect(saved.callNotes.blockers).toContain('1 required answer(s) unresolved.');
+    const second = await service.processCallResults(call._id, { callNotes: { summary: 'Overwrite' } });
+    expect(second.duplicate).toBe(true);
+    expect((await CallRecord.findById(call._id).lean()).callNotes).toEqual(saved.callNotes);
+  });
+
+  it('accepts a late agent recap once after provider completion without reapplying outcomes', async () => {
+    const { call } = await seedCallWithAnswers({}, {});
+    await service.processCallResults(call._id, {});
+    const notes = { description: 'Discussed availability', summary: 'The lead requested time to review.', blockers: ['Needs time to review'] };
+    await service.agentEndCall(call.internalCallId, { callNotes: notes });
+    const saved = await CallRecord.findById(call._id).lean();
+    expect(saved.callNotes).toMatchObject({ ...notes, blockers: expect.arrayContaining(notes.blockers), source: 'ai_agent' });
+    await service.agentEndCall(call.internalCallId, { callNotes: { ...notes, summary: 'Replay' } });
+    expect((await CallRecord.findById(call._id).lean()).callNotes).toEqual(saved.callNotes);
   });
 
   it('a do-not-contact request suppresses the number and does not qualify', async () => {

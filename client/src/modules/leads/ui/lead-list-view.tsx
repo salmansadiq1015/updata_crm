@@ -20,7 +20,9 @@ import {
   Target,
   Trash2,
   Upload,
+  Bot,
 } from 'lucide-react';
+import { AssignLeadsToAgentDialog } from '@/modules/aiCalling/ui/assign-leads-to-agent-dialog';
 import { showError, showSuccess } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -108,7 +110,8 @@ const DEFAULT_SORT = { sortBy: 'createdAt', sortOrder: 'desc' } as const;
 export function LeadListView() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canAssignAgent = isAdmin || ['ai-calling:write', 'ai-calling:admin', 'crm:admin'].some(hasPermission);
   const canWrite = hasPermission(PERMISSIONS.LEAD_WRITE);
   const canConvert = hasPermission(PERMISSIONS.LEAD_CONVERT);
   const canDelete = hasPermission(PERMISSIONS.LEAD_DELETE);
@@ -138,6 +141,7 @@ export function LeadListView() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [mapOpen, setMapOpen] = useState(false);
   // AI calling: open the campaign wizard pre-filled with the selected leads.
+  const [agentAssignmentIds, setAgentAssignmentIds] = useState<string[] | null>(null);
   const [aiCallLeadIds, setAiCallLeadIds] = useState<string[] | null>(null);
   const [pageSize, setPageSize] = useState(DEFAULT_LEAD_PAGE_SIZE);
   const [formState, setFormState] = useState<{ open: boolean; lead: Lead | null }>({ open: false, lead: null });
@@ -418,6 +422,7 @@ export function LeadListView() {
         <RowActionsMenu
           items={[
             { label: t('common.view', 'View'), icon: Eye, onSelect: () => openLead(lead) },
+            { label: t('leads.action.assignAgent', 'Assign to calling agent'), icon: Bot, hidden: !canAssignAgent, onSelect: () => setAgentAssignmentIds([lead.id]) },
             {
               label: t('common.edit', 'Edit'),
               icon: Pencil,
@@ -450,7 +455,7 @@ export function LeadListView() {
         />
       );
     },
-    [canConvert, canDelete, canWrite, openLead, t],
+    [canConvert, canDelete, canWrite, canAssignAgent, openLead, t],
   );
 
   // ── Derived UI state ───────────────────────────────────────────────────────
@@ -759,6 +764,8 @@ export function LeadListView() {
         canWhatsApp={canWhatsApp}
         canEnrich={canEnrich}
         canAiCall={canWrite}
+        canAssignAgent={canAssignAgent}
+        onAssignAgent={() => setAgentAssignmentIds(visibleSelectedIds)}
         isBusy={bulkBusy}
         onAssign={(userId) => void handleBulkAssign(userId)}
         onDelete={() => void handleBulkDelete()}
@@ -769,6 +776,8 @@ export function LeadListView() {
         onAiCall={() => setAiCallLeadIds(visibleSelectedIds)}
         onClear={clearSelection}
       />
+
+      {agentAssignmentIds?.length ? <AssignLeadsToAgentDialog leadIds={agentAssignmentIds} onClose={() => setAgentAssignmentIds(null)} onAssigned={() => { setAgentAssignmentIds(null); clearSelection(); }} /> : null}
 
       {aiCallLeadIds && aiCallLeadIds.length ? (
         <CampaignWizard

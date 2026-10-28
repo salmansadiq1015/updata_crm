@@ -58,6 +58,19 @@ test('sequence tracker counts gaps across the u16 wrap', () => {
   assert.equal(s.lost, 2);
 });
 
+test('HELLO_ACK requires complete firmware and SDK identity strings, even with a valid frame CRC', () => {
+  const header = Buffer.alloc(30);
+  header[0] = 1;
+  header.writeUInt16LE(1024, 26);
+  const good = Buffer.concat([header, Buffer.from([5]), Buffer.from('0.1.0'), Buffer.from([6]), Buffer.from('v5.5.6')]);
+  assert.equal(parse[T.HELLO_ACK](good).firmware, '0.1.0');
+  for (let n = 0; n < good.length; n += 1) {
+    const [frame] = new FrameDecoder().push(encodeFrame(T.HELLO_ACK, 0, good.subarray(0, n)));
+    assert.throws(() => parse[T.HELLO_ACK](frame.payload), RangeError, `accepted ${n} bytes`);
+  }
+  assert.throws(() => parse[T.HELLO_ACK](Buffer.concat([header, Buffer.from([0, 0])])), RangeError);
+});
+
 test('payload parsers', () => {
   const st = Buffer.alloc(22);
   st.set([6, 3, 1, 0, 2, 1, 0xff, 4], 0);

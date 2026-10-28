@@ -1,10 +1,10 @@
 /**
  * Call-window evaluation — pure, so calling-hour rules are unit-tested.
  *
- * Two independent gates apply before every dial:
+ * Scheduled runs use two independent gates before a dial:
  *   1. the campaign's configured window (campaign timezone, days, hours);
  *   2. the RECIPIENT's local quiet hours, derived from the lead's country.
- * A campaign scheduled in Zurich must not ring a lead in Karachi at night.
+ * Immediate activation and future launches both enforce these two gates.
  *
  * Only countries with a single civil timezone are mapped. For multi-zone
  * countries (US, CA, AU, BR, RU, MX, …) the recipient's local time cannot be
@@ -31,6 +31,7 @@ const COUNTRY_TIMEZONE = Object.freeze({
 });
 
 const WEEKDAY = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const formatters = new Map();
 
 function parseMinutes(value) {
   const [h, m] = String(value || '00:00').split(':').map(Number);
@@ -42,9 +43,10 @@ export function windowState(schedule, now = new Date()) {
   const tz = schedule?.timezone || 'UTC';
   let hour = 0; let minute = 0; let weekday = 1;
   try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
+    if (!formatters.has(tz)) formatters.set(tz, new Intl.DateTimeFormat('en-GB', {
       timeZone: tz, hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23',
-    }).formatToParts(now);
+    }));
+    const parts = formatters.get(tz).formatToParts(now);
     hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
     minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
     weekday = WEEKDAY[parts.find((p) => p.type === 'weekday')?.value] ?? 1;
@@ -54,11 +56,13 @@ export function windowState(schedule, now = new Date()) {
     return { open: false, delayMs: 60 * 60_000, invalidTimezone: true };
   }
 
-  const days = schedule?.daysOfWeek?.length ? schedule.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
+  const days = schedule?.daysOfWeek ?? [0, 1, 2, 3, 4, 5, 6];
   const start = parseMinutes(schedule?.callWindow?.start);
   const end = parseMinutes(schedule?.callWindow?.end);
   const nowMin = hour * 60 + minute;
-  const dayOk = days.includes(weekday);
+  // A Monday 22:00–02:00 window includes early Tuesday, not early Monday.
+  const windowDay = start > end && nowMin < end ? (weekday + 6) % 7 : weekday;
+  const dayOk = days.includes(windowDay);
   const inWindow = start <= end ? (nowMin >= start && nowMin < end) : (nowMin >= start || nowMin < end);
   if (dayOk && inWindow) return { open: true, delayMs: 0 };
   // Not open — delay to the next window start today, else ~1h and re-check.
@@ -75,13 +79,24 @@ export function windowState(schedule, now = new Date()) {
  */
 export function nextWindowOpen(schedule, now = new Date()) {
   if (windowState(schedule, now).open) return now;
-  const STEP = 15 * 60_000;
+  const STEP = 60_000;
   const start = Math.ceil(now.getTime() / 60_000) * 60_000;
   for (let t = start; t <= start + 8 * 24 * 60 * 60_000; t += STEP) {
     if (!windowState(schedule, new Date(t)).open) continue;
     let first = t;
     while (first - 60_000 > now.getTime() && windowState(schedule, new Date(first - 60_000)).open) first -= 60_000;
     return new Date(first);
+  }
+  return null;
+}
+
+/** End of the first eligible window, including overnight windows and DST. */
+export function nextWindowClose(schedule, now = new Date()) {
+  const opening = nextWindowOpen(schedule, now);
+  if (!opening) return null;
+  for (let t = Math.floor(opening.getTime() / 60_000) * 60_000 + 60_000;
+    t <= opening.getTime() + 48 * 60 * 60_000; t += 60_000) {
+    if (!windowState(schedule, new Date(t)).open) return new Date(t);
   }
   return null;
 }
@@ -121,4 +136,19 @@ export function recipientWindow(country, {
   if (!timezone) return { known: false, open: true, delayMs: 0, timezone: null };
   const state = windowState({ timezone, callWindow: parseHours(hours), daysOfWeek: parseDays(days) }, now);
   return { known: true, open: state.open, delayMs: state.delayMs, timezone };
+}
+
+/** Earliest intersection of campaign and known recipient windows, for status
+ * reporting. Dispatch always rechecks both gates at the actual dial instant. */
+export function nextDialTime(schedule, country, now = new Date()) {
+  const timezone = recipientTimezone(country);
+  const recipientSchedule = timezone ? { timezone, callWindow: parseHours(process.env.AI_CALLING_RECIPIENT_HOURS), daysOfWeek: parseDays(process.env.AI_CALLING_RECIPIENT_DAYS) } : null;
+  const permitted = date => windowState(schedule, date).open && (!recipientSchedule || windowState(recipientSchedule, date).open);
+  if (permitted(now)) return now;
+  const start = Math.ceil(now.getTime() / 60_000) * 60_000;
+  for (let t = start; t <= start + 8 * 24 * 60 * 60_000; t += 60_000) {
+    const date = new Date(t);
+    if (permitted(date)) return date;
+  }
+  return null;
 }

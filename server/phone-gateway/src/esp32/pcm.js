@@ -83,6 +83,14 @@ export function levelDbfs(samples) {
   return rms > 0 ? Math.round(200 * Math.log10(rms / 32768)) / 10 : -120;
 }
 
+/** Optional AI uplink gain. Keep PCM rate/format and saturate before Int16 conversion. */
+export function playbackGain(samples, gainDb = 0) {
+  if (!Number.isFinite(gainDb) || gainDb < 0 || gainDb > 12) throw new RangeError('Playback gain must be 0–12 dB');
+  if (gainDb === 0) return samples;
+  const gain = 10 ** (gainDb / 20);
+  return Int16Array.from(samples, (v) => Math.max(-32768, Math.min(32767, Math.round(v * gain))));
+}
+
 export function levelTimeline(samples, rate, windowS = 1) {
   const n = Math.floor(rate * windowS);
   const out = [];

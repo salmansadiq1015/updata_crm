@@ -5,6 +5,7 @@ import { duplexPair } from 'node:stream';
 
 import { Esp32Device } from '../src/esp32/device.js';
 import { signDial } from '../src/esp32/dialAuth.js';
+import { T, encodeFrame } from '../src/esp32/protocol.js';
 import { createFakeEsp32 } from './helpers/fakeEsp32.js';
 
 const KEY = Buffer.alloc(32, 9);
@@ -118,6 +119,17 @@ test('device unplugged: lost is emitted and pending commands fail', async () => 
   const lost = new Promise((r) => c.dev.once('lost', r));
   c.fake.unplug();
   assert.match(await lost, /closed|no frame/);
+  await assert.rejects(c.dev.statusRequest(), (e) => e.code === 'closed');
+  c.end();
+});
+
+test('a real firmware boot event invalidates the session even if PING would still answer', async () => {
+  const c = await connected();
+  const lost = new Promise((resolve) => c.dev.once('lost', resolve));
+  c.fake.stream.emit('data', encodeFrame(T.EVENT, 500, Buffer.from([8, 1])));
+  assert.match(await lost, /rebooted/);
+  assert.equal(c.dev.closed, true);
+  await assert.rejects(c.dev.hello(), (e) => e.code === 'closed');
   await assert.rejects(c.dev.statusRequest(), (e) => e.code === 'closed');
   c.end();
 });

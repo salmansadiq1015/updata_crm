@@ -39,7 +39,7 @@ export function VoiceKillSwitch() {
       <span className="min-w-0 basis-full text-xs text-muted-foreground sm:basis-auto sm:flex-1">
         {paused
           ? <>No new calls are placed{s.pausedAt ? ` since ${new Date(s.pausedAt).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}. Calls in progress finish normally.</>
-          : 'Campaigns dial within their calling hours, limits and consent rules.'}
+          : 'Start calling dials now. Scheduled runs follow calling hours. Limits and consent rules apply to both.'}
       </span>
       {s.pausedByEnv ? (
         <span className="text-xs text-muted-foreground">Paused by server setting</span>

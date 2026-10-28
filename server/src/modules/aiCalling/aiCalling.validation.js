@@ -26,7 +26,7 @@ const condition = Joi.object({
   any: Joi.array().items(clause).max(20),
 }).min(1).allow(null);
 
-const question = Joi.object({
+export const question = Joi.object({
   fieldKey: Joi.string().trim().pattern(/^[a-zA-Z0-9_.]+$/).max(80).required(),
   label: Joi.string().trim().max(200).required(),
   text: Joi.string().trim().max(1000).required(),
@@ -46,7 +46,7 @@ const question = Joi.object({
   sensitive: Joi.boolean().default(false),
 });
 
-const statusRule = Joi.object({
+export const statusRule = Joi.object({
   id: Joi.string().trim().max(80).required(),
   description: Joi.string().trim().max(300).allow('').default(''),
   when: condition.required(),
@@ -60,7 +60,7 @@ const agentLanguage = Joi.string().trim().max(10).custom((value, helpers) => (
   isSupportedAgentLanguage(value) ? canonicalAgentLanguage(value) : helpers.error('any.invalid')
 ), 'AI agent language').messages({ 'any.invalid': '{{#label}} must be a supported AI agent language code (see GET /ai-calling/languages)' });
 
-const agentConfig = Joi.object({
+export const agentConfig = Joi.object({
   agentName: Joi.string().trim().max(120).default('Assistant'),
   organizationName: Joi.string().trim().max(200).allow('').default(''),
   disclosure: Joi.string().trim().max(2000).allow('').default(''),
@@ -77,13 +77,13 @@ const agentConfig = Joi.object({
   shareLeadNotes: Joi.boolean().default(false),
 });
 
-const schedule = Joi.object({
+export const schedule = Joi.object({
   timezone: ianaTimezone.default('UTC'),
   callWindow: Joi.object({
     start: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).default('09:00'),
     end: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).default('18:00'),
   }).default({ start: '09:00', end: '18:00' }),
-  daysOfWeek: Joi.array().items(Joi.number().integer().min(0).max(6)).max(7).default([1, 2, 3, 4, 5]),
+  daysOfWeek: Joi.array().items(Joi.number().integer().min(0).max(6)).min(1).max(7).unique().default([1, 2, 3, 4, 5]),
   maxAttemptsPerLead: Joi.number().integer().min(1).max(10).default(2),
   minMinutesBetweenAttempts: Joi.number().integer().min(0).default(60),
   retryDelayMinutes: Joi.number().integer().min(1).default(120),
@@ -127,18 +127,24 @@ const linkConfig = Joi.object({
   whatsappShare: Joi.boolean().default(false),
 });
 
-const explicitSelection = Joi.object({
-  mode: Joi.string().valid('explicit').required(),
-  leadIds: Joi.array().items(objectId).min(1).max(5000).required(),
+// One schema keyed on `mode` (not Joi.alternatives) so a rejection names the exact
+// field, e.g. "selection.filters.country" instead of "does not match any allowed type".
+const selectionFilters = Joi.object({
+  status: Joi.string().max(40), assignedTo: objectId, source: Joi.string().max(50), type: Joi.string().max(50),
+  country: Joi.string().length(2).messages({ 'string.length': 'Country must be a 2-letter ISO code, e.g. PK or CH' }),
+  city: Joi.string().max(120), area: Joi.string().max(120),
+  countryId: Joi.string().max(80), cityId: Joi.string().max(80), areaId: Joi.string().max(80),
+  businessType: Joi.string().max(120), q: Joi.string().max(100).allow(''),
 });
-const filterSelection = Joi.object({
-  mode: Joi.string().valid('filters').required(),
-  filters: Joi.object({
-    status: Joi.string().max(40), assignedTo: objectId, source: Joi.string().max(50), type: Joi.string().max(50),
-    country: Joi.string().length(2), city: Joi.string().max(120), area: Joi.string().max(120),
-    countryId: Joi.string().max(80), cityId: Joi.string().max(80), areaId: Joi.string().max(80),
-    businessType: Joi.string().max(120), q: Joi.string().max(100).allow(''),
-  }).required(),
+const leadSelection = Joi.object({
+  mode: Joi.string().valid('explicit', 'filters').required(),
+  leadIds: Joi.when('mode', {
+    is: 'explicit',
+    then: Joi.array().items(objectId).min(1).max(5000).required()
+      .messages({ 'array.min': 'Select at least one lead', 'array.max': 'A campaign can include at most {#limit} leads' }),
+    otherwise: Joi.forbidden(),
+  }),
+  filters: Joi.when('mode', { is: 'filters', then: selectionFilters.required(), otherwise: Joi.forbidden() }),
 });
 
 export const createCampaign = { body: Joi.object({
@@ -152,7 +158,7 @@ export const createCampaign = { body: Joi.object({
   transport: Joi.string().valid('cloud_sip', 'paired_phone').default('cloud_sip'),
   pairedDeviceId: objectId.when('transport', { is: 'paired_phone', then: Joi.required(), otherwise: Joi.valid(null).optional() }),
   schedule: schedule.default({}),
-  selection: Joi.alternatives().try(explicitSelection, filterSelection).required(),
+  selection: leadSelection.required(),
   scheduledAt: Joi.date().iso().greater('now').allow(null),
   timezone: ianaTimezone,
   isTest: Joi.boolean().default(false),
@@ -175,9 +181,18 @@ export const voiceSettings = { body: Joi.object({
 }) };
 
 export const campaignId = { params: Joi.object({ id: objectId.required() }) };
-export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null) }).default({}) };
-export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link') }) };
+export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null), sequential: Joi.boolean(), startNow: Joi.boolean() }).custom((value, helpers) => value.startNow && value.scheduledAt ? helpers.message({ custom: 'Choose Start calling now or a future scheduled start' }) : value).default({}) };
+export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link'), agentId: objectId }) };
 export const listRecipients = { params: Joi.object({ id: objectId.required() }), query: Joi.object({ page, limit: Joi.number().integer().min(1).max(200).default(50), state: Joi.string().valid(...RECIPIENT_STATES) }) };
+export const removeRecipients = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
+  recipientIds: Joi.array().items(objectId).min(1).max(500).required(),
+}) };
+export const deleteCampaign = { params: Joi.object({ id: objectId.required() }) };
+export const deleteCampaigns = { body: Joi.object({ campaignIds: Joi.array().items(objectId).min(1).max(100).required() }) };
+export const previewEligibility = { body: Joi.object({
+  leadIds: Joi.array().items(objectId).min(1).max(500).required(),
+  channel: Joi.string().valid('voice', 'web_link').default('voice'),
+}) };
 export const simulate = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
   state: Joi.object().allow(null).default(null),
   userText: Joi.string().max(2000).allow('', null).default(null),
@@ -243,9 +258,13 @@ export const agentRecordAnswer = { params: Joi.object({ callId: Joi.string().max
   fieldKey: Joi.string().max(80).required(),
   rawAnswer: Joi.string().max(4000).allow('').required(),
 }) };
+export const agentRecordAnswers = { params: agentRecordAnswer.params, body: Joi.object({
+  answers: Joi.array().items(agentRecordAnswer.body).min(1).max(40).unique('fieldKey').required(),
+}) };
 export const agentFieldOnly = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
 }) };
+export const agentNoResponse = { params: agentFieldOnly.params, body: Joi.object({ fieldKey: Joi.string().max(80).required(), requestId: Joi.string().guid().required(), reason: Joi.string().valid('silence', 'unrelated', 'unintelligible').required() }) };
 export const agentConfirm = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
   reply: Joi.string().max(1000).allow(null),
@@ -255,17 +274,31 @@ export const agentCallback = { params: Joi.object({ callId: Joi.string().max(120
   human: Joi.boolean().default(false),
 }).default({}) };
 export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
+  callNotes: Joi.object({
+    description: Joi.string().trim().max(2000).allow(''),
+    summary: Joi.string().trim().max(4000).allow(''),
+    blockers: Joi.array().items(Joi.string().trim().max(500)).max(10),
+  }).allow(null),
   // Telephony-level outcomes only; business outcomes are derived server-side.
   disposition: Joi.string().valid('voicemail', 'no_answer', 'busy', 'failed').allow(null),
   durationSeconds: Joi.number().min(0).allow(null),
   transcriptRef: Joi.string().max(500).allow(null, ''),
   cost: Joi.object({ amount: Joi.number().min(0), currency: Joi.string().max(3), breakdown: Joi.any() }).allow(null),
   roomName: Joi.string().max(120).allow(null, ''),
+  // Why the worker gave up (OpenAI key rejected, CRM unreachable…), shown to the operator.
+  failureCode: Joi.string().max(100).allow(null, ''),
+  failureMessage: Joi.string().max(500).allow(null, ''),
 }).default({}) };
 export const agentTranscript = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   role: Joi.string().valid('customer', 'assistant').required(),
   text: Joi.string().max(4000).allow('').required(),
   itemId: Joi.string().max(80).pattern(/^[\w.:-]+$/).allow(null),
+  interrupted: Joi.boolean().default(false),
+  at: Joi.date().iso().allow(null),
+}) };
+export const agentActivity = { params: agentTranscript.params, body: Joi.object({
+  agentState: Joi.string().valid('initializing', 'idle', 'listening', 'thinking', 'speaking').required(),
+  speaker: Joi.string().valid('assistant', 'customer').allow(null).required(),
 }) };
 
 // Shared with the SIM SMS agent (same questionnaire / rule shapes).

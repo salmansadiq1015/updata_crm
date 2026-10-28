@@ -9,6 +9,7 @@ import { AI_AGENT_LANGUAGES, defaultAgentLanguage } from './aiCalling.languages.
 const meta = (req) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') });
 
 class AiCallingController {
+  async campaignRunStatus(req, res, next) { try { return res.success({ data: await service.campaignRunStatus(req.params.id, req.user._id) }); } catch (e) { next(e); } }
   // ---- campaigns (user-authenticated) ----
   async createCampaign(req, res, next) { try { return res.success({ data: await service.createCampaign(req.body, req.user._id, meta(req)), message: 'Call campaign created', statusCode: 201 }); } catch (e) { next(e); } }
   async listCampaigns(req, res, next) { try { return res.success(await service.listCampaigns(req.user._id, req._validatedQuery || req.query)); } catch (e) { next(e); } }
@@ -19,6 +20,10 @@ class AiCallingController {
   async pauseCampaign(req, res, next) { try { return res.success({ data: await service.pauseCampaign(req.params.id, req.user._id, meta(req)), message: 'Campaign paused' }); } catch (e) { next(e); } }
   async cancelCampaign(req, res, next) { try { return res.success({ data: await service.cancelCampaign(req.params.id, req.user._id, meta(req)), message: 'Campaign cancelled' }); } catch (e) { next(e); } }
   async listRecipients(req, res, next) { try { return res.success(await service.listRecipients(req.params.id, req.user._id, req._validatedQuery || req.query)); } catch (e) { next(e); } }
+  async removeRecipients(req, res, next) { try { return res.success({ data: await service.removeRecipients(req.params.id, req.user._id, req.body, meta(req)) }); } catch (e) { next(e); } }
+  async deleteCampaign(req, res, next) { try { return res.success({ data: await service.deleteCampaign(req.params.id, req.user._id), message: 'Campaign deleted' }); } catch (e) { next(e); } }
+  async deleteCampaigns(req, res, next) { try { return res.success({ data: await service.deleteCampaigns(req.body.campaignIds, req.user._id) }); } catch (e) { next(e); } }
+  async previewEligibility(req, res, next) { try { return res.success({ data: await service.previewEligibility(req.user._id, req.body) }); } catch (e) { next(e); } }
   async activeCalls(req, res, next) { try { return res.success({ data: await service.activeCalls(req.params.id, req.user._id) }); } catch (e) { next(e); } }
   async retryRecipients(req, res, next) { try { return res.success({ data: await service.retryRecipients(req.params.id, req.user._id, req.body, meta(req)), message: 'Recipients re-queued' }); } catch (e) { next(e); } }
   async exportCampaign(req, res, next) {
@@ -34,6 +39,8 @@ class AiCallingController {
   async simulate(req, res, next) { try { return res.success({ data: await service.simulate(req.params.id, req.user._id, req.body) }); } catch (e) { next(e); } }
   async webTest(req, res, next) { try { return res.success({ data: await service.startWebTest(req.params.id, req.user._id, req.body || {}), message: 'Browser voice test started' }); } catch (e) { next(e); } }
   async listCalls(req, res, next) { try { return res.success(await service.listCalls(req.user._id, req._validatedQuery || req.query)); } catch (e) { next(e); } }
+  async monitorCall(req, res, next) { try { return res.success({ data: await service.monitorCall(req.params.id, req.user._id) }); } catch (e) { next(e); } }
+  async agentNoResponse(req, res, next) { try { return res.success({ data: await service.agentNoResponse(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async getCall(req, res, next) { try { return res.success({ data: await service.getCall(req.params.id, req.user._id) }); } catch (e) { next(e); } }
   async reconcileCall(req, res, next) { try { return res.success({ data: await service.reconcileCall(req.params.id, req.user._id, req.body, meta(req)), message: 'Call outcome resolved' }); } catch (e) { next(e); } }
   async reviewAnswers(req, res, next) { try { return res.success({ data: await service.reviewAnswers(req.params.id, req.user._id, req.body, meta(req)), message: 'Answers reviewed' }); } catch (e) { next(e); } }
@@ -83,6 +90,7 @@ class AiCallingController {
   }
   async agentDisclose(req, res, next) { try { return res.success({ data: await service.agentDisclose(req.agentCall.callId) }); } catch (e) { next(e); } }
   async agentRecordAnswer(req, res, next) { try { return res.success({ data: await service.agentRecordAnswer(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
+  async agentRecordAnswers(req, res, next) { try { return res.success({ data: await service.agentRecordAnswers(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async agentMarkUnknown(req, res, next) { try { return res.success({ data: await service.agentMarkUnknown(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async agentConfirm(req, res, next) { try { return res.success({ data: await service.agentConfirm(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async agentCallback(req, res, next) { try { return res.success({ data: await service.agentRequestCallback(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
@@ -94,8 +102,16 @@ class AiCallingController {
       return res.success({ data: link || await service.agentEndCall(req.agentCall.callId, req.body) });
     } catch (e) { next(e); }
   }
-  /** Finished utterances of a link voice call, for the conversation transcript (ignored for phone calls). */
-  async agentTranscript(req, res, next) { try { return res.success({ data: await linkVoice.transcript(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
+  /** Authenticated, per-call speech evidence for phone and web conversations. */
+  async agentTranscript(req, res, next) {
+    try {
+      const data = await service.agentTranscript(req.agentCall.callId, req.body);
+      // Preserve the existing web-link conversation view as well.
+      await linkVoice.transcript(req.agentCall.callId, req.body);
+      return res.success({ data });
+    } catch (e) { next(e); }
+  }
+  async agentActivity(req, res, next) { try { return res.success({ data: await service.agentActivity(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
 
   // ---- telephony webhook (signature-verified, idempotent) ----
   async webhook(req, res, next) {

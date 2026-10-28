@@ -172,15 +172,16 @@ class QueueManager {
     const queue = this.queues.get(queueName);
     if (!queue) return null;
 
-    const [waiting, active, completed, failed, delayed] = await Promise.all([
+    const [waiting, active, completed, failed, delayed, workers] = await Promise.all([
       queue.getWaitingCount(),
       queue.getActiveCount(),
       queue.getCompletedCount(),
       queue.getFailedCount(),
       queue.getDelayedCount(),
+      queue.getWorkersCount(),
     ]);
 
-    return { name: queueName, waiting, active, completed, failed, delayed };
+    return { name: queueName, waiting, active, completed, failed, delayed, workers };
   }
 
   /**

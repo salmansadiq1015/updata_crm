@@ -909,6 +909,7 @@ export const ENDPOINTS = Object.freeze({
     LEAD_TASKS: (leadId) => `/sim-calls/leads/${leadId}/tasks`,
   },
   AI_CALLING: {
+    RUN_STATUS: (id) => `/ai-calling/campaigns/${id}/run-status`,
     CAMPAIGNS: '/ai-calling/campaigns',
     CAMPAIGN: (id) => `/ai-calling/campaigns/${id}`,
     PREVIEW: (id) => `/ai-calling/campaigns/${id}/preview`,
@@ -920,6 +921,9 @@ export const ENDPOINTS = Object.freeze({
     CANCEL: (id) => `/ai-calling/campaigns/${id}/cancel`,
     RETRY: (id) => `/ai-calling/campaigns/${id}/retry`,
     RECIPIENTS: (id) => `/ai-calling/campaigns/${id}/recipients`,
+    REMOVE_RECIPIENTS: (id) => `/ai-calling/campaigns/${id}/recipients/remove`,
+    PREVIEW_ELIGIBILITY: '/ai-calling/recipients/preview',
+    BULK_DELETE_CAMPAIGNS: '/ai-calling/campaigns/bulk-delete',
     ACTIVE_CALLS: (id) => `/ai-calling/campaigns/${id}/active-calls`,
     EXPORT: (id) => `/ai-calling/campaigns/${id}/export`,
     CALLS: '/ai-calling/calls',
@@ -938,6 +942,10 @@ export const ENDPOINTS = Object.freeze({
   },
   // Paired-phone calling (server/src/modules/pairedPhone): the owner's phone via the ESP32 gateway.
   PAIRED_PHONE: {
+    GATEWAY_PACKAGE: '/paired-phone/gateway-package',
+    SETUP: (id) => `/paired-phone/devices/${id}/setup`,
+    AUDIO_TEST: (id) => `/paired-phone/devices/${id}/audio-test`,
+    AUDIO_TEST_RESULT: (id, callId) => `/paired-phone/devices/${id}/audio-test/${callId}`,
     DEVICES: '/paired-phone/devices',
     PAIRING_CODE: '/paired-phone/devices/pairing-code',
     DEVICE: (id) => `/paired-phone/devices/${id}`,

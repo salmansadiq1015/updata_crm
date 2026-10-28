@@ -28,7 +28,7 @@ describe('useAiCallingRealtime', () => {
       expect(listeners.get('ai-calling:call')?.size).toBe(1);
       unmount();
     }
-    for (const event of ['ai-calling:summary', 'ai-calling:call', 'ai-calling:answer']) {
+    for (const event of ['ai-calling:summary', 'ai-calling:call', 'ai-calling:answer', 'ai-calling:transcript', 'ai-calling:activity']) {
       expect(listeners.get(event)?.size ?? 0).toBe(0);
     }
     expect(handlers.size).toBe(0);

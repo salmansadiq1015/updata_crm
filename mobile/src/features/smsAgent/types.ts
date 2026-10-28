@@ -134,6 +134,32 @@ export const simConversationDetailSchema = z.object({
       })
       .passthrough(),
   ),
+  questionCoverage: z
+    .object({
+      applicable: z.number(),
+      answered: z.number(),
+      requiredGaps: z.array(z.string()),
+      questions: z.array(
+        z.object({
+          fieldKey: z.string(),
+          label: z.string(),
+          question: z.string(),
+          required: z.boolean(),
+          status: z.string(),
+          rawAnswer: z.string(),
+          normalizedValue: z.unknown().optional(),
+          confirmed: z.boolean(),
+        }),
+      ),
+    })
+    .optional(),
+  conversationInsights: z
+    .object({
+      observations: z.array(z.object({ code: z.string(), label: z.string(), evidence: z.string() })),
+      nextSteps: z.array(z.string()),
+      limitation: z.string(),
+    })
+    .optional(),
 });
 export type SimConversationDetail = z.infer<typeof simConversationDetailSchema>;
 

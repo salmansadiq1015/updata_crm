@@ -117,6 +117,7 @@ test('daemon: connects the board, keeps the phone linked, reports health, claims
   const hb = heartbeats.find((h) => h.state?.hfp === 'slc');
   assert.ok(hb, 'heartbeat reported the phone link');
   assert.equal(hb.board.firmware, '0.1.0-fake');
+  assert.equal(hb.gateway.monitorSafe, true);
   assert.match(hb.board.sessionNonce, /^[0-9a-f]{32}$/);
   assert.ok(awake.includes(true));
   assert.deepEqual(events.filter((t) => t !== 'stats').slice(0, 3), ['dialing', 'ringing', 'answered']);

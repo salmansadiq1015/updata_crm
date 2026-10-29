@@ -66,6 +66,8 @@ export function presentDevice(device, readiness, usage = null) {
     kind: d.kind,
     revoked: Boolean(d.revokedAt),
     revokedAt: d.revokedAt,
+    archived: Boolean(d.archivedAt),
+    archivedAt: d.archivedAt || null,
     online: readiness.online,
     lastHeartbeatAt: d.lastHeartbeatAt,
     gateway: d.gateway,
@@ -93,17 +95,40 @@ export function presentDevice(device, readiness, usage = null) {
 class PairedPhoneService {
   // ------------------------------------------------------------------ owner: pairing & devices
 
-  async createPairingCode(actor, { deviceName, phoneLabel = '' }, meta = {}) {
+  async createPairingCode(actor, { deviceName, phoneLabel = '', deviceId }, meta = {}) {
+    let device;
+    if (deviceId) {
+      device = await this._owned(actor, deviceId);
+      if (device.revokedAt) throw new ConflictError('This phone was removed. Add a new phone to use it again.');
+      if (device.archivedAt) throw new ConflictError('Restore this phone from Archived phones before linking its computer.');
+      if (device.currentCallId || (device.lastHeartbeatAt && Date.now() - device.lastHeartbeatAt.getTime() <= HEARTBEAT_STALE_MS)) {
+        throw new ConflictError('Stop the gateway and finish any active call before linking this phone again.');
+      }
+      // Replacing an expired/lost code must not use up another slot or create a duplicate phone.
+      await PairingCode.deleteMany({ createdBy: actor, deviceId: device._id, usedAt: null });
+    }
     const open = await PairingCode.countDocuments({ createdBy: actor, usedAt: null, expiresAt: { $gt: new Date() } });
-    if (open >= MAX_OPEN_PAIRING_CODES) throw new ConflictError('Too many unused pairing codes; wait for them to expire');
+    if (open >= MAX_OPEN_PAIRING_CODES) throw new ConflictError('Five phones are waiting for computer setup. Finish setup or delete an unused phone, then add another. You can also wait 10 minutes for unused codes to expire.');
     const code = newPairingCode();
     const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
-    await PairingCode.create({ codeHash: hashToken(normalizePairingCode(code)), deviceName, phoneLabel, expiresAt, createdBy: actor });
+    if (!device) {
+      device = await PairedDevice.create({
+        name: deviceName, phoneLabel, createdBy: actor,
+        dialKey: { enc: encryptDialKey(newDialKey()), state: 'pending', issuedAt: new Date() },
+      });
+    }
+    try {
+      await PairingCode.create({ codeHash: hashToken(normalizePairingCode(code)), deviceName: device.name, phoneLabel: device.phoneLabel, deviceId: device._id, expiresAt, createdBy: actor });
+    } catch (error) {
+      if (!deviceId) await PairedDevice.deleteOne({ _id: device._id, tokenHash: null });
+      throw error;
+    }
     auditService.logEvent({
       eventType: 'paired_phone.pairing_code_created', userId: actor, ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent, result: 'success', module: 'paired-phone', details: { deviceName },
     });
-    return { code, expiresAt };
+    emitToOwner(actor, 'paired-phone:device', { deviceId: String(device._id), event: 'setup_started' });
+    return { code, expiresAt, deviceId: String(device._id) };
   }
 
   /** Gateway side of pairing. The code is the only credential, so it is consumed atomically. */
@@ -115,15 +140,28 @@ class PairedPhoneService {
     );
     if (!row) throw new AuthenticationError('Pairing code is invalid, used or expired');
     const token = newToken();
-    const device = await PairedDevice.create({
-      name: row.deviceName,
-      phoneLabel: row.phoneLabel,
-      tokenHash: hashToken(token),
-      tokenIssuedAt: new Date(),
+    const credentials = {
+      tokenHash: hashToken(token), tokenIssuedAt: new Date(),
       gateway: { version: gatewayInfo.version || null, platform: gatewayInfo.platform || null, hostname: gatewayInfo.hostname || null },
-      dialKey: { enc: encryptDialKey(newDialKey()), state: 'pending', issuedAt: new Date() },
-      createdBy: row.createdBy,
-    });
+    };
+    let device;
+    try {
+      device = row.deviceId ? await PairedDevice.findOneAndUpdate({
+        _id: row.deviceId, createdBy: row.createdBy, revokedAt: null, deletedAt: null, archivedAt: null, currentCallId: null,
+        $or: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { $lt: new Date(Date.now() - HEARTBEAT_STALE_MS) } }],
+      }, { $set: credentials }, { returnDocument: 'after' }) : await PairedDevice.create({
+        name: row.deviceName,
+        phoneLabel: row.phoneLabel,
+        ...credentials,
+        dialKey: { enc: encryptDialKey(newDialKey()), state: 'pending', issuedAt: new Date() },
+        createdBy: row.createdBy,
+      });
+      if (!device) throw new ConflictError('This phone is connected, in a call, or has been deleted. Stop its gateway before trying again.');
+    } catch (error) {
+      // A failed save must not silently consume the user's one-time code.
+      await PairingCode.updateOne({ _id: row._id }, { $set: { usedAt: null } });
+      throw error;
+    }
     await PairingCode.updateOne({ _id: row._id }, { $set: { deviceId: device._id } });
     auditService.logEvent({
       eventType: 'paired_phone.gateway_paired', userId: row.createdBy, ipAddress: meta.ipAddress || 'internal',
@@ -139,7 +177,7 @@ class PairedPhoneService {
   }
 
   async listDevices(actor) {
-    const devices = await PairedDevice.find({ createdBy: actor }).select(PUBLIC_FIELDS).sort({ revokedAt: 1, createdAt: -1 }).lean();
+    const devices = await PairedDevice.find({ createdBy: actor, deletedAt: null }).select(PUBLIC_FIELDS).sort({ revokedAt: 1, createdAt: -1 }).lean();
     const now = new Date();
     return Promise.all(devices.map(async (d) => {
       const usage = await usageCounts(d._id, now);
@@ -149,7 +187,7 @@ class PairedPhoneService {
 
   async _owned(actor, id, { includeKey = false } = {}) {
     if (!mongoose.isValidObjectId(id)) throw new NotFoundError('PairedDevice', id);
-    const q = PairedDevice.findOne({ _id: id, createdBy: actor });
+    const q = PairedDevice.findOne({ _id: id, createdBy: actor, deletedAt: null });
     if (includeKey) q.select('+dialKey.enc');
     const device = await q;
     if (!device) throw new NotFoundError('PairedDevice', id);
@@ -168,6 +206,58 @@ class PairedPhoneService {
     if (phoneLabel !== undefined) device.phoneLabel = phoneLabel;
     if (limits) device.limits = { ...(device.limits?.toObject?.() || device.limits || {}), ...limits };
     await device.save();
+    emitToOwner(actor, 'paired-phone:device', { deviceId: String(device._id), event: 'updated' });
+    return this.getDevice(actor, id);
+  }
+
+  async deleteDevice(actor, id, meta = {}) {
+    await this._owned(actor, id);
+    const device = await PairedDevice.findOneAndUpdate({
+      _id: id, createdBy: actor, deletedAt: null, currentCallId: null, 'attention.needed': { $ne: true },
+      $and: [
+        { $or: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { $lt: new Date(Date.now() - HEARTBEAT_STALE_MS) } }, { 'state.call': 0, 'state.callsetup': 0 }] },
+        { $or: [{ 'setup.command.state': { $nin: ['pending', 'running'] } }, { 'setup.command.expiresAt': { $lte: new Date() } }] },
+      ],
+    }, { $set: { deletedAt: new Date(), revokedAt: new Date(), revokedBy: actor, tokenHash: null, 'dialKey.enc': null } }, { returnDocument: 'after' });
+    if (!device) throw new ConflictError('Finish the current call or setup action first. If a call needs attention, check the phone and clear it before deleting.');
+    await PairingCode.deleteMany({ deviceId: device._id });
+    auditService.logEvent({
+      eventType: 'paired_phone.device_deleted', userId: actor, ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent, result: 'success', module: 'paired-phone', details: { deviceId: device._id },
+    });
+    emitToOwner(actor, 'paired-phone:device', { deviceId: String(device._id), event: 'deleted' });
+    // Keep the record for historical calls and campaign references; credentials are revoked.
+    return { id: String(device._id), deleted: true };
+  }
+
+  async archiveDevice(actor, id, meta = {}) {
+    const owned = await this._owned(actor, id);
+    if (owned.revokedAt) throw new ConflictError('This phone was revoked and cannot be archived.');
+    if (owned.archivedAt) return this.getDevice(actor, id);
+    // Use the same idle checks as deletion, atomically with the scheduler's device lock.
+    const device = await PairedDevice.findOneAndUpdate({
+      _id: id, createdBy: actor, deletedAt: null, revokedAt: null, archivedAt: null,
+      currentCallId: null, 'attention.needed': { $ne: true },
+      $and: [
+        { $or: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { $lt: new Date(Date.now() - HEARTBEAT_STALE_MS) } }, { 'state.call': 0, 'state.callsetup': 0 }] },
+        { $or: [{ 'setup.command.state': { $nin: ['pending', 'running'] } }, { 'setup.command.expiresAt': { $lte: new Date() } }] },
+      ],
+    }, { $set: { archivedAt: new Date() } }, { returnDocument: 'after' });
+    if (!device) throw new ConflictError('Finish the current call or setup action and clear any phone alert before archiving.');
+    await PairingCode.deleteMany({ deviceId: device._id, usedAt: null });
+    auditService.logEvent({ eventType: 'paired_phone.device_archived', userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent, result: 'success', module: 'paired-phone', details: { deviceId: device._id } });
+    emitToOwner(actor, 'paired-phone:device', { deviceId: String(device._id), event: 'archived' });
+    return this.getDevice(actor, id);
+  }
+
+  async restoreDevice(actor, id, meta = {}) {
+    const owned = await this._owned(actor, id);
+    if (owned.revokedAt) throw new ConflictError('This phone was revoked and cannot be restored. Add it again to use it.');
+    if (!owned.archivedAt) return this.getDevice(actor, id);
+    const device = await PairedDevice.findOneAndUpdate({ _id: id, createdBy: actor, deletedAt: null, revokedAt: null, archivedAt: { $ne: null } }, { $set: { archivedAt: null } }, { returnDocument: 'after' });
+    if (!device) throw new ConflictError('This phone changed. Refresh the phone list and try again.');
+    auditService.logEvent({ eventType: 'paired_phone.device_restored', userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent, result: 'success', module: 'paired-phone', details: { deviceId: device._id } });
+    emitToOwner(actor, 'paired-phone:device', { deviceId: String(device._id), event: 'restored' });
     return this.getDevice(actor, id);
   }
 
@@ -261,7 +351,7 @@ class PairedPhoneService {
     if (!ready.ok) return ready;
     const now = new Date();
     const taken = await PairedDevice.findOneAndUpdate(
-      { _id: deviceId, createdBy: owner, currentCallId: null, revokedAt: null, 'attention.needed': { $ne: true },
+      { _id: deviceId, createdBy: owner, currentCallId: null, revokedAt: null, archivedAt: null, 'attention.needed': { $ne: true },
         $or: [{ 'setup.command.state': { $nin: ['pending', 'running'] } }, { 'setup.command.expiresAt': { $lte: now } }] },
       { $set: { currentCallId: callId, currentRecipientId: recipientId, currentCallSince: now } },
       { returnDocument: 'after' },
@@ -396,9 +486,9 @@ class PairedPhoneService {
       limits: fresh.limits,
       provisionKeyPending: keyPending,
       readiness: { ok: ready.ok, reasons: ready.reasons },
-      voicePaused: await (await aiCalling()).default.isVoicePaused(),
+      voicePaused: Boolean(fresh.archivedAt) || await (await aiCalling()).default.isVoicePaused(),
       // Keeps the laptop awake while campaigns using this phone are running.
-      activeCampaigns: await CallCampaign.countDocuments({ pairedDeviceId: device._id, transport: 'paired_phone', status: { $in: ['running', 'scheduled'] } }),
+      activeCampaigns: fresh.archivedAt ? 0 : await CallCampaign.countDocuments({ pairedDeviceId: device._id, transport: 'paired_phone', status: { $in: ['running', 'scheduled'] } }),
       commands,
       setup: publicSetup(fresh.setup, now),
     };
@@ -445,6 +535,7 @@ class PairedPhoneService {
     else if (campaign?.status !== 'running') stop = `campaign is ${campaign?.status || 'gone'}`;
     else if (await ai.default.isVoicePaused()) stop = 'voice calling is paused (kill switch)';
     else if (device.revokedAt) stop = 'device revoked';
+    else if (device.archivedAt) stop = 'device archived';
     if (stop) {
       await this.cancelUndialed(candidate, stop);
       return null;
@@ -562,9 +653,17 @@ class PairedPhoneService {
       case 'claimed_ack':
         break;
       case 'dial_refused': {
-        // The firmware refused the DIAL before anything reached the phone: not dialed.
-        await CallRecord.updateOne({ _id: call._id }, { $set: { 'gateway.state': 'ended', failureCode: `FIRMWARE_${String(data.code || 'REFUSED').toUpperCase()}`.slice(0, 100), failureMessage: 'ESP32 refused the dial' } });
-        await PairedDevice.updateOne({ _id: device._id }, { $set: { lastError: { code: `DIAL_${String(data.code || 'REFUSED').toUpperCase()}`.slice(0, 60), message: 'ESP32 refused a dial', at: new Date() } } });
+        // Startup checks or firmware refused DIAL: nothing reached the phone.
+        const detail = {
+          no_session: 'The ESP32 USB control session expired before dialing. The gateway must reconnect; no phone call was placed.',
+          session_changed: 'The USB bridge reconnected while preparing the call. No phone call was placed; start a new call after the gateway is ready.',
+          agent_not_ready: 'The voice agent did not finish startup. Check the voice worker and its CRM connection. No phone call was placed.',
+          agent_failed: 'The voice agent reported a startup failure. Check the call failure details and worker logs. No phone call was placed.',
+          room_closed_before_dial: 'The voice room closed before the agent was ready. Check the voice worker and call service. No phone call was placed.',
+          livekit_unavailable: 'The gateway could not join the voice room. Check the LiveKit connection. No phone call was placed.',
+        }[data.code] || 'ESP32 refused the dial';
+        await CallRecord.updateOne({ _id: call._id }, { $set: { 'gateway.state': 'ended', failureCode: `FIRMWARE_${String(data.code || 'REFUSED').toUpperCase()}`.slice(0, 100), failureMessage: detail } });
+        await PairedDevice.updateOne({ _id: device._id }, { $set: { lastError: { code: `DIAL_${String(data.code || 'REFUSED').toUpperCase()}`.slice(0, 60), message: detail, at: new Date() } } });
         await ai.default.applyWebhookEvent({ provider: 'paired_phone', providerCallId: call.providerCallId, internalCallId, eventType: 'failed', occurredAt, providerEventId: `${eventId}:failed` });
         break;
       }

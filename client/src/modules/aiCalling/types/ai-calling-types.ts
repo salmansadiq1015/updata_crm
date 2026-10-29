@@ -292,7 +292,7 @@ export interface ConversationInsights {
 }
 
 export interface CallRecord {
-  gateway?: { takenOverAt?: string | null; audioLostAt?: string | null };
+  gateway?: { takenOverAt?: string | null; audioLostAt?: string | null; endReason?: string | null };
   _id: string;
   internalCallId: string;
   attemptNumber: number;
@@ -437,6 +437,8 @@ export interface PairedDevice {
   kind: 'esp32_hfp';
   revoked: boolean;
   revokedAt: string | null;
+  archived?: boolean;
+  archivedAt?: string | null;
   online: boolean;
   lastHeartbeatAt: string | null;
   gateway: { version: string | null; platform: string | null; hostname: string | null; playbackGainDb?: number | null; autoConnect?: boolean | null };
@@ -502,4 +504,54 @@ export interface AgentLaunchInput {
   idempotencyKey: string; name?: string; mode: 'now' | 'scheduled'; scheduledAt?: string | null;
   transport?: CallTransport; pairedDeviceId?: string | null;
   schedule?: Schedule; executionEndsAt?: string | null; continueAcrossDays: boolean;
+}
+
+export interface CallTokenUsage {
+  inputAudio: number; inputCachedAudio: number; inputText: number; inputCachedText: number;
+  outputAudio: number; outputText: number; input: number; output: number; total: number;
+}
+export type LeadTone = 'positive' | 'neutral' | 'hesitant' | 'negative';
+export type CallOutcomeProfile = 'engaged' | 'partially_engaged' | 'callback_requested' | 'declined' | 'opted_out' | 'not_reached';
+export interface CostComponents { model: number; telephony: number; platform: number; other?: number; modelDetail?: { audioIn: number; audioOut: number; textIn: number; textOut: number } }
+export interface AnalyzedCallCost {
+  amount: number; currency: string; source: 'token_usage' | 'per_minute_estimate' | 'provider_reported' | 'none';
+  estimate: boolean; model: string | null; pricedAs: string | null; unpriced: boolean;
+  tokens: CallTokenUsage | null; rates: Record<string, number> | null; components: CostComponents; billedMinutes: number | null;
+}
+export interface AnalyzedCall {
+  id: string; internalCallId: string; attemptNumber: number; leadId: string; leadName: string; leadPhone: string | null;
+  campaignId: string; campaignName: string; isTest: boolean; provider: string | null;
+  at: string; answeredAt: string | null; endedAt: string | null; durationSeconds: number; state: string;
+  disposition: string | null; qualification: string | null; reviewRequired: boolean;
+  failure: { code: string; message: string } | null;
+  summary: string; description: string; blockers: string[]; notesSource: 'ai_agent' | 'call_results' | null;
+  behavior: {
+    outcome: CallOutcomeProfile; tone: LeadTone | null; toneEvidence: string | null;
+    participation: { leadTurns: number; agentTurns: number; interruptions: number };
+    answers: { valid: number; total: number };
+  };
+  cost: AnalyzedCallCost;
+}
+export interface AnalyzedLead {
+  leadId: string; name: string; phone: string | null; status: string | null; calls: number; connected: number;
+  seconds: number; cost: number; tokens: number; avgCostPerCall: number | null; lastCallAt: string; lastCallId: string;
+  lastDisposition: string | null; lastQualification: string | null; lastTone: LeadTone | null; lastSummary: string;
+}
+export interface AgentCallAnalytics {
+  agent: { id: string; name: string }; currency: string;
+  totals: {
+    calls: number; connected: number; completed: number; qualified: number; leads: number; totalCost: number; totalSeconds: number;
+    avgCostPerCall: number | null; avgCostPerConnectedCall: number | null; avgCostPerLead: number | null; costPerQualifiedLead: number | null;
+    costPerMinute: number | null; avgDurationSeconds: number; connectRate: number | null;
+    tokens: CallTokenUsage; avgTokensPerCall: number | null;
+    components: { model: number; telephony: number; platform: number; other: number };
+    modelDetail: { audioIn: number; audioOut: number; textIn: number; textOut: number };
+    callsWithUsage: number; callsWithoutCost: number;
+  };
+  testing: { calls: number; totalCost: number; seconds: number; tokens: number };
+  pricing: { telephonyRatePerMinute: number; platformRatePerMinute: number; model: string };
+  tone: Record<LeadTone | 'unrecorded', number>;
+  outcomes: Partial<Record<CallOutcomeProfile, number>>;
+  byDay: Array<{ date: string; calls: number; connected: number; cost: number; seconds: number; tokens: number }>;
+  leads: AnalyzedLead[]; calls: AnalyzedCall[]; truncated: boolean;
 }

@@ -19,9 +19,11 @@ import { levelDbfs, playbackGain } from '../esp32/pcm.js';
 const DEFAULTS = Object.freeze({
   audioWaitMs: 4_000, // then ask the phone for the audio link ourselves
   audioFailMs: 12_000, // no audio link at all after answer → hang up
-  audioGraceMs: 2_000, // phones close audio just before a remote hang-up
+  audioGraceMs: 8_000, // allow a bounded SCO recovery before ending an active call
+  audioRecoverMs: 500,
+  remoteHangupConfirmMs: 1_200, // HFP call indicators can arrive separately
   hangupConfirmMs: 10_000,
-  agentLeftMs: 5_000, // agent gone but room still open: don't leave the lead in silence
+  agentLeftMs: 15_000, // allow a worker reconnect, but never leave the lead in silence indefinitely
   statsEveryMs: 2_000,
   speechDbfs: -45,
   agentGainDb: 0,
@@ -45,6 +47,7 @@ export class CallRunner {
     this.audioOn = false;
     this.receivedPhoneAudio = false;
     this.hangupReason = null;
+    this.lastCallState = null;
     this.result = null;
     this.unsubs = [];
     this.done = new Promise((resolve) => {
@@ -84,9 +87,13 @@ export class CallRunner {
     }
     try {
       await this.leg.connect();
+      await this.leg.waitForAgentReady();
       await this.leg.setCallStatus('dialing');
+      if (this.leg.disconnectReason != null || this.leg.closed) {
+        throw Object.assign(new Error('Voice room closed before dialing'), { code: 'room_closed_before_dial' });
+      }
     } catch (err) {
-      this.emit('dial_refused', { code: 'livekit_unavailable', detail: String(err.message || err).slice(0, 200) });
+      this.emit('dial_refused', { code: err.code || 'livekit_unavailable', detail: String(err.message || err).slice(0, 200) });
       await this.leg.close();
       return this.finish('not_dialed');
     }
@@ -94,7 +101,7 @@ export class CallRunner {
     this.on(this.device, 'audio', ({ pcm }) => this.onPhoneAudio(pcm));
     this.on(this.device, 'lost', (reason) => this.unknown(`ESP32 link lost: ${reason}`));
     this.on(this.leg, 'agentAudio', (pcm) => this.onAgentAudio(pcm));
-    this.on(this.leg, 'closed', () => this.onRoomClosed());
+    this.on(this.leg, 'closed', reason => this.onRoomClosed(reason));
     this.on(this.leg, 'agentLeft', () => this.onAgentLeft());
     this.on(this.leg, 'error', (err) => this.log('livekit_error', { error: String(err?.message || err) }));
 
@@ -107,6 +114,10 @@ export class CallRunner {
     }
     this.phase = 'dialing';
     this.emit('dialing');
+    if (this.leg.disconnectReason != null || this.leg.closed) {
+      this.onRoomClosed(this.leg.disconnectReason);
+      return this.done;
+    }
     this.timer('ring', (job.ringTimeoutSeconds || 45) * 1000, () => this.hangup('not_answered'));
     this.timer('max', ((job.maxCallSeconds || 300) + 60) * 1000, () => this.hangup('max_duration'));
     this.statsTimer = setInterval(() => this.sendStats(), this.o.statsEveryMs);
@@ -122,6 +133,8 @@ export class CallRunner {
       return;
     }
     const cs = callStateOf(s);
+    this.lastCallState = cs;
+    if (cs !== 'idle') this.cancel('remoteHangup');
     if (cs === 'dialing' || cs === 'alerting') this.sawSetup = true;
     if (this.phase === 'dialing' && (cs === 'dialing' || cs === 'alerting')) {
       this.phase = 'ringing';
@@ -153,6 +166,7 @@ export class CallRunner {
       this.cancel('audioWait');
       this.cancel('audioFail');
       this.cancel('audioGrace');
+      this.cancel('audioRecover');
       if (s.codec !== 'cvsd') {
         this.emit('audio_lost', { detail: `unsupported codec ${s.codec}` });
         this.hangup('audio_failed');
@@ -162,6 +176,12 @@ export class CallRunner {
     } else if (!on && this.audioOn) {
       this.audioOn = false;
       if (this.phase === 'active') {
+        this.log('audio_recovery_started', { graceMs: this.o.audioGraceMs });
+        this.timer('audioRecover', this.o.audioRecoverMs, () => {
+          if (this.phase === 'active' && !this.audioOn && this.lastCallState === 'active') {
+            this.device.audioConnect().catch(err => this.log('audio_reconnect_failed', { code: err.code }));
+          }
+        });
         this.timer('audioGrace', this.o.audioGraceMs, () => {
           if (this.phase === 'active' && !this.audioOn) {
             this.emit('audio_lost', { detail: 'audio link closed while the call stayed up' });
@@ -191,7 +211,14 @@ export class CallRunner {
     // wait for actual setup before treating idle as a completed attempt.
     // The existing ring timer still bounds a phone that never starts setup.
     if ((p === 'dialing' || p === 'ringing') && this.sawSetup) this.end('not_answered');
-    else if (p === 'active' || p === 'takeover') this.end('remote_hangup');
+    else if ((p === 'active' || p === 'takeover') && !this.timers.has('remoteHangup')) {
+      // A single idle indication is not enough to tear down the agent room.
+      // Ask the firmware for a fresh snapshot and confirm idle after a short grace.
+      this.timer('remoteHangup', this.o.remoteHangupConfirmMs, () => {
+        if (['active', 'takeover'].includes(this.phase) && this.lastCallState === 'idle') this.end('remote_hangup');
+      });
+      void this.device.statusRequest().catch(err => this.log('hangup_status_failed', { code: err.code }));
+    }
     else if (p === 'hanging_up') this.end(this.hangupReason);
   }
 
@@ -232,7 +259,8 @@ export class CallRunner {
     this.device.play(pcm);
   }
 
-  onRoomClosed() {
+  onRoomClosed(reason) {
+    this.log('voice_room_closed', { reason: String(reason || 'unknown').slice(0, 100), phase: this.phase });
     if (['dialing', 'ringing', 'active'].includes(this.phase)) this.hangup('local_hangup');
   }
 
@@ -253,6 +281,8 @@ export class CallRunner {
       this.emit('command_done', { type });
     } else if (type === 'takeover' && this.phase === 'active') {
       this.phase = 'takeover';
+      this.cancel('audioRecover');
+      this.cancel('audioGrace');
       this.device.clearPlayback();
       await this.device.audioDisconnect().catch((err) => this.log('takeover_audio_release_failed', { code: err.code }));
       await this.leg.close(); // the agent sees the line leave and wraps up
@@ -265,6 +295,9 @@ export class CallRunner {
     this.phase = 'hanging_up';
     this.hangupReason = reason;
     this.cancel('ring');
+    this.cancel('remoteHangup');
+    this.cancel('audioRecover');
+    this.cancel('audioGrace');
     this.device.clearPlayback();
     this.leg.setCallStatus('hangup').catch(() => {});
     const ack = await this.device.hangup(this.job.callRef).catch((err) => ({ result: err.code }));

@@ -25,6 +25,8 @@ export function buildNotificationDeepLink(entityType, entityId) {
       return `/field-ops/orders/${id}`;
     case 'WorkReport':
       return `/field-ops/reports?reportId=${id}`;
+    case 'Lead':
+      return `/leads?detail=${id}`;
     case 'WidgetSubmission':
       return `/admin/integrations/widget/submissions?submissionId=${id}`;
     default:

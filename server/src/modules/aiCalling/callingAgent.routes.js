@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import service from './callingAgent.service.js';
+import analytics from './callAnalytics.service.js';
 import { agentAvatarPresets } from './agentAvatarPresets.js';
 import * as schema from './callingAgent.validation.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
@@ -22,6 +23,15 @@ router.delete('/agent-images/:id', write, validate(schema.imageId), handle(req =
 router.get('/agents', read, validate(schema.listAgents), handle(req => service.list(req.user._id, req._validatedQuery), { paged: true }));
 router.post('/agents', write, validate(schema.createAgent), handle(req => service.create(req.body, req.user._id, meta(req)), { statusCode: 201 }));
 router.get('/agents/:id', read, validate(schema.agentId), handle(req => service.get(req.params.id, req.user._id)));
+router.get('/agents/:id/call-analytics', read, validate(schema.callAnalytics), handle(req => analytics.agentCallAnalytics(req.params.id, req.user._id, req._validatedQuery)));
+router.get('/agents/:id/call-analytics/export', read, validate(schema.callAnalytics), async (req, res, next) => {
+  try {
+    const csv = await analytics.agentCallAnalyticsCsv(req.params.id, req.user._id, req._validatedQuery);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="ai-agent-calls-${req.params.id}.csv"`);
+    return res.send(csv);
+  } catch (e) { next(e); }
+});
 router.patch('/agents/:id', write, validate(schema.updateAgent), handle(req => service.update(req.params.id, req.body, req.user._id, meta(req))));
 router.delete('/agents/:id', write, validate(schema.agentId), handle(req => service.remove(req.params.id, req.user._id, meta(req))));
 router.post('/agents/:id/duplicate', write, validate(schema.agentId), handle(req => service.duplicate(req.params.id, req.user._id, meta(req)), { statusCode: 201 }));

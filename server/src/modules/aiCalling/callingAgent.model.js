@@ -21,6 +21,17 @@ const schema = new mongoose.Schema({
   transport: { type: String, enum: ['cloud_sip', 'paired_phone'], default: 'cloud_sip' },
   pairedDeviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'PairedDevice', default: null },
   assignedLeadIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+  // Approved knowledge the agent speaks from (knowledge.service.js) and its human transfer setup (humanTransfer.service.js).
+  knowledge: {
+    mode: { type: String, enum: ['latest', 'pinned', 'none'], default: 'latest' },
+    versionId: { type: mongoose.Schema.Types.ObjectId, ref: 'KnowledgeVersion', default: null },
+  },
+  transfer: {
+    enabled: { type: Boolean, default: false },
+    targetUserIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+    timeoutSeconds: { type: Number, default: 30 },
+    allowPhoneTransfer: { type: Boolean, default: true },
+  },
   version: { type: Number, default: 1 },
   launchLeaseUntil: { type: Date, default: null },
   launchLeaseToken: { type: String, default: null, select: false },

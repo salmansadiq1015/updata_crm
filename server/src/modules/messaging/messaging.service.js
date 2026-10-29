@@ -9,6 +9,7 @@ import Suppression from './suppression.model.js';
 import ProviderSettings from './providerSettings.model.js';
 import DeliveryEvent from './deliveryEvent.model.js';
 import FrequencyLedger from './frequencyLedger.model.js';
+import * as contactPolicyHooks from '../contactPolicy/contactPolicy.hooks.js';
 import IntegrationHealthCheck from '../integrations/integrationHealthCheck.model.js';
 import Lead from '../crm/lead.model.js';
 import leadRepository from '../crm/lead.repository.js';
@@ -1092,6 +1093,7 @@ class MessagingService {
   }
 
   async _releaseFrequencyReservation(recipient) {
+    await contactPolicyHooks.messagingSettle(recipient, 'release');
     const token = recipient?.quotaReservationId;
     if (!token || recipient.frequencyReservationState == null || !recipient?.destinationHash || !recipient?.channel) return;
     const key = `${recipient.channel}:${recipient.destinationHash}`;
@@ -1107,6 +1109,7 @@ class MessagingService {
   }
 
   async _consumeFrequencyReservation(recipient) {
+    await contactPolicyHooks.messagingSettle(recipient, 'consume');
     const token = recipient?.quotaReservationId;
     if (!token || recipient.frequencyReservationState == null) return;
     await MessageRecipient.updateOne(
@@ -1341,6 +1344,7 @@ class MessagingService {
       await refreshCampaignSummary(campaign._id);
       return { failed: true, reason: 'quota' };
     }
+    const contactPolicyBlock = await contactPolicyHooks.messagingGate(this, claimed, campaign); if (contactPolicyBlock) return contactPolicyBlock;
     // Conditional: a pause/cancel that landed after this campaign was loaded must win
     // (the message already claimed above is still sent; nothing new is started).
     await Campaign.updateOne({ _id: campaign._id, status: { $in: ['queued', 'scheduled'] } }, { $set: { status: 'running' } });
@@ -1385,6 +1389,10 @@ class MessagingService {
       update.status = 'failed'; update.failedAt = new Date(); update.error = { code: result.errorCode, message: result.errorMessage };
     }
     await MessageRecipient.updateOne({ _id: recipientId, status: 'submitting' }, { $set: update });
+    // Provider-accepted outbound message = the lead's first response for the SLA (best effort).
+    if (result.outcome === 'accepted' && claimed.leadId) {
+      import('../crm/leadSla.service.js').then(({ default: sla }) => sla.recordFirstResponse(claimed.leadId, { at: update.acceptedAt, channel: claimed.channel })).catch(() => {});
+    }
     await refreshCampaignSummary(campaign._id);
     return result;
   }

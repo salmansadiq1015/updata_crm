@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { useSimCallCampaign, useSimCallEvents, useSimCallMutations, useSimCallTasks } from '../hooks/use-sim-calls';
 import { campaignActions, OUTCOME_LABEL, progress, STATUS_LABEL, TASK_LABEL, zonedLocalToIso } from '../sim-call-domain';
 import type { SimCallQuestion, SimCallTask, TaskState } from '../types/sim-call-types';
+import { ContactLimitSkips } from '@/modules/smsOps/ui/contact-limit-skips';
 
 const STATES: (TaskState | '')[] = ['', 'pending', 'scheduled', 'needs_review', 'completed', 'skipped', 'ineligible', 'cancelled'];
 const fmt = (iso: string | null | undefined, timeZone?: string) =>
@@ -59,6 +60,7 @@ export function SimCallCampaignDetail({ campaignId, onClose }: { campaignId: str
                 </div>
               );
             })()}
+            <ContactLimitSkips source="sim_call" campaignId={c._id} />
             {c.summary.syncFailed ? (
               <p className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"><AlertTriangle className="h-4 w-4" /> CRM sync failed for {c.summary.syncFailed} call(s); it is retried automatically, or retry per lead below.</p>
             ) : null}

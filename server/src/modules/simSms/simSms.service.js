@@ -24,7 +24,8 @@ import notificationService from '../notifications/notification.service.js';
 import logger from '../../shared/logger/index.js';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import { buildMessage, smsEncoding, smsSegments } from './engine/smsCopy.js';
-import { interpretReply } from './engine/replyInterpreter.js';
+import * as smsOpsHooks from './smsOps.hooks.js';
+import * as contactPolicyHooks from '../contactPolicy/contactPolicy.hooks.js';
 import {
   ACTIVE_CONVERSATION_STATES, ATTEMPT_RESULT_GRACE_MS, LEASE_MS, SIM_SMS_ERROR_CODES,
 } from './simSms.constants.js';
@@ -260,7 +261,7 @@ class SimSmsService {
     const answers = questions.filter((q) => state.answers[q.fieldKey]).map((q) => ({
       fieldKey: q.fieldKey, label: q.label, ...state.answers[q.fieldKey],
     }));
-    return { conversation, messages, answers, ...conversationInsights({
+    return { conversation, messages, answers, smsInsights: smsOpsHooks.conversationSummary(messages), ...conversationInsights({
       questionnaire: conversation.campaignId?.questionnaire, state, answers, disposition: conversation.disposition,
       terminal: Boolean(conversation.resultsProcessedAt || !ACTIVE_CONVERSATION_STATES.includes(conversation.state)),
       transcript: messages.filter(m => m.direction === 'inbound' || ['sent', 'delivered'].includes(m.status)).map(m => ({ role: m.direction === 'inbound' ? 'customer' : 'assistant' })),
@@ -387,6 +388,7 @@ class SimSmsService {
   async _markUnknown(message, code) {
     const res = await SimSmsMessage.updateOne({ _id: message._id, status: { $in: ['attempting', 'leased'] } }, { $set: { status: 'unknown', failureCode: code, leaseUntil: null } });
     if (!res.modifiedCount) return;
+    await smsOpsHooks.unknownSend(message, code); // recovery inbox
     // We cannot know whether the lead received it: never re-send automatically.
     await SimSmsConversation.updateOne({ _id: message.conversationId, state: { $in: ACTIVE_CONVERSATION_STATES } }, { $set: { state: 'needs_attention' } });
     notificationService.create({
@@ -456,6 +458,7 @@ class SimSmsService {
         continue;
       }
       if (gate.defer) { soonestDefer = Math.min(soonestDefer ?? Infinity, gate.defer); continue; }
+      const contactHold = await contactPolicyHooks.simSmsLeaseCheck(message); if (contactHold) { await SimSmsMessage.updateOne({ _id: message._id, status: 'pending' }, { $set: { notBefore: new Date(now.getTime() + contactHold.defer) } }); soonestDefer = Math.min(soonestDefer ?? Infinity, contactHold.defer); continue; }
 
       const leased = await SimSmsMessage.findOneAndUpdate(
         { _id: message._id, status: 'pending' },
@@ -478,6 +481,30 @@ class SimSmsService {
 
   /** The phone is about to call SmsManager. After this the message is never handed out again. */
   async markAttempting(actor, messageId, { deviceId }) {
+    const leased = await SimSmsMessage.findOne({ _id: messageId, createdBy: actor, status: 'leased', deviceId, leaseUntil: { $gte: new Date() } }).lean();
+    if (leased) {
+      const campaign = await SimSmsCampaign.findById(leased.campaignId).lean();
+      const gate = await this._leaseGate(leased, campaign, new Date());
+      if (typeof gate === 'string' || gate.defer) {
+        const update = typeof gate === 'string'
+          ? { status: 'cancelled', failureCode: gate, leaseUntil: null }
+          : { status: 'pending', deviceId: null, leaseUntil: null, notBefore: new Date(Date.now() + gate.defer) };
+        const released = await SimSmsMessage.updateOne({ _id: messageId, createdBy: actor, status: 'leased', deviceId }, { $set: update });
+        if (released.modifiedCount && typeof gate === 'string' && gate !== 'CAMPAIGN_NOT_RUNNING') {
+          await SimSmsConversation.updateOne({ _id: leased.conversationId, state: { $in: ACTIVE_CONVERSATION_STATES } }, { $set: { state: 'ineligible', 'eligibility.eligible': false, 'eligibility.reasons': [gate] } });
+          await this.refreshSummary(leased.campaignId);
+        }
+        return { proceed: false, reason: typeof gate === 'string' ? gate : 'OUTSIDE_SEND_WINDOW' };
+      }
+    }
+    // Cross-channel contact policy: atomic reservation right before SmsManager (opening/reminder only).
+    const contactBlock = leased ? await contactPolicyHooks.simSmsAttemptGate(leased) : null;
+    if (contactBlock) {
+      await SimSmsMessage.updateOne({ _id: messageId, createdBy: actor, status: 'leased', deviceId }, { $set: contactBlock.cancel
+        ? { status: 'cancelled', failureCode: `CONTACT_POLICY_${String(contactBlock.reason).toUpperCase()}`, leaseUntil: null }
+        : { status: 'pending', deviceId: null, leaseUntil: null, notBefore: new Date(Date.now() + contactBlock.defer) } });
+      return { proceed: false, reason: 'CONTACT_POLICY', detail: contactBlock.reason };
+    }
     const updated = await SimSmsMessage.findOneAndUpdate(
       { _id: messageId, createdBy: actor, status: 'leased', deviceId, leaseUntil: { $gte: new Date() } },
       { $set: { status: 'attempting', attemptedAt: new Date(), leaseUntil: null } },
@@ -494,15 +521,27 @@ class SimSmsService {
   async reportResult(actor, messageId, { deviceId, status, errorCode = null, at = null }) {
     const message = await SimSmsMessage.findOne({ _id: messageId, createdBy: actor });
     if (!message) throw new NotFoundError('SimSmsMessage', messageId);
+    if (message.deviceId && message.deviceId !== deviceId) {
+      throw conflict('This message belongs to another device', SIM_SMS_ERROR_CODES.INVALID_TRANSITION);
+    }
     if (message.status === status) return { duplicate: true };
-    if (!['attempting', 'unknown'].includes(message.status) || (message.deviceId && message.deviceId !== deviceId)) {
+    if (!['attempting', 'unknown'].includes(message.status)) {
       throw conflict(`Cannot record "${status}" for a message in status "${message.status}"`, SIM_SMS_ERROR_CODES.INVALID_TRANSITION);
     }
     const when = at ? new Date(at) : new Date();
     if (status === 'unknown') { await this._markUnknown(message, errorCode || 'DEVICE_REPORTED_UNKNOWN'); return { status }; }
 
+    const claimed = await SimSmsMessage.updateOne(
+      { _id: message._id, createdBy: actor, deviceId, status: { $in: ['attempting', 'unknown'] } },
+      { $set: status === 'sent' ? { status: 'sent', sentAt: when, failureCode: null } : { status: 'failed', failureCode: errorCode || 'UNKNOWN_FAILURE' } },
+    );
+    if (!claimed.modifiedCount) {
+      const current = await SimSmsMessage.findOne({ _id: messageId, createdBy: actor }).select('status deviceId').lean();
+      if (current?.status === status && current.deviceId === deviceId) return { duplicate: true };
+      throw conflict('Message result changed concurrently', SIM_SMS_ERROR_CODES.INVALID_TRANSITION);
+    }
+    await contactPolicyHooks.simSmsResult(message._id, status); // sent → commit, failed → release
     if (status === 'sent') {
-      await SimSmsMessage.updateOne({ _id: message._id }, { $set: { status: 'sent', sentAt: when, failureCode: null } });
       const campaign = await SimSmsCampaign.findById(message.campaignId).select('settings').lean();
       const waitsForReply = !['closing', 'stop_ack'].includes(message.kind);
       await SimSmsConversation.updateOne(
@@ -515,7 +554,6 @@ class SimSmsService {
       await SimSmsConversation.updateOne({ _id: message.conversationId, state: { $in: ['completed', 'stopped'] } }, { $set: { lastOutboundAt: when } });
     } else {
       // failed: SmsManager reported a definite failure — nothing was transmitted.
-      await SimSmsMessage.updateOne({ _id: message._id }, { $set: { status: 'failed', failureCode: errorCode || 'UNKNOWN_FAILURE' } });
       const failures = await SimSmsMessage.countDocuments({ conversationId: message.conversationId, status: 'failed' });
       if (TRANSIENT_SEND_ERRORS.has(errorCode) && failures < MAX_TRANSIENT_SEND_FAILURES && !['closing', 'stop_ack'].includes(message.kind)) {
         const delay = TRANSIENT_RETRY_DELAYS_MS[Math.min(failures - 1, TRANSIENT_RETRY_DELAYS_MS.length - 1)];
@@ -525,8 +563,11 @@ class SimSmsService {
           questionFieldKey: message.questionFieldKey, status: 'pending', subscriptionId: message.subscriptionId,
           notBefore: new Date(Date.now() + delay),
         });
-      } else if (!['closing', 'stop_ack'].includes(message.kind)) {
-        await SimSmsConversation.updateOne({ _id: message.conversationId, state: { $in: ACTIVE_CONVERSATION_STATES } }, { $set: { state: 'failed', disposition: 'failed' } });
+      } else {
+        await smsOpsHooks.deliveryFailure(message, errorCode); // permanent: recovery inbox (retry only by a human)
+        if (!['closing', 'stop_ack'].includes(message.kind)) {
+          await SimSmsConversation.updateOne({ _id: message.conversationId, state: { $in: ACTIVE_CONVERSATION_STATES } }, { $set: { state: 'failed', disposition: 'failed' } });
+        }
       }
     }
     await this.refreshSummary(message.campaignId);
@@ -587,7 +628,7 @@ class SimSmsService {
     // Not an SMS-agent conversation: it may be a STOP reply to an SMS-link campaign.
     if (!conversation) {
       const { default: linkAssistant } = await import('../linkAssistant/linkAssistant.service.js');
-      return linkAssistant.inboundSmsReply(actor, { from, body, deviceMessageKey, receivedAt });
+      return smsOpsHooks.unmatchedInbound(actor, { from, body, deviceMessageKey, receivedAt }, await linkAssistant.inboundSmsReply(actor, { from, body, deviceMessageKey, receivedAt }));
     }
 
     let inbound;
@@ -608,8 +649,10 @@ class SimSmsService {
     const state = engine.normalizeState(conversation.conversationState);
     const { action, question } = openQuestion(campaign.questionnaire, state);
     const classify = deps.classify !== undefined ? deps.classify : this._classifier();
-    const interpretation = await interpretReply(action.type === 'confirm' ? { ...question, type: 'boolean', text: 'Is that right?' } : question, inbound.body, { classify });
-    await SimSmsMessage.updateOne({ _id: inbound._id }, { $set: { interpretation: { intent: interpretation.intent, validation: interpretation.validation, source: interpretation.source, questionFieldKey: question?.fieldKey || null } } });
+    // Open question + every other question this reply answers (multi-answer) + insights.
+    const extraction = await smsOpsHooks.interpret({ campaign, conversation, state, action, question, body: inbound.body, classify });
+    const interpretation = extraction.primary;
+    await SimSmsMessage.updateOne({ _id: inbound._id }, { $set: { interpretation: smsOpsHooks.interpretationRecord(extraction, question) } });
 
     // Opt-out is honoured in every state, even after the conversation ended.
     if (interpretation.intent === 'stop') {
@@ -629,6 +672,7 @@ class SimSmsService {
       return { matched: true, intent: 'stop' };
     }
     if (!active || !question || campaign.status === 'cancelled') {
+      await smsOpsHooks.afterReply({ conversation, campaign, inbound, extraction, actor }); // late callback asks / answers → follow-up / review
       await this.refreshSummary(conversation.campaignId);
       return { matched: true, intent: interpretation.intent, ignored: 'conversation_not_active' };
     }
@@ -636,20 +680,24 @@ class SimSmsService {
     await this._mutate(conversation._id, (s) => {
       if (interpretation.intent === 'decline') return { state: engine.endConversation(s, 'declined') };
       if (interpretation.intent === 'callback') {
-        return { state: { ...engine.endConversation(s, 'callback_requested'), control: { callbackRequestedAt: null, callbackText: inbound.body.slice(0, 500) } } };
+        const callbackAt = extraction.insights?.callback?.at || null;
+        return { state: { ...engine.endConversation(smsOpsHooks.withRecordedExtras(s, extraction), 'callback_requested'), control: { callbackRequestedAt: callbackAt, callbackText: inbound.body.slice(0, 500) } } };
       }
       if (action.type === 'confirm') {
         return interpretation.intent === 'answer' && interpretation.normalizedValue === true
-          ? { state: engine.markConfirmed(s, question.fieldKey) }
+          ? { state: smsOpsHooks.withRecordedExtras(engine.markConfirmed(s, question.fieldKey), extraction) }
           : { state: engine.applyAnswer(s, question.fieldKey, { validation: 'invalid', normalizedValue: null, rawAnswer: inbound.body }) };
       }
+      // Answered other questions but not the open one: record those and ask the open one again (not a failed attempt).
+      if (smsOpsHooks.answeredOthersOnly(extraction)) return { state: smsOpsHooks.withRecordedExtras(s, extraction) };
       const validation = interpretation.intent === 'answer' ? 'valid' : (interpretation.intent === 'unknown' ? 'unknown' : 'invalid');
       return {
-        state: engine.applyAnswer(s, question.fieldKey, {
+        state: smsOpsHooks.withRecordedExtras(engine.applyAnswer(s, question.fieldKey, {
           validation, normalizedValue: validation === 'valid' ? interpretation.normalizedValue : null, rawAnswer: inbound.body,
-        }),
+        }), extraction),
       };
     });
+    await smsOpsHooks.afterReply({ conversation, campaign, inbound, extraction, actor, endedByCallback: interpretation.intent === 'callback' }); // review queue + callback follow-up
     await SimSmsConversation.updateOne({ _id: conversation._id }, { $set: { remindersSent: 0 } });
     const next = await this._advance(conversation._id);
     await this.refreshSummary(conversation.campaignId);
@@ -738,10 +786,12 @@ class SimSmsService {
       } catch (error) {
         // Leave the claim to expire: the sweep retries the (idempotent) sync.
         logger.warn('SIM SMS lead sync failed; will retry', { module: 'sim-sms', conversationId: String(conversationId), error: error.message });
+        await smsOpsHooks.crmSyncFailed(conversation, error); // recovery inbox (sweep keeps retrying)
         return { processed: false, error: error.message };
       }
     }
     await SimSmsConversation.updateOne({ _id: conversationId }, { $set: { resultsProcessedAt: new Date(), processingLeaseUntil: null } });
+    await smsOpsHooks.crmSyncSucceeded(conversationId);
     await this.refreshSummary(conversation.campaignId);
     return { processed: true, disposition, qualification: outcome.qualification };
   }
@@ -790,7 +840,7 @@ class SimSmsService {
       outcome: {
         disposition: communicationDisposition(disposition, outcome.qualification),
         connected: state.answers && Object.keys(state.answers).length ? 'yes' : (conversation.lastInboundAt ? 'yes' : 'no'),
-        notes, followUpAt: null, followUpTimezone: null, statusChange, doNotContact: disposition === 'do_not_contact',
+        notes, followUpAt: state.control?.callbackRequestedAt || null, followUpTimezone: state.control?.callbackRequestedAt ? smsOpsHooks.callbackTimezone(conversation, campaign) : null, statusChange, doNotContact: disposition === 'do_not_contact',
       },
       sms: lastOut ? { templateId: null, body: lastOut.body, encoding: smsEncoding(lastOut.body), segments: smsSegments(lastOut.body), sendStatus: 'sent_by_app' } : null,
       qualification: { answers },

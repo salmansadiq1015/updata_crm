@@ -3,7 +3,9 @@ import multer from 'multer';
 import leadCommunicationController from './leadCommunication.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
-import { getQualification, proposeQualification, transcribeVoiceNote } from './leadCommunication.validation.js';
+import { getQualification, qualificationHistory, proposeQualification, transcribeVoiceNote } from './leadCommunication.validation.js';
+import leadWorkflowController from './leadWorkflow.controller.js';
+import { qualificationCorrection } from './leadWorkflow.validation.js';
 
 /**
  * Lead qualification — mounted at /api/v1/crm/leads/:leadId/qualification by
@@ -12,7 +14,10 @@ import { getQualification, proposeQualification, transcribeVoiceNote } from './l
 const router = Router({ mergeParams: true });
 
 router.get('/', authenticate, requirePermission('lead:read'), validate(getQualification), (req, res, next) => leadCommunicationController.getQualification(req, res, next));
+router.get('/history', authenticate, requirePermission('lead:read'), validate(qualificationHistory), (req, res, next) => leadCommunicationController.getQualificationHistory(req, res, next));
 router.post('/propose', authenticate, requirePermission('lead:write'), validate(proposeQualification), (req, res, next) => leadCommunicationController.proposeQualification(req, res, next));
+// A user corrects one answer: new version (source user_correction) pointing at the corrected one; reason required.
+router.post('/corrections', authenticate, requirePermission('lead:write'), validate(qualificationCorrection), (req, res, next) => leadWorkflowController.correctQualification(req, res, next));
 
 // Voice note → text (after a call: Android gives apps no microphone during a SIM
 // call). Audio is held in memory only, transcribed and discarded — never stored.

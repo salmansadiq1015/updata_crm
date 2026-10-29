@@ -14,6 +14,8 @@ export type LeadsFilters = {
   area: string;
   /** A business category (e.g. "Chinese restaurant") from filter-options, or 'ALL'. */
   businessType: string;
+  /** Lead score band (hot / warm / cold / unscored) or 'ALL'. */
+  scoreBand: string;
   // 'ALL' = everyone, 'ME' = current user, or a specific user id.
   assignedTo: string;
   search: string;
@@ -32,6 +34,7 @@ const INITIAL_FILTERS: LeadsFilters = {
   city: 'ALL',
   area: 'ALL',
   businessType: 'ALL',
+  scoreBand: 'ALL',
   assignedTo: 'ALL',
   search: '',
 };

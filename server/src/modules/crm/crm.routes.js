@@ -15,6 +15,10 @@ import purchaseOrderRoutes from './purchaseOrder.routes.js';
 import procurementRoutes from './procurement.routes.js';
 import addressBookRoutes from './addressBook.routes.js';
 import leadRoutes from './lead.routes.js';
+import leadScoringRoutes from './leadScoring.routes.js';
+import leadMergeRoutes, { leadDuplicateRouter } from './leadMerge.routes.js';
+import leadFollowUpRoutes from './leadFollowUp.routes.js';
+import leadAssignmentPolicyRoutes from './leadAssignmentPolicy.routes.js';
 
 /**
  * CRM route aggregator.
@@ -42,6 +46,13 @@ router.use('/address-book', addressBookRoutes);
 
 // Lead routes (prospect entity; Google Places discovery imports create leads here)
 router.use('/leads', leadRoutes);
+// Lead quality: scoring config, duplicate review queue, merges (+undo)
+router.use('/lead-scoring', leadScoringRoutes);
+router.use('/lead-duplicates', leadDuplicateRouter);
+router.use('/lead-merges', leadMergeRoutes);
+// Unified follow-up inbox + lead assignment / SLA policy (Leads-A).
+router.use('/follow-ups', leadFollowUpRoutes);
+router.use('/lead-assignment-policy', leadAssignmentPolicyRoutes);
 
 // Nested routers under customers
 router.use('/customers/:customerId/contacts', customerContactsRouter);

@@ -188,7 +188,8 @@ describe('lead detail drawer — contact actions', () => {
     const user = userEvent.setup();
     const overview = within(drawer).getByRole('tab', { name: 'Overview' });
     expect(overview).toHaveAttribute('aria-selected', 'true');
-    expect(within(drawer).getAllByRole('tab')).toHaveLength(8);
+    // 8 sections + the unified conversation history tab.
+    expect(within(drawer).getAllByRole('tab')).toHaveLength(9);
     expect(within(drawer).queryByText('Channel consent')).not.toBeInTheDocument();
     expect(within(drawer).queryByText('No emails sent')).not.toBeInTheDocument();
     overview.focus();

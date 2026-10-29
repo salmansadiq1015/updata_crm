@@ -147,7 +147,8 @@ export function getLeadLocationLine(address: LeadAddress): string | null {
 
 /** `tel:` href, or null when the value has too few digits to be dialled. */
 export function toTelHref(phone: string | null | undefined): string | null {
-  if (!phone) return null;
+  // A masked value (PII masking) must never become a wrong dial target.
+  if (!phone || phone.includes('***')) return null;
   const compact = phone.replace(/[^\d+]/g, '');
   const digits = compact.replace(/\D/g, '');
   if (digits.length < 3) return null;
@@ -156,7 +157,7 @@ export function toTelHref(phone: string | null | undefined): string | null {
 
 export function toMailtoHref(email: string | null | undefined): string | null {
   const value = email?.trim();
-  if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  if (!value || value.includes('***') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
   return `mailto:${value}`;
 }
 
@@ -170,7 +171,7 @@ export function toMailtoHref(email: string | null | undefined): string | null {
  * prefix — we never invent a country code. An optional message is `&text=`.
  */
 export function toWhatsAppHref(phone: string | null | undefined, text?: string | null): string | null {
-  if (!phone) return null;
+  if (!phone || phone.includes('***')) return null;
   let digits = phone.replace(/\D/g, '');
   if (digits.startsWith('00')) digits = digits.slice(2);
   // A usable international number is at least ~7 digits; anything shorter is noise.

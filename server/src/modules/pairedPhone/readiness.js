@@ -8,6 +8,7 @@ export const HEARTBEAT_STALE_MS = 20_000;
 
 const REASON_TEXT = {
   revoked: 'Device was revoked',
+  archived: 'This phone is archived. Restore it from Archived phones before using it for calls.',
   audio_not_verified: 'Two-way call audio has not been verified on this device yet',
   gateway_offline: 'The laptop gateway is offline',
   board_disconnected: 'The ESP32 board is not connected to the laptop',
@@ -38,6 +39,7 @@ export function deviceReadiness(device, { now = new Date(), callsLastHour = 0, c
 
   if (!device) return { ok: false, online: false, reasons: ['revoked'], blocking: true, retryInMs: null };
   if (device.revokedAt) reasons.push('revoked');
+  if (device.archivedAt) reasons.push('archived');
   if (!device.audioVerifiedAt && !audioVerificationTest) reasons.push('audio_not_verified');
   if (!online) reasons.push('gateway_offline');
   if (online && !device.board?.connected) reasons.push('board_disconnected');

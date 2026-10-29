@@ -15,6 +15,7 @@ Thumbs.db
 
 .claude/
 docs/*
+!docs/PLATFORM-GOVERNANCE.md
 !docs/AI_CALLING_AUDIT.md
 !docs/AGENT-FIRST-CALLING.md
 !docs/ai-calling/

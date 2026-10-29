@@ -13,7 +13,11 @@
 import { EventEmitter } from 'node:events';
 
 const RATE = 8000;
-const isAgent = participant => !String(participant?.identity || '').startsWith('sip-') && !String(participant?.identity || '').startsWith('monitor-');
+const isAgent = participant => {
+  const identity = String(participant?.identity || '');
+  return !identity.startsWith('monitor-') && !identity.startsWith('sip-')
+    && (identity.startsWith('agent-') || participant?.kind === 4 || participant?.kind === 'agent');
+};
 const MAX_BACKLOG_MS = 200; // drop phone audio rather than let latency grow without bound
 
 export class LiveKitLeg extends EventEmitter {
@@ -27,6 +31,7 @@ export class LiveKitLeg extends EventEmitter {
     this.source = null;
     this.capture = Promise.resolve();
     this.closed = false;
+    this.disconnectReason = null;
     this.stats = { phoneFramesSent: 0, phoneFramesDropped: 0, agentFrames: 0, agentTracks: 0 };
     this.agentConnected = false;
     this.agentParticipants = new Set();
@@ -35,6 +40,12 @@ export class LiveKitLeg extends EventEmitter {
   async connect() {
     const { Room, RoomEvent, AudioSource, LocalAudioTrack, TrackPublishOptions, TrackSource, TrackKind, AudioStream } = this.rtc;
     this.room = new Room();
+    this.room.on(RoomEvent.ParticipantConnected || 'participantConnected', participant => {
+      if (!isAgent(participant)) return;
+      this.agentParticipants.add(participant.identity);
+      this.agentConnected = true;
+      this.emit('agentJoined', participant.identity);
+    });
     this.room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== TrackKind.KIND_AUDIO || !isAgent(participant)) return;
       this.agentParticipants.add(participant.identity);
@@ -51,6 +62,7 @@ export class LiveKitLeg extends EventEmitter {
       }
     });
     this.room.on(RoomEvent.Disconnected, (reason) => {
+      this.disconnectReason = String(reason ?? 'disconnected');
       if (!this.closed) this.emit('closed', String(reason ?? 'disconnected'));
     });
     await this.room.connect(this.url, this.token, { autoSubscribe: true, dynacast: false });
@@ -69,6 +81,39 @@ export class LiveKitLeg extends EventEmitter {
   async setCallStatus(status) {
     if (!this.room || this.closed) return;
     await this.room.localParticipant.setAttributes({ 'sip.callStatus': status });
+  }
+
+  /** No cellular DIAL until a real worker has loaded the CRM context successfully. */
+  waitForAgentReady(timeoutMs = 15_000) {
+    return new Promise((resolve, reject) => {
+      const attrsEvent = this.rtc.RoomEvent.ParticipantAttributesChanged || 'participantAttributesChanged';
+      let timer;
+      let done = false;
+      const finish = error => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.room.off(attrsEvent, check);
+        this.room.off(this.rtc.RoomEvent.ParticipantConnected || 'participantConnected', check);
+        this.off('closed', disconnected);
+        if (error) reject(error); else resolve();
+      };
+      const refused = (code, message) => finish(Object.assign(new Error(message), { code }));
+      const disconnected = reason => refused('room_closed_before_dial', `Voice room closed before dialing (${reason})`);
+      const check = () => {
+        if (this.closed || this.disconnectReason !== null) return disconnected(this.disconnectReason || 'client');
+        for (const participant of this.room.remoteParticipants?.values?.() || []) {
+          if (!isAgent(participant)) continue;
+          if (participant.attributes?.['updata.agent_error']) return refused('agent_failed', 'Voice agent reported a startup failure');
+          if (participant.attributes?.['updata.agent_ready'] === 'true') return finish();
+        }
+      };
+      timer = setTimeout(() => refused('agent_not_ready', 'Voice agent did not finish startup before the dial deadline'), timeoutMs);
+      this.room.on(attrsEvent, check);
+      this.room.on(this.rtc.RoomEvent.ParticipantConnected || 'participantConnected', check);
+      this.on('closed', disconnected);
+      check();
+    });
   }
 
   /** 8 kHz mono Int16Array from the phone. Never awaits the network from the audio path. */

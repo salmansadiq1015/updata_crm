@@ -134,7 +134,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
   const [pairedDeviceId, setPairedDeviceId] = useState<string>(campaign?.pairedDeviceId ?? '');
   const paired = usePairedDevices(!isLink);
   const telephony = useTelephonyHealth();
-  const pairedDevices = (paired.data ?? []).filter((d) => !d.revoked);
+  const pairedDevices = (paired.data ?? []).filter((d) => !d.revoked && !d.archived);
   const selectedDevice = pairedDevices.find((d) => d.id === pairedDeviceId) || null;
   const usesPairedPhone = !isLink && transport === 'paired_phone';
   const simCampaigns = useSimCallCampaigns(isLink && link.fallbackToCall.enabled);
@@ -359,7 +359,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
             <LinkAgentFields link={link} setLink={setLink} agent={agent} setAgent={setAgent} fieldError={fieldError} />
           ) : null}
 
-          {current === 'questions' ? <QuestionEditor questions={questions} onChange={setQuestions} isLink={isLink} /> : null}
+          {current === 'questions' ? <QuestionEditor questions={questions} onChange={setQuestions} isLink={isLink} rules={rules} onImport={(next, nextRules) => { setQuestions(next); setRules(nextRules); }} /> : null}
           {current === 'rules' ? <QualificationRulesEditor questions={questions} rules={rules} onChange={setRules} /> : null}
 
           {current === 'schedule' ? (

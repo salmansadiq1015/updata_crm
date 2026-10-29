@@ -20,6 +20,7 @@ export function buildCallNotes({ campaign, call, answers, disposition, unresolve
     description: text(agentNotes?.description, 2000) || text(campaign.objective || campaign.name || 'AI lead call', 2000),
     summary: text(agentNotes?.summary, 4000) || text([`Outcome: ${disposition.replaceAll('_', ' ')}.`, details || 'No lead responses were captured.', followUp].filter(Boolean).join('\n'), 4000),
     blockers: [...new Set([...suppliedBlockers, ...blockers.map(b => text(b, 500))])].slice(0, 20),
+    ...(agentNotes?.behavior?.tone ? { behavior: { tone: agentNotes.behavior.tone, evidence: text(agentNotes.behavior.evidence, 300) } } : {}),
     source: agentNotes ? 'ai_agent' : 'call_results',
     generatedAt: now,
   };

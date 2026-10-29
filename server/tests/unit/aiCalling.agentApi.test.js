@@ -96,6 +96,57 @@ beforeEach(async () => {
 });
 
 describe('agent tool API over HTTP', () => {
+  it('provides recognition with questionnaire context without supplying lead answers', async () => {
+    const { internalCallId } = await setupCall();
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const response = await request(serve(app)).get(`/agent/${internalCallId}/context`).set(auth).expect(200);
+    expect(response.body.data.transcriptionContext).toEqual({ questions: [{ text: 'Operating?', type: 'boolean' }] });
+    expect(response.body.data.systemPrompt).toContain('Validate the meaning of every reply');
+  });
+
+  it('keeps misrecognized contact details unresolved, explains the missing information, and accepts corrections', async () => {
+    const { internalCallId } = await setupCall();
+    const record = await CallRecord.findOne({ internalCallId });
+    await CallCampaign.updateOne({ _id: record.campaignId }, { $set: { 'questionnaire.questions': [
+      { fieldKey: 'dob', label: 'Birth date', text: 'What is your date of birth?', type: 'short_text', required: true, order: 1 },
+      { fieldKey: 'email', label: 'Email', text: 'What is your email address?', type: 'short_text', required: true, order: 2 },
+    ] } });
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const post = (path, body) => request(serve(app)).post(`/agent/${internalCallId}/${path}`).set(auth).send(body);
+    await post('disclose', {}).expect(200);
+    let response = await post('record-answer', { fieldKey: 'dob', rawAnswer: 'Why are you' }).expect(200);
+    expect(response.body.data).toMatchObject({ accepted: false, validation: 'invalid', reason: 'birth_year_required', nextAction: { type: 'clarify', question: { fieldKey: 'dob', answerType: 'date' } } });
+    expect(response.body.data.nextAction.question.answerHint).toContain('full four-digit year');
+    expect((await service.getCall(record._id, actor)).callContext.answered).toBe(0);
+    response = await post('record-answer', { fieldKey: 'dob', rawAnswer: '15 March 1992' }).expect(200);
+    expect(response.body.data).toMatchObject({ accepted: true, validation: 'valid', nextAction: { type: 'ask', question: { fieldKey: 'email' } } });
+    response = await post('record-answer', { fieldKey: 'email', rawAnswer: 'M-O-E-Z' }).expect(200);
+    expect(response.body.data).toMatchObject({ accepted: false, validation: 'invalid', reason: 'invalid_email', nextAction: { type: 'clarify', question: { fieldKey: 'email' } } });
+    await post('record-answer', { fieldKey: 'email', rawAnswer: 'moez595 at example dot com' }).expect(200);
+    const state = (await CallRecord.findOne({ internalCallId })).conversationState;
+    expect(state.answers.dob).toMatchObject({ validation: 'valid', normalizedValue: '1992-03-15' });
+    expect(state.answers.email).toMatchObject({ validation: 'valid', normalizedValue: 'moez595@example.com' });
+    expect((await service.getCall(record._id, actor)).callContext.answered).toBe(2);
+  });
+
+  it('validates volunteered batch answers independently without advancing past a rejected answer', async () => {
+    const { internalCallId } = await setupCall();
+    const record = await CallRecord.findOne({ internalCallId });
+    await CallCampaign.updateOne({ _id: record.campaignId }, { $push: { 'questionnaire.questions': {
+      fieldKey: 'email', label: 'Email', text: 'What is your email address?', type: 'email', required: true, order: 2,
+    } } });
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    await request(serve(app)).post(`/agent/${internalCallId}/disclose`).set(auth).send({}).expect(200);
+    const response = await request(serve(app)).post(`/agent/${internalCallId}/record-answers`).set(auth).send({ answers: [
+      { fieldKey: 'active', rawAnswer: 'yes' }, { fieldKey: 'email', rawAnswer: 'my email address' },
+    ] }).expect(200);
+    expect(response.body.data.validations).toEqual([
+      { fieldKey: 'active', accepted: true, validation: 'valid' },
+      { fieldKey: 'email', accepted: false, validation: 'invalid', reason: 'invalid_email' },
+    ]);
+    expect(response.body.data.nextAction).toMatchObject({ type: 'clarify', question: { fieldKey: 'email' } });
+  });
+
   it('requires paired gateways to advertise passive-listener support before issuing a speaker token', async () => {
     const { internalCallId } = await setupCall();
     const record = await CallRecord.findOne({ internalCallId });

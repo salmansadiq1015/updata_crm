@@ -28,3 +28,13 @@ export function useLeadQualification(leadId: string | null) {
     staleTime: 20_000,
   });
 }
+
+export function useLeadQualificationHistory(leadId: string | null, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...leadCommunicationKeys.qualification(leadId), 'history'],
+    queryFn: ({ pageParam }) => leadCommunicationApi.getQualificationHistory(leadId ?? '', pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextOffset : undefined,
+    enabled: Boolean(leadId) && enabled,
+  });
+}

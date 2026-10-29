@@ -213,6 +213,8 @@ export const updateLead = {
 export const listLeads = {
   query: cursorPagination.keys({
     status: Joi.string().valid(...LEAD_STATUSES),
+    // First-response SLA state (leadSla.service); 'overdue' = the overdue filter.
+    slaStatus: Joi.string().valid('none', 'pending', 'met', 'overdue', 'late'),
     assignedTo: objectId,
     source: Joi.string().valid(...LEAD_SOURCES),
     type: Joi.string().valid(...LEAD_TYPES),
@@ -224,7 +226,8 @@ export const listLeads = {
     areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
-    sortBy: Joi.string().valid('createdAt', 'name', 'status').default('createdAt'),
+    scoreBand: Joi.string().valid('hot', 'warm', 'cold', 'unscored'),
+    sortBy: Joi.string().valid('createdAt', 'name', 'status', 'scoreValue').default('createdAt'),
   }),
 };
 
@@ -244,6 +247,7 @@ export const mapLeads = {
     areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
+    scoreBand: Joi.string().valid('hot', 'warm', 'cold', 'unscored'),
     limit: Joi.number().integer().min(1).max(5000),
   }),
 };

@@ -13,6 +13,7 @@ import { Loading } from '@/features/aiAgent/components/ReviewPanels';
 import { tKey } from '@/features/communication/i18n';
 import type { RootScreenProps } from '@/navigation/navigationTypes';
 
+import { DeviceHealthCard, SmsCallbacksCard } from '../components/SmsDeviceOpsCards';
 import { useSimCampaigns } from '../hooks/useSmsAgent';
 
 const Gap = () => <View className="h-2" />;
@@ -27,6 +28,12 @@ export function SimSmsCampaignsScreen({ navigation }: RootScreenProps<'SimSmsCam
         data={query.data ?? []}
         keyExtractor={(c) => c.id}
         ItemSeparatorComponent={Gap}
+        ListHeaderComponent={
+          <View className="gap-2 pb-2">
+            <DeviceHealthCard />
+            <SmsCallbacksCard onOpenLead={(leadId) => navigation.navigate('LeadDetail', { leadId })} />
+          </View>
+        }
         contentContainerClassName="grow px-4 pb-6 pt-3"
         onRefresh={pull.onRefresh}
         refreshing={pull.refreshing}

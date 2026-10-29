@@ -46,10 +46,13 @@ class EmailService {
     if (sourceModule === 'lead' && sourceRecordId) {
       try {
         const { default: Lead } = await import('../crm/lead.model.js');
+        const contactedAt = new Date();
         await Lead.updateOne(
           { _id: sourceRecordId },
-          { $set: { lastContactedAt: new Date(), lastContactChannel: 'email' } },
+          { $set: { lastContactedAt: contactedAt, lastContactChannel: 'email' } },
         );
+        const { default: leadSlaService } = await import('../crm/leadSla.service.js');
+        await leadSlaService.recordFirstResponse(sourceRecordId, { at: contactedAt, channel: 'email' });
       } catch (err) {
         logger.warn('Could not stamp lead lastContactedAt after email send (ignored)', {
           module: 'doctpl',

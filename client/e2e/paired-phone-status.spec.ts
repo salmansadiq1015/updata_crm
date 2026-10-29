@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 const origin = `http://localhost:${process.env.PLAYWRIGHT_PORT || 3000}`;
 const bridge = () => ({
   id: 'ui-test', name: 'Connection UI test', phoneLabel: 'Test Android', kind: 'esp32_hfp', revoked: false,
+  archived: false, archivedAt: null as string | null,
   online: true, lastHeartbeatAt: new Date().toISOString(), gateway: { version: '0.3.0', platform: 'darwin' },
   board: { connected: true, port: '/dev/cu.usbserial-test', bdaddr: '24:0A:C4:00:11:22', firmware: '0.1.0', idf: 'v5.5.6', keyProvisioned: false },
   state: { device: 'bt_ready', hfp: 'disconnected', call: 0, callsetup: 0, audio: 'off', codec: 'none', peer: null },
@@ -129,7 +130,18 @@ for (const width of [390, 1440]) {
     current = { ...current, online: false };
     await panel.getByRole('button', { name: 'Refresh bridge status' }).click();
     await expect(panel.getByRole('group', { name: 'ESP32 USB: Cannot check yet' })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Connect phone', exact: true })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Reconnect gateway', exact: true })).toBeEnabled();
+    await expect(panel.getByRole('button', { name: /Link computer/ })).toBeVisible();
+    await panel.getByRole('button', { name: 'Reconnect gateway', exact: true }).click();
+    await expect(panel.getByText(/Gateway is still offline/)).toBeVisible();
+    await expect(panel.getByRole('region', { name: 'Reconnect computer gateway' })).toBeVisible();
+    await panel.getByRole('button', { name: 'Reconnect gateway', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Check gateway status', exact: true })).toBeEnabled();
+    current = { ...current, online: true, board: { ...current.board, connected: true } };
+    await panel.getByRole('button', { name: 'Check gateway status', exact: true }).click();
+    await expect(panel.getByText(/Gateway is online/)).toBeVisible();
+    await expect(panel.getByRole('group', { name: 'Phone Bluetooth: Connected' })).toBeVisible();
+    await expect(panel.getByRole('region', { name: 'Reconnect computer gateway' })).toHaveCount(0);
   });
 }
 
@@ -142,4 +154,106 @@ test('an unregistered gateway has an honest setup state and an accessible pairin
   await panel.getByRole('button', { name: 'Add paired phone' }).click();
   await expect(page.getByRole('dialog', { name: 'Add a paired phone' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create pairing code' })).toBeVisible();
+});
+
+test('creates two phones with separate setup commands, edits one and deletes only the selected phone', async ({ page }, testInfo) => {
+  let phones: ReturnType<typeof bridge>[] = [];
+  let serial = 0;
+  await mockCrm(page, () => phones);
+  await page.route('**/api/v1/paired-phone/devices/pairing-code', async route => {
+    const input = route.request().postDataJSON();
+    const id = input.deviceId || `phone-${++serial}`;
+    if (!input.deviceId) phones.push({ ...bridge(), id, name: input.deviceName, phoneLabel: input.phoneLabel, online: false, lastHeartbeatAt: '' });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { code: `TEST-000${serial}`, deviceId: id, expiresAt: new Date(Date.now() + 600_000).toISOString() } }) });
+  });
+  await page.route(/\/api\/v1\/paired-phone\/devices\/phone-\d+(?:\/(?:archive|restore))?$/, async route => {
+    const parts = new URL(route.request().url()).pathname.split('/');
+    const action = parts.at(-1);
+    const id = ['archive', 'restore'].includes(action || '') ? parts.at(-2) : action;
+    const input = route.request().method() === 'PATCH' ? route.request().postDataJSON() : {};
+    if (route.request().method() === 'DELETE') phones = phones.filter(d => d.id !== id);
+    else phones = phones.map(d => d.id === id ? { ...d, ...input, ...(['archive', 'restore'].includes(action || '') ? { archived: action === 'archive', archivedAt: action === 'archive' ? new Date().toISOString() : null } : {}) } : d);
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: phones.find(d => d.id === id) || { id, deleted: true } }) });
+  });
+  await openCalling(page);
+  const panel = page.getByRole('region', { name: 'Paired phones' });
+  for (const [index, name] of ['Sales', 'Support'].entries()) {
+    await panel.getByRole('button', { name: 'Add paired phone' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add a paired phone' });
+    await dialog.getByRole('textbox', { name: 'Device name' }).fill(name);
+    await dialog.getByRole('button', { name: 'Create pairing code' }).click();
+    await expect(dialog.getByText(`node bin/updata-gateway.mjs run --profile phone-${index + 1}`, { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Download gateway' })).toBeVisible();
+    if (index === 0) await dialog.screenshot({ path: testInfo.outputPath('phone-setup.png') });
+    await dialog.getByRole('combobox', { name: 'Your computer' }).selectOption('windows');
+    await expect(dialog.getByText(/File Explorer/)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.getByRole('button', { name: 'Close · finish setup later' }).click();
+    await expect(panel.getByRole('article', { name: `Paired phone ${name}` })).toBeVisible();
+  }
+  await expect(panel.getByRole('article')).toHaveCount(2);
+  await panel.screenshot({ path: testInfo.outputPath('paired-phones.png') });
+  await expect(panel.getByRole('button', { name: 'Edit Sales', exact: true })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Actions for Sales', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Archive Sales', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('phone-actions-menu.png') });
+  await page.getByRole('menuitem', { name: 'Edit Sales', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit phone' });
+  await edit.getByRole('textbox', { name: 'Phone name' }).fill('Sales team');
+  await edit.getByRole('textbox', { name: 'Phone / SIM label (optional)' }).fill('SIM 2');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(panel.getByRole('article', { name: 'Paired phone Sales team' })).toContainText('SIM 2');
+  await panel.getByRole('button', { name: 'Actions for Sales team', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Delete Sales team', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep phone', exact: true }).click();
+  await expect(panel.getByRole('article')).toHaveCount(2);
+  await panel.getByRole('button', { name: 'Actions for Sales team', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Delete Sales team', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete phone', exact: true }).click();
+  await expect(panel.getByRole('article')).toHaveCount(1);
+  await expect(panel.getByRole('article', { name: 'Paired phone Support' })).toBeVisible();
+  await panel.getByRole('button', { name: /Link computer/ }).click();
+  await page.getByRole('button', { name: 'Create pairing code' }).click();
+  await expect(page.getByRole('dialog').getByText('node bin/updata-gateway.mjs run --profile phone-2', { exact: true })).toBeVisible();
+  expect(phones).toHaveLength(1);
+});
+
+
+test('archives a phone through its three-dot menu and restores its saved setup', async ({ page }, testInfo) => {
+  let current = { ...bridge(), online: false, lastHeartbeatAt: '' };
+  await mockCrm(page, () => [current]);
+  await page.route(/\/api\/v1\/paired-phone\/devices\/ui-test\/(archive|restore)$/, async route => {
+    const archived = route.request().url().endsWith('/archive');
+    current = { ...current, archived, archivedAt: archived ? new Date().toISOString() : null };
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: current }) });
+  });
+  await openCalling(page);
+  const panel = page.getByRole('region', { name: 'Paired phones' });
+  const actions = panel.getByRole('button', { name: 'Actions for Connection UI test', exact: true });
+  await expect(panel.getByRole('button', { name: 'Edit Connection UI test', exact: true })).toHaveCount(0);
+  await actions.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Edit Connection UI test', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Delete Connection UI test', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('phone-actions-menu.png') });
+  await page.getByRole('menuitem', { name: 'Archive Connection UI test', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep active', exact: true }).click();
+  expect(current.archived).toBe(false);
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Archive Connection UI test', exact: true }).click();
+  await page.getByRole('button', { name: 'Archive phone', exact: true }).click();
+  await expect(panel.getByText('No active phones', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Archived phones (1)', exact: true }).click();
+  await expect(panel.getByRole('article', { name: 'Archived phone Connection UI test', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Phone setup', exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('archived-phones.png') });
+  await actions.click();
+  await page.getByRole('menuitem', { name: 'Restore Connection UI test', exact: true }).click();
+  await expect(panel.getByText('No archived phones', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Active phones (1)', exact: true }).click();
+  await expect(panel.getByRole('article', { name: 'Paired phone Connection UI test', exact: true })).toBeVisible();
+  expect(current.name).toBe('Connection UI test');
+  expect(current.board.bdaddr).toBe(bridge().board.bdaddr);
 });

@@ -124,6 +124,8 @@ export const ENDPOINTS = {
     delivery: (id: string) => `/sim-sms/device/messages/${encodeURIComponent(id)}/delivery`,
     watchList: '/sim-sms/device/watch-list',
     inbound: '/sim-sms/device/inbound',
+    heartbeat: '/sim-sms/devices/heartbeat',
+    callbacks: '/sim-sms/callbacks',
   },
   notifications: {
     feed: '/users/me/notifications',

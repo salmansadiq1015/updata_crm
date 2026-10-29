@@ -49,6 +49,7 @@ export const queryKeys = {
     conversations: (id: string) => ['sms-agent', 'conversations', id] as const,
     conversation: (id: string) => ['sms-agent', 'conversation', id] as const,
     readiness: ['sms-agent', 'readiness'] as const,
+    callbacks: ['sms-agent', 'callbacks'] as const,
   },
   linkAssistant: {
     all: ['link-assistant'] as const,

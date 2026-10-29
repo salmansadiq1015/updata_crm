@@ -7,6 +7,7 @@
 
 #include "../../main/dialauth.h"
 #include "../../main/devstate.h"
+#include "../../main/hostwatchdog.h"
 #include "../../main/proto.h"
 #include "../../main/ring.h"
 
@@ -239,6 +240,12 @@ static void test_devstate(void)
 
 int main(void)
 {
+    CHECK(!hostwatchdog_expired(1000, 1001, 5000)); // RX updated after the TX clock snapshot
+    CHECK(!hostwatchdog_expired(1000, 1000, 5000));
+    CHECK(!hostwatchdog_expired(6000, 1000, 5000)); // threshold is not exceeded
+    CHECK(hostwatchdog_expired(6001, 1000, 5000));
+    CHECK(!hostwatchdog_expired(100, UINT32_MAX - 100, 5000)); // real timer wrap
+    CHECK(hostwatchdog_expired(6000, UINT32_MAX - 100, 5000));
     test_devstate();
     test_crc_and_vectors();
     test_decoder_resync();

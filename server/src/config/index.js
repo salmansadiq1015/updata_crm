@@ -2,6 +2,7 @@
 import './loadEnv.js';
 import configSchema from './schema.js';
 import { normalizeS3Endpoint } from './normalizeS3Endpoint.js';
+import { assertTenancySupported } from './tenancyGuard.js';
 
 /**
  * Hierarchical config loader.
@@ -40,6 +41,9 @@ function parseMaintenanceTemplates(raw) {
     process.exit(1);
   }
 }
+
+// Tenant isolation is not implemented: MULTI_TENANT_MODE=true must stop startup.
+try { assertTenancySupported(envVars); } catch (err) { console.error(`\n❌ ${err.message}\n`); process.exit(1); }
 
 const maintenanceTemplates = parseMaintenanceTemplates(envVars.MAINTENANCE_TEMPLATES_JSON);
 

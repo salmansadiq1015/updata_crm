@@ -4,6 +4,8 @@ import Lead, { LEAD_STATUS } from './lead.model.js';
 import leadService from './lead.service.js';
 import contactLogService from './contactLog.service.js';
 import leadQualificationService, { normalizeConfirmedAnswer } from './leadQualification.service.js';
+import leadFollowUpService from './leadFollowUp.service.js';
+import leadSlaService from './leadSla.service.js';
 import CallSuppression from '../aiCalling/callSuppression.model.js';
 import CampaignRecipient from '../aiCalling/campaignRecipient.model.js';
 import { phoneHash } from '../aiCalling/callAuth.js';
@@ -18,6 +20,8 @@ import logger from '../../shared/logger/index.js';
 import {
   ELIGIBILITY_REASONS, COMM_ERROR_CODES, MAX_EVENTS, RECEIPT_STEPS, DNC_DISPOSITION,
 } from './leadCommunication.constants.js';
+import { recordManualTouch as recordManualContactTouch } from '../contactPolicy/contactPolicy.hooks.js';
+import { onLeadSignalsChanged } from './leadQuality.hooks.js';
 
 const LOCK_MS = 60_000;
 const DISPATCH_STATE_BY_EVENT = {
@@ -380,6 +384,7 @@ class LeadCommunicationService {
       },
       module: 'lead',
     });
+    if (!skipEligibility) await recordManualContactTouch(doc, userId); // contact policy: manual touch counts, never blocks here
     return { communication: serializeCommunication(doc), dialNumber, created: true, link };
   }
 
@@ -512,6 +517,10 @@ class LeadCommunicationService {
       }
 
       const final = await LeadCommunication.findById(existing._id).lean();
+      // First-class follow-up from the recorded outcome (idempotent per communication).
+      await leadFollowUpService.fromCommunication(final).catch((err) => logger.warn('Follow-up from communication failed', {
+        module: 'crm', communicationId: String(existing._id), error: { message: err.message },
+      }));
       const allDone = RECEIPT_STEPS.every((name) => stepDone(final.receipt?.steps?.[name]));
       await LeadCommunication.updateOne(
         { _id: existing._id },
@@ -542,6 +551,7 @@ class LeadCommunicationService {
         module: 'lead',
       });
     }
+    if (Object.keys(ran).length) onLeadSignalsChanged(leadId, 'communication'); // debounced rescore
     return { communication, receipt: communication.receipt };
   }
 
@@ -586,6 +596,8 @@ class LeadCommunicationService {
         occurredAt: doc.createdAt,
         followUpAt: outcome.followUpAt || null,
         employeeId: userId,
+        // The follow-up is created from this communication below (with its timezone).
+        skipFollowUpSync: true,
       }, userId, meta);
       return { status: 'ok', extra: { contactLogId: entry._id } };
     });
@@ -599,6 +611,7 @@ class LeadCommunicationService {
         { _id: leadId, $or: [{ lastContactedAt: null }, { lastContactedAt: { $lte: at } }] },
         { $set: { lastContactedAt: at, lastContactChannel: doc.channel } },
       );
+      await leadSlaService.recordFirstResponse(leadId, { at, channel: doc.channel });
       return { status: 'ok' };
     });
 

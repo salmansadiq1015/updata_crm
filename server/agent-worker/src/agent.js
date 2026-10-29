@@ -30,16 +30,20 @@ import {
   cli, defineAgent, voice, llm, WorkerOptions,
 } from '@livekit/agents';
 import * as openai from '@livekit/agents-plugin-openai';
-import { ToolApi, actionToInstruction, withCurrentStep } from './toolApi.js';
+import { ToolApi, actionToInstruction, answerResultInstruction, withCurrentStep } from './toolApi.js';
 import { createTranscriptPublisher } from './transcriptPublisher.js';
 import { randomUUID } from 'node:crypto';
 import { createSilenceWatchdog } from './silenceWatchdog.js';
+import { createQualityTelemetry, attachQualityTelemetry } from './qualityTelemetry.js';
 import {
   AGENT_ERROR_ATTRIBUTE, crmUnreachable, explainRealtimeFailure, failure, probeOpenAI,
 } from './failures.js';
 import {
   waitForSipAnswer, once, waitUntilQuiet, createHeard, createAnswerGate, openCall,
 } from './callControl.js';
+import { createHumanTransfer, waitForHumanParticipant } from './humanTransfer.js';
+import { transcription, turnDetection } from './transcription.js';
+export { transcription, turnDetection } from './transcription.js';
 
 const safeJson = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
 const log = (msg, extra = {}) => console.log(JSON.stringify({ level: 'info', msg: `[voice-agent] ${msg}`, ...extra }));
@@ -48,29 +52,6 @@ const RING_TIMEOUT_MS = Number(process.env.AGENT_RING_TIMEOUT_MS || 60_000);
 // How long a failed browser call waits for the tester to join, so they can read why.
 const FAILURE_NOTICE_WAIT_MS = 15_000;
 const realtimeModel = () => process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime';
-
-/**
- * End-of-turn detection. Server VAD answers ~0.6 s after the person stops talking;
- * semantic VAD (OPENAI_REALTIME_TURN_DETECTION=semantic) waits for a "finished"
- * sentence, which measured 2.5–5 s per reply on browser calls.
- */
-export function turnDetection(env = process.env) {
-  if (env.OPENAI_REALTIME_TURN_DETECTION === 'semantic') {
-    return { type: 'semantic_vad', eagerness: env.OPENAI_REALTIME_EAGERNESS || 'high', create_response: true, interrupt_response: true };
-  }
-  return {
-    type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300,
-    silence_duration_ms: Number(env.OPENAI_REALTIME_SILENCE_MS) || 600, create_response: true, interrupt_response: true,
-  };
-}
-
-/** Transcript language hint (the model itself hears the audio; this only steers the written transcript). */
-export function transcription(language, env = process.env) {
-  const base = { model: env.OPENAI_REALTIME_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe' };
-  const forced = (env.OPENAI_REALTIME_TRANSCRIBE_LANGUAGE || '').trim();
-  return { ...base, ...(/^[a-z]{2,3}$/.test(forced) ? { language: forced } : {}),
-    prompt: `Transcribe the customer's actual words in the language spoken, including language switches. Do not translate, invent answers, or complete inaudible words. The agent's language hint is ${language || 'auto'}; the customer may use a different language. Preserve names and contact details.` };
-}
 
 export default defineAgent({
   entry: async (ctx) => {
@@ -100,6 +81,7 @@ export default defineAgent({
     let answeredAt = null;
     let usage = null;
     let callNotes = null;
+    const quality = createQualityTelemetry({ vadSilenceMs: turnDetection().silence_duration_ms ?? null });
     // /end is sent exactly once, whichever path ends the call first.
     const endCall = once(async (disposition = null, reason = null) => {
       silenceWatchdog?.stop();
@@ -111,6 +93,7 @@ export default defineAgent({
         ...(callNotes ? { callNotes } : {}),
         roomName: ctx.room?.name || meta.roomName || null,
         ...(usage ? { cost: { amount: 0, currency: 'USD', breakdown: { usage } } } : {}),
+        quality: (answeredAt && quality.markAnswered(), quality.summary(session?.history?.items)),
         ...(reason ? { failureCode: reason.code, failureMessage: reason.message.slice(0, 500) } : {}),
       }).catch((e) => warn('end tool call failed (the CRM reconciler will finish the call)', { callId, error: e?.message }));
     });
@@ -158,6 +141,8 @@ export default defineAgent({
     }
     context = loaded.value.value;
     log('call ready', { callId, roomJoinMs: joinedRoom.value.ms, contextMs: loaded.value.ms });
+    // A gateway must not dial while the worker is still loading its call context.
+    await ctx.room.localParticipant.setAttributes({ 'updata.agent_ready': 'true' });
 
     // ---- Wait for a real answer before saying anything (PSTN only).
     if (isPstn) {
@@ -181,21 +166,22 @@ export default defineAgent({
       `Disclosure to deliver first, word for word: "${context.disclosure}"`,
       'If you hear an automated voicemail greeting instead of a person, call reached_voicemail immediately and say nothing.',
       'Never invent answers. If a tool call is rejected, follow the instruction it returns.',
+      'You hear the caller audio directly. The written input transcript is produced by a separate speech recognizer and may contain errors. Ground answers in what you actually hear; do not override clear spoken information with a garbled transcript. If the audio itself is unclear, say you did not catch it and ask for a repeat or spelling. Do not tell the caller their answer is wrong because recognition failed. Read back names, complete email addresses, phone numbers and dates of birth when uncertain before saving them.',
       'Save each relevant answer promptly. If the person volunteers several configured answers, use record_answers. For unrelated or unintelligible replies, use no_response for the current question. The CRM repeats an unanswered question up to three times, then moves on. Do not mark silence or irrelevant speech as an answer. Do not use mark_answer_unknown unless the person explicitly says they do not know or prefer to skip. Stop immediately for decline, do-not-contact or human/callback requests.',
-      'When calling finish_call, include private CRM notes: a brief description of the conversation, a factual summary of the lead responses and next steps, and blockers explicitly raised by the lead. Use an empty blockers list if none were stated. Never infer objections or commitments. These notes are not spoken aloud.',
+      'When calling finish_call, include private CRM notes: a brief description of the conversation, a factual summary of the lead responses and next steps, and blockers explicitly raised by the lead. Use an empty blockers list if none were stated. Never infer objections or commitments. Also give the overall tone of the lead (positive, neutral, hesitant or negative) judged only from what they said, with a short quote or paraphrase as evidence; use neutral when unclear. These notes are not spoken aloud.',
     ].join('\n\n');
     let pendingAction = context.nextAction;
     let pending = actionToInstruction(pendingAction);
     let agent = null;
     // The realtime model only sees its instructions on ordinary turns, so the current
     // step must live there too — otherwise it improvises questions between tool calls.
-    // Not awaited: the tool's return value already tells the model the next step, so
-    // the reply need not wait for another round trip to OpenAI.
+    // Refresh instructions before returning the tool result so the next response
+    // cannot start with the previous questionnaire step.
     const nextFrom = async (res) => {
       silenceWatchdog?.cancel();
       pendingAction = res.nextAction;
       pending = actionToInstruction(pendingAction);
-      agent?.updateInstructions(withCurrentStep(baseInstructions, pending))
+      await agent?.updateInstructions(withCurrentStep(baseInstructions, pending))
         .catch((e) => warn('updateInstructions failed', { callId, error: e?.message }));
       return pending;
     };
@@ -207,6 +193,7 @@ export default defineAgent({
     // The person's own words for confirmations (the model tends to pass the value instead).
     const heard = createHeard();
     const gate = createAnswerGate(heard);
+    const transfer = createHumanTransfer({ api, warn: (message, error) => warn(message, { callId, error: error?.message }) });
     const responseRequests = new Map();
     const responseId = (kind, fieldKey, turn) => {
       const key = `${kind}:${fieldKey}:${turn}`;
@@ -255,7 +242,10 @@ export default defineAgent({
       record_answer: llm.tool({
         description: 'Record the person\'s answer to the current question, in their own words.',
         parameters: z.object({ fieldKey: z.string(), answer: z.string() }),
-        execute: gated(async ({ fieldKey, answer }) => `Saved. Next: ${await nextFrom(await api.recordAnswer(fieldKey, answer))}`),
+        execute: gated(async ({ fieldKey, answer }) => {
+          const result = await api.recordAnswer(fieldKey, answer);
+          return answerResultInstruction(result, await nextFrom(result));
+        }),
       }),
       no_response: llm.tool({
         description: 'The person spoke but did not answer the current question: their reply was unrelated or unintelligible. Never save it as a valid answer. The CRM decides whether to repeat or move to the next question.',
@@ -265,7 +255,7 @@ export default defineAgent({
         }),
       }),
       mark_answer_unknown: llm.tool({
-        description: 'The person does not know the answer to the current question.',
+        description: 'The person explicitly said they do not know, prefer not to share, or want to skip this question. Never use this for unrelated, incomplete or unintelligible replies.',
         parameters: z.object({ fieldKey: z.string() }),
         execute: gated(async ({ fieldKey }) => `Marked unknown. Next: ${await nextFrom(await api.markUnknown(fieldKey))}`),
       }),
@@ -302,6 +292,29 @@ export default defineAgent({
         description: 'The person declined to participate in the questionnaire.',
         execute: guarded(async () => { await nextFrom(await api.decline()); return 'Thank them for their time, say goodbye, then call finish_call.'; }),
       }),
+      // Only when the agent has transfer targets configured in the CRM (see humanTransfer.js).
+      ...(context.transfer?.enabled ? { request_human_transfer: llm.tool({
+        description: 'Transfer the call to a human team member: the person asked for a human, or needs a price, deal or commitment that is not in the approved knowledge. Give a short reason and a factual summary of the call so far.',
+        parameters: z.object({ reason: z.string().max(500), summary: z.string().max(2000) }),
+        execute: guarded(async ({ reason, summary }) => {
+          const res = await transfer.request({ reason, summary });
+          if (res.watch) {
+            void transfer.watch({
+              say: async (instructions) => { session.generateReply({ instructions }); await waitUntilQuiet(session, () => agentState, { minMs: 1200 }); },
+              waitForHuman: (ms) => waitForHumanParticipant(ctx.room, ms),
+              handOff: async (mode) => {
+                silenceWatchdog?.stop();
+                log('call handed to a person', { callId, mode });
+                if (mode !== 'web') return; // phone: the SIP leg leaves the room; the disconnect handler ends the call
+                ctx.room.on?.('participantDisconnected', (p) => { if (String(p?.identity || '').startsWith('human-')) finish(null, 0); });
+                await session.close().catch((e) => warn('closing the AI session after handover failed', { callId, error: e?.message }));
+              },
+              fallback: (instructions) => { gate.reset(); silenceWatchdog?.arm(); session.generateReply({ instructions }); },
+            }).catch((e) => warn('transfer watch failed', { callId, error: e?.message }));
+          }
+          return res.instruction;
+        }),
+      }) } : {}),
       reached_voicemail: llm.tool({
         description: 'You reached an answering machine / voicemail greeting, not a person. Do NOT leave a message.',
         execute: async () => { await finish('voicemail', 200); return undefined; },
@@ -312,9 +325,11 @@ export default defineAgent({
           description: z.string().max(2000),
           summary: z.string().max(4000),
           blockers: z.array(z.string().max(500)).max(10),
+          lead_tone: z.enum(['positive', 'neutral', 'hesitant', 'negative']).optional(),
+          tone_evidence: z.string().max(300).optional(),
         }),
         // No return value → agents-js generates no follow-up reply (anything returned would be spoken).
-        execute: async (notes) => { if (!['finish', 'end'].includes(pendingAction?.type)) return `Do not end yet. Complete the current step: ${pending}`; callNotes = notes; finish(null); return undefined; },
+        execute: async (notes) => { if (!['finish', 'end'].includes(pendingAction?.type)) return `Do not end yet. Complete the current step: ${pending}`; const { lead_tone: tone, tone_evidence: evidence, ...rest } = notes; callNotes = { ...rest, ...(tone ? { behavior: { tone, evidence: evidence || '' } } : {}) }; finish(null); return undefined; },
       }),
     };
 
@@ -326,7 +341,7 @@ export default defineAgent({
         voice: meta.voice || config.voice || process.env.OPENAI_REALTIME_VOICE || 'alloy',
         apiKey: process.env.OPENAI_API_KEY,
         turnDetection: turnDetection(),
-        inputAudioTranscription: transcription(meta.language || config.language),
+        inputAudioTranscription: transcription(meta.language || config.language, process.env, context.transcriptionContext),
         ...(isPstn ? {} : { inputAudioNoiseReduction: { type: 'near_field' } }),
       }),
       // Campaign config: silence → "away" after N seconds; barge-in on/off.
@@ -345,9 +360,10 @@ export default defineAgent({
     let introRepeats = 0;
     silenceWatchdog = createSilenceWatchdog({
       timeoutMs: Math.max(2, Number(config.silenceTimeoutSeconds) || 8) * 1000,
-      isBusy: () => !opened || userSpeaking || gate.busy() || ['initializing', 'thinking', 'speaking'].includes(agentState),
+      isBusy: () => !opened || userSpeaking || gate.busy() || transfer.holding() || ['initializing', 'thinking', 'speaking'].includes(agentState),
       warn: error => warn('question silence retry failed', { callId, error: error?.message }),
       onSilence: async () => {
+        quality.onSilence();
         if (pendingAction?.type === 'disclose') {
           introRepeats += 1;
           if (introRepeats > 3) { session.generateReply({ instructions: 'No agreement was received. Say a brief polite goodbye without collecting any information.' }); await finish(null, 3000); return; }
@@ -370,6 +386,7 @@ export default defineAgent({
       else if (opened && ev.newState === 'listening') silenceWatchdog.arm();
     });
     session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => { usage = ev.usage; });
+    attachQualityTelemetry({ session, room: ctx.room, quality, events: voice.AgentSessionEventTypes });
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
       if (ev.newState === 'speaking') { heard.onSpeaking(); void publishActivity('customer'); }
     });
@@ -433,7 +450,7 @@ export default defineAgent({
 
     // Max-duration guard (the CRM reconciler is the backstop if this process dies).
     const maxMs = ((Number(config.maxCallSeconds) || 300) + 15) * 1000;
-    const guard = setTimeout(() => { log('max call duration reached', { callId }); finish(null, 0); }, maxMs);
+    const guard = setTimeout(() => { if (transfer.handedOff()) return; log('max call duration reached', { callId }); finish(null, 0); }, maxMs);
 
     // The callee hung up, or the room closed: finish whatever was collected.
     ctx.room.on?.('participantDisconnected', (p) => {

@@ -13,17 +13,17 @@ import { AgentAvatar, AgentDialog, AgentField, AgentTabs, inputClass, primaryCla
 export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void; avatarUrl?: string | null; onAvatarChange: (url: string | null) => void }) {
   const [gallery, setGallery] = useState(false);
   return <div className="space-y-6">
-    <div className="flex flex-col gap-5 rounded-2xl border border-violet-300/15 bg-gradient-to-br from-violet-500/10 via-[#10192c] to-[#0d1527] p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
-      <button type="button" aria-label="Change agent avatar" onClick={() => setGallery(true)} className="group relative w-fit shrink-0 rounded-2xl ring-4 ring-violet-400/5 transition hover:ring-violet-400/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400">
+    <div className="flex flex-col gap-5 rounded-2xl border border-sky-300/15 bg-gradient-to-br from-blue-500/10 via-[#10192c] to-[#0d1527] p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+      <button type="button" aria-label="Change agent avatar" onClick={() => setGallery(true)} className="group relative w-fit shrink-0 rounded-2xl ring-4 ring-sky-400/5 transition hover:ring-sky-400/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-400">
         <AgentAvatar name={value.name} url={avatarUrl} large />
-        <span className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-violet-300/25 bg-[#202441] text-violet-200 shadow-lg transition group-hover:bg-violet-600"><Camera aria-hidden="true" className="h-3.5 w-3.5" /></span>
+        <span className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300/25 bg-[#202441] text-sky-200 shadow-lg transition group-hover:bg-blue-600"><Camera aria-hidden="true" className="h-3.5 w-3.5" /></span>
       </button>
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-semibold text-slate-100">Agent avatar</h3>
         <p className="mt-1.5 max-w-md text-xs leading-relaxed text-slate-400">Give your agent a familiar face. Choose a premium portrait or upload your own image.</p>
         <div className="mt-4 flex flex-wrap items-center gap-4">
-          <button type="button" className={`${secondaryClass} border-violet-300/20 bg-violet-400/10 text-violet-100 hover:bg-violet-400/15`} onClick={() => setGallery(true)}><Images aria-hidden="true" className="h-4 w-4" />Choose avatar</button>
-          {(value.avatarFileId || value.avatarPresetId) && <button type="button" className="rounded-md py-2 text-xs text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline focus-visible:outline-2 focus-visible:outline-violet-400" onClick={() => { onChange({ ...value, avatarFileId: null, avatarPresetId: null }); onAvatarChange(null); }}>Use initials</button>}
+          <button type="button" className={`${secondaryClass} border-sky-300/20 bg-sky-400/10 text-sky-100 hover:bg-sky-400/15`} onClick={() => setGallery(true)}><Images aria-hidden="true" className="h-4 w-4" />Choose avatar</button>
+          {(value.avatarFileId || value.avatarPresetId) && <button type="button" className="rounded-md py-2 text-xs text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400" onClick={() => { onChange({ ...value, avatarFileId: null, avatarPresetId: null }); onAvatarChange(null); }}>Use initials</button>}
         </div>
       </div>
     </div>
@@ -40,10 +40,10 @@ export function AgentQuestionTabs({ value, onChange, includeBehavior = false }: 
   const [tab, setTab] = useState('questions');
   const questions = value.questionnaire?.questions || [];
   return <AgentTabs label="Question configuration" value={tab} onChange={setTab} items={[{ value: 'questions', label: 'Conversation questions' }, { value: 'rules', label: 'Qualification rules' }, { value: 'preview', label: 'Conversation preview' }, ...(includeBehavior ? [{ value: 'behavior', label: 'Calling behavior' }] : [])]}>
-    {tab === 'questions' && <QuestionEditor questions={questions} onChange={next => onChange({ ...value, questionnaire: { questions: next } })} />}
+    {tab === 'questions' && <QuestionEditor questions={questions} onChange={next => onChange({ ...value, questionnaire: { questions: next } })} rules={value.statusRules || []} onImport={(next, rules) => onChange({ ...value, questionnaire: { questions: next }, statusRules: rules })} />}
     {tab === 'rules' && <QualificationRulesEditor questions={questions} rules={value.statusRules || []} onChange={rules => onChange({ ...value, statusRules: rules })} />}
     {tab === 'behavior' && <AgentExecutionFields value={value} onChange={onChange} />}
-    {tab === 'preview' && <div className="space-y-4"><p className="text-xs text-slate-400">Preview the current question sequence. The agent keeps each question&apos;s meaning and validates answers using the selected types.</p><div className="rounded-xl border border-white/10 p-4 text-sm"><p className="mb-2 text-xs font-medium text-violet-300">Opening disclosure</p><p>{value.agentConfig?.disclosure?.replaceAll('{company}', value.agentConfig?.organizationName || '{company}') || 'Add an opening disclosure in Voice & instructions.'}</p></div><ol className="space-y-3">{questions.map((q, i) => <li key={q.fieldKey} className="rounded-xl border border-white/10 p-4 text-sm"><p className="mb-1 text-xs text-slate-500">{i + 1} · {q.type.replaceAll('_', ' ')}{q.required ? ' · Required' : ' · Optional'}</p><p>{q.text || 'Question text is not complete.'}</p>{q.condition && <p className="mt-2 text-xs text-amber-300">Asked when its configured conditions match earlier answers.</p>}</li>)}</ol>{!questions.length && <p className="text-sm text-slate-500">Add questions to preview the conversation.</p>}</div>}
+    {tab === 'preview' && <div className="space-y-4"><p className="text-xs text-slate-400">Preview the current question sequence. The agent keeps each question&apos;s meaning and validates answers using the selected types.</p><div className="rounded-xl border border-white/10 p-4 text-sm"><p className="mb-2 text-xs font-medium text-sky-300">Opening disclosure</p><p>{value.agentConfig?.disclosure?.replaceAll('{company}', value.agentConfig?.organizationName || '{company}') || 'Add an opening disclosure in Voice & instructions.'}</p></div><ol className="space-y-3">{questions.map((q, i) => <li key={q.fieldKey} className="rounded-xl border border-white/10 p-4 text-sm"><p className="mb-1 text-xs text-slate-500">{i + 1} · {q.type.replaceAll('_', ' ')}{q.required ? ' · Required' : ' · Optional'}</p><p>{q.text || 'Question text is not complete.'}</p>{q.condition && <p className="mt-2 text-xs text-amber-300">Asked when its configured conditions match earlier answers.</p>}</li>)}</ol>{!questions.length && <p className="text-sm text-slate-500">Add questions to preview the conversation.</p>}</div>}
   </AgentTabs>;
 }
 

@@ -145,12 +145,83 @@ test('daemon: a revoked gateway stops itself', async () => {
   fake.stop();
 });
 
+test('daemon checks the control session before reserving a call and reconnects an expired session', async t => {
+  let claims = 0, closed = 0;
+  const daemon = new GatewayDaemon({
+    crm: { claim: async () => { claims++; }, heartbeat: async () => ({}) },
+    outbox: { flush: async () => {} }, keepAwake: { set() {} },
+    closeDevice: async () => { closed++; },
+  });
+  daemon.settingsLoaded = true; daemon.crmConnected = true;
+  daemon.scheduleHeartbeat = () => {};
+  daemon.conn = { info: { keyProvisioned: true, sessionNonce: 'expired' }, device: {
+    state: { hfp: 'slc', call: 0, callsetup: 0 },
+    statusRequest: async () => { throw Object.assign(new Error('session expired'), { code: 'no_session' }); },
+  } };
+  t.after(() => daemon.stop());
+  await assert.rejects(daemon.tryClaim(), error => error.code === 'no_session');
+  assert.equal(claims, 0, 'no signed call may be reserved against an expired nonce');
+  assert.equal(closed, 1);
+  assert.equal(daemon.conn, null);
+  assert.equal(Boolean(daemon.canClaim()), false);
+});
+
+test('a board reconnect during CRM claim never sends the old signed dial to the new session', async t => {
+  const events = [];
+  let resolve;
+  const pending = new Promise(done => { resolve = done; });
+  const daemon = new GatewayDaemon({ crm: { claim: () => pending },
+    outbox: { push: (...args) => events.push(args), flush: async () => {} },
+    keepAwake: { set() {} }, closeDevice: async () => {},
+  });
+  daemon.settingsLoaded = true; daemon.crmConnected = true;
+  daemon.conn = { info: { keyProvisioned: true, sessionNonce: 'old' }, device: { state: { hfp: 'slc', call: 0, callsetup: 0 } } };
+  t.after(() => daemon.stop());
+  const claim = daemon.tryClaim();
+  await new Promise(done => setImmediate(done));
+  daemon.conn = { info: { sessionNonce: 'new' }, device: {} };
+  resolve({ callId: 'old-session-call' });
+  await claim;
+  assert.deepEqual(events, [['old-session-call', 'dial_refused', { code: 'session_changed' }]]);
+  assert.equal(daemon.runner, null);
+});
+
+test('daemon: slow call claims cannot overlap and a failed heartbeat suspends claims until recovery', async t => {
+  let claims = 0, releaseClaim, offline = false;
+  const pending = new Promise(resolve => { releaseClaim = resolve; });
+  const daemon = new GatewayDaemon({
+    crm: {
+      async heartbeat() { if (offline) throw new Error('network timeout'); return {}; },
+      async claim() { claims++; return pending; },
+    },
+    outbox: { flush: async () => {} }, keepAwake: { set() {} }, closeDevice: async () => {},
+  });
+  daemon.scheduleHeartbeat = () => {};
+  daemon.conn = { info: { keyProvisioned: true, sessionNonce: 'nonce' }, device: { state: { hfp: 'slc', call: 0, callsetup: 0 } } };
+  t.after(() => daemon.stop());
+  assert.equal(Boolean(daemon.canClaim()), false);
+  await daemon.heartbeat();
+  const first = daemon.tryClaim();
+  await daemon.tryClaim();
+  assert.equal(claims, 1);
+  releaseClaim(null);
+  await first;
+  assert.equal(daemon.claiming, false);
+  offline = true;
+  await daemon.heartbeat();
+  await daemon.tryClaim();
+  assert.equal(claims, 1);
+  offline = false;
+  await daemon.heartbeat();
+  assert.equal(Boolean(daemon.canClaim()), true);
+});
+
 /** Minimal stand-in for @livekit/rtc-node: a room that connects and accepts audio. */
 function fakeRtc() {
   class Room extends EventEmitter {
     constructor() {
       super();
-      this.remoteParticipants = new Map();
+      this.remoteParticipants = new Map([['agent-test', { identity: 'agent-test', attributes: { 'updata.agent_ready': 'true' } }]]);
       this.localParticipant = { publishTrack: async () => ({}), setAttributes: async () => {} };
     }
 

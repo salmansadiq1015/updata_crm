@@ -4,15 +4,22 @@
 import { z } from 'zod';
 
 import { api } from '@/services/api/apiClient';
+import { ApiError } from '@/services/api/apiErrors';
 import { ENDPOINTS } from '@/services/api/endpoints';
 
 import {
+  heartbeatResponseSchema,
   leaseResultSchema,
   simCampaignSchema,
   simConversationDetailSchema,
   simConversationSchema,
+  smsCallbackSchema,
   type SimCampaignInput,
 } from '../types';
+import type { HeartbeatPayload } from '../domain/heartbeat';
+
+/** The live server may predate an endpoint: a 404 means "not supported here", not an error. */
+export const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 const ok = z.unknown();
 
@@ -100,6 +107,27 @@ export const simSmsApi = {
       z.object({ matched: z.boolean() }).passthrough(),
     );
     return data;
+  },
+
+  // ---- device dashboard + callback requests ----
+  /** Returns null when the server does not support device heartbeats (404). */
+  async heartbeat(payload: HeartbeatPayload) {
+    try {
+      const { data } = await api.post(ENDPOINTS.simSms.heartbeat, payload, heartbeatResponseSchema);
+      return data;
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  },
+  async callbacks(signal?: AbortSignal) {
+    try {
+      const { data } = await api.get(ENDPOINTS.simSms.callbacks, z.array(smsCallbackSchema), { signal });
+      return data;
+    } catch (error) {
+      if (isNotFound(error)) return [];
+      throw error;
+    }
   },
 };
 

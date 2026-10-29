@@ -14,6 +14,7 @@ const ConfirmDialog = ConfirmDialogRaw as (props: {
 /** Readiness reason codes from the server (pairedPhone/readiness.js) in plain words. */
 export const DEVICE_WAIT_TEXT: Record<string, string> = {
   revoked: 'the paired phone was revoked',
+  archived: 'the paired phone is archived',
   audio_not_verified: 'two-way call audio is not verified on the phone yet',
   gateway_offline: 'the laptop gateway is offline',
   board_disconnected: 'the ESP32 board is not plugged in',
@@ -35,6 +36,7 @@ export const DEVICE_WAIT_TEXT: Record<string, string> = {
  */
 export const DEVICE_FIX_TEXT: Record<string, string> = {
   revoked: 'Pair the phone again under AI Calling → Paired phones.',
+  archived: 'Open Connections → Archived phones and restore this phone.',
   audio_not_verified: 'Verify two-way call audio in the paired phone\'s device card.',
   gateway_offline: 'Start the Updata gateway on the laptop the ESP32 is plugged into.',
   board_disconnected: 'Plug the ESP32 into the laptop running the gateway.',

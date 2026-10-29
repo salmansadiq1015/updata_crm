@@ -65,6 +65,26 @@ test('simultaneous USB retries share one open attempt and close a connection tha
   assert.equal(closed, 1); assert.equal(daemon.conn, null);
 });
 
+test('gateway reports the computer online while USB startup is still waiting', async t => {
+  const heartbeats = [];
+  let release;
+  const opening = new Promise(resolve => { release = resolve; });
+  const daemon = new GatewayDaemon({
+    crm: { heartbeat: async body => { heartbeats.push(body); return {}; }, claim: async () => null },
+    outbox: { flush: async () => {} }, keepAwake: { set() {} },
+    openDevice: () => opening, closeDevice: async () => {},
+  });
+  t.after(async () => { await daemon.stop(); release({}); });
+  const starting = daemon.start();
+  const deadline = Date.now() + 1000;
+  while (!heartbeats.length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(heartbeats.length, 1);
+  assert.equal(heartbeats[0].board.connected, false);
+  await daemon.stop();
+  release({});
+  await starting;
+});
+
 test('startup respects persisted Bluetooth disconnect and reports applied volume without reopening USB', async t => {
   let connections = 0, opens = 0;
   const device = new EventEmitter();

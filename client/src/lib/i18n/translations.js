@@ -1,6 +1,12 @@
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
+import { callingIntelligenceTranslations } from './calling-intelligence-translations';
+import { callingQualityTranslations } from './calling-quality-translations';
+import { platformGovernanceTranslations } from './platform-governance-translations';
 import { leadgenTranslations, leadgenCommonTranslations } from './leadgen-translations';
+import { leadsWorkflowTranslations } from './leads-workflow-translations';
 import { landingTranslations } from './landing-translations';
+import { smsOpsTranslations } from './sms-ops-translations';
+import { leadsQualityTranslations } from './leads-quality-translations';
 import { completeLocale } from './locale-completion';
 
 const notificationAdminTranslations = {
@@ -1212,7 +1218,10 @@ const baseTranslations = {
     ...migrationTranslations.de,
     ...assetMaintenanceTranslations.de,
     ...leadgenTranslations.de,
+    ...leadsWorkflowTranslations.de,
     ...landingTranslations.de,
+    ...smsOpsTranslations.de,
+    ...leadsQualityTranslations.de,
     // Navbar
     'nav.features': 'Arbeitsbereiche',
     'nav.modules': 'Arbeitsabläufe',
@@ -1407,6 +1416,9 @@ const baseTranslations = {
     'dashboard.activity.accountActivated': 'Konto aktiviert',
     'dashboard.activity.empty': 'Keine aktuellen Aktivitäten.',
     ...dashboardAnalyticsTranslations.de,
+    ...callingIntelligenceTranslations.de,
+    ...callingQualityTranslations.de,
+    ...platformGovernanceTranslations.de,
 
     // Platform — Sidebar
     'sidebar.mainMenu': 'Hauptmenu',
@@ -6252,7 +6264,10 @@ const baseTranslations = {
     ...migrationTranslations.en,
     ...assetMaintenanceTranslations.en,
     ...leadgenTranslations.en,
+    ...leadsWorkflowTranslations.en,
     ...landingTranslations.en,
+    ...smsOpsTranslations.en,
+    ...leadsQualityTranslations.en,
     // Navbar
     'nav.features': 'Work Areas',
     'nav.modules': 'Workflows',
@@ -6447,6 +6462,9 @@ const baseTranslations = {
     'dashboard.activity.accountActivated': 'Account activated',
     'dashboard.activity.empty': 'No recent activity.',
     ...dashboardAnalyticsTranslations.en,
+    ...callingIntelligenceTranslations.en,
+    ...callingQualityTranslations.en,
+    ...platformGovernanceTranslations.en,
 
     // Platform — Sidebar
     'sidebar.mainMenu': 'Main Menu',
@@ -11300,8 +11318,14 @@ const baseTranslations = {
   fr: {
     ...leadgenCommonTranslations.fr,
     ...leadgenTranslations.fr,
+    ...leadsWorkflowTranslations.fr,
     ...landingTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
+    ...callingIntelligenceTranslations.fr,
+    ...callingQualityTranslations.fr,
+    ...platformGovernanceTranslations.fr,
+    ...smsOpsTranslations.fr,
+    ...leadsQualityTranslations.fr,
     'dashboard.welcome': 'Bienvenue',
     'dashboard.greetingMorning': 'Bonjour',
     'dashboard.greetingDay': 'Bonjour',
@@ -11441,8 +11465,14 @@ const baseTranslations = {
   ar: {
     ...leadgenCommonTranslations.ar,
     ...leadgenTranslations.ar,
+    ...leadsWorkflowTranslations.ar,
     ...landingTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
+    ...callingIntelligenceTranslations.ar,
+    ...callingQualityTranslations.ar,
+    ...platformGovernanceTranslations.ar,
+    ...smsOpsTranslations.ar,
+    ...leadsQualityTranslations.ar,
     'dashboard.welcome': 'مرحبا',
     'dashboard.greetingMorning': 'صباح الخير',
     'dashboard.greetingDay': 'نهارك سعيد',

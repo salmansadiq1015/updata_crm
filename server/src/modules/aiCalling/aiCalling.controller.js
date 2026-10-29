@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import service from './aiCalling.service.js';
 import linkVoice from '../linkAssistant/linkVoice.service.js';
+import callQuality from './callQuality.service.js';
 import { telephonyHealth } from './providers/telephonyRouter.js';
 import { mapLiveKitWebhook } from './providers/livekitWebhook.js';
 import { AI_AGENT_LANGUAGES, defaultAgentLanguage } from './aiCalling.languages.js';
@@ -98,6 +99,7 @@ class AiCallingController {
   async agentDecline(req, res, next) { try { return res.success({ data: await service.agentDecline(req.agentCall.callId) }); } catch (e) { next(e); } }
   async agentEnd(req, res, next) {
     try {
+      if (req.body?.quality) await callQuality.recordTelemetry(req.agentCall.callId, req.body.quality);
       const link = await linkVoice.agentEnded(req.agentCall.callId, req.body);
       return res.success({ data: link || await service.agentEndCall(req.agentCall.callId, req.body) });
     } catch (e) { next(e); }

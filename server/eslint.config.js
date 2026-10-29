@@ -14,6 +14,8 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        setImmediate: 'readonly',
+        structuredClone: 'readonly',
         Buffer: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',

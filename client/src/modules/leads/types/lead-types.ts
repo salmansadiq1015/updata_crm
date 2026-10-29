@@ -1,4 +1,6 @@
+import type { LeadSla, SlaStatus } from './lead-workflow-types';
 // Frontend-facing types for the Leads CRM entity.
+import type { LeadScoreBand, LeadScoreSummary } from './lead-quality-types';
 // Mirrors LEAD_GENERATION_DESIGN.md §4.3 (lead model) and §11 (API contract).
 
 export type GeoPoint = { lat: number; lng: number };
@@ -173,10 +175,18 @@ export type Lead = {
   social?: LeadSocial;
   /** Status + results of the website enrichment for this lead. */
   enrichment?: LeadEnrichment;
+  /** Assignment + first-response SLA (lead workflow). Absent on older payloads. */
+  sla?: LeadSla;
+  /** Last deterministic lead score (null = never scored). Full breakdown: GET /crm/leads/:id/score. */
+  score?: LeadScoreSummary | null;
+  /** Leads merged into this one (their retained history is still linked). */
+  mergedLeadIds?: string[];
 };
 
 export type LeadFilters = {
   status?: LeadStatus;
+  /** First-response SLA state; 'overdue' is the "response overdue" filter. */
+  slaStatus?: SlaStatus;
   assignedTo?: string;
   source?: LeadSource;
   type?: LeadType;
@@ -184,6 +194,7 @@ export type LeadFilters = {
   cityId?: string;
   areaId?: string;
   businessType?: string;
+  scoreBand?: LeadScoreBand;
   q?: string;
 };
 

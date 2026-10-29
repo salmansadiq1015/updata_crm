@@ -20,6 +20,7 @@ import { RECIPIENT_ACTIVE_STATES, RecipientReasons } from './campaign-lead-picke
 import { LiveCallsPanel } from './live-calls-panel';
 import { CallDetailDrawer } from './call-detail-drawer';
 import { CampaignCallingStatus } from './campaign-run-status';
+import { ContactLimitSkips } from '@/modules/smsOps/ui/contact-limit-skips';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import type { Campaign } from '../types/ai-calling-types';
 
@@ -153,6 +154,7 @@ export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaign
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="mb-4"><CampaignCallingStatus campaign={campaign} /></div>
+              {campaign.channel !== 'web_link' ? <ContactLimitSkips source="ai_calling" campaignId={campaignId} className="mb-4" /> : null}
               {tab === 'live' && <LiveCallsPanel campaignId={campaignId} active={['running', 'queued'].includes(campaign.status) || (s?.inProgress || 0) > 0} onPreview={setLiveCallId} />}
               {tab === 'overview' && s ? (
                 <div className="space-y-4">

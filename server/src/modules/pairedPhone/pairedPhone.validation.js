@@ -11,6 +11,7 @@ export const deviceId = id;
 export const createPairingCode = { body: Joi.object({
   deviceName: short(80).min(1).required(),
   phoneLabel: short(80).allow('').default(''),
+  deviceId: objectId,
 }) };
 export const updateDevice = { ...id, body: Joi.object({
   name: short(80).min(1),

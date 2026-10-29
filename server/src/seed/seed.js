@@ -246,6 +246,15 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'lead', action: 'whatsapp', description: 'Log WhatsApp contacts for leads' },
   { module: 'lead', action: 'enrich', description: 'Enrich leads from their website (fill missing contact fields)' },
   { module: 'lead', action: 'delete', description: 'Delete leads' },
+  { module: 'lead', action: 'assign-policy', description: 'Configure automatic lead assignment, response SLAs and escalation; see every follow-up' },
+  { module: 'lead', action: 'merge', description: 'Review duplicate leads and merge / undo merges' },
+  { module: 'lead', action: 'scoring-admin', description: 'Configure lead scoring weights and rules' },
+  // Platform governance (docs/PLATFORM-GOVERNANCE.md)
+  { module: 'lead', action: 'read:all', description: 'See every lead regardless of owner or team (LEAD_ACCESS_MODE=team)' },
+  { module: 'lead', action: 'pii:view', description: 'See unmasked lead phone numbers and e-mail addresses (PII_MASKING_ENABLED=true)' },
+  { module: 'team', action: 'read', description: 'View teams and their members' },
+  { module: 'team', action: 'manage', description: 'Create, edit and delete teams and team membership' },
+  { module: 'analytics', action: 'attribution:read', description: 'View campaign performance, attribution, cost per lead and profitability' },
 ];
 
 // Role definitions with permission keys

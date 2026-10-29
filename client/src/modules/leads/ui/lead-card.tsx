@@ -9,6 +9,7 @@ import { LEAD_SOURCE_ICON, getLeadDiscoveredAt, getLeadSourceLabel } from './lea
 import { formatAddressOneLine, formatLeadDate, getLeadBusinessTypeLabel } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
+import { LeadSlaBadge } from './lead-sla-badge';
 import { AssigneeLabel } from './lead-table-columns';
 import { LtrText } from './ltr-text';
 import { RatingStars } from './rating-stars';
@@ -64,6 +65,7 @@ export function LeadCard({ lead, users, selected, onToggleSelect, onOpen }: Lead
           )}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <LeadStatusBadge status={lead.status} />
+            <LeadSlaBadge sla={lead.sla} />
             {lead.leadNumber && <span className="font-mono text-[11px] text-muted-foreground">{lead.leadNumber}</span>}
             {lead.providerMeta?.rating != null && (
               <span className="inline-flex items-center gap-1" title={t('leads.card.ratingTitle', 'Google rating (overall only)')}>

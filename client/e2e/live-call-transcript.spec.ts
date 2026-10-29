@@ -74,12 +74,29 @@ test('preview both speakers, live answers and final notes during a call', async 
   await preview.getByRole('tab', { name: 'Transcript', exact: true }).click();
   turns.push({ itemId: 'a2', role: 'assistant', text: 'Thank you. Our team will follow up tomorrow.', at: new Date().toISOString() });
   await expect(preview.getByText(turns[2].text, { exact: true })).toBeVisible();
+  // A long conversation must have one reachable viewport, including when the
+  // drawer is nested inside campaign details on a small screen.
+  for (let index = 0; index < 40; index++) turns.push({ itemId: `long-${index}`, role: index % 2 ? 'customer' : 'assistant', text: `Conversation turn ${index}: a complete response that wraps on a phone-sized screen.`, at: new Date().toISOString() });
+  await expect(preview.getByText(turns.at(-1)!.text, { exact: true })).toBeInViewport();
+  const scroll = preview.locator('[data-call-conversation-scroll]');
+  const transcript = preview.getByRole('log');
+  expect(await transcript.evaluate(node => getComputedStyle(node).overflowY)).not.toBe('auto');
+  await scroll.evaluate(node => { node.scrollTop = 350; node.dispatchEvent(new Event('scroll')); });
+  const readingPosition = await scroll.evaluate(node => node.scrollTop);
+  turns.at(-1)!.text += ' The latest response was corrected.';
+  await expect(preview.getByText(turns.at(-1)!.text, { exact: true })).toBeAttached();
+  expect(await scroll.evaluate(node => node.scrollTop)).toBeCloseTo(readingPosition, 0);
+  const jump = preview.getByRole('button', { name: 'Jump to latest' });
+  await expect(jump).toBeInViewport();
+  await jump.click();
+  await expect(preview.getByText(turns.at(-1)!.text, { exact: true })).toBeInViewport();
   const dialogBounds = await preview.boundingBox();
   expect(dialogBounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   expect(await preview.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   if (process.env.LIVE_CALL_UI_SHOTS) await page.screenshot({ path: `${process.env.LIVE_CALL_UI_SHOTS}/live-transcript-${test.info().project.name}.png` });
   call.state = 'completed'; call.endedAt = new Date().toISOString(); call.durationSeconds = 48;
   call.callNotes = { description: 'Office service enquiry', summary: 'Lead requested a quote and a follow-up tomorrow.', blockers: [], source: 'ai_agent' };
+  await preview.getByText('Call ended', { exact: true }).scrollIntoViewIfNeeded();
   await expect(preview.getByText('Call ended', { exact: true })).toBeVisible();
   await preview.getByRole('tab', { name: 'Notes', exact: true }).click();
   await expect(preview.getByText('Lead requested a quote and a follow-up tomorrow.', { exact: true })).toBeVisible();

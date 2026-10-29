@@ -59,6 +59,29 @@ describe('live call preview', () => {
     expect(log.scrollTop).toBe(2000);
   });
 
+  it('follows corrections to the latest turn without requiring a new turn ID', () => {
+    const view = render(<CallTranscript turns={[turn('a1', 'assistant', 'First words')]} live />);
+    const log = screen.getByRole('log');
+    Object.defineProperties(log, { scrollHeight: { value: 1800, configurable: true }, clientHeight: { value: 300, configurable: true } });
+    view.rerender(<CallTranscript turns={[turn('a1', 'assistant', 'First words, now a complete and longer response.')]} live />);
+    expect(log.scrollTop).toBe(1800);
+  });
+
+  it('uses the drawer viewport as the only scroller and preserves manual reading position', () => {
+    const viewport = document.createElement('div');
+    Object.defineProperties(viewport, { scrollHeight: { value: 2400, configurable: true }, clientHeight: { value: 500, configurable: true } });
+    const scrollContainerRef = { current: viewport };
+    const view = render(<CallTranscript turns={[turn('a1', 'assistant', 'First question')]} live scrollContainerRef={scrollContainerRef} />);
+    expect(screen.getByRole('log')).not.toHaveClass('overflow-y-auto');
+    expect(viewport.scrollTop).toBe(2400);
+    viewport.scrollTop = 400;
+    fireEvent.scroll(viewport);
+    view.rerender(<CallTranscript turns={[turn('a1', 'assistant', 'First question'), turn('c1', 'customer', 'A new answer')]} live scrollContainerRef={scrollContainerRef} />);
+    expect(viewport.scrollTop).toBe(400);
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }));
+    expect(viewport.scrollTop).toBe(2400);
+  });
+
   it('shows unanswered and conditionally excluded questions alongside captured answers and explicit requests', () => {
     call.questionCoverage = { total: 3, applicable: 2, answered: 1, unknown: 0, needsClarification: 0, needsConfirmation: 0, unanswered: 1, notApplicable: 1, requiredGaps: ['timing'], questions: [
       { fieldKey: 'need', label: 'Service needed', question: 'What do you need?', required: true, eligible: true, status: 'answered', rawAnswer: 'Office quote', normalizedValue: 'Office quote', validation: 'valid', confirmed: true, source: 'agent_tool' },

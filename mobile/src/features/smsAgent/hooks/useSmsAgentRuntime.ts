@@ -11,6 +11,7 @@ import { telephony } from '@/services/telephony/telephonyService';
 
 import { smsAgentLoop } from '../domain/agentLoop';
 import { ensureSmsAgentRunning, stopSmsAgent, syncWatchedNumbers } from '../services/agentControl';
+import { sendDeviceHeartbeat } from '../services/heartbeatService';
 
 export function useSmsAgentRuntime() {
   const userId = useSessionStore((state) => state.user?.id ?? null);
@@ -18,6 +19,7 @@ export function useSmsAgentRuntime() {
   useEffect(() => {
     if (!userId || getEnv().distribution !== 'private') return;
     void syncWatchedNumbers().then(() => ensureSmsAgentRunning());
+    void sendDeviceHeartbeat('foreground');
 
     const wake = () => {
       if (smsAgentLoop.getStatus().running) smsAgentLoop.kick();
@@ -28,6 +30,7 @@ export function useSmsAgentRuntime() {
     const appState = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;
       void syncWatchedNumbers();
+      void sendDeviceHeartbeat('foreground');
       wake();
     });
     const online = onlineManager.subscribe((isOnline) => {

@@ -144,6 +144,14 @@ export const listCommunications = {
 };
 
 export const getQualification = { params: leadParams };
+export const qualificationHistory = {
+  params: leadParams,
+  query: Joi.object({
+    limit: Joi.number().integer().min(1).max(50).default(20),
+    offset: Joi.number().integer().min(0).default(0),
+    fieldKey: Joi.string().valid(...QUALIFICATION_FIELD_KEYS),
+  }),
+};
 
 export const transcribeVoiceNote = { params: leadParams };
 

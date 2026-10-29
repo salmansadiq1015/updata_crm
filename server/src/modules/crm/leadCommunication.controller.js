@@ -62,6 +62,13 @@ class LeadCommunicationController {
     } catch (err) { next(err); }
   }
 
+  async getQualificationHistory(req, res, next) {
+    try {
+      const result = await leadQualificationService.getHistory(req.params.leadId, req._validatedQuery || req.query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async transcribeVoiceNote(req, res, next) {
     try {
       const data = await leadQualificationService.transcribe(req.params.leadId, req.file, {

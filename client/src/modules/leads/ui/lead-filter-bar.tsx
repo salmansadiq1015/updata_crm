@@ -45,6 +45,8 @@ import {
   getLeadTypeLabel,
 } from './lead-ui-constants';
 import { LEAD_STATUS_META } from './status-badge';
+import { getScoreBandLabel } from './lead-score-badge';
+import { LEAD_SCORE_BANDS } from '../types/lead-quality-types';
 import { getUserDisplayName, humanizeBusinessType } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 
@@ -66,6 +68,9 @@ type LeadFilterBarProps = {
   /** A business category returned by `GET /crm/leads/filter-options`, or `ALL`. */
   businessType: string;
   onBusinessTypeChange: (value: string) => void;
+  /** Lead score band or `ALL` (optional: the control is hidden when no handler is passed). */
+  scoreBand?: string;
+  onScoreBandChange?: (value: string) => void;
   filterOptions?: LeadFilterOptions;
   filterOptionsLoading?: boolean;
   /** `ALL`, `ME`, or a user id. */
@@ -122,6 +127,8 @@ export function LeadFilterBar({
   onAreaChange,
   businessType,
   onBusinessTypeChange,
+  scoreBand = FILTER_ALL,
+  onScoreBandChange,
   filterOptions,
   filterOptionsLoading = false,
   assignedTo,
@@ -146,6 +153,7 @@ export function LeadFilterBar({
     city !== FILTER_ALL,
     area !== FILTER_ALL,
     businessType !== FILTER_ALL,
+    scoreBand !== FILTER_ALL,
     assignedTo !== FILTER_ALL,
   ].filter(Boolean).length;
 
@@ -348,6 +356,29 @@ export function LeadFilterBar({
               </SelectContent>
             </Select>
           </FilterField>
+
+          {onScoreBandChange && (
+            <FilterField label={t('leads.score.filter', 'Score band')}>
+              <Select value={scoreBand} onValueChange={onScoreBandChange}>
+                <SelectTrigger
+                  aria-label={t('leads.score.filter', 'Score band')}
+                  className={cn(TRIGGER, scoreBand !== FILTER_ALL && ACTIVE_TRIGGER)}
+                >
+                  <SelectValue placeholder={t('leads.score.filter', 'Score band')} />
+                </SelectTrigger>
+                <SelectContent position="popper" sideOffset={6}>
+                  <SelectItem value={FILTER_ALL} textValue={t('leads.score.filter.all', 'All bands')}>
+                    {t('leads.score.filter.all', 'All bands')}
+                  </SelectItem>
+                  {LEAD_SCORE_BANDS.map((band) => (
+                    <SelectItem key={band} value={band} textValue={getScoreBandLabel(t, band)}>
+                      {getScoreBandLabel(t, band)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+          )}
 
           <FilterField label={t('leads.filter.country', 'Country')}>
             <Select value={country} onValueChange={onCountryChange}>

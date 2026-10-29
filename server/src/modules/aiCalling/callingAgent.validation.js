@@ -43,3 +43,7 @@ export const launchAgent = { ...agentId, body: Joi.object({
   executionEndsAt: Joi.date().iso().greater('now').allow(null),
   continueAcrossDays: Joi.boolean().default(false),
 }) };
+export const callAnalytics = {
+  params: Joi.object({ id: objectId.required() }),
+  query: Joi.object({ from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')) }),
+};

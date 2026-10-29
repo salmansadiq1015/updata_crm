@@ -14,6 +14,9 @@ router.get('/devices', authenticate, requirePermission('ai-calling:read'), contr
 router.post('/devices/pairing-code', authenticate, requirePermission('ai-calling:write'), validate(schemas.createPairingCode), controller.createPairingCode);
 router.get('/devices/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.deviceId), controller.getDevice);
 router.patch('/devices/:id', authenticate, requirePermission('ai-calling:write'), validate(schemas.updateDevice), controller.updateDevice);
+router.delete('/devices/:id', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.deleteDevice);
+router.post('/devices/:id/archive', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.archiveDevice);
+router.post('/devices/:id/restore', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.restoreDevice);
 router.post('/devices/:id/revoke', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.revokeDevice);
 router.post('/devices/:id/verify-audio', authenticate, requirePermission('ai-calling:write'), validate(schemas.verifyAudio), controller.verifyAudio);
 router.post('/devices/:id/rotate-key', authenticate, requirePermission('ai-calling:write'), validate(schemas.deviceId), controller.rotateKey);

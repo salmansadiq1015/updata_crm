@@ -54,3 +54,16 @@ export const QUALIFICATION_PROMPT_VERSION = 'lead-qualification-propose/2026-10-
 export const PROPOSE_LANGUAGES = Object.freeze(['en', 'de', 'fr', 'ar', 'ur']);
 
 export const PROPOSE_TIMEOUT_MS = 20_000;
+
+/**
+ * Who/what produced a qualification value (Lead.qualification fields + history).
+ * Superset of the sources a mobile device may claim (leadCommunication ANSWER_SOURCES):
+ * 'ai_call_agent' is written only by the AI-calling result path, 'user_correction'
+ * only by the correction endpoint.
+ */
+export const QUALIFICATION_ANSWER_SOURCES = Object.freeze([
+  'user', 'ai_proposed_user_confirmed', 'sms_agent', 'ai_call_agent', 'user_correction',
+]);
+
+/** Bound on a stored evidence quote that points into a call transcript. */
+export const TRANSCRIPT_QUOTE_MAX = 1000;

@@ -96,7 +96,7 @@ export function nextAction(questionnaire, state, { maxRepeats } = {}) {
     if (entry && entry.validation === 'invalid') {
       const max = maxRepeats ?? q.maxClarifications ?? 2;
       const failures = (entry.clarifications ?? 0) + (entry.noResponseCount ?? 0);
-      if (maxRepeats != null ? failures <= max : failures < max) return { type: 'clarify', question: q };
+      if (maxRepeats != null ? failures <= max : failures < max) return { type: 'clarify', question: q, reason: entry.reason || null };
       continue; // give up on this one; it remains unresolved
     }
     return { type: 'ask', question: q };

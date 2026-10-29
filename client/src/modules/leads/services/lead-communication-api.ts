@@ -73,6 +73,15 @@ export type LeadQualification = {
   fields: LeadQualificationField[];
 };
 
+export type QualificationChange = {
+  id: string;
+  previous: LeadQualificationField | null;
+  current: LeadQualificationField;
+  changedAt: string | null;
+  communicationId: string | null;
+  confidence: number | null;
+};
+
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
@@ -187,5 +196,18 @@ export const leadCommunicationApi = {
   async getQualification(leadId: string): Promise<LeadQualification> {
     const response = (await apiClient.get(ENDPOINTS.LEADS.QUALIFICATION(leadId))) as Envelope;
     return parseLeadQualification(response.data);
+  },
+
+  async getQualificationHistory(leadId: string, offset = 0) {
+    const response = (await apiClient.get(`${ENDPOINTS.LEADS.QUALIFICATION(leadId)}/history`, { params: { limit: 20, offset } })) as Envelope;
+    const rows = Array.isArray(response.data) ? response.data.filter(isRec) : [];
+    const data: QualificationChange[] = [];
+    for (const row of rows) {
+      const current = parseLeadQualification({ fields: [row.current] }).fields[0];
+      if (!current) continue;
+      const previous = parseLeadQualification({ fields: [row.previous] }).fields[0] ?? null;
+      data.push({ id: str(row._id) ?? '', previous, current, changedAt: str(row.changedAt), communicationId: str(row.communicationId), confidence: num(row.confidence) });
+    }
+    return { data, hasNext: Boolean(response.pagination?.hasNext), nextOffset: offset + data.length };
   },
 };

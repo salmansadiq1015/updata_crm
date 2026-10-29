@@ -27,6 +27,8 @@ import {
 import { exportLeads, importTemplate } from './leadImportExport.validation.js';
 import leadCommunicationRoutes from './leadCommunication.routes.js';
 import leadQualificationRoutes from './leadQualification.routes.js';
+import { leadScoreRouter } from './leadScoring.routes.js';
+import leadTimelineRoutes from './leadTimeline.routes.js';
 
 /**
  * Lead routes — mounted at /api/v1/crm/leads by crm.routes.js (§11).
@@ -94,5 +96,9 @@ router.get('/:id/contact-log', authenticate, requirePermission('lead:read'), val
 // lead qualification they feed. Sub-routers use mergeParams for :leadId.
 router.use('/:leadId/communications', leadCommunicationRoutes);
 router.use('/:leadId/qualification', leadQualificationRoutes);
+// Explainable score: GET explanation, POST /recalculate.
+router.use('/:leadId/score', leadScoreRouter);
+// Unified conversation history across every channel (+ merged leads).
+router.use('/:leadId/timeline', leadTimelineRoutes);
 
 export default router;

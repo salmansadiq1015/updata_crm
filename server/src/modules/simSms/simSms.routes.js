@@ -3,6 +3,7 @@ import controller from './simSms.controller.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import { validate } from '../../shared/validation/validate.js';
 import * as schemas from './simSms.validation.js';
+import smsOpsRoutes from './smsOps.routes.js';
 
 /**
  * SIM SMS agent — /api/v1/sim-sms. Every route acts on the authenticated
@@ -30,5 +31,8 @@ router.post('/device/messages/:id/result', ...write, validate(schemas.result), c
 router.post('/device/messages/:id/delivery', ...write, validate(schemas.delivery), controller.delivery);
 router.get('/device/watch-list', ...read, controller.watchList);
 router.post('/device/inbound', ...write, validate(schemas.inbound), controller.inbound);
+
+// Device dashboard, answer reviews, recovery inbox, SMS callbacks.
+router.use(smsOpsRoutes);
 
 export default router;

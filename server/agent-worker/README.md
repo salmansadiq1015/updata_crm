@@ -52,9 +52,21 @@ Optional tuning:
 | Variable | Default | |
 |---|---|---|
 | `OPENAI_REALTIME_TURN_DETECTION` | server VAD | `semantic` = OpenAI semantic VAD (measured 2.5–5 s per reply on browser calls) |
-| `OPENAI_REALTIME_SILENCE_MS` | 600 | Silence that ends the person's turn (server VAD) |
-| `OPENAI_REALTIME_TRANSCRIBE_MODEL` | gpt-4o-mini-transcribe | Written transcript only; the model hears the audio itself |
+| `OPENAI_REALTIME_SILENCE_MS` | 1000 | Silence that ends the person's turn (server VAD); allows pauses while spelling details |
+| `OPENAI_REALTIME_TRANSCRIBE_MODEL` | gpt-transcribe | Written transcript only; the voice model hears the audio directly |
+| `OPENAI_REALTIME_TRANSCRIBE_LANGUAGE` | call language hint | Optional language override; leave blank for automatic detection on auto-language calls |
+| `OPENAI_REALTIME_TRANSCRIBE_LANGUAGES` | call language plus English spelling | Optional comma-separated language hints for mixed-language calls; takes precedence over the singular override |
 | `AGENT_IDLE_PROCESSES` | production: up to 4 · dev: 0 | Pre-started job processes (≈ 1 s faster call start) |
+
+Recognition receives the questionnaire wording and expected field types as context,
+without lead answers or personal details that could bias it into inventing an answer.
+It preserves the spoken language, spelling, digits and corrections. Automatic language
+mode sends no fixed language restriction. Regional language settings are normalized
+to recognition codes; mixed-language hints remain optional. This follows the
+[OpenAI guidance on committed-turn transcription and context](https://developers.openai.com/api/docs/guides/realtime-transcription).
+Restart the voice worker after deploying these changes. Existing stored transcripts
+are unchanged; correcting them requires the original audio. A live call with the
+affected audio is still needed to measure recognition accuracy.
 
 ## Browser calls (SMS link page and the CRM "Live test")
 

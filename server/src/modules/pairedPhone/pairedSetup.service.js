@@ -7,7 +7,7 @@ import { SETUP_ACTIONS, SETUP_ACTIVE, SETUP_TTL_MS, publicSetup } from './setupC
 
 function emit(d) { global.io?.to(`user:${d.createdBy}`).emit('paired-phone:device', { deviceId: String(d._id), event: 'setup' }); }
 async function owned(actor, id) {
-  const d = await Device.findOne({ _id: id, createdBy: actor, revokedAt: null });
+  const d = await Device.findOne({ _id: id, createdBy: actor, revokedAt: null, archivedAt: null });
   if (!d) throw new NotFoundError('PairedDevice', id);
   return d;
 }
@@ -33,7 +33,7 @@ export default {
     if (busy(d)) throw new ConflictError('End the phone call before changing the bridge setup');
     if (action === 'provision_key' && d.dialKey?.state === 'provisioned') throw new ConflictError('The key is already provisioned. Routine reconnection does not need a new key or BOOT.');
     const command = { id: randomUUID(), action, state: 'pending', requestedAt: new Date(), expiresAt: new Date(Date.now() + SETUP_TTL_MS), message: 'Waiting for the laptop gateway', startedAt: null, completedAt: null };
-    const updated = await Device.findOneAndUpdate({ _id: id, createdBy: actor, revokedAt: null, currentCallId: null, 'state.call': 0, 'state.callsetup': 0,
+    const updated = await Device.findOneAndUpdate({ _id: id, createdBy: actor, revokedAt: null, archivedAt: null, currentCallId: null, 'state.call': 0, 'state.callsetup': 0,
       $or: [{ 'setup.command.state': { $nin: SETUP_ACTIVE } }, { 'setup.command.expiresAt': { $lte: new Date() } }] },
     { $set: { 'setup.command': command, ...(['connect_phone', 'pair_phone', 'disconnect_phone'].includes(action) ? { 'setup.autoConnect': action !== 'disconnect_phone' } : {}) } }, { returnDocument: 'after' });
     if (!updated) throw new ConflictError('Another setup action or call is in progress');

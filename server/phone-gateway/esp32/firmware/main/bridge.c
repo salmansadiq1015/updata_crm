@@ -11,6 +11,7 @@
 // (silence when empty), so the phone's clock paces everything.
 
 #include "bridge.h"
+#include "hostwatchdog.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -260,7 +261,7 @@ static void tx_task(void *arg)
             send_stats();
         }
         // Host gone during a call: the lead would hear dead air. End the call, tell the next session.
-        if (S.session_open && (S.call || S.callsetup) && now - S.last_host_rx_ms > CONFIG_UPDATA_HOST_TIMEOUT_MS) {
+        if (S.session_open && (S.call || S.callsetup) && hostwatchdog_expired(now, S.last_host_rx_ms, CONFIG_UPDATA_HOST_TIMEOUT_MS)) {
             S.session_open = false;
             S.host_lost_pending = true;
             esp_hf_client_reject_call();  // AT+CHUP: ends a dialing, ringing or active call

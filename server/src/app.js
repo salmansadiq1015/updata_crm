@@ -71,6 +71,10 @@ import linkAssistantRoutes from './modules/linkAssistant/linkAssistant.routes.js
 import linkAssistantPublicRoutes from './modules/linkAssistant/linkAssistant.public.routes.js';
 import simSmsRoutes from './modules/simSms/simSms.routes.js';
 import simCallRoutes from './modules/simCall/simCall.routes.js';
+import contactPolicyRoutes from './modules/contactPolicy/contactPolicy.routes.js';
+import leadGovernance, { GOVERNED_PATHS } from './modules/governance/governance.middleware.js';
+import governanceRoutes from './modules/governance/governance.routes.js';
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -164,6 +168,10 @@ export function createApp() {
   app.use("/api/v1/users", userRoutes);
   app.use("/api/v1/roles", roleRoutes);
   app.use("/api/v1/permissions", permissionRouter);
+  // Lead data governance (team scope, PII masking, break-glass audit) — no-op by default.
+  app.use(GOVERNED_PATHS, leadGovernance());
+  app.use("/api/v1/governance", governanceRoutes);
+  app.use("/api/v1/analytics", analyticsRoutes);
   app.use("/api/v1/crm", crmRoutes);
   app.use("/api/v1/messaging", messagingRoutes);
   app.use("/api/v1/webhooks/messaging", messagingWebhookRoutes);
@@ -180,6 +188,8 @@ export function createApp() {
   // AI SMS agent over the user's own phone SIM (Android private build).
   app.use("/api/v1/sim-sms", simSmsRoutes);
   app.use("/api/v1/sim-calls", simCallRoutes);
+  // Cross-channel contact limits (calls, SIM SMS, provider messaging).
+  app.use("/api/v1/contact-policy", contactPolicyRoutes);
   // Lead Generation / Business Discovery — discovery sessions/results + lead import.
   // Two routers share the prefix (disjoint paths/methods): discovery first, then import.
   app.use("/api/v1/business-discovery", discoveryRoutes);

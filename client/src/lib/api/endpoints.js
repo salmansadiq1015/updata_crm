@@ -908,6 +908,29 @@ export const ENDPOINTS = Object.freeze({
     CALLBACKS: '/sim-calls/callbacks',
     LEAD_TASKS: (leadId) => `/sim-calls/leads/${leadId}/tasks`,
   },
+  // SMS operations (server/src/modules/simSms/smsOps.routes.js): phones, recovery inbox, answer reviews.
+  SMS_OPS: {
+    DEVICES: '/sim-sms/devices',
+    DEVICE: (deviceId) => `/sim-sms/devices/${encodeURIComponent(deviceId)}`,
+    DEVICE_RESYNC: (deviceId) => `/sim-sms/devices/${encodeURIComponent(deviceId)}/resync`,
+    REVIEWS: '/sim-sms/answer-reviews',
+    REVIEW_COUNTS: '/sim-sms/answer-reviews/counts',
+    REVIEW: (id) => `/sim-sms/answer-reviews/${id}`,
+    REVIEW_RESOLVE: (id) => `/sim-sms/answer-reviews/${id}/resolve`,
+    RECOVERY: '/sim-sms/recovery',
+    RECOVERY_COUNTS: '/sim-sms/recovery/counts',
+    RECOVERY_ITEM: (id) => `/sim-sms/recovery/${id}`,
+    RECOVERY_ACTION: (id) => `/sim-sms/recovery/${id}/actions`,
+    RECOVERY_BULK_DISMISS: '/sim-sms/recovery/bulk-dismiss',
+    CALLBACKS: '/sim-sms/callbacks',
+  },
+  // Cross-channel contact limits (server/src/modules/contactPolicy).
+  CONTACT_POLICY: {
+    SETTINGS: '/contact-policy/settings',
+    LEAD: (leadId) => `/contact-policy/leads/${leadId}`,
+    LEAD_CHECK: (leadId) => `/contact-policy/leads/${leadId}/check`,
+    CAMPAIGN_SKIPS: (source, campaignId) => `/contact-policy/campaigns/${source}/${campaignId}/skips`,
+  },
   AI_CALLING: {
     RUN_STATUS: (id) => `/ai-calling/campaigns/${id}/run-status`,
     CAMPAIGNS: '/ai-calling/campaigns',

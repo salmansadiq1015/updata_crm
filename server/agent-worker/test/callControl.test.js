@@ -126,14 +126,14 @@ test('thinking that turns into speech waits for the speech to end', async () => 
 test('turn detection defaults to server VAD; semantic is opt-in', async () => {
   const { turnDetection, transcription } = await import('../src/agent.js');
   assert.equal(turnDetection({}).type, 'server_vad');
-  assert.equal(turnDetection({}).silence_duration_ms, 600);
+  assert.equal(turnDetection({}).silence_duration_ms, 1000);
   assert.equal(turnDetection({ OPENAI_REALTIME_SILENCE_MS: '800' }).silence_duration_ms, 800);
   assert.deepEqual(turnDetection({ OPENAI_REALTIME_TURN_DETECTION: 'semantic' }).type, 'semantic_vad');
   assert.equal(transcription('en', {}).language, undefined);
   assert.equal(transcription('ur', {}).language, undefined);
   assert.match(transcription('ur', {}).prompt, /language switches/);
   assert.ok(transcription('roman_ur', {}).prompt);
-  assert.equal(transcription('ur', { OPENAI_REALTIME_TRANSCRIBE_LANGUAGE: 'en' }).language, 'en');
+  assert.deepEqual(transcription('ur', { OPENAI_REALTIME_TRANSCRIBE_LANGUAGE: 'en' }).languages, ['en']);
 });
 
 test('answers in any language reach the server as options / digits it can validate', () => {

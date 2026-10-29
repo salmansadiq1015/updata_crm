@@ -59,6 +59,7 @@ let server;
 let Lead; let User; let Role; let Permission;
 let LeadCommunication; let ContactLog; let CallSuppression; let MessageSuppression; let LeadChannelConsent;
 let contactLogService; let phoneHash; let destinationHash; let generateAccessToken; let auditService;
+let leadQualificationService;
 
 let userA; let userB; let tokenA; let tokenB;
 let leadCounter = 0;
@@ -129,6 +130,7 @@ beforeAll(async () => {
   LeadChannelConsent = (await import('../../src/modules/messaging/consent.model.js')).default;
   contactLogService = (await import('../../src/modules/crm/contactLog.service.js')).default;
   auditService = (await import('../../src/modules/auth/audit.service.js')).default;
+  leadQualificationService = (await import('../../src/modules/crm/leadQualification.service.js')).default;
   ({ phoneHash } = await import('../../src/modules/aiCalling/callAuth.js'));
   ({ destinationHash } = await import('../../src/modules/messaging/destinationHash.js'));
   ({ generateAccessToken } = await import('../../src/shared/utils/crypto.js'));
@@ -352,6 +354,38 @@ describe('events', () => {
 });
 
 describe('complete', () => {
+  it('preserves answer versions and does not replay an old communication over a newer answer', async () => {
+    const lead = await makeLead({ qualification: { fields: [{ fieldKey: 'budget', label: 'Budget', value: 9000, status: 'answered', source: 'user' }] } });
+    const firstId = new mongoose.Types.ObjectId();
+    const secondId = new mongoose.Types.ObjectId();
+    const answer = (value) => ({ fieldKey: 'budget', label: 'Budget', value, status: 'answered', source: 'user', evidence: 'customer supplied budget', confidence: 0.9 });
+    await leadQualificationService.mergeAnswers(lead._id, [answer(10000)], { communicationId: firstId, userId: userA._id });
+    await leadQualificationService.mergeAnswers(lead._id, [answer(12000)], { communicationId: secondId, userId: userA._id });
+    await leadQualificationService.mergeAnswers(lead._id, [answer(10000)], { communicationId: firstId, userId: userA._id });
+
+    const history = await request(server).get(`${base(lead._id)}/qualification/history?limit=1`).set(auth(tokenA)).expect(200);
+    expect(history.body.data).toHaveLength(1);
+    expect(history.body.data[0]).toMatchObject({ fieldKey: 'budget', previous: { value: 10000 }, current: { value: 12000 }, confidence: 0.9 });
+    expect(history.body.pagination.hasNext).toBe(true);
+    const older = await request(server).get(`${base(lead._id)}/qualification/history?limit=1&offset=1`).set(auth(tokenA)).expect(200);
+    expect(older.body.data[0]).toMatchObject({ previous: { value: 9000 }, current: { value: 10000 } });
+    const current = await request(server).get(`${base(lead._id)}/qualification`).set(auth(tokenA)).expect(200);
+    expect(current.body.data.fields[0].value).toBe(12000);
+    const detail = await request(server).get(base(lead._id)).set(auth(tokenA)).expect(200);
+    expect(detail.body.data.qualification.history).toBeUndefined();
+    await request(server).get(`${base(lead._id)}/qualification/history`).expect(401);
+  });
+
+  it('records concurrent distinct updates once and retains both versions', async () => {
+    const lead = await makeLead();
+    const updates = [10000, 12000].map((value) => leadQualificationService.mergeAnswers(lead._id,
+      [{ fieldKey: 'budget', label: 'Budget', value, status: 'answered', source: 'user' }],
+      { communicationId: new mongoose.Types.ObjectId(), userId: userA._id }));
+    await Promise.all(updates);
+    const history = await request(server).get(`${base(lead._id)}/qualification/history`).set(auth(tokenA)).expect(200);
+    expect(history.body.data).toHaveLength(2);
+    expect(history.body.data[0].previous.value).toBe(history.body.data[1].current.value);
+  });
   it('happy path: outcome, ContactLog, lead contact, status change, qualification merge, DNC on both channels', async () => {
     const lead = await makeLead({
       status: 'new',

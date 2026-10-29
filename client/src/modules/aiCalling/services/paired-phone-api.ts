@@ -2,6 +2,8 @@ import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import type { BridgeAudioTest, DeviceLimits, PairedDevice, SetupAction, VoiceSettings } from '../types/ai-calling-types';
 
+export type PhonePairingCode = { code: string; expiresAt: string; deviceId: string };
+
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
 const unwrap = <T,>(res: unknown): T => ((res as { data?: T }).data ?? res) as T;
 
@@ -28,7 +30,7 @@ export const pairedPhoneApi = {
   async device(id: string): Promise<PairedDevice> {
     return unwrap<PairedDevice>(await apiClient.get(ENDPOINTS.PAIRED_PHONE.DEVICE(id)));
   },
-  async pairingCode(input: { deviceName: string; phoneLabel?: string }): Promise<{ code: string; expiresAt: string }> {
+  async pairingCode(input: { deviceName: string; phoneLabel?: string; deviceId?: string }): Promise<PhonePairingCode> {
     return unwrap(await apiClient.post(ENDPOINTS.PAIRED_PHONE.PAIRING_CODE, input));
   },
   async update(id: string, input: { name?: string; phoneLabel?: string; limits?: Partial<DeviceLimits> }): Promise<PairedDevice> {
@@ -36,6 +38,15 @@ export const pairedPhoneApi = {
   },
   async revoke(id: string): Promise<PairedDevice> {
     return unwrap<PairedDevice>(await apiClient.post(ENDPOINTS.PAIRED_PHONE.REVOKE(id)));
+  },
+  async remove(id: string): Promise<{ id: string; deleted: boolean }> {
+    return unwrap(await apiClient.delete(ENDPOINTS.PAIRED_PHONE.DEVICE(id)));
+  },
+  async archive(id: string): Promise<PairedDevice> {
+    return unwrap(await apiClient.post(`${ENDPOINTS.PAIRED_PHONE.DEVICE(id)}/archive`));
+  },
+  async restore(id: string): Promise<PairedDevice> {
+    return unwrap(await apiClient.post(`${ENDPOINTS.PAIRED_PHONE.DEVICE(id)}/restore`));
   },
   async verifyAudio(id: string, input: { inboundPhraseHeard: boolean; outboundPhraseHeard: boolean; note: string }): Promise<PairedDevice> {
     return unwrap<PairedDevice>(await apiClient.post(ENDPOINTS.PAIRED_PHONE.VERIFY_AUDIO(id), input));

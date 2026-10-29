@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { CALL_STATES, DISPOSITIONS, ANSWER_VALIDATION, ANSWER_REVIEW, QUALIFICATION_RESULTS } from './aiCalling.constants.js';
+import { intelligenceSchema, knowledgeStampSchema, handoffSchema } from './callIntelligence.schemas.js';
 
 /**
  * CallRecord — the authoritative record of ONE call attempt. Append-semantics:
@@ -31,6 +32,14 @@ const callNotesSchema = new mongoose.Schema({
   description: { type: String, maxlength: 2000, default: '' },
   summary: { type: String, maxlength: 4000, default: '' },
   blockers: { type: [{ type: String, maxlength: 500 }], default: [] },
+  // The agent's reading of the lead's tone from what they said (finish_call); absent when the call didn't close normally.
+  behavior: {
+    type: new mongoose.Schema({
+      tone: { type: String, enum: ['positive', 'neutral', 'hesitant', 'negative'], required: true },
+      evidence: { type: String, maxlength: 300, default: '' },
+    }, { _id: false }),
+    default: undefined,
+  },
   source: { type: String, enum: ['ai_agent', 'call_results'], default: 'call_results' },
   generatedAt: { type: Date, default: Date.now },
 }, { _id: false });
@@ -155,6 +164,19 @@ const callRecordSchema = new mongoose.Schema({
     resolution: { type: String, enum: ['reached', 'not_reached', 'retry', null], default: null },
   },
 
+  // Worker-measured call quality (engine/callQualityTelemetry.js); absent on calls placed before it was recorded.
+  quality: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // Script attribution (scriptVersionResolver.js): the agent script version this call ran, and its experiment arm.
+  scriptVersionId: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentScriptVersion', default: null },
+  experimentId: { type: mongoose.Schema.Types.ObjectId, ref: 'ScriptExperiment', default: null },
+  arm: { type: String, maxlength: 40, default: null },
+
+  // Evidence-linked extraction + compliance flags (callIntelligence.service.js), the approved
+  // knowledge version the agent ran with (knowledge.service.js) and the human transfer (humanTransfer.service.js).
+  intelligence: { type: intelligenceSchema, default: undefined },
+  knowledge: { type: knowledgeStampSchema, default: undefined },
+  handoff: { type: handoffSchema, default: undefined },
+
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 }, { timestamps: true, minimize: false });
 
@@ -169,5 +191,7 @@ callRecordSchema.index({ processingLeaseUntil: 1 }, { partialFilterExpression: {
 callRecordSchema.index({ campaignId: 1, initiatedAt: 1 });
 callRecordSchema.index({ pairedDeviceId: 1, initiatedAt: 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_usage' });
 callRecordSchema.index({ pairedDeviceId: 1, 'gateway.state': 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_queue' });
+callRecordSchema.index({ createdBy: 1, 'intelligence.pendingReview': 1, endedAt: -1 }, { partialFilterExpression: { 'intelligence.pendingReview': { $gt: 0 } }, name: 'intelligence_review_queue' });
+callRecordSchema.index({ 'handoff.offeredTo': 1, 'handoff.status': 1 }, { partialFilterExpression: { 'handoff.status': 'ringing' }, name: 'handoff_ringing' });
 
 export default mongoose.model('CallRecord', callRecordSchema);

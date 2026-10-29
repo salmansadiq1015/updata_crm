@@ -118,7 +118,7 @@ test('device unplugged: lost is emitted and pending commands fail', async () => 
   const c = await connected();
   const lost = new Promise((r) => c.dev.once('lost', r));
   c.fake.unplug();
-  assert.match(await lost, /closed|no frame/);
+  assert.match(await lost, /closed|no frame|control session.*ack_timeout/);
   await assert.rejects(c.dev.statusRequest(), (e) => e.code === 'closed');
   c.end();
 });
@@ -134,6 +134,18 @@ test('a real firmware boot event invalidates the session even if PING would stil
   c.end();
 });
 
+test('PING replies cannot hide a firmware session invalidated by the host watchdog', async () => {
+  const c = await connected();
+  assert.equal(c.dev.sessionValid, true);
+  const lost = new Promise(resolve => c.dev.once('lost', resolve));
+  c.fake.state.session = false; // PING still responds; authenticated STATUS does not.
+  assert.match(await lost, /control session.*no_session/);
+  assert.equal(c.dev.sessionValid, false);
+  assert.equal(c.dev.closed, true);
+  assert.equal(c.fake.log.dials.length, 0);
+  c.end();
+});
+
 test('device stops answering: lost after lostAfterMs', async () => {
   const c = await connected();
   c.fake.state.session = true;
@@ -141,6 +153,6 @@ test('device stops answering: lost after lostAfterMs', async () => {
   c.fake.stream.removeAllListeners('data'); // keep the stream open but deliver nothing
   c.dev.stream.on('data', () => {});
   const reason = await lost;
-  assert.match(reason, /no frame/);
+  assert.match(reason, /no frame|control session.*ack_timeout/);
   c.end();
 });

@@ -19,6 +19,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import {
   Activity,
   AlertTriangle,
+  LifeBuoy,
   Bell,
   BellRing,
   BookOpen,
@@ -79,6 +80,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useUnreadCount } from '@/modules/notifications/hooks/use-notification-feed';
+import { SmsRecoveryNavBadge } from '@/modules/smsOps/ui/sms-recovery-nav-badge';
 import { useUiConfig, applySidebarConfig } from '@/shared/hooks/use-ui-config';
 import { UiPreviewBanner } from '@/shared/components/ui-preview-banner';
 import { APP_LOGOS, APP_NAME, APP_PRODUCT_NAME } from '@/shared/constants/application';
@@ -109,8 +111,11 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.addressBook', href: '/crm/address-book', icon: BookOpen, permission: 'crm:read' },
       { type: 'leaf', labelKey: 'sidebar.leadGeneration', href: '/lead-generation', icon: Radar, permission: 'discovery:read' },
       { type: 'leaf', labelKey: 'sidebar.leads', href: '/leads', icon: UserPlus, permission: 'lead:read' },
+      { type: 'leaf', labelKey: 'sidebar.leadFollowUps', href: '/leads/follow-ups', icon: CalendarClock, permission: 'lead:read' },
       { type: 'leaf', labelKey: 'sidebar.aiCalling', href: '/ai-calling', icon: PhoneCall, permission: 'lead:read' },
       { type: 'leaf', labelKey: 'sidebar.simCalls', href: '/sim-calls', icon: Smartphone, permission: 'ai-calling:read' },
+      { type: 'leaf', labelKey: 'governance.nav.campaignPerformance', href: '/campaign-performance', icon: TrendingUp, permission: 'analytics:attribution:read' },
+      { type: 'leaf', labelKey: 'sidebar.smsOps', href: '/sms-ops', icon: LifeBuoy, permission: 'ai-calling:read' },
       { type: 'leaf', labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, permission: 'quotations:read' },
       { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
       { type: 'leaf', labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },
@@ -161,6 +166,8 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.users', href: '/settings/users', icon: Users, permission: 'users:read' },
       { type: 'leaf', labelKey: 'sidebar.roles', href: '/settings/roles', icon: ShieldCheck, permission: 'roles:read' },
       { type: 'leaf', labelKey: 'sidebar.audit', href: '/settings/audit', icon: ScrollText, permission: 'audit:read' },
+      { type: 'leaf', labelKey: 'governance.nav.teams', href: '/settings/teams', icon: Users, permission: 'team:read' },
+      { type: 'leaf', labelKey: 'governance.nav.accessLog', href: '/settings/access-log', icon: ShieldCheck, permission: 'audit:read' },
       { type: 'leaf', labelKey: 'sidebar.departments', href: '/admin/departments', icon: Building2, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.numbering', href: '/admin/numbering', icon: Hash, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.reminders', href: '/admin/reminders', icon: BellRing, permission: 'quotations:admin' },
@@ -256,6 +263,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
           isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55',
           nested && 'h-[14px] w-[14px]'
         )} />
+        {leaf.href === '/sms-ops' && <SmsRecoveryNavBadge />}
         {leaf.href === '/notifications' && unreadCount > 0 && (
           <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
             {unreadCount > 99 ? '99+' : unreadCount}

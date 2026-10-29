@@ -6,6 +6,7 @@ import {
 } from './aiCalling.constants.js';
 import { canonicalAgentLanguage, isSupportedAgentLanguage } from './aiCalling.languages.js';
 import { isValidTimezone } from './engine/callWindow.js';
+import { qualityTelemetry } from './callingQuality.validation.js';
 
 const ianaTimezone = Joi.string().max(80).custom((value, helpers) => (
   isValidTimezone(value) ? value : helpers.message('"timezone" must be a valid IANA timezone (e.g. Europe/Zurich)')
@@ -279,6 +280,10 @@ export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).req
     description: Joi.string().trim().max(2000).allow(''),
     summary: Joi.string().trim().max(4000).allow(''),
     blockers: Joi.array().items(Joi.string().trim().max(500)).max(10),
+    behavior: Joi.object({
+      tone: Joi.string().valid('positive', 'neutral', 'hesitant', 'negative').required(),
+      evidence: Joi.string().trim().max(300).allow(''),
+    }).allow(null),
   }).allow(null),
   // Telephony-level outcomes only; business outcomes are derived server-side.
   disposition: Joi.string().valid('voicemail', 'no_answer', 'busy', 'failed').allow(null),
@@ -289,6 +294,8 @@ export const agentEnd = { params: Joi.object({ callId: Joi.string().max(120).req
   // Why the worker gave up (OpenAI key rejected, CRM unreachable…), shown to the operator.
   failureCode: Joi.string().max(100).allow(null, ''),
   failureMessage: Joi.string().max(500).allow(null, ''),
+  // Worker-measured call quality (callQuality.service.js recordTelemetry).
+  quality: qualityTelemetry,
 }).default({}) };
 export const agentTranscript = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   role: Joi.string().valid('customer', 'assistant').required(),

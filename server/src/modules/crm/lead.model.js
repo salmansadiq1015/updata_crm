@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { canonicalizeLeadAddress } from './leadGeography.js';
+import { QUALIFICATION_ANSWER_SOURCES, TRANSCRIPT_QUOTE_MAX } from './leadQualification.constants.js';
 
 /**
  * Lead — a prospective customer (own `leads` collection), numbered L-##### via
@@ -50,15 +51,32 @@ const pointSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Pointer into an AI call transcript: the call, the turn index and/or offset,
+// and the verbatim quote the value rests on.
+const transcriptRefSchema = new mongoose.Schema(
+  {
+    callRecordId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
+    turnIndex: { type: Number, min: 0, default: null },
+    startMs: { type: Number, min: 0, default: null },
+    quote: { type: String, maxlength: TRANSCRIPT_QUOTE_MAX, default: null },
+  },
+  { _id: false },
+);
+
 const leadQualificationFieldSchema = new mongoose.Schema(
   {
     fieldKey: { type: String, required: true, trim: true, maxlength: 80 },
     label: { type: String, trim: true, maxlength: 200, default: null },
     value: { type: mongoose.Schema.Types.Mixed, default: null },
     status: { type: String, enum: ['answered', 'unknown', 'refused', 'not_applicable'], required: true },
-    source: { type: String, enum: ['user', 'ai_proposed_user_confirmed', 'sms_agent'], default: 'user' },
+    source: { type: String, enum: QUALIFICATION_ANSWER_SOURCES, default: 'user' },
     evidence: { type: String, maxlength: 2000, default: null },
     communicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadCommunication', default: null },
+    // Evidence links (Leads-A answer history): the AI call / SIM SMS message the
+    // value came from and, for calls, the transcript turn that supports it.
+    callRecordId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
+    smsMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'SimSmsMessage', default: null },
+    transcriptRef: { type: transcriptRefSchema, default: null },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     updatedAt: { type: Date, default: null },
   },
@@ -69,6 +87,26 @@ const leadQualificationSchema = new mongoose.Schema(
   {
     fields: { type: [leadQualificationFieldSchema], default: [] },
     updatedAt: { type: Date, default: null },
+    // Stored alongside the current values so a version and its update commit together.
+    // Excluded from ordinary lead reads; the qualification history endpoint exposes it.
+    history: { type: [new mongoose.Schema({
+      fieldKey: { type: String, required: true },
+      previous: { type: leadQualificationFieldSchema, default: null },
+      current: { type: leadQualificationFieldSchema, required: true },
+      confidence: { type: Number, min: 0, max: 1, default: null },
+      communicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadCommunication', default: null },
+      // Provenance of this version (Leads-A answer history). Absent on versions
+      // written before these fields existed — the API reports them as unknown.
+      source: { type: String, enum: [...QUALIFICATION_ANSWER_SOURCES, null], default: null },
+      callRecordId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
+      smsMessageId: { type: mongoose.Schema.Types.ObjectId, ref: 'SimSmsMessage', default: null },
+      transcriptRef: { type: transcriptRefSchema, default: null },
+      // A user correction points at the version it corrects and must say why.
+      correctionOf: { type: mongoose.Schema.Types.ObjectId, default: null },
+      reason: { type: String, maxlength: 1000, default: null },
+      changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      changedAt: { type: Date, required: true },
+    })], default: [], select: false },
   },
   { _id: false },
 );
@@ -230,6 +268,18 @@ const leadSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    // Assignment + first-response SLA (leadAssignment.service / leadSla.service).
+    // slaStatus: none (no owner/SLA) → pending → met | overdue → late (answered
+    // after the deadline). escalationLevel counts escalations of the current SLA.
+    assignedAt: { type: Date, default: null },
+    assignmentSource: { type: String, enum: ['manual', 'auto', 'import', null], default: null },
+    firstResponseDueAt: { type: Date, default: null },
+    firstRespondedAt: { type: Date, default: null },
+    firstResponseChannel: { type: String, maxlength: 40, default: null },
+    slaStatus: { type: String, enum: ['none', 'pending', 'met', 'overdue', 'late'], default: 'none' },
+    slaBreachedAt: { type: Date, default: null },
+    escalationLevel: { type: Number, min: 0, default: 0 },
+    lastEscalatedAt: { type: Date, default: null },
     notes: { type: String, maxlength: 5000, default: null },
     tags: { type: [String], default: [] },
     // Communication tracking (§ lead module). Stamped whenever a lead is
@@ -259,6 +309,46 @@ const leadSchema = new mongoose.Schema(
     },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    // --- Lead quality (leadScoring.engine.js / leadMerge.service.js) ---
+    // Compact copy of the last deterministic score; the full evidence-backed
+    // breakdown is served by GET /crm/leads/:id/score. Absent until scored.
+    score: {
+      type: new mongoose.Schema({
+        value: { type: Number, min: 0, max: 100, required: true },
+        band: { type: String, enum: ['hot', 'warm', 'cold', 'unscored'], required: true },
+        version: { type: Number, required: true },
+        engineVersion: { type: String, maxlength: 40, default: null },
+        computedAt: { type: Date, required: true },
+        disqualified: { type: Boolean, default: false },
+        factors: {
+          type: [new mongoose.Schema({
+            key: { type: String, maxlength: 60, required: true },
+            points: { type: Number, required: true },
+            maxPoints: { type: Number, required: true },
+          }, { _id: false })],
+          default: [],
+        },
+      }, { _id: false }),
+      default: undefined,
+    },
+    // Denormalized sort key for the list (cursor pagination needs a top-level,
+    // always-numeric field): the score value, or -1 while the lead is unscored.
+    scoreValue: { type: Number, default: -1 },
+    // Merge bookkeeping. A merged-away lead is soft-deleted with mergedInto set;
+    // the survivor lists every lead merged into it (timeline reads this).
+    mergedInto: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null },
+    mergedAt: { type: Date, default: null },
+    mergedLeadIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Lead', default: [] },
+    // Short-lived lock held by an in-flight merge/undo (never serialized).
+    mergeLock: {
+      type: new mongoose.Schema({
+        mergeId: { type: mongoose.Schema.Types.ObjectId, required: true },
+        token: { type: String, maxlength: 64, required: true },
+        until: { type: Date, required: true },
+      }, { _id: false }),
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -271,6 +361,8 @@ const leadSchema = new mongoose.Schema(
 leadSchema.index({ createdBy: 1, createdAt: -1 }); // lists
 leadSchema.index({ status: 1 }); // pipeline
 leadSchema.index({ assignedTo: 1 }); // "my leads"
+// SLA sweep: pending/overdue leads by deadline (leadSla.service sweep).
+leadSchema.index({ slaStatus: 1, firstResponseDueAt: 1 }, { name: 'lead_sla_sweep' });
 // Cascading Leads filters use the actual address hierarchy. Keeping soft-delete
 // first also helps the filter-options facet, which only exposes live leads.
 leadSchema.index({ isDeleted: 1, 'address.country': 1, 'address.city': 1, 'address.area': 1 });
@@ -289,6 +381,10 @@ leadSchema.index({ normalizedPhone: 1 }); // dedup ladder
 leadSchema.index({ websiteDomain: 1 }); // dedup ladder
 leadSchema.index({ name: 1, 'address.postalCode': 1 }); // dedup ladder
 leadSchema.index({ location: '2dsphere' }); // geo dedup / map
+leadSchema.index({ email: 1 }); // duplicate detection
+leadSchema.index({ scoreValue: -1, _id: -1 }); // sort by score (no isDeleted prefix: it would hijack _id $in plans)
+leadSchema.index({ 'score.band': 1 }); // band filter
+leadSchema.index({ mergedInto: 1 }, { partialFilterExpression: { mergedInto: { $type: 'objectId' } } });
 leadSchema.index(
   { name: 'text', 'address.city': 'text', email: 'text' },
   { weights: { name: 10, email: 5, 'address.city': 2 } },

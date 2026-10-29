@@ -1,4 +1,5 @@
 import { FileUp, MapPin, PenLine, Puzzle } from 'lucide-react';
+import type { LeadScoreBand } from '../types/lead-quality-types';
 import type { LucideIcon } from 'lucide-react';
 import type { Lead, LeadSource, LeadStatus, LeadType } from '../types/lead-types';
 import type { TranslateFn } from './lead-ui-kit';
@@ -86,12 +87,15 @@ export const COLUMN_TO_SORT_FIELD: Record<string, string> = {
   name: 'name',
   status: 'status',
   discoveredAt: 'createdAt',
+  // Lead quality: denormalized score (-1 = unscored) — see leadScoring.service.
+  score: 'scoreValue',
 };
 
 export const SORT_FIELD_TO_COLUMN: Record<string, string> = {
   name: 'name',
   status: 'status',
   createdAt: 'discoveredAt',
+  scoreValue: 'score',
 };
 
 // ── Small domain helpers ─────────────────────────────────────────────────────
@@ -109,6 +113,8 @@ export type LeadFilterState = {
   city: string;
   area: string;
   businessType: string;
+  /** Score band (hot / warm / cold / unscored) or 'ALL'; optional for older callers. */
+  scoreBand?: string;
   assignedTo: string;
   search: string;
 };
@@ -122,6 +128,7 @@ export type LeadQueryFilterParams = {
   cityId?: string;
   areaId?: string;
   businessType?: string;
+  scoreBand?: LeadScoreBand;
   assignedTo?: string;
   q?: string;
 };
@@ -151,6 +158,7 @@ export function buildLeadFilterParams(
     ...(filters.city !== FILTER_ALL ? { cityId: filters.city } : {}),
     ...(filters.area !== FILTER_ALL ? { areaId: filters.area } : {}),
     ...(filters.businessType !== FILTER_ALL ? { businessType: filters.businessType } : {}),
+    ...(filters.scoreBand && filters.scoreBand !== FILTER_ALL ? { scoreBand: filters.scoreBand as LeadScoreBand } : {}),
     ...(assignedTo ? { assignedTo } : {}),
     ...(searchTerm ? { q: searchTerm } : {}),
   };

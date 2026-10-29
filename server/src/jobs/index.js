@@ -50,9 +50,14 @@ import { OutboundMessagingRecoveryWorker } from './outboundMessagingRecovery.job
 import { OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE } from '../modules/messaging/messaging.constants.js';
 import { OutboundCallingWorker } from './outboundCalling.job.js';
 import { registerAiCallReconciliationJob } from './aiCallReconciliation.job.js';
+import { registerCallingQualityJobs } from './callingQuality.job.js';
+import { registerCallIntelligenceJob } from './callIntelligence.job.js';
 import { registerLinkAssistantSweepJob } from './linkAssistantSweep.job.js';
 import { registerSimSmsSweepJob } from './simSmsSweep.job.js';
+import { registerSmsOpsSweepJob } from './smsOpsSweep.job.js';
 import { registerSimCallSweepJob } from './simCallSweep.job.js';
+import { registerLeadSlaSweepJob } from './leadSlaSweep.job.js';
+import { registerLeadQualityJobs } from './leadQuality.job.js';
 import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
 import { registerAiAgentJob } from './aiAgent.job.js';
 import { registerAiAgentTimeoutJob } from './aiAgentTimeout.job.js';
@@ -714,11 +719,18 @@ export function registerJobs() {
 
   // AI call reconciliation — recover calls stuck after a crash / lost webhook.
   registerAiCallReconciliationJob(queueManager);
+  registerCallingQualityJobs(queueManager); // benchmarks + experiment guardrails
+  registerCallIntelligenceJob(queueManager);
   registerLinkAssistantSweepJob(queueManager);
 
   // SIM SMS agent — reply timeouts / reminders / lease recovery for SMS sent from users' phones.
   registerSimSmsSweepJob(queueManager);
+  registerSmsOpsSweepJob(queueManager); // device offline alerts, provider failures → recovery inbox, contact ledger
   registerSimCallSweepJob(queueManager);
+  // Lead workflow — first-response SLA breaches/escalation + overdue follow-ups.
+  registerLeadSlaSweepJob(queueManager);
+  // Lead quality — event-driven/bulk scoring, duplicate detection, merge recovery.
+  registerLeadQualityJobs(queueManager);
 
   // AI agent — agentic orchestration (execute + resume with confirmation)
   registerAiAgentJob(queueManager);

@@ -6,6 +6,7 @@ import { useSessionStore } from '@/features/auth/store/sessionStore';
 import { logger } from '@/services/logging/logger';
 
 import { smsAgentLoop } from './domain/agentLoop';
+import { sendDeviceHeartbeat } from './services/heartbeatService';
 
 export const SMS_AGENT_TASK = 'UpdataSmsAgent';
 
@@ -19,5 +20,7 @@ export async function smsAgentHeadlessTask(): Promise<void> {
     logger.info('sms_agent.no_session');
     return;
   }
+  // Report this phone to the CRM device dashboard; later beats follow the loop's cycles.
+  void sendDeviceHeartbeat('headless');
   await smsAgentLoop.run();
 }

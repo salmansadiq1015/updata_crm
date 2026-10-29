@@ -18,6 +18,7 @@ const UNKNOWN_PATTERNS = [
   /^(keine\s+ahnung|weiss\s+nicht|weiß\s+nicht)\b/i, // de
   /^(pata\s+nahi|pata\s+nahin|maloom\s+nahi|maloom\s+nahin|maalum\s+nahi|nahi\s+pata)\b/i, // Roman Urdu
   /^(پتا نہیں|پتہ نہیں|معلوم نہیں)/, // Urdu
+  /^(?:(?:i(?:'d| would)?\s+)?(?:prefer|rather)\s+not\s+(?:to\s+)?(?:say|share|answer)|skip(?:\s+(?:this|it|question))?|i\s+(?:do not|don't)\s+(?:want|wish)\s+to\s+(?:share|answer))\s*[.!]?$/i,
 ];
 
 const YES_WORDS = /^(yes|yeah|yep|yup|sure|correct|right|absolutely|of course|ok|okay|ja|oui|si)\b/i;
@@ -45,11 +46,90 @@ const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
 
 const isUnknown = (text) => UNKNOWN_PATTERNS.some((re) => re.test(String(text ?? '').trim()));
 
-/** Pull the first number out of a spoken answer ("about twenty-five" is left to the model). */
+// Urdu/Persian (۰-۹) and Arabic-Indic (٠-٩) digits → ASCII; ٫ / ٬ are the Arabic separators.
+function toAsciiDigits(text) {
+  return String(text ?? '')
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06F0))
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/٫/g, '.').replace(/٬/g, ',');
+}
+
+// Scale words after a number: "30 hazar", "2.5 lakh", "50k", "1 crore".
+const SCALE_WORDS = {
+  thousand: 1e3, thousands: 1e3, k: 1e3, hazar: 1e3, hazaar: 1e3, hajar: 1e3, 'ہزار': 1e3,
+  lakh: 1e5, lakhs: 1e5, laakh: 1e5, lac: 1e5, lacs: 1e5, 'لاکھ': 1e5,
+  million: 1e6, millions: 1e6,
+  crore: 1e7, crores: 1e7, karor: 1e7, karod: 1e7, 'کروڑ': 1e7,
+  billion: 1e9, arab: 1e9, 'ارب': 1e9,
+};
+const SCALE_ALT = Object.keys(SCALE_WORDS).sort((a, b) => b.length - a.length).join('|');
+// The scale must end the word (no letter after it), so "30 km" stays 30.
+const NUMBER_WITH_SCALE = new RegExp(`(-?\\d+(?:\\.\\d+)?)(?:\\s*(${SCALE_ALT}))?(?![a-z\\u0600-\\u06FF])`, 'giu');
+const JOINERS = /^(\s|and|aur|or|اور|،|,)*$/iu;
+
+// Spoken numbers. English and Urdu-script words always count; Roman Urdu words
+// collide with English ("do", "char", "saath" = with), so they only count in a
+// run that also has a hundred/scale word ("do lakh", "pachas hazar").
+const EN_WORDS = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+const UR_WORDS = {
+  'ایک': 1, 'دو': 2, 'تین': 3, 'چار': 4, 'پانچ': 5, 'چھ': 6, 'چھے': 6, 'سات': 7, 'آٹھ': 8, 'نو': 9, 'دس': 10,
+  'گیارہ': 11, 'بارہ': 12, 'پندرہ': 15, 'بیس': 20, 'پچیس': 25, 'تیس': 30, 'چالیس': 40, 'پچاس': 50,
+  'ساٹھ': 60, 'ستر': 70, 'اسی': 80, 'اسّی': 80, 'نوے': 90, 'ڈیڑھ': 1.5, 'ڈھائی': 2.5,
+};
+const ROMAN_UR_WORDS = {
+  ek: 1, do: 2, teen: 3, char: 4, chaar: 4, panch: 5, paanch: 5, chay: 6, chhe: 6, saat: 7, aath: 8, nau: 9, das: 10,
+  gyarah: 11, barah: 12, pandrah: 15, bees: 20, pachees: 25, tees: 30, chalees: 40, chalis: 40, pachas: 50, pachaas: 50,
+  saath: 60, sattar: 70, assi: 80, nabbay: 90, nawway: 90, dedh: 1.5, dhai: 2.5, dhaai: 2.5,
+};
+const HUNDRED_WORDS = new Set(['hundred', 'sau', 'سو']);
+
+function parseNumberWords(text) {
+  const tokens = String(text).toLowerCase().split(/[\s\-،۔,.!?]+/u).filter(Boolean);
+  let run = [];
+  for (const token of [...tokens, '']) {
+    const isNumberWord = token in EN_WORDS || token in UR_WORDS || token in ROMAN_UR_WORDS || HUNDRED_WORDS.has(token) || token in SCALE_WORDS;
+    if (isNumberWord && token !== 'k') { run.push(token); continue; }
+    if (run.length && JOINERS.test(token) && token) continue;
+    if (run.length) break;
+  }
+  if (!run.length) return null;
+  const hasScale = run.some((t) => HUNDRED_WORDS.has(t) || t in SCALE_WORDS);
+  if (run.some((t) => t in ROMAN_UR_WORDS && !(t in EN_WORDS)) && !hasScale) return null;
+  let total = 0;
+  let current = 0;
+  for (const t of run) {
+    if (HUNDRED_WORDS.has(t)) current = (current || 1) * 100;
+    else if (t in SCALE_WORDS) { total += (current || 1) * SCALE_WORDS[t]; current = 0; } else current += EN_WORDS[t] ?? UR_WORDS[t] ?? ROMAN_UR_WORDS[t];
+  }
+  return total + current;
+}
+
+/**
+ * Pull the first number out of a spoken answer: digits in any script, with an
+ * optional scale word ("30 hazar" → 30000, "1 lakh 50 hazar" → 150000), else a
+ * spelled-out number ("forty thousand", "پچاس ہزار", "do lakh").
+ */
 function parseNumber(text) {
-  const cleaned = String(text ?? '').replace(/[, ](?=\d{3}\b)/g, '').replace(/[^0-9.-]/g, ' ').trim();
-  const match = cleaned.match(/-?\d+(\.\d+)?/);
-  return match ? Number(match[0]) : null;
+  const source = toAsciiDigits(text).replace(/(\d)[, ](?=\d{3}\b)/g, '$1');
+  const matches = [...source.matchAll(NUMBER_WITH_SCALE)];
+  if (!matches.length) return parseNumberWords(source);
+  let value = Number(matches[0][1]) * (SCALE_WORDS[matches[0][2]?.toLowerCase()] ?? 1);
+  let lastScale = SCALE_WORDS[matches[0][2]?.toLowerCase()] ?? null;
+  // "1 lakh 50 hazar": add the following parts while each is a smaller unit.
+  for (let i = 1; lastScale && i < matches.length; i += 1) {
+    const prev = matches[i - 1];
+    const gap = source.slice(prev.index + prev[0].length, matches[i].index);
+    const scale = SCALE_WORDS[matches[i][2]?.toLowerCase()] ?? 1;
+    const part = Number(matches[i][1]) * scale;
+    if (!JOINERS.test(gap) || scale >= lastScale || part >= lastScale) break;
+    value += part;
+    lastScale = scale === 1 ? null : scale;
+  }
+  return value;
 }
 
 function matchChoice(text, options) {
@@ -61,13 +141,20 @@ function matchChoice(text, options) {
     const l = String(opt.label ?? opt).toLowerCase();
     if (value === v || value === l) return String(opt.value ?? opt);
   }
+  const matches = [];
   for (const opt of options) {
     const v = String(opt.value ?? opt).toLowerCase();
     const l = String(opt.label ?? opt).toLowerCase();
-    if (v && value.includes(v)) return String(opt.value ?? opt);
-    if (l && value.includes(l)) return String(opt.value ?? opt);
+    const contains = (part) => {
+      const start = value.indexOf(part);
+      if (!part || start < 0) return false;
+      return !/[\p{L}\p{N}_]/u.test(value[start - 1] || '')
+        && !/[\p{L}\p{N}_]/u.test(value[start + part.length] || '');
+    };
+    if (contains(v) || contains(l)) matches.push(String(opt.value ?? opt));
   }
-  return null;
+  // A single-choice answer containing two options needs clarification.
+  return new Set(matches).size === 1 ? matches[0] : null;
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -86,7 +173,7 @@ function ymd(y, m, d) {
  * free text (Date.parse would turn "1 December" into 2001 and shift days across zones).
  */
 export function parseSpokenDate(text, now = new Date()) {
-  const t = String(text || '').toLowerCase().replace(/(\d+)(st|nd|rd|th)\b/g, '$1');
+  const t = toAsciiDigits(text).toLowerCase().replace(/(\d+)(st|nd|rd|th)\b/g, '$1');
   let m = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
   if (m) return ymd(Number(m[1]), Number(m[2]), Number(m[3]));
   m = t.match(/\b(\d{1,2})[/.](\d{1,2})[/.](\d{2}|\d{4})\b/);
@@ -98,7 +185,7 @@ export function parseSpokenDate(text, now = new Date()) {
     if (m) { month = MONTHS.indexOf(m[1].slice(0, 3)) + 1; day = Number(m[2]); }
   }
   if (!month || !day) return null;
-  const year = t.match(/\b(20\d{2})\b/);
+  const year = t.match(/\b(\d{4})\b/);
   if (year) return ymd(Number(year[1]), month, day);
   const today = ymd(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate());
   const thisYear = ymd(now.getUTCFullYear(), month, day);
@@ -126,6 +213,42 @@ const ok = (value) => ({ validation: 'valid', normalizedValue: value });
 const bad = (reason) => ({ validation: 'invalid', normalizedValue: null, reason });
 const dunno = () => ({ validation: 'unknown', normalizedValue: null });
 
+/** Older/manual questionnaires often leave contact questions as short_text. */
+export function answerRequirements(question = {}) {
+  const key = String(question.fieldKey || question.mapTo || '')
+    .replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().replace(/[.\s-]+/g, '_');
+  const prompt = `${question.label || ''} ${question.text || ''}`;
+  const birthDate = /^(dob|birth_?date|date_of_birth)$/.test(key)
+    || /\b(date of birth|birth\s*date|geburtsdatum|date de naissance)\b|تاریخ پیدائش/i.test(prompt);
+  let type = question.type || 'short_text';
+  if (['short_text', 'long_text'].includes(type)) {
+    if (birthDate) type = 'date';
+    else if (/^(email|email_address|contact_email)$/.test(key) || /\byour email(?: address)?\b/i.test(prompt)) type = 'email';
+    else if (/^(phone|phone_number|mobile|mobile_number|contact_phone)$/.test(key) || /\b(?:your|best|contact) (?:phone|mobile|telephone) number\b/i.test(prompt)) type = 'phone';
+    else if (/^(family_size|family_members|household_size)$/.test(key) || /\bhow many (?:people|members)\b.*\b(?:family|household)\b/i.test(prompt)) type = 'integer';
+  }
+  const hints = {
+    email: 'Please give a complete email address, including the part after @.',
+    phone: 'Please give the complete phone number, including the area or country code.',
+    date: birthDate ? 'Please give your birth day, month, and full four-digit year. Do not guess a missing year.' : 'Please give a real calendar date with the day and month.',
+    integer: 'Please give a whole number related to this question.',
+    boolean: 'Please answer yes or no to this question.',
+    address: 'Please give the requested location or residential address.',
+  };
+  return { type, birthDate, hint: hints[type] || 'Please provide information that directly answers this question.' };
+}
+
+// These are conversational turns, not values for profile/contact questions.
+// Other free-text relevance is assessed by the voice model using the question and
+// its configured description; do not restrict names or professions to a word list.
+function isNonAnswer(text, question) {
+  const clean = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim().replace(/\s+/g, ' ');
+  const echo = String(question.text || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim().replace(/\s+/g, ' ');
+  return (echo && clean === echo)
+    || /^(yes|no|okay|ok|sure|continue|mhm|hmm|uh|um|hello|hi|good (morning|evening|afternoon)|thank you(?: for the)?|thanks|thats the problem|its possible|mhm its possible|i could not really|why are you|my email address|phone number)$/i.test(clean)
+    || /^(?:why (?:are|do|would)|what do you mean|could you (?:please )?(?:repeat|explain)|can you (?:please )?(?:repeat|explain))\b/i.test(text);
+}
+
 /**
  * @param {object} question - the configured question (type, options, min, max, …)
  * @param {string} rawAnswer - the transcribed spoken answer
@@ -133,7 +256,7 @@ const dunno = () => ({ validation: 'unknown', normalizedValue: null });
  * @returns {{validation:'valid'|'invalid'|'unknown', normalizedValue:*, reason?:string}}
  */
 export function validateAnswer(question, rawAnswer, now = new Date()) {
-  const type = question?.type || 'short_text';
+  const { type, birthDate } = answerRequirements(question);
   const text = String(rawAnswer ?? '').trim();
 
   // "I don't know" is a first-class, non-invented outcome for every type except
@@ -151,7 +274,8 @@ export function validateAnswer(question, rawAnswer, now = new Date()) {
     case 'integer': {
       const n = parseNumber(text);
       if (n === null || !Number.isFinite(n)) return bad('not_a_number');
-      const i = Math.round(n);
+      if (!Number.isInteger(n)) return bad('not_a_whole_number');
+      const i = n;
       if (question.min != null && i < question.min) return bad('below_min');
       if (question.max != null && i > question.max) return bad('above_max');
       return ok(i);
@@ -190,12 +314,15 @@ export function validateAnswer(question, rawAnswer, now = new Date()) {
       return URL_RE.test(value) ? ok(value.startsWith('http') ? value : `https://${value}`) : bad('invalid_url');
     }
     case 'phone': {
-      const digits = text.replace(/[^\d+]/g, '');
+      const digits = toAsciiDigits(text).replace(/[^\d+]/g, '');
       const count = digits.replace(/\D/g, '').length;
-      return count >= 7 && count <= 15 ? ok(digits) : bad('invalid_phone');
+      return /^\+?\d+$/.test(digits) && count >= 7 && count <= 15 ? ok(digits) : bad('invalid_phone');
     }
     case 'date': {
+      // Appointment dates may default a year; birth dates must never do so.
+      if (birthDate && !/\b\d{4}\b/.test(toAsciiDigits(text))) return bad('birth_year_required');
       const date = parseSpokenDate(text, now);
+      if (birthDate && date && date > now.toISOString().slice(0, 10)) return bad('birth_date_in_future');
       return date ? ok(date) : bad('unparseable_date');
     }
     case 'time': {
@@ -205,10 +332,12 @@ export function validateAnswer(question, rawAnswer, now = new Date()) {
     }
     case 'address':
     case 'long_text':
+      if (text && isNonAnswer(text, question)) return bad('unrelated_answer');
       return text ? ok(text) : (question.required ? bad('empty') : dunno());
     case 'short_text':
     default: {
       if (!text) return question.required ? bad('empty') : dunno();
+      if (isNonAnswer(text, question)) return bad('unrelated_answer');
       const max = question.maxLength || 500;
       return ok(text.slice(0, max));
     }

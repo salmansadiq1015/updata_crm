@@ -30,6 +30,15 @@ test('multiple boards require an explicit port; Linux and Windows paths remain u
   }
 });
 
+test('macOS detects Silicon Labs USB serial ports when the driver omits USB IDs', async () => {
+  const port = { path: '/dev/cu.usbserial-0001', manufacturer: 'Silicon Labs' };
+  assert.equal(await findBoardPort(options([port])), port.path);
+  assert.equal(await findBoardPort(options([{ ...port, path: '/dev/cu.Bluetooth-Incoming-Port' }])), null);
+  assert.equal(await findBoardPort(options([{ ...port, vendorId: '303a', productId: '1001' }])), null);
+  assert.equal(await findBoardPort(options([{ ...port, manufacturer: 'Unknown' }])), null);
+  await assert.rejects(findBoardPort(options([port, { ...port, path: '/dev/cu.usbserial-2' }])), /Several USB-serial boards/);
+});
+
 test('a gateway can start without a board and discovers its current path on subsequent attempts', async () => {
   const ports = [null, '/dev/cu.usbserial-1', '/dev/cu.usbserial-2'];
   const opened = [];

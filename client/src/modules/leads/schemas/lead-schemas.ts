@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { readLeadSla } from './lead-sla-schema';
+import { parseLeadScore } from '../services/lead-quality-api';
 import type {
   GeoPoint,
   Lead,
@@ -346,6 +348,9 @@ export const leadSchema = z.unknown().transform((value): Lead => {
     updatedAt: readIso(raw.updatedAt),
     social: readSocial(raw.social),
     enrichment: readEnrichment(raw.enrichment),
+    sla: readLeadSla(raw),
+    score: parseLeadScore(raw.score),
+    mergedLeadIds: Array.isArray(raw.mergedLeadIds) ? raw.mergedLeadIds.map((item) => readId(item)).filter(Boolean) : [],
   };
 });
 

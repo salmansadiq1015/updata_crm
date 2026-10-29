@@ -27,16 +27,24 @@ import { phoneHash, issueAgentToken } from './callAuth.js';
 import {
   OUTBOUND_CALL_QUEUE, ACTION_TO_LEAD_STATUS, PROTECTED_LEAD_STATUSES, normalizeTelephonyStatus,
 } from './aiCalling.constants.js';
-import { isConfirmation, validateAnswer } from './engine/answerValidation.js';
+import { answerRequirements, isConfirmation, validateAnswer } from './engine/answerValidation.js';
 import * as engine from './engine/questionEngine.js';
 import { evaluateOutcome } from './engine/statusRuleEngine.js';
 import { buildCallNotes } from './engine/callNotes.js';
 import { conversationInsights } from './engine/conversationInsights.js';
+import { computeCallCost } from './engine/callCost.js';
 import { leadContext, buildSystemPrompt, disclosureText } from './engine/leadContext.js';
+import knowledgeService from './knowledge.service.js';
+import callIntelligenceService from './callIntelligence.service.js';
+import humanTransferService from './humanTransfer.service.js';
+import { activeHandoffExemption, TRANSFER_PROMPT_RULE } from './engine/handoffPolicy.js';
 import { windowState, recipientWindow, nextWindowOpen, nextDialTime } from './engine/callWindow.js';
 import { recordCallMetric, observeDuration, observeDispatchLatency } from './aiCalling.metrics.js';
+import { resolveScriptVersion, applyScriptVersion } from './scriptVersionResolver.js';
+import * as contactPolicyHooks from '../contactPolicy/contactPolicy.hooks.js';
 import MessageSuppression from '../messaging/suppression.model.js';
 import { destinationHash } from '../messaging/destinationHash.js';
+import { onLeadSignalsChanged } from '../crm/leadQuality.hooks.js';
 
 export { windowState };
 
@@ -418,8 +426,9 @@ class AiCallingService {
   async _resolveTransport({ channel, transport, pairedDeviceId }, actor) {
     if (channel === 'web_link' || transport !== 'paired_phone') return { transport: 'cloud_sip', pairedDeviceId: null };
     if (!pairedDeviceId) throw new ValidationError('Choose the paired phone this campaign calls from');
-    const device = await PairedDevice.findOne({ _id: pairedDeviceId, createdBy: actor, revokedAt: null }).select('_id').lean();
+    const device = await PairedDevice.findOne({ _id: pairedDeviceId, createdBy: actor, revokedAt: null }).select('_id archivedAt').lean();
     if (!device) throw new ValidationError('Paired phone not found, or it was revoked');
+    if (device.archivedAt) throw new ValidationError('This phone is archived. Restore it in Connections or choose another phone.');
     return { transport: 'paired_phone', pairedDeviceId: device._id };
   }
 
@@ -431,6 +440,7 @@ class AiCallingService {
     if (config.transport === 'paired_phone') {
       const device = await PairedDevice.findOne({ _id: config.pairedDeviceId, createdBy: actor, revokedAt: null }).lean();
       if (!device) throw new ConflictError('Choose an available paired phone in the agent settings');
+      if (device.archivedAt) throw new ConflictError('Restore the archived phone in Connections before launching.');
       if (!device.audioVerifiedAt) throw new ConflictError('Verify two-way call sound in Connections before launching');
     } else {
       const health = await telephonyHealth();
@@ -660,6 +670,7 @@ class AiCallingService {
     if (campaign.channel !== 'web_link' && campaign.transport === 'paired_phone') {
       const device = campaign.pairedDeviceId ? await PairedDevice.findOne({ _id: campaign.pairedDeviceId, createdBy: actor }).lean() : null;
       if (!device || device.revokedAt) throw new ConflictError('The paired phone for this campaign is missing or revoked; choose another device');
+      if (device.archivedAt) throw new ConflictError('The paired phone is archived. Restore it in Connections or choose another phone.');
       if (!device.audioVerifiedAt && !audioVerificationTest) throw new ConflictError('Two-way call audio has not been verified on this paired phone yet. Run the audio test and verify it first.');
     }
 
@@ -1121,6 +1132,7 @@ class AiCallingService {
       }
     }
     const releaseDevice = () => (isPaired ? pairedPhoneService.release(campaign.pairedDeviceId, callObjectId) : Promise.resolve());
+    const contactPolicyBlock = await contactPolicyHooks.aiCallGate(this, campaign, recipient, { audioVerificationTest }); if (contactPolicyBlock) { await releaseDevice(); return contactPolicyBlock; }
     const pointed = await CampaignRecipient.updateOne(
       { _id: recipient._id, state: 'dialing', attemptCount: recipient.attemptCount },
       { $inc: { attemptCount: 1 }, $set: { lastCallId: callObjectId, leaseUntil: new Date(Date.now() + DISPATCH_LEASE_MS) } },
@@ -1130,7 +1142,9 @@ class AiCallingService {
       return { skipped: 'claim_lost' };
     }
 
+    const script = await resolveScriptVersion(campaign, recipient.leadId); // experiment arm / script version
     await CallRecord.create({
+      ...script.stamp,
       _id: callObjectId,
       campaignId: campaign._id,
       recipientId: recipient._id,
@@ -1155,8 +1169,8 @@ class AiCallingService {
       mode: 'pstn',
       agentToolApi: `${apiBase}/api/v1/ai-calling/agent`,
       agentToken: issueAgentToken(internalCallId, campaign.agentConfig?.maxCallSeconds ? campaign.agentConfig.maxCallSeconds + 600 : 1800),
-      voice: campaign.agentConfig?.voice,
-      language: campaign.agentConfig?.language,
+      voice: script.agentConfig?.voice || campaign.agentConfig?.voice,
+      language: script.agentConfig?.language || campaign.agentConfig?.language,
     };
     // Point of no return: from here on a crash leaves an AMBIGUOUS attempt.
     await CallRecord.updateOne({ _id: callObjectId }, { $set: { dispatchStartedAt: new Date() } });
@@ -1381,7 +1395,7 @@ class AiCallingService {
     if (mutable && (call.resultsProcessedAt || call.endedAt || TERMINAL_CALL_STATES.has(call.state))) {
       throw new ConflictError('This call has already ended');
     }
-    const campaign = await CallCampaign.findById(call.campaignId).lean();
+    const campaign = await applyScriptVersion(await CallCampaign.findById(call.campaignId).lean(), call);
     if (!campaign) throw new NotFoundError('CallCampaign', call.campaignId);
     return { call, campaign };
   }
@@ -1414,16 +1428,22 @@ class AiCallingService {
     // provider webhook.
     if (call.provider === 'livekit_web') await this.agentAnswered(internalCallId).catch(() => {});
     const state = call.conversationState || engine.initConversationState();
+    // Approved knowledge (stamped once per call) and the agent's human-transfer setup.
+    const knowledge = await knowledgeService.forCall(call, campaign);
+    const transfer = await humanTransferService.configForCampaign(campaign).catch(() => null);
     return {
       callId: internalCallId,
       persistTranscript: true,
       participantIdentity: call.provider === 'livekit_web' ? `admin-${call.createdBy}` : `sip-${internalCallId}`,
       agentConfig: campaign.agentConfig,
+      transcriptionContext: { questions: (campaign.questionnaire?.questions || []).map(q => ({ text: q.text, type: answerRequirements(q).type })) },
       disclosure: disclosureText(campaign.agentConfig || {}),
-      systemPrompt: buildSystemPrompt({
+      systemPrompt: [buildSystemPrompt({
         agentConfig: campaign.agentConfig, lead, objective: campaign.agentConfig?.objective,
         questions: [...(campaign.questionnaire?.questions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      }),
+      }), knowledge.section, transfer ? TRANSFER_PROMPT_RULE : null].filter(Boolean).join('\n\n'),
+      knowledgeVersion: knowledge.stamp?.version ?? null,
+      transfer: { enabled: Boolean(transfer) },
       leadContext: leadContext(lead),
       ...(campaign.agentConfig?.shareLeadNotes && lead?.notes ? { leadNotes: String(lead.notes).slice(0, 1000) } : {}),
       nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })),
@@ -1485,9 +1505,12 @@ class AiCallingService {
     const q = action.question;
     return {
       type: action.type,
+      ...(action.reason ? { reason: action.reason } : {}),
       question: {
         fieldKey: q.fieldKey, text: q.text, label: q.label, type: q.type,
         options: q.options || [], required: q.required, description: q.description || '',
+        answerType: answerRequirements(q).type, answerHint: answerRequirements(q).hint,
+        min: q.min ?? null, max: q.max ?? null,
       },
     };
   }
@@ -1519,6 +1542,7 @@ class AiCallingService {
   /** The constrained record_answer tool. Validation happens server-side; the model's value is untrusted. */
   async agentRecordAnswer(internalCallId, { fieldKey, rawAnswer }) {
     let validation = null;
+    let reason = null;
     const { campaign, state } = await this._mutateConversation(internalCallId, (s, c) => {
       const question = (c.questionnaire.questions || []).find((q) => q.fieldKey === fieldKey);
       if (!question) throw new ValidationError(`Unknown question: ${fieldKey}`);
@@ -1527,10 +1551,11 @@ class AiCallingService {
       if (!engine.conditionMet(question.condition, s.answers || {})) throw new ConflictError('The question condition is not met');
       const result = validateAnswer(question, rawAnswer);
       validation = result.validation;
+      reason = result.reason || null;
       return { state: engine.applyAnswer(s, fieldKey, { ...result, rawAnswer, confirmed: false }) };
     });
     emitToOwner(campaign.createdBy, 'ai-calling:answer', { campaignId: String(campaign._id), callId: internalCallId, fieldKey, validation });
-    return { accepted: true, validation, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
+    return { accepted: validation !== 'invalid', validation, reason, nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })) };
   }
 
   /** Capture several explicitly volunteered answers in one speech turn atomically. */
@@ -1555,7 +1580,7 @@ class AiCallingService {
         const result = validateAnswer(question, rawAnswer);
         // A correction to a critical value must be read back again.
         next = engine.applyAnswer(next, question.fieldKey, { ...result, rawAnswer, confirmed: false });
-        validations.push({ fieldKey: question.fieldKey, accepted: true, validation: result.validation });
+        validations.push({ fieldKey: question.fieldKey, accepted: result.validation !== 'invalid', validation: result.validation, ...(result.reason ? { reason: result.reason } : {}) });
       }
       return { state: next };
     });
@@ -1825,6 +1850,7 @@ class AiCallingService {
       );
     }
     if (call.pairedDeviceId) await pairedPhoneService.release(call.pairedDeviceId, call._id, { endedAt });
+    await callIntelligenceService.onCallProcessed(call._id); // transfer follow-up + queued evidence extraction (never throws)
 
     // 5. Hang up: deleting the room ends the SIP leg (otherwise the agent leaving
     // would leave the callee on a silent open line). Best-effort and harmless if
@@ -1841,6 +1867,7 @@ class AiCallingService {
       disposition: finalDisposition, qualification: outcome.qualification, source,
     });
     emitToOwner(campaign.createdBy, 'ai-calling:call', { campaignId: String(campaign._id), callId: call.internalCallId, state: callState, disposition: finalDisposition, qualification: outcome.qualification });
+    onLeadSignalsChanged(call.leadId, 'ai_call'); // debounced lead rescore
     return { processed: true, callId: call.internalCallId, disposition: finalDisposition, qualification: outcome.qualification, action: outcome.action };
   }
 
@@ -1926,6 +1953,19 @@ class AiCallingService {
         );
       }
     }
+
+    // Lead workflow: an answered AI call is the lead's first response (SLA), and a
+    // callback request becomes an inbox follow-up. Best effort, idempotent.
+    try {
+      if (set.lastContactedAt) {
+        const { default: leadSlaService } = await import('../crm/leadSla.service.js');
+        await leadSlaService.recordFirstResponse(lead._id, { at: set.lastContactedAt, channel: set.lastContactChannel });
+      }
+      if (outcome.action === 'schedule_callback') {
+        const { default: leadFollowUpService } = await import('../crm/leadFollowUp.service.js');
+        await leadFollowUpService.fromAiCall({ call, lead, campaign, outcome });
+      }
+    } catch (e) { logger.warn('lead workflow update after AI call failed', { module: 'ai-calling', error: e.message }); }
 
     if (outcome.action === 'schedule_callback') {
       await notificationService.create({
@@ -2158,7 +2198,7 @@ class AiCallingService {
     }
 
     // 2. in_progress calls past max duration + grace → process what we have (and hang up).
-    const active = await CallRecord.find({ state: 'in_progress', resultsProcessedAt: null })
+    const active = await CallRecord.find({ state: 'in_progress', resultsProcessedAt: null, ...activeHandoffExemption(now) })
       .select('_id campaignId recipientId provider pairedDeviceId answeredAt initiatedAt createdAt').limit(limit).lean();
     for (const c of active) {
       const campaign = await CallCampaign.findById(c.campaignId).select('agentConfig').lean();
@@ -2887,15 +2927,24 @@ export function sanitizeReportedDisposition(disposition, call) {
 }
 
 /**
- * Per-call cost. A provider-reported amount wins; otherwise, when the operator
+ * Per-call cost. A provider-reported amount wins; then the realtime model's
+ * reported token usage priced at list rates (+ configured per-minute telephony /
+ * platform charges, see engine/callCost.js); otherwise, when the operator
  * configures a blended rate (AI_CALLING_COST_PER_MINUTE, e.g. realtime model +
  * carrier minutes), an ESTIMATE is computed from billed minutes and flagged as
- * such. Without either the amount stays 0 — we never invent prices.
+ * such. Without any of these the amount stays 0 — we never invent prices.
  */
 export function estimateCallCost(call, reported = null, rate = Number(process.env.AI_CALLING_COST_PER_MINUTE || 0)) {
   const currency = reported?.currency || process.env.AI_CALLING_COST_CURRENCY || 'USD';
   const breakdown = reported?.breakdown || null;
-  if (reported && Number(reported.amount) > 0) return { amount: Number(reported.amount), currency, breakdown };
+  if (reported && Number(reported.amount) > 0) return { amount: Number(reported.amount), currency, breakdown: { ...(breakdown || {}), source: 'provider_reported' } };
+  if (breakdown?.usage) {
+    const priced = computeCallCost({
+      usage: breakdown.usage, durationSeconds: call.durationSeconds || 0, provider: call.provider,
+      fallbackModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime', isTest: call.isTest,
+    });
+    return { amount: priced.amount, currency: 'USD', breakdown: { ...breakdown, ...priced.breakdown } };
+  }
   if (rate > 0 && call.durationSeconds > 0) {
     const billedMinutes = Math.ceil(call.durationSeconds / 60);
     return { amount: Number((billedMinutes * rate).toFixed(4)), currency, breakdown: { ...(breakdown || {}), estimate: true, ratePerMinute: rate, billedMinutes } };

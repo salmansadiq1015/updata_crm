@@ -200,3 +200,41 @@ export type SimCampaignInput = {
   };
   subscriptionId?: number | null;
 };
+
+// ---- device heartbeat + SMS callback requests (server simSms smsOps routes) ----
+export const deviceHealthReasonSchema = z.object({ code: z.string(), severity: z.string() });
+export const heartbeatResponseSchema = z
+  .object({
+    deviceId: z.string().optional(),
+    health: z
+      .object({
+        status: z.enum(['online', 'warning', 'offline']),
+        reasons: z.array(deviceHealthReasonSchema).default([]),
+      })
+      .nullable()
+      .optional(),
+    resyncRequested: z.boolean().default(false),
+    minAppVersion: z.string().nullable().optional(),
+    serverTime: z.string().nullable().optional(),
+    nextHeartbeatMs: z.number().nullable().optional(),
+  })
+  .passthrough();
+export type HeartbeatResponse = z.infer<typeof heartbeatResponseSchema>;
+
+export const smsCallbackSchema = z
+  .object({
+    id: z.string(),
+    leadId: z.unknown().transform(idOf),
+    leadName: z.string().nullable().optional(),
+    conversationId: z.string().nullable().optional(),
+    campaignId: z.string().nullable().optional(),
+    dueAt: z.string().nullable().optional(),
+    needsTime: z.boolean().default(false),
+    requestedTimeText: z.string().nullable().optional(),
+    evidence: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+    status: z.string().optional(),
+    createdAt: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type SmsCallback = z.infer<typeof smsCallbackSchema>;

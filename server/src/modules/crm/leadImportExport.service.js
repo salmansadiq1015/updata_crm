@@ -11,6 +11,7 @@ import { leadImportsTotal } from '../../metrics/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
+import { maskForCurrentViewer } from '../../shared/security/requestAccessContext.js';
 import {
   LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE,
 } from './lead.model.js';
@@ -984,7 +985,8 @@ class LeadImportExportService {
   async exportLeads({ format = 'csv', filters = {} } = {}, createdBy) {
     const fmt = ['csv', 'xlsx', 'pdf'].includes(format) ? format : 'csv';
     const { search, ...listFilters } = filters;
-    const leads = await this._collectForExport(listFilters, search);
+    // Governance: masked rows for viewers without lead:pii:view when PII masking is on.
+    const leads = await maskForCurrentViewer(await this._collectForExport(listFilters, search));
 
     logger.info('Lead export generated', {
       module: 'crm', action: 'lead.export', format: fmt, count: leads.length, userId: createdBy,

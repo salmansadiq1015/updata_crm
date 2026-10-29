@@ -9,9 +9,43 @@ to a permanent folder you own, then run `npm ci --omit=dev` in that folder.
 The release includes npm-shrinkwrap.json with the tested dependency resolutions.
 
 Create a pairing code in the CRM. Run the pairing command shown there using the
-actual API URL and one-use code. Then run `node bin/updata-gateway.mjs run`.
+actual API URL and one-use code. Copy the start command shown next; it includes
+`--profile` and that phone's ID. Keep that flag on every command for this phone.
 Keep this process running; the website cannot launch software on your computer.
-The credential file stays in ~/.updata with owner-only permissions.
+Each phone's credentials and event queue stay in `~/.updata/profiles/<phone-id>/`
+with owner-only permissions. Older installations without a profile still work.
+
+Adding a phone saves its CRM card immediately, before computer setup is finished.
+Creating a code does not connect the computer, USB bridge, or Bluetooth phone.
+Use **Link computer** on an offline card to finish setup or recover lost computer
+settings without creating a duplicate phone. Replacing an unused code keeps the
+same phone. Codes expire after 10 minutes and work once. Stop the old gateway
+before relinking; an online phone or a phone with an active call cannot be relinked.
+
+## Several phones on one computer
+
+Use gateway 0.4.0 or newer and one prepared ESP32 bridge per phone. Each phone
+gets its own profile, gateway process and (on macOS) login service. When several
+USB bridges are attached, select a distinct port for each when pairing:
+
+```sh
+node bin/updata-gateway.mjs status
+node bin/updata-gateway.mjs pair --api https://your-crm.example/api/v1 --code XXXX-XXXX --profile PHONE_ID --port YOUR_USB_PORT
+node bin/updata-gateway.mjs run --profile PHONE_ID
+```
+
+Replace the capitalized placeholders with the code, phone ID and USB port shown
+by CRM and the status command. Pairing saves the selected USB port. Repeat in a
+separate Terminal window with the other phone's ID, code and USB port. Never use
+the same bridge for two running gateways. `run --port YOUR_USB_PORT` can override
+a saved port after changing USB sockets.
+
+To reuse a legacy connection, stop its old process and login service, download
+and install the new package, then use the phone card's start command. The gateway
+copies a matching legacy connection into that phone's profile. If that old file
+belongs to a different phone, use **Link computer** to pair the desired phone.
+
+## Finish setup
 
 Use the CRM buttons to open Bluetooth pairing, connect/disconnect the phone,
 provision a pending dial key, set AI volume, check status and run an audio test.
@@ -23,13 +57,13 @@ validated image/layout and backup; these controls never erase or flash a board.
 On macOS, after pairing, stop the terminal gateway with Ctrl-C and run:
 
 ```sh
-node bin/updata-gateway.mjs service install
-node bin/updata-gateway.mjs service status
+node bin/updata-gateway.mjs service install --profile PHONE_ID
+node bin/updata-gateway.mjs service status --profile PHONE_ID
 ```
 
 This registers an owner-only LaunchAgent that runs at login and recovers after
 a crash. Keep the extracted folder and Node.js installation in place. To remove
-auto-start while preserving credentials: `node bin/updata-gateway.mjs service uninstall`.
+auto-start while preserving credentials: `node bin/updata-gateway.mjs service uninstall --profile PHONE_ID`.
 No administrator password is needed. Linux and Windows currently use the
 foreground `run` command; this release does not claim tested auto-start support
 on those systems.
@@ -38,6 +72,27 @@ The gateway owns the USB port exclusively. Close serial monitors before starting
 it. Use Bluetooth reconnect first; USB reconnect is an idle-only recovery action
 and some DevKit USB drivers reset EN when a port is reopened. Routine setup
 controls keep the port open and do not reboot or regenerate keys.
+
+Gateway 0.4.1 confirms a phone-side hang-up before ending the agent room, attempts
+to recover a dropped SCO audio link for up to eight seconds, and allows fifteen
+seconds for an agent to reconnect. Persistent audio failure still ends the call
+with a recorded reason. Passive listeners never count as an agent and leaving
+the browser monitor does not hang up the phone.
+
+Gateway 0.4.2 also probes the authenticated USB control session, since PING can
+respond after firmware has invalidated HELLO. It reconnects a lost session and
+checks it before reserving a signed call. Firmware 0.1.3 fixes a watchdog clock
+race that could falsely hang up a healthy call and invalidate that session.
+
+Gateway 0.4.3 waits for the voice worker's `updata.agent_ready` attribute before
+sending DIAL. Deploy the updated voice worker with this gateway. A startup
+failure, closed room, or missing readiness signal refuses the call before dialing;
+room disconnect codes are also logged with the call phase.
+
+**Edit** on a phone card changes its name and SIM label. **Delete** disconnects
+its gateway and removes the card; past call records are retained. Finish any
+active call or setup command and resolve phone alerts before deleting. To use a
+deleted phone again, add it and complete setup again.
 
 AI playback gain is configurable in the CRM from 0–12 dB. The optional command
 line flag `run --playback-gain-db 6` supplies an initial value before the gateway

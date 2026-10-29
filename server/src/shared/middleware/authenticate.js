@@ -100,6 +100,8 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     'ai-calling:read',
     'ai-calling:write',
     'ai-calling:admin',
+    'analytics:attribution:read',
+    'lead:assign-policy',
   ],
   'field-service:read': [
     'mobile:read',
@@ -135,6 +137,14 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     'field-ticket:write',
     'field-ticket:assign',
     'field-ticket:comment',
+  ],
+  // Platform governance: user administrators manage teams.
+  'users:admin': [
+    'team:read',
+    'team:manage',
+  ],
+  'team:manage': [
+    'team:read',
   ],
   'chat:write': [
     'chat:read',

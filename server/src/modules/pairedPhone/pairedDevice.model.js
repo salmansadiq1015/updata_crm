@@ -29,6 +29,8 @@ const pairedDeviceSchema = new mongoose.Schema({
   tokenIssuedAt: { type: Date, default: null },
   revokedAt: { type: Date, default: null },
   revokedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  deletedAt: { type: Date, default: null },
+  archivedAt: { type: Date, default: null },
 
   gateway: {
     monitorSafe: { type: Boolean, default: false },

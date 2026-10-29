@@ -12,6 +12,9 @@ import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 import { LEAD_STATUS, LEAD_TYPE } from './lead.model.js';
 import { canonicalizeLeadAddress } from './leadGeography.js';
+import leadAssignmentService from './leadAssignment.service.js';
+import leadSlaService from './leadSla.service.js';
+import { onLeadsCreated } from './leadQuality.hooks.js';
 
 /**
  * Lead service (§4.3 / §9 / §72 of LEAD_GENERATION_DESIGN.md).
@@ -103,15 +106,20 @@ class LeadService {
     }
 
     const leadNumber = await counterService.getNextLeadNumber();
+    // Owner + first-response SLA: an unassigned lead may be auto-assigned by the
+    // policy (never reassigns a given owner; never blocks the create).
+    const assignment = await leadAssignmentService.prepareNew({ ...data, address });
 
     const saved = await leadRepository.create({
       ...data,
       ...dedupKeys,
       address,
       ...(data.location ? { location: toGeoJsonLocation(data.location) } : {}),
+      ...assignment,
       leadNumber,
       createdBy,
     });
+    await leadAssignmentService.afterCreate([saved], createdBy);
 
     auditService.logEvent({
       eventType: 'lead.created',
@@ -129,6 +137,7 @@ class LeadService {
 
     const result = toPlain(saved);
     result.duplicateWarning = duplicateWarning;
+    onLeadsCreated([saved._id]); // duplicate detection + first score (queued)
     return result;
   }
 
@@ -219,14 +228,18 @@ class LeadService {
         geography: undefined,
       }, { source: current.source || 'manual' });
     }
+    // An owner change restarts the first-response SLA (same owner: no-op).
+    const assignment = data.assignedTo !== undefined ? await leadAssignmentService.assignmentPatch(id, data.assignedTo) : {};
     const payload = {
       ...data,
       ...deriveDedupKeys(data),
       ...(address ? { address } : {}),
       ...(data.location ? { location: toGeoJsonLocation(data.location) } : {}),
+      ...assignment,
     };
     const updated = await leadRepository.update(id, payload);
     if (!updated) throw new NotFoundError('Lead', id);
+    if (Object.keys(assignment).length) await leadAssignmentService.afterAssignmentChange([id], data.assignedTo || null, meta.userId);
 
     auditService.logEvent({
       eventType: 'lead.updated',
@@ -301,7 +314,12 @@ class LeadService {
       return { requested: 0, updated: 0, updatedIds: [], notUpdatedIds: [] };
     }
 
+    const Lead = (await import('./lead.model.js')).default;
+    const changing = (await Lead.find({ _id: { $in: unique }, assignedTo: { $ne: assignedTo || null } }).select('_id').lean()).map((d) => String(d._id));
     const { updatedIds } = await leadRepository.bulkAssign(unique, assignedTo || null);
+    const updatedSet0 = new Set(updatedIds);
+    await leadAssignmentService.stampBulkAssignment(changing.filter((id) => updatedSet0.has(id)), assignedTo || null, meta.userId)
+      .catch((err) => logger.warn('Bulk assignment SLA stamping failed', { module: 'crm', error: { message: err.message } }));
     const updatedSet = new Set(updatedIds);
     const notUpdatedIds = unique.filter((id) => !updatedSet.has(id));
 
@@ -343,7 +361,11 @@ class LeadService {
       ...deriveDedupKeys(doc),
       address: canonicalizeLeadAddress(doc.address ?? {}, { source: doc.source || 'import' }),
     }));
-    return leadRepository.bulkCreate(docs);
+    const assignments = await leadAssignmentService.prepareNewBatch(docs);
+    const result = await leadRepository.bulkCreate(docs.map((doc, i) => ({ ...doc, ...assignments[i] })));
+    await leadAssignmentService.afterCreate(result.created || [], docs[0]?.createdBy ?? null);
+    onLeadsCreated((result.created || []).map((doc) => doc._id)); // duplicate detection + first score (queued)
+    return result;
   }
 
   /**
@@ -469,10 +491,12 @@ class LeadService {
       meta,
     );
 
+    const contactedAt = new Date();
     await leadRepository.update(leadId, {
-      lastContactedAt: new Date(),
+      lastContactedAt: contactedAt,
       lastContactChannel: 'whatsapp',
     });
+    await leadSlaService.recordFirstResponse(leadId, { at: contactedAt, channel: 'whatsapp' });
 
     auditService.logEvent({
       eventType: 'lead.whatsapp_opened',

@@ -1,14 +1,18 @@
+import mongoose from 'mongoose';
 import Lead from './lead.model.js';
 import config from '../../config/index.js';
 import { isAiConfigured, createOpenAiClient } from '../../shared/ai/llmFactory.js';
 import { validateAnswer } from '../aiCalling/engine/answerValidation.js';
 import { AppError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
+import auditService from '../auth/audit.service.js';
 import {
   LEAD_QUALIFICATION_FIELDS,
   QUALIFICATION_FIELD_BY_KEY,
   QUALIFICATION_PROMPT_VERSION,
   PROPOSE_TIMEOUT_MS,
+  QUALIFICATION_ANSWER_SOURCES,
+  TRANSCRIPT_QUOTE_MAX,
 } from './leadQualification.constants.js';
 
 const TEXT_TYPES = new Set(['short_text', 'long_text']);
@@ -82,6 +86,30 @@ export function normalizeConfirmedAnswer(answer, index = 0) {
   return { ...base, value: result.normalizedValue };
 }
 
+/** Bounded, typed copy of a transcript reference (or null when there is none). */
+export function normalizeTranscriptRef(ref, fallbackCallId = null) {
+  if (!ref || typeof ref !== 'object') return null;
+  const callRecordId = ref.callRecordId || fallbackCallId || null;
+  const turnIndex = Number.isInteger(ref.turnIndex) && ref.turnIndex >= 0 ? ref.turnIndex : null;
+  const startMs = Number.isFinite(ref.startMs) && ref.startMs >= 0 ? Math.round(ref.startMs) : null;
+  const quote = typeof ref.quote === 'string' && ref.quote.trim() ? ref.quote.trim().slice(0, TRANSCRIPT_QUOTE_MAX) : null;
+  if (!callRecordId && turnIndex == null && startMs == null && !quote) return null;
+  return { callRecordId, turnIndex, startMs, quote };
+}
+
+/** Display names for user ids (best effort; unknown ids are simply absent). */
+async function userNames(ids) {
+  const unique = [...new Set(ids.filter(Boolean).map(String))];
+  const map = new Map();
+  if (!unique.length) return map;
+  try {
+    const User = mongoose.models.User || (await import('../auth/user.model.js')).default;
+    const users = await User.find({ _id: { $in: unique } }).select('firstName lastName email').lean();
+    for (const u of users) map.set(String(u._id), [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || null);
+  } catch { /* names are cosmetic */ }
+  return map;
+}
+
 async function withTimeout(promise, ms) {
   let timer;
   try {
@@ -95,8 +123,11 @@ async function withTimeout(promise, ms) {
 }
 
 class LeadQualificationService {
-  async _loadLead(leadId) {
-    const lead = await Lead.findById(leadId).select('_id status qualification __v').lean();
+  async _loadLead(leadId, includeHistory = false) {
+    const selection = includeHistory
+      ? '_id status __v qualification.fields qualification.updatedAt +qualification.history'
+      : '_id status qualification __v';
+    const lead = await Lead.findById(leadId).select(selection).lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     return lead;
   }
@@ -107,39 +138,176 @@ class LeadQualificationService {
   }
 
   /**
-   * Merge confirmed answers into Lead.qualification. 'unknown' answers are
-   * never written (they cannot overwrite a known value); any other status
-   * replaces the field, recording communication, user and time.
+   * Answer-change history, newest first. `fieldKey` narrows it to one field.
+   * Versions written before provenance existed carry source null (= not recorded).
+   */
+  async getHistory(leadId, { limit = 20, offset = 0, fieldKey = null } = {}) {
+    const lead = await this._loadLead(leadId, true);
+    let history = lead.qualification?.history || [];
+    if (fieldKey) history = history.filter((h) => h.fieldKey === fieldKey);
+    const ordered = history.slice().reverse();
+    const page = ordered.slice(offset, offset + limit);
+    const names = await userNames(page.map((h) => h.changedBy));
+    const data = page.map((h) => ({
+      ...h,
+      source: h.source ?? h.current?.source ?? null,
+      changedByName: h.changedBy ? names.get(String(h.changedBy)) ?? null : null,
+    }));
+    return { data, pagination: { limit, offset, hasNext: offset + limit < ordered.length } };
+  }
+
+  /**
+   * Merge confirmed answers into Lead.qualification (cross-team contract).
+   *
+   * opts: { communicationId?, callRecordId?, smsMessageId?, transcriptRef?:
+   * { callRecordId, turnIndex?, startMs?, quote? }, source?, userId, correctionOf? }.
+   * An answer may carry its own source / transcriptRef / callRecordId /
+   * smsMessageId, which win over opts. 'unknown' answers are never written (they
+   * cannot overwrite a known value). Retries are idempotent per evidence record
+   * (communication / call / SMS message) and field.
    * Returns the number of fields written.
    */
-  async mergeAnswers(leadId, answers, { communicationId, userId }) {
-    const writable = (answers || []).filter((a) => a.status !== 'unknown');
-    if (!writable.length) return 0;
+  async mergeAnswers(leadId, answers, opts = {}) {
+    const { changed } = await this._merge(leadId, answers, opts);
+    return changed;
+  }
+
+  async _merge(leadId, answers, opts = {}) {
+    const {
+      communicationId = null, callRecordId = null, smsMessageId = null, transcriptRef = null,
+      source: defaultSource = null, userId = null, correctionOf = null, reason = null,
+      allowUnknown = false, expectLatest,
+    } = opts || {};
+    const writable = (answers || []).filter((a) => allowUnknown || a.status !== 'unknown');
+    if (!writable.length) return { changed: 0, entries: [] };
+    for (const answer of writable) {
+      const src = answer.source || defaultSource || 'user';
+      if (!QUALIFICATION_ANSWER_SOURCES.includes(src)) {
+        throw new ValidationError('Unknown qualification answer source', [{ field: 'source', message: `Unknown source '${src}'` }]);
+      }
+    }
     const now = new Date();
+    const same = (a, b) => a && b && String(a) === String(b);
     for (let retry = 0; retry < 5; retry += 1) {
-      const lead = await this._loadLead(leadId);
+      const lead = await this._loadLead(leadId, true);
       const byKey = new Map((lead.qualification?.fields ?? []).map((f) => [f.fieldKey, f]));
+      const history = [...(lead.qualification?.history ?? [])];
+      const entries = [];
+      const changedKeys = [];
       for (const answer of writable) {
-        byKey.set(answer.fieldKey, {
+        const callId = answer.callRecordId || callRecordId || answer.transcriptRef?.callRecordId || transcriptRef?.callRecordId || null;
+        const smsId = answer.smsMessageId || smsMessageId || null;
+        // An evidence receipt may be retried after the lead update committed.
+        // Do not replay it over a later correction or append a duplicate version.
+        if (history.some((h) => h.fieldKey === answer.fieldKey && (
+          same(h.communicationId, communicationId) || same(h.callRecordId, callId) || same(h.smsMessageId, smsId)
+        ))) continue;
+        if (expectLatest !== undefined) {
+          const latest = [...history].reverse().find((h) => h.fieldKey === answer.fieldKey);
+          if (String(latest?._id ?? null) !== String(expectLatest ?? null)) {
+            throw new AppError('This answer changed since you opened it; review the latest value and correct again', 409, 'QUALIFICATION_STALE');
+          }
+        }
+        const ref = normalizeTranscriptRef(answer.transcriptRef || transcriptRef, callId);
+        const src = answer.source || defaultSource || 'user';
+        const previous = byKey.get(answer.fieldKey) || null;
+        const current = {
           fieldKey: answer.fieldKey,
           label: answer.label,
           value: answer.value ?? null,
           status: answer.status,
-          source: answer.source || 'user',
-          evidence: answer.evidence ?? null,
+          source: src,
+          evidence: answer.evidence ?? ref?.quote ?? null,
           communicationId: communicationId || null,
-          updatedBy: userId,
+          callRecordId: callId,
+          smsMessageId: smsId,
+          transcriptRef: ref,
+          updatedBy: userId || null,
           updatedAt: now,
-        });
+        };
+        byKey.set(answer.fieldKey, current);
+        const entry = {
+          _id: new mongoose.Types.ObjectId(),
+          fieldKey: answer.fieldKey,
+          previous,
+          current,
+          confidence: answer.confidence ?? null,
+          communicationId: communicationId || null,
+          source: src,
+          callRecordId: callId,
+          smsMessageId: smsId,
+          transcriptRef: ref,
+          correctionOf: correctionOf || null,
+          reason: reason ? String(reason).slice(0, 1000) : null,
+          changedBy: userId || null,
+          changedAt: now,
+        };
+        history.push(entry);
+        entries.push(entry);
+        changedKeys.push(answer.fieldKey);
       }
+      if (!entries.length) return { changed: 0, entries: [] };
       const order = new Map(LEAD_QUALIFICATION_FIELDS.map((f, i) => [f.fieldKey, i]));
       const fields = [...byKey.values()].sort((a, b) => (order.get(a.fieldKey) ?? 99) - (order.get(b.fieldKey) ?? 99));
       const result = await Lead.updateOne({ _id: leadId,
         ...(lead.__v == null ? { __v: { $exists: false } } : { __v: lead.__v }),
-      }, { $set: { qualification: { fields, updatedAt: now } }, $inc: { __v: 1 } }, { runValidators: true });
-      if (result.modifiedCount) return writable.length;
+      }, { $set: { qualification: { fields, updatedAt: now, history } }, $inc: { __v: 1 } }, { runValidators: true });
+      if (result.modifiedCount) {
+        await auditService.logEvent({
+          eventType: correctionOf || defaultSource === 'user_correction' ? 'lead.qualification_corrected' : 'lead.qualification_changed',
+          userId,
+          module: 'lead',
+          result: 'success',
+          details: {
+            leadId: String(leadId),
+            communicationId: communicationId ? String(communicationId) : null,
+            callRecordId: entries[0].callRecordId ? String(entries[0].callRecordId) : null,
+            smsMessageId: entries[0].smsMessageId ? String(entries[0].smsMessageId) : null,
+            correctionOf: correctionOf ? String(correctionOf) : null,
+            fieldKeys: changedKeys,
+          },
+        });
+        return { changed: entries.length, entries };
+      }
     }
     throw new AppError('Qualification changed concurrently; retry synchronization', 409, 'QUALIFICATION_CONFLICT');
+  }
+
+  /**
+   * A user corrects one field. The correction is a new version with source
+   * 'user_correction' that points at the version it corrects (`correctionOf`,
+   * default: the field's latest version) and carries a mandatory reason. A
+   * correction of a version that is no longer the latest is refused (409), so a
+   * user never silently overwrites a change they have not seen.
+   */
+  async correct(leadId, { fieldKey, status, value = null, reason, correctionOf = null }, userId) {
+    const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!trimmedReason) {
+      throw new ValidationError('A correction needs a reason', [{ field: 'reason', message: 'reason is required' }]);
+    }
+    const answer = normalizeConfirmedAnswer({ fieldKey, status, value, source: 'user_correction' });
+    const lead = await this._loadLead(leadId, true);
+    const fieldHistory = (lead.qualification?.history ?? []).filter((h) => h.fieldKey === fieldKey);
+    const latest = fieldHistory[fieldHistory.length - 1] || null;
+    let target = latest;
+    if (correctionOf) {
+      target = (lead.qualification?.history ?? []).find((h) => String(h._id) === String(correctionOf)) || null;
+      if (!target) throw new NotFoundError('Qualification history entry', correctionOf);
+      if (target.fieldKey !== fieldKey) {
+        throw new ValidationError('correctionOf belongs to a different field', [{ field: 'correctionOf', message: `Entry is for '${target.fieldKey}', not '${fieldKey}'` }]);
+      }
+    }
+    const { entries } = await this._merge(leadId, [answer], {
+      source: 'user_correction',
+      userId,
+      correctionOf: target?._id ?? null,
+      reason: trimmedReason,
+      allowUnknown: true,
+      expectLatest: target?._id ?? null,
+    });
+    const entry = entries[0];
+    const names = await userNames([userId]);
+    return { ...entry, changedByName: names.get(String(userId)) ?? null };
   }
 
   /**

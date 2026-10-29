@@ -32,6 +32,8 @@ class FakeLeg extends EventEmitter {
     if (this.statuses[this.statuses.length - 1] !== s) this.statuses.push(s);
   }
 
+  async waitForAgentReady() {}
+
   pushPhoneAudio() {
     this.phoneFrames += 1;
   }
@@ -71,7 +73,7 @@ async function setup(fakeOpts = {}, legOpts = {}, jobOver = {}, options = {}) {
   const ob = outbox();
   const crm = { stats: [], sendEvent: async (id, e) => { crm.stats.push(e); } };
   const leg = new FakeLeg(legOpts);
-  const runner = new CallRunner({ device, job, outbox: ob, crm, leg, options: { audioWaitMs: 100, audioFailMs: 400, audioGraceMs: 150, hangupConfirmMs: 500, agentLeftMs: 200, statsEveryMs: 100, ...options } });
+  const runner = new CallRunner({ device, job, outbox: ob, crm, leg, options: { audioWaitMs: 100, audioFailMs: 400, audioGraceMs: 150, audioRecoverMs: 50, remoteHangupConfirmMs: 75, hangupConfirmMs: 500, agentLeftMs: 200, statsEveryMs: 100, ...options } });
   return { fake, device, job, ob, crm, leg, runner, end: () => { device.close(); fake.stop(); } };
 }
 
@@ -145,6 +147,34 @@ test('lead hangs up → ended remote_hangup, no hang-up sent by us', async () =>
   assert.equal(c.ob.events.at(-1).data.reason, 'remote_hangup');
   assert.equal(c.fake.log.hangups, 0);
   c.end();
+});
+
+test('a transient idle HFP indicator during speech does not end the call', async t => {
+  const c = await setup();
+  t.after(() => { if (c.runner.phase !== 'done') c.runner.finish('test_cleanup'); c.end(); });
+  const done = c.runner.start();
+  await c.device.waitForState(s => s.call === 1 && s.audio === 'on', 1000);
+  c.runner.onState({ ...c.device.state, call: 0, callsetup: 0 });
+  assert.equal(c.runner.phase, 'active');
+  await sleep(120); // statusRequest confirms the real phone is still active
+  assert.equal(c.runner.phase, 'active');
+  assert.equal(c.fake.log.hangups, 0);
+  assert.ok(!c.ob.types().includes('ended'));
+  await c.leg.close(); await done;
+});
+
+test('SCO audio loss is recovered before the grace window without hanging up', async t => {
+  const c = await setup();
+  t.after(() => { if (c.runner.phase !== 'done') c.runner.finish('test_cleanup'); c.end(); });
+  const done = c.runner.start();
+  await c.device.waitForState(s => s.call === 1 && s.audio === 'on', 1000);
+  await c.device.audioDisconnect();
+  await c.device.waitForState(s => s.audio === 'on', 1000);
+  await sleep(180);
+  assert.equal(c.runner.phase, 'active');
+  assert.equal(c.fake.log.hangups, 0);
+  assert.ok(!c.ob.types().includes('audio_lost'));
+  await c.leg.close(); await done;
 });
 
 test('nobody answers → ring timeout → hang up → not_answered', async () => {
@@ -234,4 +264,14 @@ test('owner hang-up command ends the call', async () => {
   assert.ok(c.ob.events.some((e) => e.type === 'ended' && e.data.reason === 'owner_hangup'));
   assert.ok(c.ob.events.some((e) => e.type === 'command_done'));
   c.end();
+});
+
+test('worker startup failure refuses the call before firmware DIAL', async t => {
+  const c = await setup();
+  t.after(c.end);
+  c.leg.waitForAgentReady = async () => { throw Object.assign(new Error('worker could not load context'), { code: 'agent_failed' }); };
+  const result = await c.runner.start();
+  assert.equal(result.result, 'not_dialed');
+  assert.equal(c.fake.log.dials.length, 0);
+  assert.equal(c.ob.events[0].data.code, 'agent_failed');
 });

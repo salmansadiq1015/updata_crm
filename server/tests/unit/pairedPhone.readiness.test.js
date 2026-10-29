@@ -27,6 +27,7 @@ describe('paired-phone readiness', () => {
 
   it.each([
     [{ revokedAt: new Date() }, 'revoked', true],
+    [{ archivedAt: new Date() }, 'archived', true],
     [{ audioVerifiedAt: null }, 'audio_not_verified', true],
     [{ lastHeartbeatAt: new Date(now.getTime() - 60_000) }, 'gateway_offline', false],
     [{ board: { connected: false } }, 'board_disconnected', false],

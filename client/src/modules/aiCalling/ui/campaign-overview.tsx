@@ -67,7 +67,7 @@ export function CampaignOverview({
     <section aria-labelledby="campaign-overview-title" className="overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] shadow-[0_16px_42px_rgba(2,6,23,.18)]">
       <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300"><Activity className="h-4 w-4" /></span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-400/10 text-sky-300"><Activity className="h-4 w-4" /></span>
           <div>
             <h2 id="campaign-overview-title" className="text-sm font-semibold">Campaign overview</h2>
             <p className="text-[11px] text-slate-500">Open a campaign to control it, inspect recipients, or monitor live calls</p>
@@ -164,7 +164,7 @@ export function CampaignOverview({
                     <td className="px-4 py-3"><StatusPill status={campaign.status === 'running' ? (campaign.summary.inProgress > 0 ? 'calling' : campaign.waitReason ? 'waiting' : 'queued') : campaign.status} /></td>
                     <td className="min-w-48 px-4 py-3">
                       <div className="flex items-center justify-between text-[10px] text-slate-500"><span>{completed}/{totalLeads}</span><span>{progress}%</span></div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6"><span className="block h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500" style={{ width: `${progress}%` }} /></div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6"><span className="block h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500" style={{ width: `${progress}%` }} /></div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-emerald-300">{campaign.summary.qualified}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-blue-300">{campaign.summary.callbacks}</td>

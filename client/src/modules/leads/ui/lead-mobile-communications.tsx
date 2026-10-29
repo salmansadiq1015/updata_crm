@@ -1,11 +1,14 @@
 'use client';
 
 import { AlertTriangle, CalendarClock, ClipboardCheck, Loader2, MessageSquare, Phone, ShieldOff } from 'lucide-react';
-import { useLeadCommunications, useLeadQualification } from '../hooks/use-lead-communications';
+import { useState } from 'react';
+import { useLeadCommunications, useLeadQualification, useLeadQualificationHistory } from '../hooks/use-lead-communications';
 import type { LeadCommunication, LeadQualificationField } from '../services/lead-communication-api';
 import { useLanguage } from './lead-ui-kit';
 import type { TranslateFn } from './lead-ui-kit';
 import { formatLeadDateTime } from './lead-ui-utils';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { QualificationFieldHistory } from './qualification-field-history';
 
 /**
  * "Mobile calls & SMS" + "Qualification" for the lead detail drawer. Records
@@ -62,6 +65,8 @@ const SOURCE_FALLBACK: Record<string, string> = {
   user: 'Entered by user',
   ai_proposed_user_confirmed: 'AI-suggested, user-confirmed',
   sms_agent: 'Lead reply via AI SMS agent (validated)',
+  ai_call_agent: 'AI call agent (from the call)',
+  user_correction: 'Corrected by user',
 };
 
 const label = (t: TranslateFn, group: string, key: string, fallbacks: Record<string, string>) =>
@@ -143,12 +148,12 @@ function CommunicationItem({ comm, locale, t }: { comm: LeadCommunication; local
 
           {comm.sms && (
             <div className="space-y-0.5 text-xs">
-              {comm.sms.body && <p className="whitespace-pre-wrap break-words rounded-lg bg-muted/40 px-2 py-1">{comm.sms.body}</p>}
+              {comm.sms.body && <p dir="auto" className="whitespace-pre-wrap break-words rounded-lg bg-muted/40 px-2 py-1">{comm.sms.body}</p>}
               <p className="text-muted-foreground">{label(t, 'sendStatus', comm.sms.sendStatus, SEND_STATUS_FALLBACK)}</p>
             </div>
           )}
 
-          {comm.outcome?.notes && <p className="whitespace-pre-wrap break-words text-sm">{comm.outcome.notes}</p>}
+          {comm.outcome?.notes && <p dir="auto" className="whitespace-pre-wrap break-words text-sm">{comm.outcome.notes}</p>}
 
           {comm.outcome?.followUpAt && (
             <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -181,6 +186,8 @@ function formatAnswerValue(field: LeadQualificationField, options: string[], t: 
 
 function QualificationBlock({ leadId, locale, t }: { leadId: string; locale: string; t: TranslateFn }) {
   const qualification = useLeadQualification(leadId);
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission('lead:write');
   if (qualification.isLoading) return <div className="skeleton-shimmer h-12 rounded-xl bg-muted" aria-hidden="true" />;
   if (qualification.isError) {
     return <p className="text-sm text-muted-foreground">{t('leads.qualification.loadError', 'Qualification could not be loaded.')}</p>;
@@ -191,7 +198,7 @@ function QualificationBlock({ leadId, locale, t }: { leadId: string; locale: str
   }
   const schemaByKey = new Map(schema.map((f) => [f.fieldKey, f]));
   return (
-    <dl className="divide-y divide-border/60 rounded-xl border border-border/60 bg-background/40">
+    <><dl className="divide-y divide-border/60 rounded-xl border border-border/60 bg-background/40">
       {fields.map((field) => {
         const def = schemaByKey.get(field.fieldKey);
         return (
@@ -206,16 +213,50 @@ function QualificationBlock({ leadId, locale, t }: { leadId: string; locale: str
                   : <em className="font-normal text-muted-foreground">{label(t, 'answerStatus', field.status, ANSWER_STATUS_FALLBACK)}</em>}
               </dd>
             </div>
-            <p className="text-[11px] text-muted-foreground/80">
-              {label(t, 'answerSource', field.source ?? 'user', SOURCE_FALLBACK)}
-              {field.updatedAt ? ` · ${formatLeadDateTime(field.updatedAt, locale)}` : ''}
-            </p>
-            {field.evidence && <p className="text-[11px] italic text-muted-foreground">“{field.evidence}”</p>}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground/80">
+                {label(t, 'answerSource', field.source ?? 'user', SOURCE_FALLBACK)}
+                {field.updatedAt ? ` · ${formatLeadDateTime(field.updatedAt, locale)}` : ''}
+              </p>
+              <QualificationFieldHistory
+                leadId={leadId}
+                fieldKey={field.fieldKey}
+                label={t(`leads.qualification.field.${field.fieldKey}`, def?.label ?? field.label)}
+                options={def?.options ?? []}
+                canWrite={canWrite}
+              />
+            </div>
+            {field.evidence && <p dir="auto" className="text-[11px] italic text-muted-foreground">“{field.evidence}”</p>}
           </div>
         );
       })}
-    </dl>
+    </dl><QualificationHistory leadId={leadId} locale={locale} t={t} /></>
   );
+}
+
+function QualificationHistory({ leadId, locale, t }: { leadId: string; locale: string; t: TranslateFn }) {
+  const [open, setOpen] = useState(false);
+  const history = useLeadQualificationHistory(leadId, open);
+  const changes = history.data?.pages.flatMap((page) => page.data) ?? [];
+  const display = (field: LeadQualificationField | null) => !field ? '—' : field.status === 'answered'
+    ? formatAnswerValue(field, [], t) : label(t, 'answerStatus', field.status, ANSWER_STATUS_FALLBACK);
+  return <div className="mt-3">
+    <button type="button" className="text-sm text-primary underline underline-offset-4" aria-expanded={open} onClick={() => setOpen(!open)}>
+      {open ? t('leads.qualification.hideHistory', 'Hide answer history') : t('leads.qualification.showHistory', 'Show answer history')}
+    </button>
+    {open && <div className="mt-2 space-y-2" aria-live="polite">
+      {history.isLoading && <p className="text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>}
+      {history.isError && <button type="button" className="text-sm text-destructive underline" onClick={() => void history.refetch()}>{t('leads.qualification.historyError', 'Could not load history. Retry')}</button>}
+      {!history.isLoading && !history.isError && !changes.length && <p className="text-sm text-muted-foreground">{t('leads.qualification.historyEmpty', 'No recorded changes. Older changes may not be available.')}</p>}
+      {changes.map((change) => <div key={change.id} className="rounded-lg border border-border/60 p-3 text-sm">
+        <p className="font-medium">{change.current.label}</p>
+        <p dir="auto" className="break-words">{display(change.previous)} → {display(change.current)}</p>
+        <p className="text-xs text-muted-foreground">{label(t, 'answerSource', change.current.source ?? 'user', SOURCE_FALLBACK)}{change.changedAt ? ` · ${formatLeadDateTime(change.changedAt, locale)}` : ''}</p>
+        {change.current.evidence && <p dir="auto" className="mt-1 break-words text-xs italic text-muted-foreground">“{change.current.evidence}”</p>}
+      </div>)}
+      {history.hasNextPage && <button type="button" className="text-sm text-primary underline" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>{t('common.loadMore', 'Load more')}</button>}
+    </div>}
+  </div>;
 }
 
 export function LeadMobileCommunications({ leadId }: { leadId: string }) {

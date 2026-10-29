@@ -33,6 +33,7 @@ export const exportLeads = {
     cityId: canonicalLocationId,
     areaId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
+    scoreBand: Joi.string().valid('hot', 'warm', 'cold', 'unscored'),
     q: Joi.string().trim().max(100).allow(''),
   }),
 };

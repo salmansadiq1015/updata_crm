@@ -10,6 +10,9 @@ export function useCallingAgents(filters: AgentFilters = {}) {
 export function useCallingAgent(id: string) {
   return useQuery({ queryKey: ['ai-calling', 'agent', id], queryFn: () => callingAgentApi.get(id), refetchInterval: 10000 });
 }
+export function useAgentCallAnalytics(id: string, params: { from?: string; to?: string } = {}) {
+  return useQuery({ queryKey: ['ai-calling', 'agent', id, 'call-analytics', params], queryFn: () => callingAgentApi.callAnalytics(id, params), refetchInterval: 30000 });
+}
 export function useAgentMutations() {
   const qc = useQueryClient();
   const options = { onSuccess: () => { void qc.invalidateQueries({ queryKey: ['ai-calling'] }); }, onError: (error: unknown) => showError(error) };

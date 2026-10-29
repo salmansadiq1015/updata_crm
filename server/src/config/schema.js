@@ -231,6 +231,10 @@ const configSchema = Joi.object({
   AI_CALLING_RECIPIENT_DAYS: Joi.string().pattern(/^[0-6](\s*,\s*[0-6])*$/).allow('').default('1,2,3,4,5,6'),
   AI_CALLING_COST_PER_MINUTE: Joi.number().min(0).empty('').default(0),
   AI_CALLING_COST_CURRENCY: Joi.string().length(3).uppercase().allow('').default('USD'),
+  // Per-call costing (engine/callCost.js): carrier minutes on cloud SIP legs, LiveKit agent minutes, model list-price overrides (JSON).
+  AI_CALLING_TELEPHONY_COST_PER_MINUTE: Joi.number().min(0).empty('').default(0),
+  AI_CALLING_PLATFORM_COST_PER_MINUTE: Joi.number().min(0).empty('').default(0),
+  AI_CALLING_MODEL_PRICING: Joi.string().allow('').default(''),
   AI_CALLING_TWILIO_FALLBACK_ENABLED: Joi.boolean().default(false),
   AI_CALLING_TWILIO_FALLBACK_COUNTRIES: Joi.string().allow('').default(''),
   OPENAI_REALTIME_MODEL: Joi.string().default('gpt-realtime'),
@@ -253,6 +257,15 @@ const configSchema = Joi.object({
   SIP_OUTBOUND_TRUNK_NAME: Joi.string().default('crm-outbound'),
   LIVEKIT_AGENT_NAME: Joi.string().default('crm-voice-agent'),
   LIVEKIT_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(15000),
+
+  // Platform governance (docs/PLATFORM-GOVERNANCE.md). Defaults keep today's behaviour.
+  LEAD_ACCESS_MODE: Joi.string().valid('company', 'team').empty('').default('company'),
+  LEAD_ACCESS_REASON_REQUIRED: Joi.boolean().empty('').default(true),
+  LEAD_ACCESS_GRANT_MINUTES: Joi.number().integer().min(1).max(480).empty('').default(30),
+  PII_MASKING_ENABLED: Joi.boolean().empty('').default(false),
+  MULTI_TENANT_MODE: Joi.boolean().empty('').default(false), // true = refuse to start (not implemented)
+  SIM_SMS_COST_PER_MESSAGE: Joi.number().min(0).empty('').allow(null).default(null), // blank = not recorded
+  SIM_SMS_COST_CURRENCY: Joi.string().length(3).uppercase().empty('').default('CHF'),
 
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),

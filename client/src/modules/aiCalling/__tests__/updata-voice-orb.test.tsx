@@ -21,19 +21,34 @@ describe('UpdataVoiceOrb', () => {
     expect(orb).toHaveAttribute('data-state', state);
   });
 
-  it('reacts only to a bounded real audio level', () => {
+  it('keeps a stable layout while audio levels change', () => {
     const { rerender } = render(<UpdataVoiceOrb state="speaking" audioLevel={4} size={160} />);
-    expect(screen.getByRole('img')).toHaveStyle({ width: '160px', height: '160px', transform: 'scale(1.035)' });
+    expect(screen.getByRole('img')).toHaveStyle({ width: '160px', aspectRatio: '1' });
 
     rerender(<UpdataVoiceOrb state="speaking" audioLevel={-3} size={160} />);
-    expect(screen.getByRole('img')).toHaveStyle({ transform: 'scale(1)' });
+    expect(screen.getByRole('img')).toHaveStyle({ width: '160px', aspectRatio: '1' });
   });
 
   it('removes component motion classes when reduced motion is requested', () => {
     const { container } = render(<UpdataVoiceOrb state="speaking" audioLevel={0.8} reducedMotion />);
-    expect(screen.getByRole('img')).toHaveStyle({ transform: 'scale(1)' });
+    expect(screen.getByRole('img')).toHaveAttribute('data-motion', 'reduced');
+    expect(screen.getByRole('img')).not.toHaveAttribute('tabindex');
     expect(container.querySelector('.updata-orb-drift')).toBeNull();
     expect(container.querySelector('.updata-orb-breathe')).toBeNull();
     expect(container.querySelector('.updata-orb-slow-spin')).toBeNull();
+  });
+
+  it('makes large orbs keyboard accessible with interaction instructions', () => {
+    render(<UpdataVoiceOrb size="lg" />);
+    const orb = screen.getByRole('img');
+    expect(orb).toHaveAttribute('tabindex', '0');
+    expect(orb).toHaveAccessibleDescription(/Drag or use arrow keys to rotate/);
+    expect(orb).toHaveAccessibleDescription(/Home to reset/);
+  });
+
+  it('keeps decorative avatars out of the tab order', () => {
+    render(<UpdataVoiceOrb size="compact" />);
+    expect(screen.getByRole('img')).not.toHaveAttribute('tabindex');
+    expect(screen.getByRole('img')).toHaveAttribute('data-interactive', 'false');
   });
 });

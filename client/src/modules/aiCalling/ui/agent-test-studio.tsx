@@ -41,7 +41,7 @@ export function AgentTestLauncher({
       aria-labelledby="agent-test-heading"
       className="relative shrink-0 overflow-hidden rounded-2xl border border-blue-400/15 bg-[linear-gradient(110deg,rgba(30,64,175,.17),rgba(15,23,42,.72)_45%,rgba(88,28,135,.12))] p-4 shadow-[0_18px_50px_rgba(2,6,23,.2)] sm:p-5"
     >
-      <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3.5">
           <UpdataVoiceOrb state={livekitReady ? 'idle' : 'error'} size="sm" className="-m-3" />
@@ -64,7 +64,7 @@ export function AgentTestLauncher({
             </p>
             <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
               <span className="inline-flex items-center gap-1.5"><Volume2 className="h-3.5 w-3.5 text-blue-400" /> Browser mic + speaker</span>
-              <span className="inline-flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5 text-violet-400" /> Real questions and rules</span>
+              <span className="inline-flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5 text-sky-400" /> Real questions and rules</span>
               <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Lead data isolated</span>
             </div>
           </div>
@@ -207,7 +207,7 @@ export function AgentTestStudio({
                     <h2 id="test-agent-config" className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-500">Voice agent</h2>
                     <div className="rounded-xl border border-white/9 bg-[#0e172b] p-3.5">
                       <div className="flex items-center gap-3">
-                        <UpdataVoiceOrb state={webStatus.phase === 'live' ? 'listening' : 'idle'} size="sm" className="-m-2" />
+                        <UpdataVoiceOrb state={webStatus.orbState ?? (webStatus.phase === 'live' ? 'listening' : 'idle')} size="sm" className="-m-2" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold">{selected.agentConfig.agentName}</p>
                           <p className="mt-0.5 text-xs text-slate-400">{selected.agentConfig.voice || 'alloy'} · {readableStyle(selected.agentConfig.speakingStyle)}</p>

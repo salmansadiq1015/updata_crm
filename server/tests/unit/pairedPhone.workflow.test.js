@@ -149,6 +149,158 @@ beforeEach(async () => {
   roomStatusMock.mockResolvedValue('unknown');
 });
 
+describe('phone creation, recovery and deletion', () => {
+  it('archives and restores an idle phone without losing credentials, setup or campaign history', async () => {
+    const d = await readyDevice();
+    const campaign = await pairedCampaign(d.deviceId);
+    const before = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    await expect(pp.archiveDevice(stranger, d.deviceId)).rejects.toThrow(/not found/i);
+    const archived = await pp.archiveDevice(owner, d.deviceId);
+    expect(archived).toMatchObject({ archived: true, readiness: { ok: false, blocking: true } });
+    expect(archived.readiness.reasons).toContain('archived');
+    expect((await pp.listDevices(owner))[0].archived).toBe(true);
+    expect(await pp.authenticateGateway(d.token)).toBeTruthy();
+    await d.gw('/heartbeat').send(hb()).expect(200).expect(res => expect(res.body.data.voicePaused).toBe(true));
+    await expect(ai.startCampaign(campaign._id, owner)).rejects.toThrow(/archived/);
+    expect(await pp.acquire(d.deviceId, { owner, callId: new mongoose.Types.ObjectId() })).toMatchObject({ ok: false, reasons: expect.arrayContaining(['archived']) });
+    await expect(pairedCampaign(d.deviceId)).rejects.toThrow(/archived/);
+    await expect(pp.createPairingCode(owner, { deviceId: d.deviceId, deviceName: 'Sales' })).rejects.toThrow(/Restore/);
+    await expect(pp.restoreDevice(stranger, d.deviceId)).rejects.toThrow(/not found/i);
+    expect(await pp.restoreDevice(owner, d.deviceId)).toMatchObject({ archived: false, audioVerified: true, readiness: { ok: true } });
+    const restored = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    expect(restored.dialKey.enc).toBe(before.dialKey.enc);
+    expect(restored.tokenHash).toBe(before.tokenHash);
+    expect(restored.audioVerifiedAt).toEqual(before.audioVerifiedAt);
+    expect(await CallCampaign.findById(campaign._id)).toBeTruthy();
+    await pp.archiveDevice(owner, d.deviceId);
+    await pp.deleteDevice(owner, d.deviceId);
+    await expect(pp.restoreDevice(owner, d.deviceId)).rejects.toThrow(/not found/i);
+  });
+
+  it('blocks archiving during calls, setup and unresolved alerts', async () => {
+    const d = await readyDevice();
+    for (const fields of [
+      { currentCallId: new mongoose.Types.ObjectId() }, { 'state.call': 1 }, { 'attention.needed': true },
+      { 'setup.command': { id: crypto.randomUUID(), action: 'connect_phone', state: 'pending', requestedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) } },
+    ]) {
+      await PairedDevice.updateOne({ _id: d.deviceId }, { $set: fields });
+      await expect(pp.archiveDevice(owner, d.deviceId)).rejects.toThrow(/Finish the current call/);
+      await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { currentCallId: null, 'state.call': 0, 'attention.needed': false, 'setup.command': null } });
+    }
+    expect((await pp.getDevice(owner, d.deviceId)).archived).toBe(false);
+  });
+
+  it('invalidates unused pairing codes when archiving and can issue a fresh one after restoring', async () => {
+    const pending = await pp.createPairingCode(owner, { deviceName: 'Sales' });
+    await pp.archiveDevice(owner, pending.deviceId);
+    await expect(pp.redeemPairingCode(pending.code)).rejects.toThrow(/invalid/);
+    await pp.restoreDevice(owner, pending.deviceId);
+    const fresh = await pp.createPairingCode(owner, { deviceId: pending.deviceId, deviceName: 'Sales' });
+    expect((await pp.redeemPairingCode(fresh.code)).deviceId).toBe(pending.deviceId);
+  });
+
+  it('saves multiple distinct phones before their gateways pair, then redeems into those same records', async () => {
+    const codes = await Promise.all(['Sales', 'Support'].map(deviceName => pp.createPairingCode(owner, { deviceName })));
+    expect(codes[0].deviceId).not.toBe(codes[1].deviceId);
+    const saved = await pp.listDevices(owner);
+    expect(saved).toHaveLength(2);
+    expect(saved.every(d => !d.online && !d.readiness.ok)).toBe(true);
+    const paired = await Promise.all(codes.map(c => pp.redeemPairingCode(c.code)));
+    expect(paired.map(d => d.deviceId)).toEqual(codes.map(c => c.deviceId));
+    expect(await PairedDevice.countDocuments({ createdBy: owner })).toBe(2);
+    expect(await pp.authenticateGateway(paired[0].token)).toMatchObject({ name: 'Sales' });
+    expect(await pp.authenticateGateway(paired[1].token)).toMatchObject({ name: 'Support' });
+  });
+
+  it('edits a phone without changing its security key, verification or call history', async () => {
+    const d = await readyDevice();
+    const before = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    const edited = await pp.updateDevice(owner, d.deviceId, { name: 'Sales phone', phoneLabel: 'SIM 2' });
+    expect(edited).toMatchObject({ name: 'Sales phone', phoneLabel: 'SIM 2', audioVerified: true });
+    const after = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    expect(after.dialKey.enc).toBe(before.dialKey.enc);
+    expect(after.tokenHash).toBe(before.tokenHash);
+    await expect(pp.updateDevice(stranger, d.deviceId, { name: 'Taken' })).rejects.toThrow(/not found/i);
+  });
+
+  it('replaces unused codes on the same phone without duplicates or exhausting the open-code limit', async () => {
+    let code = await pp.createPairingCode(owner, { deviceName: 'Sales' });
+    const original = code;
+    for (let i = 0; i < 6; i++) code = await pp.createPairingCode(owner, { deviceId: original.deviceId, deviceName: 'Sales' });
+    expect(code.deviceId).toBe(original.deviceId);
+    expect(await pp.listDevices(owner)).toHaveLength(1);
+    await expect(pp.redeemPairingCode(original.code)).rejects.toThrow(/invalid, used or expired/);
+    expect((await pp.redeemPairingCode(code.code)).deviceId).toBe(original.deviceId);
+    await expect(pp.createPairingCode(stranger, { deviceId: original.deviceId, deviceName: 'Sales' })).rejects.toThrow(/not found/i);
+  });
+
+  it('relinks an offline phone, invalidates its old token, and preserves the board key and audio verification', async () => {
+    const d = await readyDevice();
+    await expect(pp.createPairingCode(owner, { deviceId: d.deviceId, deviceName: 'Sales' })).rejects.toThrow(/Stop the gateway/);
+    const before = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { lastHeartbeatAt: new Date(Date.now() - 30_000) } });
+    const code = await pp.createPairingCode(owner, { deviceId: d.deviceId, deviceName: 'Sales' });
+    const paired = await pp.redeemPairingCode(code.code, { version: '0.4.0' });
+    expect(paired.deviceId).toBe(d.deviceId);
+    expect(await pp.authenticateGateway(d.token)).toBeNull();
+    expect(await pp.authenticateGateway(paired.token)).toBeTruthy();
+    const after = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    expect(after.dialKey.enc).toBe(before.dialKey.enc);
+    expect(after.audioVerifiedAt).toEqual(before.audioVerifiedAt);
+    expect(await pp.listDevices(owner)).toHaveLength(1);
+  });
+
+  it('does not consume a code if the saved phone becomes busy before redemption', async () => {
+    const code = await pp.createPairingCode(owner, { deviceName: 'Sales' });
+    await PairedDevice.updateOne({ _id: code.deviceId }, { $set: { currentCallId: new mongoose.Types.ObjectId() } });
+    await expect(pp.redeemPairingCode(code.code)).rejects.toThrow(/in a call/);
+    await PairedDevice.updateOne({ _id: code.deviceId }, { $set: { currentCallId: null } });
+    expect((await pp.redeemPairingCode(code.code)).deviceId).toBe(code.deviceId);
+  });
+
+  it('deletes an unused phone, invalidates its code and frees an open-code slot', async () => {
+    const codes = [];
+    for (let i = 0; i < 5; i++) codes.push(await pp.createPairingCode(owner, { deviceName: `Phone ${i}` }));
+    await expect(pp.createPairingCode(owner, { deviceName: 'Extra' })).rejects.toThrow(/Five phones/);
+    await pp.deleteDevice(owner, codes[0].deviceId);
+    await expect(pp.redeemPairingCode(codes[0].code)).rejects.toThrow(/invalid/);
+    await pp.createPairingCode(owner, { deviceName: 'Extra' });
+    expect(await pp.listDevices(owner)).toHaveLength(5);
+  });
+
+  it('deletes only the owner’s idle phone and keeps historical references while revoking credentials', async () => {
+    const d = await readyDevice();
+    await expect(pp.deleteDevice(stranger, d.deviceId)).rejects.toThrow(/not found/i);
+    const campaign = await pairedCampaign(d.deviceId);
+    await pp.deleteDevice(owner, d.deviceId);
+    expect(await pp.listDevices(owner)).toEqual([]);
+    expect(await pp.authenticateGateway(d.token)).toBeNull();
+    await expect(pp.getDevice(owner, d.deviceId)).rejects.toThrow(/not found/i);
+    const deleted = await PairedDevice.findById(d.deviceId).select('+dialKey.enc').lean();
+    expect(deleted.deletedAt).toBeTruthy();
+    expect(deleted.revokedAt).toBeTruthy();
+    expect(deleted.dialKey.enc).toBeNull();
+    expect(await CallCampaign.findById(campaign._id)).toBeTruthy();
+    await expect(ai.startCampaign(campaign._id, owner)).rejects.toThrow(/revoked/);
+    await d.gw('/heartbeat').send(hb()).expect(401);
+  });
+
+  it('blocks deletion while a call or setup action is active or a call needs attention', async () => {
+    const d = await readyDevice();
+    for (const fields of [
+      { currentCallId: new mongoose.Types.ObjectId() },
+      { 'state.call': 1 },
+      { 'attention.needed': true },
+      { 'setup.command': { id: crypto.randomUUID(), action: 'connect_phone', state: 'pending', requestedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) } },
+    ]) {
+      await PairedDevice.updateOne({ _id: d.deviceId }, { $set: fields });
+      await expect(pp.deleteDevice(owner, d.deviceId)).rejects.toThrow(/Finish the current call/);
+      await PairedDevice.updateOne({ _id: d.deviceId }, { $set: { currentCallId: null, 'state.call': 0, 'attention.needed': false, 'setup.command': null } });
+    }
+    expect(await pp.authenticateGateway(d.token)).toBeTruthy();
+  });
+});
+
 describe('supervised audio verification call', () => {
   it('runs one bounded test before audio attestation, without marking audio verified', async () => {
     const { AUDIO_VERIFICATION_TEST } = await import('../../src/modules/aiCalling/aiCalling.service.js');
@@ -273,6 +425,26 @@ describe('CRM manual setup', () => {
     await createUser({ _id: owner, role: role._id });
     const reader = await createUser({ role: (await createRole({ permissions: [read._id] }))._id });
     const other = await createUser({ role: role._id });
+    const auth = user => `Bearer ${generateAccessToken({ sub: String(user) })}`;
+    const codePath = '/owner/devices/pairing-code';
+    await request(serve(app)).post(codePath).send({ deviceName: 'Sales' }).expect(401);
+    await request(serve(app)).post(codePath).set('Authorization', auth(reader._id)).send({ deviceName: 'Sales' }).expect(403);
+    const created = await request(serve(app)).post(codePath).set('Authorization', auth(owner)).send({ deviceName: 'Sales' }).expect(201);
+    const devicePath = `/owner/devices/${created.body.data.deviceId}`;
+    await request(serve(app)).patch(devicePath).set('Authorization', auth(reader._id)).send({ name: 'New name' }).expect(403);
+    await request(serve(app)).patch(devicePath).set('Authorization', auth(other._id)).send({ name: 'New name' }).expect(404);
+    await request(serve(app)).patch(devicePath).set('Authorization', auth(owner)).send({ name: ' ' }).expect(400);
+    await request(serve(app)).patch(devicePath).set('Authorization', auth(owner)).send({ name: 'New name', phoneLabel: 'SIM 2' }).expect(200);
+    for (const action of ['archive', 'restore']) {
+      await request(serve(app)).post(`${devicePath}/${action}`).expect(401);
+      await request(serve(app)).post(`${devicePath}/${action}`).set('Authorization', auth(reader._id)).expect(403);
+      await request(serve(app)).post(`${devicePath}/${action}`).set('Authorization', auth(other._id)).expect(404);
+      await request(serve(app)).post(`${devicePath}/${action}`).set('Authorization', auth(owner)).expect(200);
+    }
+    await request(serve(app)).delete(devicePath).expect(401);
+    await request(serve(app)).delete(devicePath).set('Authorization', auth(reader._id)).expect(403);
+    await request(serve(app)).delete(devicePath).set('Authorization', auth(other._id)).expect(404);
+    await request(serve(app)).delete(devicePath).set('Authorization', auth(owner)).expect(200);
     const d = await currentGateway();
     const path = `/owner/devices/${d.deviceId}/setup`;
     const call = user => request(serve(app)).post(path).set('Authorization', `Bearer ${generateAccessToken({ sub: String(user) })}`).send({ action: 'status' });
@@ -404,15 +576,16 @@ describe('a full paired-phone call', () => {
     expect(b).toMatchObject({ counter: 2, callRef: 2 });
   });
 
-  it('firmware refusal fails the call without holding the device', async () => {
+  it.each(['unauthorized', 'no_session', 'session_changed', 'agent_not_ready', 'agent_failed', 'room_closed_before_dial', 'livekit_unavailable'])('dial refusal %s fails the call without holding the device', async code => {
     const d = await readyDevice();
     const campaign = await pairedCampaign(d.deviceId);
     await startAndTick(campaign);
     const job = (await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data;
-    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'dial_refused', data: { code: 'unauthorized' } }).expect(200);
+    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'dial_refused', data: { code } }).expect(200);
     const call = await CallRecord.findOne().lean();
     expect(call.resultsProcessedAt).toBeTruthy();
-    expect(call.failureCode).toBe('FIRMWARE_UNAUTHORIZED');
+    expect(call.failureCode).toBe(`FIRMWARE_${code.toUpperCase()}`);
+    if (code !== 'unauthorized') expect(call.failureMessage).toMatch(/no phone call was placed/i);
     expect((await PairedDevice.findById(d.deviceId).lean()).currentCallId).toBeNull();
   });
 });

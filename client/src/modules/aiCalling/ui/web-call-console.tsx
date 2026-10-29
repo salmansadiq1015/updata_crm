@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, Headphones, Info, Loader2, Mic, MicOff,
-  PhoneOff, Play, Radio, RotateCcw, Settings2, UserRound, Wifi, WifiOff,
+  MousePointer2, Pause, PhoneOff, Play, Radio, RotateCcw, Settings2, UserRound, Wifi, WifiOff,
 } from 'lucide-react';
 import { aiCallingApi } from '../services/ai-calling-api';
 import { UpdataVoiceOrb, type UpdataVoiceOrbState } from './updata-voice-orb';
@@ -50,6 +50,7 @@ export type WebCallStatus = {
   audioReady: boolean;
   muted: boolean;
   transcriptCount: number;
+  orbState?: UpdataVoiceOrbState;
 };
 
 type TranscriptLine = {
@@ -134,6 +135,7 @@ export function WebCallConsole({
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [callId, setCallId] = useState<string | null>(null);
   const roomRef = useRef<LkRoom | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
@@ -148,6 +150,7 @@ export function WebCallConsole({
   // so a room closed by a failing agent is shown as an error, not as a finished test.
   const agentErrorRef = useRef<string | null>(null);
   const agentHeardRef = useRef(false);
+  const publishedAgentStateRef = useRef<string | null>(null);
   const recordIdRef = useRef<string | null>(null);
   /** The worker's reason, else the one the CRM recorded on the call, else a generic one. */
   const failureReason = async (fallback: string): Promise<string> => {
@@ -208,10 +211,6 @@ export function WebCallConsole({
     transcriptEndRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [transcript]);
 
-  useEffect(() => {
-    onStatusChange?.({ phase, callId, agentConnected, audioReady, muted, transcriptCount: transcript.length });
-  }, [agentConnected, audioReady, callId, muted, onStatusChange, phase, transcript.length]);
-
   const orbState: UpdataVoiceOrbState = useMemo(() => {
     if (phase === 'error') return 'error';
     if (phase === 'reconnecting') return 'reconnecting';
@@ -224,6 +223,10 @@ export function WebCallConsole({
     if (muted) return 'muted';
     return 'listening';
   }, [agentConnected, agentSpeaking, agentThinking, audioReady, muted, phase]);
+
+  useEffect(() => {
+    onStatusChange?.({ phase, callId, agentConnected, audioReady, muted, transcriptCount: transcript.length, orbState });
+  }, [agentConnected, audioReady, callId, muted, onStatusChange, orbState, phase, transcript.length]);
 
   const copy = phaseCopy(phase, agentName, muted, agentSpeaking, agentThinking, agentConnected, audioReady);
   const active = ['starting', 'connecting', 'live', 'reconnecting'].includes(phase);
@@ -249,6 +252,7 @@ export function WebCallConsole({
     setConfirmEnd(false);
     agentErrorRef.current = null;
     agentHeardRef.current = false;
+    publishedAgentStateRef.current = null;
     recordIdRef.current = null;
     setPhase('starting');
     meter().resume(); // inside the click, so the browser allows audio analysis
@@ -291,19 +295,34 @@ export function WebCallConsole({
         agentErrorRef.current = reason;
         setError(reason);
       };
+      // The worker knows when it is thinking, even when captions are unavailable.
+      // Older workers still fall back to active speakers and transcription events.
+      const noteAgentState = (participant?: LkParticipant) => {
+        if (generationRef.current !== generation || !isAgentParticipant(participant)) return;
+        const state = participant?.attributes?.['lk.agent.state'];
+        if (!state || !['initializing', 'idle', 'listening', 'thinking', 'speaking'].includes(state)) return;
+        publishedAgentStateRef.current = state;
+        setAgentSpeaking(state === 'speaking');
+        setAgentThinking(state === 'thinking');
+      };
       room.on(RoomEvent.ParticipantConnected, (...args: unknown[]) => {
         if (generationRef.current !== generation || !isAgentParticipant(args[0] as LkParticipant)) return;
         noteAgentError(args[0] as LkParticipant);
+        noteAgentState(args[0] as LkParticipant);
         setAgentConnected(true);
         if (agentWaitRef.current) window.clearTimeout(agentWaitRef.current);
       });
-      room.on(RoomEvent.ParticipantAttributesChanged, (...args: unknown[]) => noteAgentError(args[1] as LkParticipant));
+      room.on(RoomEvent.ParticipantAttributesChanged, (...args: unknown[]) => {
+        noteAgentError(args[1] as LkParticipant);
+        noteAgentState(args[1] as LkParticipant);
+      });
       room.on(RoomEvent.ParticipantDisconnected, () => {
         if (generationRef.current !== generation) return;
         setAgentConnected([...(room.remoteParticipants?.values() || [])].some(isAgentParticipant));
         setAudioReady(false);
         setAgentSpeaking(false);
         setAgentThinking(false);
+        publishedAgentStateRef.current = null;
         setVoiceActivityLevel(0);
       });
       room.on(RoomEvent.ActiveSpeakersChanged, (...args: unknown[]) => {
@@ -311,9 +330,9 @@ export function WebCallConsole({
         const speakers = (args[0] as LkParticipant[]) || [];
         const remoteSpeaker = speakers.find((speaker) => !speaker.isLocal);
         const localSpeaker = speakers.find((speaker) => speaker.isLocal);
-        setAgentSpeaking(Boolean(remoteSpeaker));
+        if (!publishedAgentStateRef.current) setAgentSpeaking(Boolean(remoteSpeaker));
         setVoiceActivityLevel(Math.max(0, Math.min(1, remoteSpeaker?.audioLevel ?? (localSpeaker?.audioLevel ?? 0) * 0.42)));
-        if (remoteSpeaker) setAgentThinking(false);
+        if (remoteSpeaker && !publishedAgentStateRef.current) setAgentThinking(false);
       });
       const upsertLines = (segments: LkTranscriptSegment[], role: TranscriptLine['role']) => {
         setTranscript((current) => {
@@ -350,8 +369,10 @@ export function WebCallConsole({
         const segments = (args[0] as LkTranscriptSegment[]) || [];
         const tester = Boolean(participant?.isLocal);
         upsertLines(segments, tester ? 'tester' : 'agent');
-        if (!tester && segments.some((segment) => segment.text?.trim())) setAgentThinking(false);
-        if (tester && segments.some((segment) => segment.final && segment.text?.trim())) setAgentThinking(true);
+        if (!publishedAgentStateRef.current) {
+          if (!tester && segments.some((segment) => segment.text?.trim())) setAgentThinking(false);
+          if (tester && segments.some((segment) => segment.final && segment.text?.trim())) setAgentThinking(true);
+        }
       });
       // Current agents: text streams on "lk.transcription". The agent's own captions
       // arrive as deltas; the tester's transcript arrives as the full text so far.
@@ -369,8 +390,10 @@ export function WebCallConsole({
               text += chunk;
               streamText[id] = text;
               upsertLines([{ id, text, final, firstReceivedTime: Date.now() }], tester ? 'tester' : 'agent');
-              if (tester && final) setAgentThinking(true);
-              if (!tester) setAgentThinking(false);
+              if (!publishedAgentStateRef.current) {
+                if (tester && final) setAgentThinking(true);
+                if (!tester) setAgentThinking(false);
+              }
             }
             // The stream closed: this line is complete (no lingering "partial" tag).
             if (generationRef.current === generation && text.trim()) {
@@ -417,6 +440,7 @@ export function WebCallConsole({
       }
       const present = [...(room.remoteParticipants?.values() || [])];
       present.forEach(noteAgentError);
+      present.forEach(noteAgentState);
       setAgentConnected(present.some(isAgentParticipant));
       await trackMic(room.localParticipant.setMicrophoneEnabled(true));
       meter().attach('user', room.localParticipant.getTrackPublication?.(Track.Source?.Microphone || 'microphone')?.track?.mediaStreamTrack);
@@ -502,7 +526,7 @@ export function WebCallConsole({
         : 'bg-slate-500';
 
   return (
-    <div className="flex h-full min-h-[520px] flex-col bg-[#090f1f] text-slate-100">
+    <div className="flex h-full min-h-[520px] flex-col overflow-y-auto bg-[#090f1f] text-slate-100">
       <audio ref={audioElRef} autoPlay className="hidden" />
 
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/8 bg-[#0b1223] px-4 py-3 text-xs">
@@ -525,24 +549,37 @@ export function WebCallConsole({
         </div>
       </div>
 
-      <div className="relative flex shrink-0 flex-col items-center justify-center overflow-hidden border-b border-white/8 px-4 py-6 text-center sm:min-h-[388px]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(14,165,233,.12),transparent_30%),radial-gradient(circle_at_56%_46%,rgba(168,85,247,.13),transparent_42%),linear-gradient(180deg,rgba(15,23,42,.18),rgba(2,6,23,.22))]" />
+      <div className="relative flex shrink-0 flex-col items-center justify-center overflow-hidden border-b border-white/8 px-4 pb-6 pt-10 text-center sm:min-h-[440px]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(14,165,233,.12),transparent_30%),radial-gradient(circle_at_56%_46%,rgba(37,99,235,.16),transparent_42%),linear-gradient(180deg,rgba(15,23,42,.18),rgba(2,6,23,.22))]" />
         <div className="pointer-events-none absolute inset-0 opacity-[.16] [background-image:linear-gradient(rgba(125,211,252,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(125,211,252,.08)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
+        <button
+          type="button"
+          onClick={() => setReducedMotion((value) => !value)}
+          aria-label={reducedMotion ? 'Enable orb animation' : 'Pause orb animation'}
+          aria-pressed={reducedMotion}
+          title={reducedMotion ? 'Enable orb animation' : 'Pause orb animation'}
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-slate-950/30 text-slate-500 transition hover:border-white/20 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-cyan-300"
+        >
+          {reducedMotion ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+        </button>
         <UpdataVoiceOrb
           state={orbState}
           audioLevel={voiceActivityLevel}
           getAudio={active ? () => meterRef.current?.read() ?? null : undefined}
-          size={phase === 'idle' || phase === 'ended' ? 200 : 'lg'}
+          size="lg"
+          reducedMotion={reducedMotion}
         />
-        <div className="relative mt-3">
-          {active ? (
-            <div className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-full border border-sky-300/10 bg-slate-950/45 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.18em] text-sky-200/70 backdrop-blur-sm">
-              <span className={`h-1.5 w-1.5 rounded-full ${orbState === 'speaking' ? 'bg-fuchsia-400 shadow-[0_0_8px_#e879f9]' : orbState === 'processing' ? 'bg-violet-400 shadow-[0_0_8px_#a78bfa]' : 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]'}`} />
-              {orbState === 'processing' ? 'Thinking' : orbState === 'speaking' ? 'Voice active' : orbState === 'listening' ? 'Listening' : 'Establishing link'}
-            </div>
-          ) : null}
+        <div className="relative -mt-1" aria-live="polite" aria-atomic="true">
+          <div className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-full border border-sky-300/10 bg-slate-950/45 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.18em] text-sky-200/70 backdrop-blur-sm">
+            <span className={`h-1.5 w-1.5 rounded-full ${orbState === 'speaking' ? 'bg-fuchsia-300 shadow-[0_0_8px_#e879f9]' : orbState === 'processing' ? 'bg-violet-400 shadow-[0_0_8px_#a78bfa]' : orbState === 'error' ? 'bg-rose-400' : orbState === 'muted' ? 'bg-slate-400' : 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]'}`} />
+            {orbState === 'processing' ? 'Thinking' : orbState === 'speaking' ? 'Speaking' : orbState === 'listening' ? 'Listening' : orbState === 'muted' ? 'Mic muted' : orbState === 'error' ? 'Disconnected' : orbState === 'reconnecting' ? 'Reconnecting' : orbState === 'connecting' ? 'Establishing link' : phase === 'ended' ? 'Session ended' : 'Ready when you are'}
+          </div>
           <p className="text-base font-semibold tracking-tight">{copy.title}</p>
           <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-slate-400">{disabledReason || copy.detail}</p>
+        </div>
+
+        <div className="relative mt-4 flex items-center gap-2 text-[10px] text-slate-500 motion-reduce:hidden" aria-hidden="true">
+          {reducedMotion ? <><Pause className="h-3 w-3" /> Visualization paused</> : <><MousePointer2 className="h-3 w-3" /><span className="hidden sm:inline">Move to explore · </span>Drag to rotate · Tap to ripple</>}
         </div>
 
         {error ? (
@@ -558,7 +595,7 @@ export function WebCallConsole({
               type="button"
               onClick={start}
               disabled={Boolean(disabledReason) || active}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:from-blue-500 hover:to-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:from-blue-500 hover:to-cyan-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {phase === 'ended' || phase === 'error' ? <RotateCcw className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
               {phase === 'ended' || phase === 'error' ? 'Test again' : 'Start test session'}
@@ -641,7 +678,7 @@ export function WebCallConsole({
                 <p className="mt-1 text-[11px]">If audio works but text never appears, transcription may be unavailable for this session.</p>
               </div>
             ) : transcript.map((line) => (
-              <div key={line.id} className={`flex items-start gap-2 ${line.role === 'tester' ? 'justify-end' : 'justify-start'}`}>
+              <div key={line.id} className={`flex items-start gap-2 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 ${line.role === 'tester' ? 'justify-end' : 'justify-start'}`}>
                 {line.role === 'agent' ? <UpdataVoiceOrb state={line.final ? 'idle' : 'speaking'} size="compact" className="mt-0.5" /> : null}
                 <div className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
                   line.role === 'tester'

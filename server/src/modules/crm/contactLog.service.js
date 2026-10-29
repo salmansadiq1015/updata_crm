@@ -95,6 +95,9 @@ class ContactLogService {
       if (task) entry = await contactLogRepository.updateById(entry._id, { followUpTaskId: task._id });
     }
 
+    // Lead follow-up dates become first-class inbox follow-ups (idempotent per entry).
+    if (leadId && payload.followUpAt && !data.skipFollowUpSync) await this._syncLeadFollowUp((svc) => svc.upsertFromContactLog(entry));
+
     auditService.logEvent({
       eventType: 'customer.contact.created',
       userId,
@@ -144,6 +147,13 @@ class ContactLogService {
     allowed.updatedBy = userId;
 
     const updated = await contactLogRepository.updateById(id, allowed);
+    if (existing.leadId && data.followUpAt !== undefined) {
+      const next = allowed.followUpAt;
+      await this._syncLeadFollowUp(async (svc) => {
+        const synced = await svc.syncContactLog(id, { followUpAt: next }, userId);
+        if (!synced && next) await svc.upsertFromContactLog(updated);
+      });
+    }
 
     auditService.logEvent({
       eventType: 'customer.contact.updated',
@@ -163,6 +173,7 @@ class ContactLogService {
     if (!existing) throw new NotFoundError('ContactLogEntry', id);
 
     await contactLogRepository.softDelete(id);
+    if (existing.leadId) await this._syncLeadFollowUp((svc) => svc.syncContactLog(id, { deleted: true }, userId));
 
     auditService.logEvent({
       eventType: 'customer.contact.deleted',
@@ -175,6 +186,16 @@ class ContactLogService {
     });
 
     logger.info('Customer contact deleted', { module: 'crm', action: 'contactLog.delete', contactLogId: id });
+  }
+
+  /** Best-effort bridge to the lead follow-up inbox (lazy import: no module cycle). */
+  async _syncLeadFollowUp(fn) {
+    try {
+      const { default: leadFollowUpService } = await import('./leadFollowUp.service.js');
+      await fn(leadFollowUpService);
+    } catch (err) {
+      logger.warn('Lead follow-up sync failed (contact log kept)', { module: 'crm', error: { message: err.message } });
+    }
   }
 
   /**

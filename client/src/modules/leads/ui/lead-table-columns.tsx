@@ -26,6 +26,8 @@ import {
 } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
+import { LeadScoreBadge } from './lead-score-badge';
+import { LeadSlaBadge } from './lead-sla-badge';
 import { RatingStars } from './rating-stars';
 import { LtrText } from './ltr-text';
 import { isValidLeadPhone } from './lead-contact-validation';
@@ -299,8 +301,22 @@ export function useLeadColumns({ users, canWrite, onOpen, onCopyPhone, onEditCon
         id: 'status',
         accessorKey: 'status',
         header: t('leads.col.status', 'Status'),
-        size: 140,
-        Cell: ({ row }) => <LeadStatusBadge status={row.original.status} />,
+        size: 180,
+        Cell: ({ row }) => (
+          <div className="flex flex-col items-start gap-1">
+            <LeadStatusBadge status={row.original.status} />
+            <LeadSlaBadge sla={row.original.sla} />
+          </div>
+        ),
+      },
+      {
+        // Lead quality: sorts server-side by the denormalized scoreValue.
+        id: 'score',
+        accessorFn: (lead) => lead.score?.value ?? -1,
+        sortDescFirst: true,
+        header: t('leads.score.col', 'Score'),
+        size: 130,
+        Cell: ({ row }) => <LeadScoreBadge score={row.original.score} />,
       },
       {
         id: 'type',

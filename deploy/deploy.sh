@@ -66,7 +66,7 @@ node src/migrations/runner.js
 
 say "Dépendances et build client"
 cd "$ROOT/client"
-npm ci
+npm ci --include=dev
 npm run build
 
 say "Redémarrage"

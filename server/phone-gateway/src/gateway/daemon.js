@@ -12,7 +12,7 @@ import { CallRunner } from './callRunner.js';
 import { LiveKitLeg } from './livekitLeg.js';
 import { performSetup } from './setup.js';
 
-export const GATEWAY_VERSION = '0.3.2';
+export const GATEWAY_VERSION = '0.4.3';
 
 const NUM_STATS = ['uptimeMs', 'heapFree', 'heapMin', 'audioUpFrames', 'audioDownFrames', 'downUnderruns', 'downOverruns', 'upDrops', 'rxCrcErrors', 'rxResyncs', 'downSeqGaps', 'downLevelBytes'];
 
@@ -45,6 +45,8 @@ export class GatewayDaemon {
     this.autoConnect = true;
     this.setupBusy = false;
     this.settingsLoaded = false;
+    this.crmConnected = false;
+    this.claiming = false;
     this.reconnectDelay = this.o.reconnectMinMs;
     this.connecting = null;
     this.reconnectTimer = null;
@@ -53,11 +55,12 @@ export class GatewayDaemon {
 
   async start() {
     this.log('gateway_start', { version: GATEWAY_VERSION });
-    await this.connectBoard();
     this.scheduleHeartbeat(0);
     this.timers.push(setInterval(() => this.tryClaim().catch((err) => this.fail('claim_failed', err)), this.o.claimEveryMs));
     this.timers.push(setInterval(() => this.outbox.flush().catch(() => {}), 5_000));
     this.timers.push(setInterval(() => { if (this.conn) this.onBoardState(this.conn.device.state || {}); }, 2_000));
+    // Report the computer online even while USB discovery/HELLO is waiting.
+    await this.connectBoard();
   }
 
   // ---- board ----------------------------------------------------------------------------------
@@ -112,6 +115,7 @@ export class GatewayDaemon {
     this.conn = null;
     if (conn) this.closeDevice(conn).catch(() => {});
     this.lastError = { code: 'BOARD_LOST', message: String(reason).slice(0, 300) };
+    this.scheduleHeartbeat(0);
     this.retryBoard();
   }
 
@@ -130,7 +134,7 @@ export class GatewayDaemon {
   // ---- CRM ------------------------------------------------------------------------------------
 
   heartbeatBody() {
-    const c = this.conn;
+    const c = this.conn && !this.conn.device.closed && this.conn.device.sessionValid !== false ? this.conn : null;
     const s = c?.device.state;
     const stats = c?.device.stats
       ? Object.fromEntries(NUM_STATS.filter((k) => Number.isFinite(c.device.stats[k])).map((k) => [k, c.device.stats[k]]))
@@ -162,6 +166,8 @@ export class GatewayDaemon {
   async heartbeat() {
     try {
       const res = await this.crm.heartbeat(this.heartbeatBody());
+      if (!this.crmConnected) this.log('crm_connected', { readiness: res.readiness?.ok ?? false });
+      this.crmConnected = true;
       this.server = res;
       this.settingsLoaded = true;
       if (res.setup) {
@@ -184,6 +190,7 @@ export class GatewayDaemon {
       }
       this.keepAwake.set(Boolean(this.runner) || (res.activeCampaigns || 0) > 0);
     } catch (err) {
+      this.crmConnected = false;
       if (err.status === 401) {
         this.log('gateway_revoked', { hint: 'the device was revoked or unpaired in the CRM; run updata-gateway pair again' });
         await this.stop();
@@ -196,14 +203,34 @@ export class GatewayDaemon {
 
   canClaim() {
     const c = this.conn;
-    return !this.stopped && this.settingsLoaded && !this.runner && !this.setupBusy && c && c.info.keyProvisioned && c.device.state?.hfp === 'slc'
+    return !this.stopped && this.settingsLoaded && this.crmConnected && !this.claiming && !this.runner && !this.setupBusy && c && !c.device.closed && c.device.sessionValid !== false && c.info.keyProvisioned && c.device.state?.hfp === 'slc'
       && !c.device.state.call && !c.device.state.callsetup && !this.server.voicePaused;
   }
 
   async tryClaim() {
     if (!this.canClaim()) return;
-    const job = await this.crm.claim(this.conn.info.sessionNonce);
+    // The polling interval is shorter than an HTTP timeout. Hold a guard until
+    // the response arrives so slow requests cannot reserve several calls.
+    this.claiming = true;
+    let job;
+    const connection = this.conn;
+    try {
+      // Check HELLO authorization before reserving a call against its nonce.
+      // A responsive PING and cached Bluetooth STATE are insufficient.
+      await connection.device.statusRequest?.();
+      if (this.conn !== connection || connection.device.closed || connection.device.sessionValid === false) return;
+      job = await this.crm.claim(connection.info.sessionNonce);
+    } catch (error) {
+      if (error.code === 'no_session' && this.conn === connection) this.onBoardLost('USB control session expired; reconnecting');
+      throw error;
+    }
+    finally { this.claiming = false; }
     if (!job) return;
+    if (this.conn !== connection || connection.device.closed || connection.device.sessionValid === false) {
+      this.outbox.push(job.callId, 'dial_refused', { code: 'session_changed' });
+      this.log('call_not_dialed_session_changed', { callId: job.callId });
+      return;
+    }
     this.log('call_claimed', { callId: job.callId });
     const leg = new LiveKitLeg({ rtc: this.rtc, url: job.livekit?.url, token: job.livekit?.token, identity: job.livekit?.identity });
     this.runner = new CallRunner({ device: this.conn.device, job, outbox: this.outbox, crm: this.crm, leg, log: this.log, options: { agentGainDb: this.o.agentGainDb } });

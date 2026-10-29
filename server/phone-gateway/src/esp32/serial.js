@@ -28,7 +28,13 @@ export async function listPorts({ platform = process.platform, enumerate, pathEx
       path,
       id,
       manufacturer: p.manufacturer || '',
-      bridge: USB_BRIDGES[id] || null,
+      // Some macOS drivers omit USB IDs but still identify the CP210x vendor.
+      // Restrict this fallback to USB serial paths and absent IDs so Bluetooth
+      // ports and known incompatible native-USB chips are never selected.
+      bridge: USB_BRIDGES[id] || (!p.vendorId && !p.productId
+        && /silicon\s+labs/i.test(p.manufacturer || '')
+        && /^(\/dev\/(?:cu|tty)\.usbserial|\/dev\/ttyUSB|COM\d)/i.test(path)
+        ? USB_BRIDGES['10c4:ea60'] : null),
       nativeUsbNoClassicBt: id.startsWith('303a:'), // ESP32-S2/S3/C3/C6: no Classic Bluetooth
     };
   }).filter((p) => {

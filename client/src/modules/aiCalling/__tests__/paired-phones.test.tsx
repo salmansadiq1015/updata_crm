@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { LanguageProvider } from '@/lib/i18n/language-context';
@@ -30,10 +31,13 @@ const api = {
   audioTestResult: vi.fn(async () => ({ id: 'audio1', state: 'ringing', answeredAt: null, endedAt: null, durationSeconds: 0, answers: [], audio: null, failureMessage: null })),
   downloadGateway: vi.fn(async () => new Blob(['package'])),
   devices: vi.fn(async () => [device()]),
-  pairingCode: vi.fn(async () => ({ code: 'ABCD-EF23', expiresAt: new Date(Date.now() + 600_000).toISOString() })),
+  pairingCode: vi.fn(async () => ({ code: 'ABCD-EF23', expiresAt: new Date(Date.now() + 600_000).toISOString(), deviceId: 'd1' })),
   verifyAudio: vi.fn(async () => device({ audioVerified: true })),
   clear: vi.fn(async () => device()),
   revoke: vi.fn(async () => device({ revoked: true })),
+  remove: vi.fn(async () => ({ id: 'd1', deleted: true })),
+  archive: vi.fn(async () => device({ archived: true, archivedAt: new Date().toISOString() })),
+  restore: vi.fn(async () => device({ archived: false, archivedAt: null })),
   rotateKey: vi.fn(async () => device()),
   update: vi.fn(async () => device()),
   takeover: vi.fn(async () => ({ ok: true })),
@@ -55,7 +59,9 @@ const wrap = (ui: ReactNode) => render(
   </LanguageProvider>,
 );
 
-beforeEach(() => { vi.clearAllMocks(); permissions.write = true; api.devices.mockResolvedValue([device()]); });
+const openPhoneMenu = async (name = 'TECNO bridge') => { await userEvent.click(await screen.findByRole('button', { name: `Actions for ${name}` })); };
+
+beforeEach(() => { HTMLElement.prototype.hasPointerCapture ??= vi.fn(() => false); HTMLElement.prototype.releasePointerCapture ??= vi.fn(); HTMLElement.prototype.scrollIntoView ??= vi.fn(); vi.clearAllMocks(); permissions.write = true; api.devices.mockResolvedValue([device()]); });
 
 describe('PairedPhonesPanel', () => {
   const controllable = () => device({ gateway: { version: '0.3.0', platform: 'darwin', hostname: 'mac' }, setup: { autoConnect: true, playbackGainDb: 0, command: null } });
@@ -103,6 +109,109 @@ describe('PairedPhonesPanel', () => {
     await screen.findByRole('article', { name: 'Paired phone TECNO bridge' });
     expect(screen.queryByRole('button', { name: 'Connect phone' })).toBeNull();
     expect(screen.getByRole('button', { name: /Add paired phone/ }).getAttribute('disabled')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Actions for/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Delete TECNO/ })).toBeNull();
+  });
+  it('edits the phone name and SIM label from the visible card actions', async () => {
+    wrap(<PairedPhonesPanel />);
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Edit TECNO bridge' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Phone name' }), { target: { value: ' Sales phone ' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Phone / SIM label (optional)' }), { target: { value: ' SIM 2 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.update).toHaveBeenCalledWith('d1', { name: 'Sales phone', phoneLabel: 'SIM 2' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit phone' })).toBeNull());
+  });
+
+  it('requires confirmation to delete a phone and keeps the card if deletion fails', async () => {
+    api.remove.mockRejectedValueOnce(new Error('Connection failed'));
+    wrap(<PairedPhonesPanel />);
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete TECNO bridge' }));
+    expect(api.remove).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep phone' }));
+    expect(api.remove).not.toHaveBeenCalled();
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete TECNO bridge' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete phone' }));
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith('d1'));
+    expect(screen.getByRole('article', { name: 'Paired phone TECNO bridge' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Delete TECNO bridge?' })).toBeTruthy();
+  });
+
+  it('blocks deletion during a call or while an uncertain call needs attention', async () => {
+    api.devices.mockResolvedValueOnce([device({ currentCallId: 'call1' }), device({ id: 'd2', name: 'Other phone', attention: { needed: true, reason: 'Check the phone', at: new Date().toISOString() } })]);
+    wrap(<PairedPhonesPanel />);
+    await openPhoneMenu();
+    expect(screen.getByRole('menuitem', { name: 'Delete TECNO bridge' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Archive TECNO bridge' })).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Escape}');
+    await openPhoneMenu('Other phone');
+    expect(screen.getByRole('menuitem', { name: 'Delete Other phone' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('archives through the menu after confirmation and restores the saved phone from the archive view', async () => {
+    wrap(<PairedPhonesPanel />);
+    await screen.findByRole('article', { name: 'Paired phone TECNO bridge' });
+    expect(screen.queryByRole('button', { name: 'Edit TECNO bridge' })).toBeNull();
+    expect(screen.queryByRole('menuitem')).toBeNull();
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive TECNO bridge' }));
+    expect(api.archive).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep active' }));
+    expect(api.archive).not.toHaveBeenCalled();
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive TECNO bridge' }));
+    api.devices.mockResolvedValue([device({ archived: true, archivedAt: new Date().toISOString() })]);
+    fireEvent.click(screen.getByRole('button', { name: 'Archive phone' }));
+    await waitFor(() => expect(api.archive).toHaveBeenCalledWith('d1'));
+    await screen.findByText('No active phones');
+    fireEvent.click(screen.getByRole('button', { name: 'Archived phones (1)' }));
+    await screen.findByRole('article', { name: 'Archived phone TECNO bridge' });
+    expect(screen.queryByRole('button', { name: 'Phone setup' })).toBeNull();
+    await openPhoneMenu();
+    api.devices.mockResolvedValue([device({ archived: false, archivedAt: null })]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Restore TECNO bridge' }));
+    await waitFor(() => expect(api.restore).toHaveBeenCalledWith('d1'));
+    await screen.findByText('No archived phones');
+    fireEvent.click(screen.getByRole('button', { name: 'Active phones (1)' }));
+    expect(await screen.findByRole('article', { name: 'Paired phone TECNO bridge' })).toBeTruthy();
+  });
+
+  it('keeps the active card visible when archiving fails', async () => {
+    api.archive.mockRejectedValueOnce(new Error('Busy'));
+    wrap(<PairedPhonesPanel />);
+    await openPhoneMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive TECNO bridge' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archive phone' }));
+    await waitFor(() => expect(api.archive).toHaveBeenCalledWith('d1'));
+    expect(screen.getByRole('dialog', { name: 'Archive TECNO bridge?' })).toBeTruthy();
+    expect(screen.getByRole('article', { name: 'Paired phone TECNO bridge', hidden: true })).toBeTruthy();
+  });
+
+  it('links a saved offline phone using its own profile without creating another phone', async () => {
+    api.devices.mockResolvedValue([device({ online: false })]);
+    api.pairingCode.mockResolvedValueOnce({ code: 'ABCD-EF23', expiresAt: new Date(Date.now() + 600_000).toISOString(), deviceId: 'd1' });
+    wrap(<PairedPhonesPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: /Link computer/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create pairing code' }));
+    expect(await screen.findByText('ABCD-EF23')).toBeTruthy();
+    expect(api.pairingCode).toHaveBeenCalledWith({ deviceName: 'TECNO bridge', phoneLabel: 'Jazz SIM', deviceId: 'd1' });
+    expect(screen.getByText(/pair --api .* --code ABCD-EF23 --profile d1/)).toBeTruthy();
+    expect(screen.getByText('node bin/updata-gateway.mjs run --profile d1')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download gateway' })).toBeTruthy();
+  });
+
+  it('replaces an expired pairing code on the same saved phone', async () => {
+    api.devices.mockResolvedValue([]);
+    api.pairingCode.mockResolvedValueOnce({ code: 'OLD-CODE', expiresAt: new Date(Date.now() - 1000).toISOString(), deviceId: 'd2' });
+    wrap(<PairedPhonesPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add paired phone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create pairing code' }));
+    expect(await screen.findByText('This pairing code has expired')).toBeTruthy();
+    expect(screen.queryByText(/--code OLD-CODE/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Get new code' }));
+    await waitFor(() => expect(api.pairingCode).toHaveBeenLastCalledWith({ deviceName: 'My phone bridge', phoneLabel: '', deviceId: 'd2' }));
   });
   it('offers Connect even when USB is lost and explains that Bluetooth cannot be checked', async () => {
     const d = controllable();
@@ -140,7 +249,7 @@ describe('PairedPhonesPanel', () => {
   });
 
   it('does not display cached Bluetooth connection flags as live when the gateway is offline', async () => {
-    api.devices.mockResolvedValueOnce([device({ online: false })]);
+    api.devices.mockResolvedValue([device({ online: false })]);
     wrap(<PairedPhonesPanel />);
     expect(await screen.findByRole('group', { name: 'ESP32 USB: Cannot check yet' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Phone Bluetooth: Cannot check yet' })).toBeTruthy();
@@ -149,9 +258,60 @@ describe('PairedPhonesPanel', () => {
     expect(reconnect).toBeEnabled();
     fireEvent.click(reconnect);
     expect(screen.getByRole('region', { name: 'Reconnect computer gateway' })).toHaveTextContent('node bin/updata-gateway.mjs run');
-    expect(screen.getByRole('button', { name: 'Check gateway status' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Check gateway status' })).toBeEnabled());
     expect(api.setupAction).not.toHaveBeenCalled();
     expect(api.rotateKey).not.toHaveBeenCalled();
+  });
+
+  it('checks the server on reconnect, reports offline, and detects the gateway coming back', async () => {
+    api.devices.mockResolvedValue([device({ online: false })]);
+    wrap(<PairedPhonesPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconnect gateway' }));
+    await screen.findByText(/Gateway is still offline/);
+    expect(api.devices).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('region', { name: 'Reconnect computer gateway' })).toBeVisible();
+    // Clicking again must check again, rather than merely hide the instructions.
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect gateway' }));
+    await waitFor(() => expect(api.devices).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole('region', { name: 'Reconnect computer gateway' })).toBeVisible();
+    api.devices.mockResolvedValue([controllable()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Check gateway status' }));
+    await screen.findByText(/Gateway is online/);
+    expect(screen.getByRole('group', { name: 'Computer: Online' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Reconnect computer gateway' })).toBeNull();
+    expect(api.setupAction).not.toHaveBeenCalled();
+    expect(api.rotateKey).not.toHaveBeenCalled();
+  });
+
+  it('shows loading and a server error when a gateway status check cannot finish', async () => {
+    api.devices.mockResolvedValue([device({ online: false })]);
+    wrap(<PairedPhonesPanel />);
+    const reconnect = await screen.findByRole('button', { name: 'Reconnect gateway' });
+    let rejectCheck!: (reason: Error) => void;
+    api.devices.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectCheck = reject; }));
+    fireEvent.click(reconnect);
+    expect(await screen.findByRole('button', { name: 'Checking gateway status…' })).toBeDisabled();
+    rejectCheck(new Error('Network unavailable'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not check gateway status. Network unavailable');
+    expect(screen.getByRole('button', { name: 'Check gateway status' })).toBeEnabled();
+  });
+
+  it('reports command completion without requiring the user to open bridge details', async () => {
+    api.devices.mockResolvedValue([{ ...controllable(), setup: { autoConnect: true, playbackGainDb: 0,
+      command: { id: 'done', action: 'status', state: 'succeeded', expiresAt: new Date(Date.now() + 60_000).toISOString(), message: 'Gateway confirmed the action completed' } } }]);
+    wrap(<PairedPhonesPanel />);
+    expect(await screen.findByText('Gateway confirmed the action completed')).toBeVisible();
+  });
+
+  it('keeps the phone and its recovery controls when a background refresh fails', async () => {
+    api.devices.mockResolvedValue([device({ online: false })]);
+    wrap(<PairedPhonesPanel />);
+    await screen.findByRole('article', { name: 'Paired phone TECNO bridge' });
+    api.devices.mockRejectedValueOnce(new Error('Network unavailable'));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh bridge status' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh phone status');
+    expect(screen.getByRole('article', { name: 'Paired phone TECNO bridge' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Reconnect gateway' })).toBeEnabled();
   });
 
   it('shows each setup check from the reported state and why the phone is not ready', async () => {

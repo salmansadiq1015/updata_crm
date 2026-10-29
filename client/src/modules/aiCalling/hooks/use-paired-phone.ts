@@ -56,12 +56,15 @@ export function usePairedDeviceMutations() {
   };
   const failed = (fallback: string) => (e: unknown) => showError(errMessage(e, fallback));
   return {
-    pairingCode: useMutation({ mutationFn: pairedPhoneApi.pairingCode, onError: failed('Could not create a pairing code') }),
+    pairingCode: useMutation({ mutationFn: (input: Parameters<typeof pairedPhoneApi.pairingCode>[0]) => pairedPhoneApi.pairingCode(input), onSuccess: () => qc.invalidateQueries({ queryKey: pairedKeys.devices }), onError: failed('Could not create a pairing code') }),
     update: useMutation({
       mutationFn: ({ id, ...input }: { id: string; name?: string; phoneLabel?: string; limits?: Partial<DeviceLimits> }) => pairedPhoneApi.update(id, input),
       onSuccess: done('Device updated'), onError: failed('Could not update the device'),
     }),
     revoke: useMutation({ mutationFn: (id: string) => pairedPhoneApi.revoke(id), onSuccess: done('Device revoked'), onError: failed('Could not revoke the device') }),
+    remove: useMutation({ mutationFn: (id: string) => pairedPhoneApi.remove(id), onSuccess: done('Phone deleted'), onError: failed('Could not delete the phone') }),
+    archive: useMutation({ mutationFn: (id: string) => pairedPhoneApi.archive(id), onSuccess: done('Phone archived. Restore it from Archived phones.'), onError: failed('Could not archive the phone') }),
+    restore: useMutation({ mutationFn: (id: string) => pairedPhoneApi.restore(id), onSuccess: done('Phone restored'), onError: failed('Could not restore the phone') }),
     verifyAudio: useMutation({
       mutationFn: ({ id, ...input }: { id: string; inboundPhraseHeard: boolean; outboundPhraseHeard: boolean; note: string }) => pairedPhoneApi.verifyAudio(id, input),
       onSuccess: done('Two-way call audio verified'), onError: failed('Could not record the verification'),

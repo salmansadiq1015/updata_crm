@@ -21,6 +21,8 @@ import {
   Trash2,
   Upload,
   Bot,
+  Copy,
+  Gauge,
 } from 'lucide-react';
 import { AssignLeadsToAgentDialog } from '@/modules/aiCalling/ui/assign-leads-to-agent-dialog';
 import { showError, showSuccess } from '@/lib/toast';
@@ -76,6 +78,7 @@ import { LeadOutreachComposer } from './lead-outreach-composer';
 import type { OutreachChannel } from '../services/messaging-api';
 import { LeadCard } from './lead-card';
 import { LeadDetailDrawer } from './lead-detail-drawer';
+import { LeadWorkflowToolbar } from './lead-workflow-toolbar';
 import { LeadExportMenu } from './lead-export-menu';
 import { ExtensionConnectCard } from './extension-connect-card';
 import { ExtensionImportBanner } from './extension-import-banner';
@@ -140,6 +143,9 @@ export function LeadListView() {
   // ── Local view state ───────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [mapOpen, setMapOpen] = useState(false);
+  // Lead workflow: "first response overdue" quick filter + assignment/SLA settings.
+  const [slaOverdueOnly, setSlaOverdueOnly] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
   // AI calling: open the campaign wizard pre-filled with the selected leads.
   const [agentAssignmentIds, setAgentAssignmentIds] = useState<string[] | null>(null);
   const [aiCallLeadIds, setAiCallLeadIds] = useState<string[] | null>(null);
@@ -170,8 +176,9 @@ export function LeadListView() {
       sortBy: sort.sortBy,
       sortOrder: sort.sortOrder,
       ...buildLeadFilterParams(filters, currentUserId, searchTerm),
+      ...(slaOverdueOnly ? { slaStatus: 'overdue' as const } : {}),
     }),
-    [pageSize, sort.sortBy, sort.sortOrder, filters, currentUserId, searchTerm],
+    [pageSize, sort.sortBy, sort.sortOrder, filters, currentUserId, searchTerm, slaOverdueOnly],
   );
   const paramsKey = JSON.stringify(params);
   const filterOptionParams = useMemo(() => {
@@ -468,6 +475,7 @@ export function LeadListView() {
     filters.city !== FILTER_ALL ||
     filters.area !== FILTER_ALL ||
     filters.businessType !== FILTER_ALL ||
+    filters.scoreBand !== FILTER_ALL ||
     filters.assignedTo !== FILTER_ALL;
 
   const emptyState = hasActiveFilters ? (
@@ -571,6 +579,13 @@ export function LeadListView() {
                 ))}
               </div>
 
+              <LeadWorkflowToolbar
+                overdueOnly={slaOverdueOnly}
+                onOverdueOnlyChange={setSlaOverdueOnly}
+                policyOpen={policyOpen}
+                onPolicyOpenChange={setPolicyOpen}
+              />
+
               <Button variant="outline" className="h-9 gap-2" onClick={() => setMapOpen(true)}>
                 <MapPinned className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{t('leads.map.open', 'View on map')}</span>
@@ -586,6 +601,24 @@ export function LeadListView() {
               )}
 
               {canExport && <LeadExportMenu />}
+
+              {/* Lead quality: duplicate review (lead:read; merging needs lead:merge) and scoring config (admin). */}
+              {canExport && (
+                <Button asChild variant="outline" className="h-9 gap-2">
+                  <Link href="/leads/duplicates">
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">{t('leads.dup.open', 'Duplicates')}</span>
+                  </Link>
+                </Button>
+              )}
+              {(isAdmin || hasPermission('lead:scoring-admin')) && (
+                <Button asChild variant="outline" className="h-9 gap-2">
+                  <Link href="/leads/scoring">
+                    <Gauge className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">{t('leads.scoring.open', 'Scoring')}</span>
+                  </Link>
+                </Button>
+              )}
 
               {canExport && (
                 <Button asChild variant="outline" className="h-9 gap-2">
@@ -637,6 +670,8 @@ export function LeadListView() {
             onAreaChange={(area) => setFilters({ area })}
             businessType={filters.businessType}
             onBusinessTypeChange={(businessType) => setFilters({ businessType })}
+            scoreBand={filters.scoreBand}
+            onScoreBandChange={(scoreBand) => setFilters({ scoreBand })}
             filterOptions={filterOptionsQuery.data}
             filterOptionsLoading={filterOptionsQuery.isLoading}
             assignedTo={filters.assignedTo}

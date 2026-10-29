@@ -34,7 +34,7 @@ export function AgentLaunchDialog({ agent, onClose, onLaunched, onConnections }:
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [transport]);
-  const phones = devices.data?.filter(d => !d.revoked) || [];
+  const phones = devices.data?.filter(d => !d.revoked && !d.archived) || [];
   const selectedPhone = phones.find(d => d.id === pairedDeviceId);
   const connection = selectedPhone && !devices.isError ? pairedPhoneConnection(selectedPhone, now) : null;
   const cloudUnavailable = telephony.data?.configured === false || telephony.data?.eligible === false;
@@ -103,7 +103,7 @@ export function AgentLaunchDialog({ agent, onClose, onLaunched, onConnections }:
       <fieldset className="space-y-2"><legend className="mb-2 text-xs font-medium text-slate-300">Launch mode</legend>{([
         ['now', 'Start Now', 'Activate immediately. No future launch date is needed.', PhoneCall],
         ['scheduled', 'Schedule Campaign', 'Activate automatically at a future date and time.', CalendarClock],
-      ] as const).map(([value, label, detail, Icon]) => <label key={value} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${mode === value ? 'border-violet-400/60 bg-violet-500/10' : 'border-white/10'}`}><input type="radio" name="launch-mode" checked={mode === value} onChange={() => setMode(value)} className="mt-1" /><Icon className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" /><span><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs text-slate-400">{detail}</span></span></label>)}</fieldset>
+      ] as const).map(([value, label, detail, Icon]) => <label key={value} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${mode === value ? 'border-sky-400/60 bg-blue-500/10' : 'border-white/10'}`}><input type="radio" name="launch-mode" checked={mode === value} onChange={() => setMode(value)} className="mt-1" /><Icon className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" /><span><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs text-slate-400">{detail}</span></span></label>)}</fieldset>
       {mode === 'scheduled' && <AgentField label={`Launch date and time · ${schedule.timezone || 'UTC'}`}><input type="datetime-local" className={inputClass} value={localLaunch} onChange={e => setLocalLaunch(e.target.value)} /></AgentField>}
       {mode === 'scheduled' && <CallingWindowFields value={schedule} onChange={setSchedule} />}
       {mode === 'scheduled' && <div className="space-y-3"><label className="flex items-start gap-2 text-xs text-slate-300"><input className="mt-0.5" type="checkbox" checked={continueAcrossDays} onChange={e => setContinue(e.target.checked)} /><span>Continue unfinished leads on future permitted days<span className="mt-1 block text-slate-500">When off, this campaign ends after its first permitted calling window. Active calls can finish.</span></span></label>{continueAcrossDays && <AgentField label="Last calling date (optional)"><input type="date" className={inputClass} value={endDate} onChange={e => setEndDate(e.target.value)} /></AgentField>}</div>}

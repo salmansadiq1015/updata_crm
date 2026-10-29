@@ -5,6 +5,7 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
+import { currentLeadAccessFilter } from '../../shared/security/requestAccessContext.js';
 import { buildGeographyFacets, canonicalizeLeadAddress, countGeographyFacets } from './leadGeography.js';
 
 // Build a regex where each letter also matches its accented variants, e.g.
@@ -39,12 +40,14 @@ function normalizedExactTextFilter(path, value) {
 
 const ALLOWED_FILTERS = {
   status: 'exact',
+  slaStatus: 'exact',
   assignedTo: 'objectId',
   source: 'exact',
   type: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'status', '_id'];
+// scoreValue: denormalized lead score (-1 = unscored) — see leadScoring.service.
+const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'status', '_id', 'scoreValue'];
 
 const DUPLICATE_SELECT = '_id leadNumber name status source normalizedPhone websiteDomain address sourceMetadata';
 
@@ -155,7 +158,7 @@ class LeadRepository {
     // fields displayed in the Leads table — no discovery-location fallback.
     // countryId/cityId/areaId are resolved asynchronously by buildDatasetFilter.
     const {
-      countryId: _countryId, cityId: _cityId, areaId: _areaId, country, city, area, businessType, ...flatFilters
+      countryId: _countryId, cityId: _cityId, areaId: _areaId, country, city, area, businessType, scoreBand, ...flatFilters
     } = filters;
 
     const baseFilter = {
@@ -173,6 +176,10 @@ class LeadRepository {
     // the lead `type` (business/private). Exact match on the stored value the
     // filter-options facet surfaced.
     const businessTypeFilter = businessType ? { 'sourceMetadata.businessType': businessType } : {};
+    // Score band (lead quality). 'unscored' also covers leads never scored.
+    const scoreBandFilter = scoreBand
+      ? { 'score.band': scoreBand === 'unscored' ? { $in: ['unscored', null] } : scoreBand }
+      : {};
 
     let searchFilter = {};
     if (search) {
@@ -214,7 +221,9 @@ class LeadRepository {
       cityFilter,
       areaFilter,
       businessTypeFilter,
+      scoreBandFilter,
       searchFilter,
+      currentLeadAccessFilter(), // governance: team-scoped lead access ({} in company mode)
     );
   }
 

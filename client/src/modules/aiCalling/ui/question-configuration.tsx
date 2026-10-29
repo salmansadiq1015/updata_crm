@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, GripVertical, ArrowUp, ArrowDown, ClipboardPaste, Sparkles } from 'lucide-react';
 import type { Question, QuestionType, StatusRule, RuleAction } from '../types/ai-calling-types';
 import { ConditionEditor, type ConditionValue, type FieldOption } from './condition-editor';
+import { QuestionImportDialog } from './question-import-dialog';
 const inputCls = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500';
 const smallSel = inputCls + ' w-auto';
 const QUESTION_TYPES: QuestionType[] = ['short_text', 'long_text', 'boolean', 'single_choice', 'multiple_choice', 'integer', 'decimal', 'currency', 'date', 'time', 'email', 'phone', 'url', 'address', 'rating', 'enum'];
@@ -10,8 +11,9 @@ const CHOICE_TYPES = new Set(['single_choice', 'multiple_choice', 'enum']);
 const ACTIONS: RuleAction[] = ['mark_qualified', 'mark_unqualified', 'mark_not_interested', 'schedule_callback', 'request_review', 'mark_do_not_contact', 'mark_contacted', 'none'];
 const earlierFieldOptions = (questions: Question[], idx: number): FieldOption[] => questions.slice(0, idx).filter(q => q.label).map(q => ({ value: q.fieldKey, label: q.label }));
 const allFieldOptions = (questions: Question[]): FieldOption[] => earlierFieldOptions(questions, questions.length);
-export function QuestionEditor({ questions, onChange, isLink = false }: { questions: Question[]; onChange: (questions: Question[]) => void; isLink?: boolean }) {
+export function QuestionEditor({ questions, onChange, isLink = false, rules, onImport }: { questions: Question[]; onChange: (questions: Question[]) => void; isLink?: boolean; rules?: StatusRule[]; onImport?: (questions: Question[], rules: StatusRule[]) => void }) {
  const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({});
+ const [importing, setImporting] = useState<'paste' | 'ai' | null>(null);
  const fieldError = (_field: string) => false;
  const updateQuestion = (idx: number, patch: Partial<Question>) => onChange(questions.map((q, i) => i === idx ? { ...q, ...patch } : q));
  const removeQuestion = (idx: number) => onChange(questions.filter((_, i) => i !== idx).map((q, i) => ({ ...q, order: i + 1 })));
@@ -19,6 +21,14 @@ export function QuestionEditor({ questions, onChange, isLink = false }: { questi
  const move = (idx: number, direction: number) => { const next = [...questions]; [next[idx], next[idx + direction]] = [next[idx + direction], next[idx]]; onChange(next.map((q, i) => ({ ...q, order: i + 1 }))); };
  return (
 <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/20 bg-gradient-to-r from-blue-600/10 via-transparent to-cyan-500/10 p-3">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground"><span className="font-medium text-foreground">Build faster:</span> paste a complete question list, or have any AI assistant write one from a ready-made prompt.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setImporting('paste')} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium hover:border-sky-500/50"><ClipboardPaste className="h-3.5 w-3.5" />Paste questions</button>
+                  <button type="button" onClick={() => setImporting('ai')} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 px-3 py-2 text-xs font-semibold text-white shadow-md shadow-blue-600/20 hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Create with AI</button>
+                </div>
+              </div>
+              {importing && <QuestionImportDialog questions={questions} rules={onImport ? rules || [] : undefined} initialTab={importing} onClose={() => setImporting(null)} onApply={({ questions: next, rules: nextRules }) => { setOptionDrafts({}); if (onImport && nextRules) onImport(next, nextRules); else onChange(next); }} />}
               <p className="text-xs text-muted-foreground">Questions are asked in order. The AI rephrases naturally but keeps each question&apos;s meaning. Answers are validated server-side by type.</p>
               {questions.map((q, idx) => (
                 <div key={q.fieldKey} className={`rounded-lg border bg-background p-3 ${fieldError(`q:${q.fieldKey}`) ? 'border-rose-500/60' : 'border-border'}`}>

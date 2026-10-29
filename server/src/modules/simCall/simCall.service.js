@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import SimCallCampaign from './simCallCampaign.model.js';
 import SimCallTask from './simCallTask.model.js';
 import SimCallEvent from './simCallEvent.model.js';
+import * as contactPolicyHooks from '../contactPolicy/contactPolicy.hooks.js';
 import Lead from '../crm/lead.model.js';
 import CallSuppression from '../aiCalling/callSuppression.model.js';
 import { phoneHash } from '../aiCalling/callAuth.js';
@@ -578,6 +579,7 @@ class SimCallService {
         await this._event(campaignId, 'task.ineligible', { taskId: task._id, leadId: task.leadId, details: { reasons: e.reasons } });
         continue;
       }
+      if (await contactPolicyHooks.simCallClaimHold(task, attemptId)) continue;
       if (e.field !== task.destinationField || e.destinationMasked !== task.destinationMasked) {
         await SimCallTask.updateOne({ _id: task._id }, { $set: { destinationField: e.field, destinationMasked: e.destinationMasked } });
         task.destinationField = e.field; task.destinationMasked = e.destinationMasked;
@@ -619,6 +621,7 @@ class SimCallService {
     const now = new Date();
     const attempt = task.attempts.find((a) => a.attemptId === attemptId);
     if (attempt?.dialedAt) throw conflict('This attempt was already authorized; reconcile its outcome instead of dialing again', SIM_CALL_ERROR_CODES.ALREADY_DIALED);
+    const contactPolicyBlock = await contactPolicyHooks.simCallDialGate(task, attemptId); if (contactPolicyBlock) throw conflict(contactPolicyBlock.message, SIM_CALL_ERROR_CODES.TASK_LOCKED, contactPolicyBlock.details);
     const result = await SimCallTask.updateOne(
       { _id: task._id, state: 'in_progress', 'lock.deviceId': deviceId, 'lock.attemptId': attemptId, 'lock.until': { $gt: now },
         attempts: { $elemMatch: { attemptId, dialedAt: null, completedAt: null } } },

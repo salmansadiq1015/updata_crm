@@ -49,6 +49,13 @@ import { RatingStars } from './rating-stars';
 import { EmailHistoryPanel as EmailHistoryPanelImpl } from '@/modules/doctpl/components/email-history-panel';
 import { LeadCallsTab } from '@/modules/aiCalling/ui/lead-calls-tab';
 import { LeadMobileCommunications } from './lead-mobile-communications';
+import { LeadConversationHistory } from './lead-conversation-history';
+import { LeadSlaBadge } from './lead-sla-badge';
+import { LeadContactPolicy } from '@/modules/smsOps/ui/lead-contact-policy';
+import { AccessReasonGate } from '@/modules/governance/ui/access-reason-gate';
+import { LeadPiiReveal } from '@/modules/governance/ui/lead-pii-reveal';
+import { LeadAccessHistory } from '@/modules/governance/ui/lead-access-history';
+import { isAccessReasonRequired } from '@/modules/governance/services/governance-api';
 import { useDeleteLead, useEnrichLead, useLead, useLeadContactLog, useUpdateLead } from '../hooks/use-leads';
 import type {
   Lead,
@@ -72,6 +79,7 @@ import {
 import type { TranslateFn } from './lead-ui-kit';
 import { LeadOutreachComposer } from './lead-outreach-composer';
 import { LeadConsentPanel } from './lead-consent-panel';
+import { LeadScorePanel } from './lead-score-panel';
 import type { OutreachChannel } from '../services/messaging-api';
 import { messagingApi } from '../services/messaging-api';
 import {
@@ -332,11 +340,11 @@ function ProviderMessageHistory({ leadId, locale, receivedOnly = false }: { lead
                 <span className="rounded-full bg-muted px-2 py-0.5 normal-case capitalize text-foreground">{entry.status}</span>
                 <span>{formatRelativeTime(entry.createdAt, locale)}</span>
               </div>
-              {entry.rendered?.subject && <p className="mt-1 text-sm font-medium text-foreground">{entry.rendered.subject}</p>}
-              <p className={cn('mt-1 text-sm text-foreground', receivedOnly ? 'whitespace-pre-wrap break-words' : 'truncate')}>{entry.rendered?.bodyText || campaign || 'Message content unavailable'}</p>
+              {entry.rendered?.subject && <p dir="auto" className="mt-1 text-sm font-medium text-foreground">{entry.rendered.subject}</p>}
+              <p dir="auto" className={cn('mt-1 text-sm text-foreground', receivedOnly ? 'whitespace-pre-wrap break-words' : 'truncate')}>{entry.rendered?.bodyText || campaign || 'Message content unavailable'}</p>
               {(campaign || evidenceAt) && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{campaign ? `Campaign: ${campaign}` : 'Direct message'}{evidenceAt ? ` · ${entry.status} ${formatRelativeTime(evidenceAt, locale)}` : ''}</p>}
               {entry.error?.message && <p className="mt-0.5 text-xs text-destructive">{entry.error.message}</p>}
-              {entry.providerMessageId && <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{entry.providerMessageId}</p>}
+              {entry.providerMessageId && <p dir="ltr" className="mt-0.5 truncate text-start font-mono text-[10px] text-muted-foreground">{entry.providerMessageId}</p>}
             </div>
           </li>
         );
@@ -497,7 +505,10 @@ export function LeadDetailDrawer({
 
   // ── Body ───────────────────────────────────────────────────────────────────
   let body: ReactNode;
-  if (!lead && leadQuery.isError) {
+  if (!lead && leadQuery.isError && leadId && isAccessReasonRequired(leadQuery.error)) {
+    // Governance (team mode): a lead the viewer does not own needs a stated reason.
+    body = <AccessReasonGate leadId={leadId} onGranted={() => void leadQuery.refetch()} onCancel={() => onOpenChange(false)} />;
+  } else if (!lead && leadQuery.isError) {
     body = (
       <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
         <AlertTriangle className="h-6 w-6 text-warning" aria-hidden="true" />
@@ -781,6 +792,7 @@ function LeadDetailBody({
       {/* Status + type */}
       <div className="flex flex-wrap items-center gap-2">
         <LeadStatusBadge status={lead.status} size="md" />
+        <LeadSlaBadge sla={lead.sla} size="md" />
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
           <TypeIcon className="h-3.5 w-3.5" aria-hidden="true" />
           {getLeadTypeLabel(t, lead.type)}
@@ -838,6 +850,7 @@ function LeadDetailBody({
             ['responses', t('leads.drawer.tabResponses', 'Responses')],
             ['calls', t('leads.drawer.tabCalls', 'AI Calls')],
             ['communication', t('leads.drawer.tabCommunication', 'Activity')],
+            ['history', t('leads.history.tab', 'History')],
             ['business', t('leads.drawer.tabBusiness', 'Business')],
             ['notes', t('leads.drawer.tabNotes', 'Notes')],
             ['consent', t('leads.drawer.tabConsent', 'Consent')],
@@ -846,6 +859,11 @@ function LeadDetailBody({
             <Tabs.Trigger key={value} value={value} className="min-w-0 rounded-lg px-1 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{label}</Tabs.Trigger>
           ))}
         </Tabs.List>
+        <Tabs.Content value="history" className="space-y-5 outline-none">
+          <Section title={t('leads.history.title', 'Conversation history')}>
+            <LeadConversationHistory leadId={lead.id} />
+          </Section>
+        </Tabs.Content>
         <Tabs.Content value="overview" className="space-y-5 outline-none">
       {/* Enrich from website: fills missing contact/social data from the lead's
           site. Needs lead:enrich AND a website (disabled + hinted otherwise). */}
@@ -953,8 +971,14 @@ function LeadDetailBody({
         </div>
       </Section>
 
+      {/* Lead quality: evidence-backed score breakdown */}
+      <Section title={t('leads.score.section', 'Why this score')}>
+        <LeadScorePanel leadId={lead.id} canRecalculate={canWrite} />
+      </Section>
+
       {/* Contact */}
       <Section title={t('leads.drawer.sectionContact', 'Contact')}>
+        <LeadPiiReveal lead={lead} />
         {phone || mobile || lead.email || lead.website ? (
           <InfoList label={t('leads.drawer.sectionContact', 'Contact')}>
             {phone && (
@@ -1305,6 +1329,7 @@ function LeadDetailBody({
             locale={locale}
             t={t}
           />
+          <LeadAccessHistory leadId={lead.id} />
         </div>
       </Section>
 
@@ -1312,6 +1337,7 @@ function LeadDetailBody({
       <Section title={t('leads.drawer.sectionMobileComm', 'Mobile calls & SMS')}>
         <LeadMobileCommunications leadId={lead.id} />
       </Section>
+      <Section title={t('smsOps.lead.section', 'Contact limits')}><LeadContactPolicy leadId={lead.id} /></Section>
 
         </Tabs.Content>
         <Tabs.Content value="responses" className="space-y-5 outline-none">

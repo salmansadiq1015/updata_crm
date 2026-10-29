@@ -136,6 +136,37 @@ describe('Agent test entry point', () => {
 });
 
 describe('WebCallConsole', () => {
+  it('can pause the visualization without starting a call', async () => {
+    const { WebCallConsole } = await import('../ui/web-call-console');
+    render(<WebCallConsole campaignId="campaign-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pause orb animation' }));
+    expect(screen.getByRole('img', { name: 'Voice agent is idle' })).toHaveAttribute('data-motion', 'reduced');
+    expect(mocks.startWebTest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable orb animation' }));
+    expect(screen.getByRole('img', { name: 'Voice agent is idle' })).toHaveAttribute('data-motion', 'full');
+  });
+
+  it('follows worker conversation states even without captions and ignores stale speaker events', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const onStatusChange = vi.fn();
+    const { WebCallConsole } = await import('../ui/web-call-console');
+    render(<WebCallConsole campaignId="campaign-1" agentName="Maya" onStatusChange={onStatusChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start test session' }));
+    await waitFor(() => expect(screen.getByText('Live browser call')).toBeTruthy());
+    act(() => { mocks.callbacks.trackSubscribed?.({ kind: 'audio', attach: vi.fn() }); });
+
+    for (const [state, label] of [['thinking', 'processing'], ['speaking', 'speaking'], ['listening', 'listening']]) {
+      act(() => { mocks.callbacks.participantAttributesChanged?.(
+        { 'lk.agent.state': state },
+        { identity: 'agent-1', attributes: { 'lk.agent.state': state } },
+      ); });
+      expect(screen.getByRole('img')).toHaveAttribute('data-state', label);
+      expect(onStatusChange).toHaveBeenLastCalledWith(expect.objectContaining({ orbState: label }));
+    }
+    act(() => { mocks.callbacks.activeSpeakersChanged?.([{ identity: 'agent-1', audioLevel: 0.8 }]); });
+    expect(screen.getByRole('img')).toHaveAttribute('data-state', 'listening');
+  });
+
   it('connects the real browser call and exposes transcript, mute and hang-up controls', async () => {
     const { WebCallConsole } = await import('../ui/web-call-console');
     render(<WebCallConsole campaignId="campaign-1" agentName="Maya" />);

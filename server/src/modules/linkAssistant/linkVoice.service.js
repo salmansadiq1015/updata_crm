@@ -174,6 +174,7 @@ class LinkVoiceService {
     const company = companyOf(campaign);
     return {
       channel: 'web_link',
+      transcriptionContext: { questions: (campaign.questionnaire?.questions || []).map(q => ({ text: q.text, type: q.type })) },
       participantIdentity: `${VOICE_CUSTOMER_IDENTITY_PREFIX}${session._id}`,
       persistTranscript: true,
       // Already disclosed in an earlier call or in the chat: a short hello, then the current step.
@@ -186,6 +187,7 @@ class LinkVoiceService {
       }),
       agentConfig: {
         ...(campaign.agentConfig || {}),
+        language: session.language,
         maxCallSeconds: cfg.limits.maxVoiceMinutes * 60,
         silenceTimeoutSeconds: Math.max(10, Number(campaign.agentConfig?.silenceTimeoutSeconds) || 12),
         allowBargeIn: true,

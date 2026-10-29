@@ -41,6 +41,8 @@ export class Esp32Device extends EventEmitter {
     this.seq = 0;
     this.pending = new Map();
     this.info = null;
+    this.sessionValid = false;
+    this.probing = false;
     this.state = null;
     this.lastRx = this.now();
     this.closed = false;
@@ -73,6 +75,7 @@ export class Esp32Device extends EventEmitter {
     if (this.info.protoMajor !== PROTO_MAJOR) {
       throw new DeviceError(`firmware speaks protocol ${this.info.protoMajor}.${this.info.protoMinor}, gateway ${PROTO_MAJOR}.x`, 'proto_mismatch');
     }
+    this.sessionValid = true;
     this.emit('hello', this.info);
     return this.info;
   }
@@ -257,6 +260,7 @@ export class Esp32Device extends EventEmitter {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.sessionValid = false;
     clearInterval(this.timer);
     this.stream.off('data', this._onData);
     this.stream.off('close', this._onClose);
@@ -307,6 +311,7 @@ export class Esp32Device extends EventEmitter {
         case T.ACK: {
           const p = this.pending.get(v.ackedSeq);
           if (p) {
+            if (v.result === 'no_session') this.sessionValid = false;
             clearTimeout(p.timer);
             this.pending.delete(v.ackedSeq);
             p.resolve(v);
@@ -348,11 +353,22 @@ export class Esp32Device extends EventEmitter {
       this._lost(`no frame from the device for ${this.lostAfterMs} ms`);
       return;
     }
-    if (this.info) this._send(T.PING, build.ping(this.now() & 0xffffffff));
+    if (this.info) {
+      // Firmware answers PING even after its host watchdog invalidates HELLO.
+      // A PONG alone must never keep a dead control session "ready" forever.
+      this._send(T.PING, build.ping(this.now() & 0xffffffff));
+      if (!this.probing) {
+        this.probing = true;
+        this.statusRequest().catch(error => {
+          if (!this.closed) this._lost(`USB control session check failed: ${error.code || error.message}`);
+        }).finally(() => { this.probing = false; });
+      }
+    }
   }
 
   _lost(reason) {
     if (this.closed) return;
+    this.sessionValid = false;
     this.emit('lost', reason);
     this.close();
   }

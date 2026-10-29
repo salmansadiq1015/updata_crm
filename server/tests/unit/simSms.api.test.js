@@ -225,6 +225,36 @@ describe('campaign creation + eligibility', () => {
   });
 });
 
+describe('dispatch safety', () => {
+  it('rechecks consent after lease and before the phone sends', async () => {
+    const lead = await makeLead();
+    await grantSms(lead);
+    await startCampaign([lead]);
+    const leased = await request(server).post('/api/v1/sim-sms/device/lease').set(auth(tokenA)).send({ deviceId: DEVICE }).expect(200);
+    const message = leased.body.data.message;
+    expect(message).toBeTruthy();
+    await LeadChannelConsent.updateOne({ leadId: lead._id, channel: 'sms' }, { $set: { status: 'revoked' } });
+    const result = await request(server).post(`/api/v1/sim-sms/device/messages/${message.id}/attempting`).set(auth(tokenA)).send({ deviceId: DEVICE }).expect(200);
+    expect(result.body.data).toMatchObject({ proceed: false, reason: 'SMS_CONSENT_DENIED' });
+    expect((await SimSmsMessage.findById(message.id).lean()).status).toBe('cancelled');
+  });
+
+  it('creates only one retry for concurrent duplicate failure reports', async () => {
+    const lead = await makeLead();
+    await grantSms(lead);
+    await startCampaign([lead]);
+    const leased = await request(server).post('/api/v1/sim-sms/device/lease').set(auth(tokenA)).send({ deviceId: DEVICE }).expect(200);
+    const message = leased.body.data.message;
+    expect(message).toBeTruthy();
+    await request(server).post(`/api/v1/sim-sms/device/messages/${message.id}/attempting`).set(auth(tokenA)).send({ deviceId: DEVICE }).expect(200);
+    const reports = await Promise.all(Array.from({ length: 5 }, () => request(server)
+      .post(`/api/v1/sim-sms/device/messages/${message.id}/result`).set(auth(tokenA))
+      .send({ deviceId: DEVICE, status: 'failed', errorCode: 'RESULT_ERROR_NO_SERVICE' })));
+    expect(reports.every((response) => response.status === 200)).toBe(true);
+    expect(await SimSmsMessage.countDocuments({ conversationId: message.conversationId, status: 'pending' })).toBe(1);
+  });
+});
+
 describe('device transport: at most once', () => {
   it('leases the opening (identity + STOP + first question), paces, and refuses a second device', async () => {
     const lead = await makeLead(); await grantSms(lead);

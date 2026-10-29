@@ -11,6 +11,11 @@ import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
 import { useAiStore } from '@/modules/ai/store/ai-store';
 import { cn } from '@/lib/utils';
 
+// Incoming AI-call transfer offers (context card + live audio join) wherever the user is in the CRM.
+const IncomingTransferHost = lazy(() =>
+  import('@/modules/aiCalling/ui/incoming-transfer-host').then((m) => ({ default: m.IncomingTransferHost }))
+);
+
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
 );
@@ -73,6 +78,10 @@ export default function PlatformLayout({ children }) {
 
       {/* Right drawer */}
       <RightDrawer />
+
+      <Suspense fallback={null}>
+        <IncomingTransferHost />
+      </Suspense>
 
       {/* AI Assistant panel — button lives in the header; not on the AI page,
           where the full chat is already the whole screen. */}

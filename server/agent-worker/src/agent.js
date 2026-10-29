@@ -43,6 +43,7 @@ import {
 } from './callControl.js';
 import { createHumanTransfer, waitForHumanParticipant } from './humanTransfer.js';
 import { transcription, turnDetection } from './transcription.js';
+import { billingUsage } from './billingUsage.js';
 export { transcription, turnDetection } from './transcription.js';
 
 const safeJson = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
@@ -56,6 +57,7 @@ const realtimeModel = () => process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime';
 export default defineAgent({
   entry: async (ctx) => {
     const startedAt = Date.now();
+    const callModel = realtimeModel();
     // LiveKit passes our per-call metadata (apiBase, token, callId, voice…) on the job.
     const meta = safeJson(ctx.job?.metadata) || {};
     const apiBase = meta.agentToolApi || process.env.AGENT_TOOL_API;
@@ -87,12 +89,14 @@ export default defineAgent({
       silenceWatchdog?.stop();
       const durationSeconds = answeredAt ? Math.round((Date.now() - answeredAt) / 1000) : 0;
       await flushTranscripts();
+      // SDK usage is a cumulative session snapshot, not another usage event to add.
+      const finalUsage = billingUsage(session?.usage || usage, { model: callModel });
       await api.end({
         disposition,
         durationSeconds,
         ...(callNotes ? { callNotes } : {}),
         roomName: ctx.room?.name || meta.roomName || null,
-        ...(usage ? { cost: { amount: 0, currency: 'USD', breakdown: { usage } } } : {}),
+        ...(finalUsage ? { cost: { amount: 0, currency: 'USD', breakdown: { usage: finalUsage } } } : {}),
         quality: (answeredAt && quality.markAnswered(), quality.summary(session?.history?.items)),
         ...(reason ? { failureCode: reason.code, failureMessage: reason.message.slice(0, 500) } : {}),
       }).catch((e) => warn('end tool call failed (the CRM reconciler will finish the call)', { callId, error: e?.message }));
@@ -337,7 +341,7 @@ export default defineAgent({
 
     session = new voice.AgentSession({
       llm: new openai.realtime.RealtimeModel({
-        model: realtimeModel(),
+        model: callModel,
         voice: meta.voice || config.voice || process.env.OPENAI_REALTIME_VOICE || 'alloy',
         apiKey: process.env.OPENAI_API_KEY,
         turnDetection: turnDetection(),

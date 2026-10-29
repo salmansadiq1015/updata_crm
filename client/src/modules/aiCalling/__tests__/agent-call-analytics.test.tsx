@@ -10,7 +10,7 @@ vi.mock('@/lib/api/download', () => ({ downloadBlob: mocks.download }));
 vi.mock('@/lib/toast', () => ({ showError: vi.fn(), showSuccess: vi.fn() }));
 vi.mock('../ui/call-detail-drawer', () => ({ CallDetailDrawer: ({ callId }: { callId: string }) => <div>Conversation {callId}</div> }));
 
-const { AgentCallAnalytics: Analytics } = await import('../ui/agent-call-analytics');
+const { AgentCallAnalytics: Analytics, rangeParams } = await import('../ui/agent-call-analytics');
 
 const tokens = { inputAudio: 10000, inputCachedAudio: 4000, inputText: 2000, inputCachedText: 0, outputAudio: 2500, outputText: 500, input: 12000, output: 3000, total: 15000 };
 const call: AnalyzedCall = {
@@ -44,13 +44,14 @@ beforeEach(() => { vi.clearAllMocks(); mocks.callAnalytics.mockResolvedValue(ana
 describe('agent call analytics', () => {
   it('shows spend, per-call/per-lead averages, tokens and the excluded test spend', async () => {
     renderIt();
-    expect(await screen.findByText('Total call spend')).toBeTruthy();
+    expect(await screen.findByText('Estimated call total')).toBeTruthy();
     expect(screen.getAllByText('$0.3696').length).toBeGreaterThan(1);
     expect(screen.getAllByText('$0.1848').length).toBeGreaterThan(0); // avg per call (also a trend axis label)
     expect(screen.getAllByText('15,000').length).toBeGreaterThan(0);
     expect(screen.getByText(/3 test call\(s\) \(\$0\.5000\) are excluded/)).toBeTruthy();
     expect(screen.getByText(/Telephony minutes are not included/)).toBeTruthy();
-    expect(mocks.callAnalytics).toHaveBeenCalledWith('a1', { from: expect.any(String) });
+    expect(mocks.callAnalytics).toHaveBeenCalledWith('a1', { from: expect.any(String), to: expect.any(String) });
+    expect(screen.getByRole('region', { name: 'Billing comparison' })).toHaveTextContent('not reconciled with OpenAI billing');
     // Cost-per-minute figure and total minutes are surfaced in the hero.
     expect(screen.getAllByText('Cost per minute').length).toBeGreaterThan(0);
     expect(screen.getByText('Total minutes')).toBeTruthy();
@@ -75,7 +76,7 @@ describe('agent call analytics', () => {
     expect(screen.getByText('Budget approval needed')).toBeTruthy();
     expect(screen.getByText('“That sounds great”')).toBeTruthy();
     expect(screen.getByText('6 / 7')).toBeTruthy();
-    expect(screen.getByText(/Estimated from gpt-realtime token usage at list prices · 2 billed min/)).toBeTruthy();
+    expect(screen.getByText(/Estimated from gpt-realtime token usage at list prices. Input caching is discounted/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Open conversation/ }));
     expect(screen.getByText('Conversation c1')).toBeTruthy();
   });
@@ -92,11 +93,40 @@ describe('agent call analytics', () => {
   it('exports the CSV and shows an empty state with no calls', async () => {
     mocks.callAnalyticsCsv.mockResolvedValue(new Blob(['x']));
     renderIt();
-    await screen.findByText('Total call spend');
+    await screen.findByText('Estimated call total');
     fireEvent.click(screen.getByRole('button', { name: /Export CSV/ }));
     await vi.waitFor(() => expect(mocks.download).toHaveBeenCalled());
     mocks.callAnalytics.mockResolvedValue({ ...analytics, totals: { ...analytics.totals, calls: 0 } });
-    fireEvent.click(screen.getByRole('radio', { name: '7 days' }));
+    fireEvent.click(screen.getByRole('radio', { name: '90 days' }));
     expect(await screen.findByText('No campaign calls in this period')).toBeTruthy();
+  });
+
+  it('uses complete UTC days independent of the browser timezone', () => {
+    expect(rangeParams('7', new Date('2026-10-29T23:30:00-05:00'))).toEqual({ from: '2026-10-24T00:00:00.000Z', to: '2026-10-31T00:00:00.000Z' });
+    expect(rangeParams('all')).toEqual({});
+  });
+
+  it('contains the SVG inside a bounded plot with explicit width and handles a single data point', async () => {
+    renderIt();
+    const plot = await screen.findByTestId('cost-trend-plot');
+    expect(plot.querySelector('svg')).toHaveAttribute('width', '100%');
+    expect(plot.querySelector('svg')).toHaveClass('w-full');
+    expect(plot.querySelector('circle')).toBeTruthy();
+  });
+
+  it('does not label unavailable pricing as a free call', async () => {
+    mocks.callAnalytics.mockResolvedValue({ ...analytics, calls: [{ ...call, cost: { ...call.cost, amount: 0, unpriced: true } }] });
+    renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: /Bilal Traders/ }));
+    expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
+    expect(screen.getByText(/this is not a zero-cost call/)).toBeTruthy();
+  });
+
+  it('does not present a zero-dollar total or flat cost trend when all historical calls lack model identity', async () => {
+    mocks.callAnalytics.mockResolvedValue({ ...analytics, totals: { ...analytics.totals, totalCost: 0 }, billing: { unpricedCalls: 1, foreignCurrencyCalls: 0, modelEstimate: 0, additionalEstimate: 0 }, calls: [{ ...call, cost: { ...call.cost, amount: 0, unpriced: true } }] });
+    renderIt();
+    await screen.findByText('Estimated call total');
+    expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(1);
+    expect(screen.getByText(/Cost trend is unavailable/)).toBeTruthy();
   });
 });

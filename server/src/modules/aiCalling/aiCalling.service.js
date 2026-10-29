@@ -2941,7 +2941,7 @@ export function estimateCallCost(call, reported = null, rate = Number(process.en
   if (breakdown?.usage) {
     const priced = computeCallCost({
       usage: breakdown.usage, durationSeconds: call.durationSeconds || 0, provider: call.provider,
-      fallbackModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime', isTest: call.isTest,
+      fallbackModel: null, isTest: call.isTest,
     });
     return { amount: priced.amount, currency: 'USD', breakdown: { ...breakdown, ...priced.breakdown } };
   }

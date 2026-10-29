@@ -14,6 +14,7 @@ export const MODEL_PRICING = Object.freeze({
   'gpt-4o-realtime-preview': { audioIn: 40, audioCachedIn: 2.5, audioOut: 80, textIn: 5, textCachedIn: 2.5, textOut: 20 },
   'gpt-4o-mini-realtime-preview': { audioIn: 10, audioCachedIn: 0.3, audioOut: 20, textIn: 0.6, textCachedIn: 0.3, textOut: 2.4 },
 });
+export const COST_PRICING_VERSION = 2;
 
 const RATE_KEYS = ['audioIn', 'audioCachedIn', 'audioOut', 'textIn', 'textCachedIn', 'textOut'];
 const n = v => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
@@ -24,17 +25,21 @@ export function pricingTable(env = process.env) {
   try { custom = env.AI_CALLING_MODEL_PRICING ? JSON.parse(env.AI_CALLING_MODEL_PRICING) : {}; } catch { custom = {}; }
   const table = { ...MODEL_PRICING };
   for (const [model, rates] of Object.entries(custom || {})) {
-    if (rates && typeof rates === 'object') table[model] = { ...(table[model] || {}), ...Object.fromEntries(RATE_KEYS.map(k => [k, n(rates[k])])) };
+    if (rates && typeof rates === 'object') {
+      // Partial overrides must retain the other rates; explicit zero is valid.
+      const valid = Object.fromEntries(RATE_KEYS.filter(k => rates[k] !== '' && rates[k] != null && Number.isFinite(Number(rates[k])) && Number(rates[k]) >= 0).map(k => [k, Number(rates[k])]));
+      table[model.toLowerCase()] = { ...(table[model.toLowerCase()] || {}), ...valid };
+    }
   }
   return table;
 }
 
-/** Exact model name first, then the longest known prefix (dated snapshots, "-2.1" revisions). */
+/** Exact model or its dated snapshot. A new model family must have its own rates. */
 export function resolvePricing(model, table = pricingTable()) {
   if (!model) return null;
   const key = String(model).toLowerCase();
   if (table[key]) return { pricedAs: key, rates: table[key] };
-  const prefix = Object.keys(table).filter(k => key.startsWith(k)).sort((a, b) => b.length - a.length)[0];
+  const prefix = Object.keys(table).find(k => key.startsWith(`${k}-`) && /^\d{4}-\d{2}-\d{2}$/.test(key.slice(k.length + 1)));
   return prefix ? { pricedAs: prefix, rates: table[prefix] } : null;
 }
 
@@ -51,13 +56,18 @@ export function summarizeUsage(usage) {
   for (const u of entries) {
     model ||= u.model || null;
     const audioIn = n(u.inputAudioTokens);
-    const textIn = n(u.inputTextTokens) || Math.max(0, n(u.inputTokens) - audioIn - n(u.inputImageTokens));
+    const textIn = u.inputTextTokens != null ? n(u.inputTextTokens) : Math.max(0, n(u.inputTokens) - audioIn - n(u.inputImageTokens));
     const audioOut = n(u.outputAudioTokens);
-    const textOut = n(u.outputTextTokens) || Math.max(0, n(u.outputTokens) - audioOut);
+    const textOut = u.outputTextTokens != null ? n(u.outputTextTokens) : Math.max(0, n(u.outputTokens) - audioOut);
     t.inputAudio += audioIn;
-    t.inputCachedAudio += Math.min(audioIn, n(u.inputCachedAudioTokens));
+    const cached = n(u.inputCachedTokens);
+    const cachedAudio = u.inputCachedAudioTokens != null ? n(u.inputCachedAudioTokens)
+      : u.inputCachedTextTokens != null ? Math.max(0, cached - n(u.inputCachedTextTokens) - n(u.inputCachedImageTokens)) : textIn === 0 ? cached : 0;
+    const cachedText = u.inputCachedTextTokens != null ? n(u.inputCachedTextTokens)
+      : u.inputCachedAudioTokens != null ? Math.max(0, cached - n(u.inputCachedAudioTokens) - n(u.inputCachedImageTokens)) : audioIn === 0 ? cached : 0;
+    t.inputCachedAudio += Math.min(audioIn, cachedAudio);
     t.inputText += textIn;
-    t.inputCachedText += Math.min(textIn, n(u.inputCachedTextTokens) || Math.max(0, n(u.inputCachedTokens) - n(u.inputCachedAudioTokens)));
+    t.inputCachedText += Math.min(textIn, cachedText);
     t.outputAudio += audioOut;
     t.outputText += textOut;
   }
@@ -84,8 +94,29 @@ export function modelCost(tokens, rates) {
 export function computeCallCost({ usage = null, durationSeconds = 0, provider = null, fallbackModel = null, isTest = false } = {}, env = process.env) {
   const { model: reportedModel, tokens, hasUsage } = summarizeUsage(usage);
   const model = reportedModel || fallbackModel || null;
-  const pricing = hasUsage ? resolvePricing(model, pricingTable(env)) : null;
-  const llm = modelCost(tokens, pricing?.rates);
+  const table = pricingTable(env);
+  const entries = (Array.isArray(usage?.modelUsage) ? usage.modelUsage : Array.isArray(usage) ? usage : []).filter(u => u && (u.type === 'llm_usage' || u.type == null));
+  const models = entries.map(entry => {
+    const name = entry.model || fallbackModel || null;
+    const pricing = (!entry.provider || /^(openai|api\.openai\.com)$/i.test(entry.provider)) ? resolvePricing(name, table) : null;
+    const normalized = summarizeUsage([entry]).tokens;
+    const ambiguousCache = n(entry.inputCachedTokens) > 0 && normalized.inputAudio > 0 && normalized.inputText > 0
+      && entry.inputCachedAudioTokens == null && entry.inputCachedTextTokens == null;
+    const inconsistent = (entry.inputTokens != null && normalized.input !== n(entry.inputTokens))
+      || (entry.outputTokens != null && normalized.output !== n(entry.outputTokens))
+      || n(entry.inputCachedTokens) > normalized.input
+      || (entry.inputCachedTokens != null && !ambiguousCache && normalized.inputCachedAudio + normalized.inputCachedText + n(entry.inputCachedImageTokens) !== n(entry.inputCachedTokens))
+      || n(entry.inputCachedAudioTokens) > normalized.inputAudio || n(entry.inputCachedTextTokens) > normalized.inputText
+      || Object.entries(entry).some(([key, value]) => /Tokens$/.test(key) && value != null && (!Number.isFinite(Number(value)) || Number(value) < 0));
+    const detail = modelCost(normalized, ambiguousCache || inconsistent ? null : pricing?.rates);
+    return { model: name, provider: entry.provider || null, pricedAs: pricing?.pricedAs || null, rates: pricing?.rates || null, tokens: normalized, amount: detail.total, detail,
+      unpriced: !pricing || RATE_KEYS.some(k => pricing.rates[k] == null) || n(entry.inputImageTokens) > 0 || ambiguousCache || inconsistent,
+      issues: [!pricing ? 'unknown_model_or_provider' : null, ambiguousCache ? 'missing_cached_modality_split' : null, inconsistent ? 'inconsistent_token_totals' : null, n(entry.inputImageTokens) > 0 ? 'image_pricing_not_recorded' : null].filter(Boolean) };
+  });
+  const llm = { total: 0, audioIn: 0, audioOut: 0, textIn: 0, textOut: 0 };
+  for (const row of models) for (const k of Object.keys(llm)) llm[k] += row.detail[k];
+  for (const k of Object.keys(llm)) llm[k] = round(llm[k]);
+  const pricing = models.length === 1 ? models[0] : null;
   const billedMinutes = durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : 0;
   const carrierLeg = !isTest && provider && !['livekit_web', 'web_link_preview', 'paired_phone'].includes(provider);
   const telephonyRate = carrierLeg ? n(env.AI_CALLING_TELEPHONY_COST_PER_MINUTE) : 0;
@@ -95,7 +126,10 @@ export function computeCallCost({ usage = null, durationSeconds = 0, provider = 
   return {
     amount: round(llm.total + telephony + platform),
     breakdown: {
-      source: 'token_usage', estimate: true, model, pricedAs: pricing?.pricedAs || null, unpriced: hasUsage && !pricing,
+      source: 'token_usage', estimate: true, pricingVersion: COST_PRICING_VERSION,
+      model: models.length > 1 ? [...new Set(models.map(m => m.model))].join(', ') : model,
+      pricedAs: pricing?.pricedAs || null, unpriced: !hasUsage || models.some(m => m.unpriced),
+      models, invoiceVerified: false,
       tokens, rates: pricing?.rates || null,
       components: { model: llm.total, modelDetail: llm, telephony, platform },
       billedMinutes, telephonyRatePerMinute: telephonyRate, platformRatePerMinute: platformRate,

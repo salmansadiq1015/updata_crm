@@ -517,6 +517,8 @@ export interface AnalyzedCallCost {
   amount: number; currency: string; source: 'token_usage' | 'per_minute_estimate' | 'provider_reported' | 'none';
   estimate: boolean; model: string | null; pricedAs: string | null; unpriced: boolean;
   tokens: CallTokenUsage | null; rates: Record<string, number> | null; components: CostComponents; billedMinutes: number | null;
+  invoiceVerified?: boolean;
+  models?: Array<{ model: string | null; provider: string | null; amount: number; unpriced: boolean; issues?: string[] }>;
 }
 export interface AnalyzedCall {
   id: string; internalCallId: string; attemptNumber: number; leadId: string; leadName: string; leadPhone: string | null;
@@ -533,6 +535,7 @@ export interface AnalyzedCall {
   cost: AnalyzedCallCost;
 }
 export interface AnalyzedLead {
+  pricingIncomplete?: boolean;
   leadId: string; name: string; phone: string | null; status: string | null; calls: number; connected: number;
   seconds: number; cost: number; tokens: number; avgCostPerCall: number | null; lastCallAt: string; lastCallId: string;
   lastDisposition: string | null; lastQualification: string | null; lastTone: LeadTone | null; lastSummary: string;
@@ -549,7 +552,11 @@ export interface AgentCallAnalytics {
     callsWithUsage: number; callsWithoutCost: number;
   };
   testing: { calls: number; totalCost: number; seconds: number; tokens: number };
-  pricing: { telephonyRatePerMinute: number; platformRatePerMinute: number; model: string };
+  pricing: { telephonyRatePerMinute: number; platformRatePerMinute: number; model: string | null };
+  billing?: {
+    status: 'not_reconciled'; timezone: 'UTC'; currency: 'USD'; from: string | null; to: string | null;
+    modelEstimate: number; additionalEstimate: number; unpricedCalls: number; foreignCurrencyCalls: number; excludes: string[];
+  };
   tone: Record<LeadTone | 'unrecorded', number>;
   outcomes: Partial<Record<CallOutcomeProfile, number>>;
   byDay: Array<{ date: string; calls: number; connected: number; cost: number; seconds: number; tokens: number }>;

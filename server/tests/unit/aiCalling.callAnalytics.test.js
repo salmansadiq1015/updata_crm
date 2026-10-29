@@ -135,12 +135,72 @@ describe('per-call cost engine', () => {
 });
 
 describe('agent call analytics', () => {
+  it('identifies estimates and scope instead of claiming they are reconciled OpenAI charges', async () => {
+    const { agent } = await answeredCall();
+    const result = await request(app).get(`/ai-calling/agents/${agent._id}/call-analytics`).expect(200);
+    expect(result.body.data.billing).toMatchObject({ status: 'not_reconciled', timezone: 'UTC', modelEstimate: MODEL_COST, additionalEstimate: 0, unpricedCalls: 0, foreignCurrencyCalls: 0 });
+    expect(result.body.data.billing.excludes).toContain('input_transcription');
+  });
+
+  it('recalculates old token estimates from evidence while preserving an explicit provider amount', async () => {
+    const { pricedCost } = await import('../../src/modules/aiCalling/callAnalytics.service.js');
+    const base = { durationSeconds: 90, provider: 'livekit_web', isTest: true };
+    expect(pricedCost({ ...base, cost: { amount: 99, breakdown: { estimate: true, source: 'token_usage', usage } } }, {}).amount).toBeCloseTo(MODEL_COST, 6);
+    expect(pricedCost({ ...base, cost: { amount: 0.02, currency: 'USD', breakdown: { source: 'provider_reported', usage } } }, {}).amount).toBe(0.02);
+  });
+
+  it('previews stored-estimate repair without replacing provider totals or current priced estimates', async () => {
+    const { repairedEstimate } = await import('../../scripts/reprice-call-estimates.mjs');
+    const original = { durationSeconds: 90, cost: { amount: 99, currency: 'USD', breakdown: { estimate: true, source: 'token_usage', usage } } };
+    const fixed = repairedEstimate(original, {});
+    expect(fixed.amount).toBeCloseTo(MODEL_COST, 6);
+    expect(original.cost.amount).toBe(99);
+    expect(fixed.breakdown.usage).toEqual(usage);
+    expect(repairedEstimate({ ...original, cost: fixed }, {})).toBeNull();
+    expect(repairedEstimate({ ...original, cost: { ...original.cost, breakdown: { source: 'provider_reported', usage } } }, {})).toBeNull();
+  });
+
+  it('does not price the photographed legacy usage with the current server default when model metadata is blank', async () => {
+    const { pricedCost } = await import('../../src/modules/aiCalling/callAnalytics.service.js');
+    const usageWithoutModel = { modelUsage: [{ type: 'llm_usage', model: '', provider: '',
+      inputTokens: 101210, inputCachedTokens: 55552, inputAudioTokens: 12937, inputCachedAudioTokens: 5312,
+      inputTextTokens: 88273, inputCachedTextTokens: 50240, outputTokens: 2657, outputAudioTokens: 1555, outputTextTokens: 1102 }] };
+    const result = pricedCost({ durationSeconds: 208, provider: 'paired_phone', cost: { amount: 0, currency: 'USD', breakdown: { usage: usageWithoutModel } } }, { OPENAI_REALTIME_MODEL: 'gpt-realtime' });
+    expect(result).toMatchObject({ amount: 0, unpriced: true, model: null });
+    const legacy = pricedCost({ durationSeconds: 208, cost: { amount: 99, breakdown: { usage: usageWithoutModel, tokens: {}, estimate: true, model: 'gpt-realtime', source: 'token_usage' } } }, {});
+    expect(legacy).toMatchObject({ amount: 0, unpriced: true, model: null });
+  });
+
+  it('does not add another currency to USD totals and uses an exclusive period end', async () => {
+    const { agent, record } = await answeredCall();
+    await Calls.collection.updateOne({ _id: record._id }, { $set: { createdAt: new Date('2026-10-29T00:00:00Z'), cost: { amount: 100, currency: 'CHF', breakdown: { source: 'provider_reported' } } } });
+    let response = await request(app).get(`/ai-calling/agents/${agent._id}/call-analytics`).expect(200);
+    expect(response.body.data.totals.totalCost).toBe(0);
+    expect(response.body.data.billing.foreignCurrencyCalls).toBe(1);
+    expect(response.body.data.calls[0].cost).toMatchObject({ amount: 100, currency: 'CHF' });
+    response = await request(app).get(`/ai-calling/agents/${agent._id}/call-analytics?from=2026-10-28T00:00:00Z&to=2026-10-29T00:00:00Z`).expect(200);
+    expect(response.body.data.totals.calls).toBe(0);
+  });
+
   it('stores the priced cost and the agent-observed tone on the call record at /end', async () => {
     const { record } = await answeredCall();
     expect(record.cost.amount).toBeCloseTo(MODEL_COST, 6);
     expect(record.cost.breakdown).toMatchObject({ source: 'token_usage', usage, tokens: { total: 15000 } });
     expect(record.callNotes.behavior).toEqual({ tone: 'positive', evidence: 'Sounds great' });
     expect((await Campaign.findById(record.campaignId).lean()).summary.actualCost).toBeCloseTo(MODEL_COST, 4);
+  });
+
+  it('distinguishes a recorded free call from missing billing evidence', async () => {
+    const { agent, record } = await answeredCall();
+    await Calls.updateOne({ _id: record._id }, { $set: { cost: { amount: 0, currency: 'USD', breakdown: { source: 'provider_reported' } } } });
+    let a = (await request(app).get(`/ai-calling/agents/${agent._id}/call-analytics`).expect(200)).body.data;
+    expect(a.billing.unpricedCalls).toBe(0);
+    expect(a.totals.callsWithoutCost).toBe(0);
+    await Calls.updateOne({ _id: record._id }, { $set: { cost: { amount: 0, currency: 'USD', breakdown: null } } });
+    a = (await request(app).get(`/ai-calling/agents/${agent._id}/call-analytics`).expect(200)).body.data;
+    expect(a.billing.unpricedCalls).toBe(1);
+    expect(a.calls[0].cost.unpriced).toBe(true);
+    expect(a.totals.callsWithoutCost).toBe(1);
   });
 
   it('reports per-call, per-lead and averaged cost, tokens, duration and behaviour over HTTP', async () => {

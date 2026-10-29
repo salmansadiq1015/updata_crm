@@ -5,7 +5,7 @@ import { showSuccess } from '@/lib/toast';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import type { Lead, LeadStatus } from '@/modules/leads/types/lead-types';
 import { useAgentCallAnalytics, useAgentMutations, useCallingAgent } from '../hooks/use-calling-agents';
-import { AgentCallAnalytics, money } from './agent-call-analytics';
+import { AgentCallAnalytics, estimateMoney } from './agent-call-analytics';
 import { ScriptExperiments } from './script-experiments';
 import { useCampaignMutations, useCampaigns, usePreviewEligibility } from '../hooks/use-ai-calling';
 import type { CallingAgent, CallingAgentInput } from '../types/ai-calling-types';
@@ -60,7 +60,7 @@ function AgentSpendSummary({ agentId, onOpen }: { agentId: string; onOpen: () =>
   const { data, isError } = useAgentCallAnalytics(agentId);
   const t = data?.totals;
   if (isError) return null;
-  const items: Array<[string, string]> = t ? [['Total spend', money(t.totalCost, data.currency)], ['Avg cost / call', money(t.avgCostPerCall, data.currency)], ['Cost / lead', money(t.avgCostPerLead, data.currency)], ['Avg duration', t.avgDurationSeconds ? `${Math.floor(t.avgDurationSeconds / 60)}:${String(t.avgDurationSeconds % 60).padStart(2, '0')}` : '—']] : [];
+  const items: Array<[string, string]> = t ? [['Estimated total', estimateMoney(data, t.totalCost)], ['Avg cost / call', estimateMoney(data, t.avgCostPerCall)], ['Cost / lead', estimateMoney(data, t.avgCostPerLead)], ['Avg duration', t.avgDurationSeconds ? `${Math.floor(t.avgDurationSeconds / 60)}:${String(t.avgDurationSeconds % 60).padStart(2, '0')}` : '—']] : [];
   return <section className="relative overflow-hidden rounded-2xl border border-sky-400/15 bg-gradient-to-r from-blue-950/50 via-[#0c1425] to-cyan-950/30 p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><Coins className="size-4 text-sky-300" />Call economics</h2><button className={secondaryClass} onClick={onOpen}>Open call analytics<ArrowRight className="h-3.5 w-3.5" /></button></div>
     {!t ? <p className="mt-3 flex items-center gap-2 text-xs text-slate-400"><Loader2 className="size-3.5 animate-spin" />Loading spend…</p> : !t.calls ? <p className="mt-3 text-sm text-slate-500">Cost per call, per lead and token usage appear here after the first call.</p>

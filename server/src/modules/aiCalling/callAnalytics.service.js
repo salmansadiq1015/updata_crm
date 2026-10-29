@@ -5,7 +5,7 @@ import CallRecord from './callRecord.model.js';
 import Lead from '../crm/lead.model.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import { toCsv } from '../../shared/utils/csv.js';
-import { computeCallCost, needsPricing } from './engine/callCost.js';
+import { computeCallCost, COST_PRICING_VERSION, needsPricing } from './engine/callCost.js';
 
 /**
  * Cost and outcome analytics for one calling agent: every call its campaigns
@@ -28,21 +28,33 @@ const addTokens = (into, t) => { for (const k of TOKEN_KEYS) into[k] += t?.[k] |
 export function pricedCost(call, env = process.env) {
   const cost = call.cost || {};
   const breakdown = cost.breakdown || null;
-  if (needsPricing(breakdown) && !(Number(cost.amount) > 0)) {
+  if (breakdown?.source !== 'provider_reported' && ((needsPricing(breakdown) && !(Number(cost.amount) > 0))
+    || (breakdown?.usage && breakdown?.estimate && ((breakdown.pricingVersion || 0) < COST_PRICING_VERSION || breakdown.unpriced)))) {
+    // Preserve complete historic rate cards, without discarding newly configured
+    // prices for models whose cost was previously unavailable.
+    let overrides = {};
+    try { const parsed = JSON.parse(env.AI_CALLING_MODEL_PRICING || '{}'); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) overrides = parsed; } catch { /* use known rates */ }
+    const completeRates = rates => rates && ['audioIn', 'audioCachedIn', 'audioOut', 'textIn', 'textCachedIn', 'textOut'].every(k => rates[k] != null && Number.isFinite(Number(rates[k])) && Number(rates[k]) >= 0);
+    if (breakdown.model && completeRates(breakdown.rates)) overrides[breakdown.model] = breakdown.rates;
+    for (const m of breakdown.models || []) if (m.model && !m.unpriced && completeRates(m.rates)) overrides[m.model] = m.rates;
+    const historical = { ...env, AI_CALLING_MODEL_PRICING: JSON.stringify(overrides) };
     const priced = computeCallCost({
       usage: breakdown.usage, durationSeconds: call.durationSeconds || 0, provider: call.provider,
-      fallbackModel: env.OPENAI_REALTIME_MODEL || 'gpt-realtime', isTest: call.isTest,
-    }, env);
+      // A missing historical model is unknown; today's server default is not evidence.
+      fallbackModel: null, isTest: call.isTest,
+    }, historical);
     return { amount: priced.amount, currency: 'USD', ...priced.breakdown };
   }
   const components = breakdown?.components || { model: 0, telephony: 0, platform: 0 };
+  const source = breakdown?.source || (breakdown?.estimate ? 'per_minute_estimate' : Number(cost.amount) > 0 ? 'provider_reported' : 'none');
   // A blended per-minute estimate or a provider total has no split: report it as one line.
   const unsplit = !breakdown?.components && Number(cost.amount) > 0;
   return {
-    amount: Number(cost.amount) || 0, currency: cost.currency || 'USD',
-    source: breakdown?.source || (breakdown?.estimate ? 'per_minute_estimate' : Number(cost.amount) > 0 ? 'provider_reported' : 'none'),
+    amount: Number.isFinite(Number(cost.amount)) && Number(cost.amount) >= 0 ? Number(cost.amount) : 0, currency: String(cost.currency || 'USD').toUpperCase(),
+    source,
     estimate: Boolean(breakdown?.estimate), model: breakdown?.model || null, pricedAs: breakdown?.pricedAs || null,
-    unpriced: Boolean(breakdown?.unpriced), tokens: breakdown?.tokens || null, rates: breakdown?.rates || null,
+    unpriced: Boolean(breakdown?.unpriced || (source === 'none' && call.durationSeconds > 0)), tokens: breakdown?.tokens || null, rates: breakdown?.rates || null,
+    models: breakdown?.models || [], invoiceVerified: false, pricingVersion: breakdown?.pricingVersion || null,
     components: unsplit ? { model: 0, telephony: 0, platform: 0, other: Number(cost.amount) } : components,
     billedMinutes: breakdown?.billedMinutes ?? null,
   };
@@ -71,7 +83,7 @@ class CallAnalyticsService {
     if (!agent) throw new NotFoundError('CallingAgent', agentId);
     const campaigns = await CallCampaign.find({ agentId: agent._id, createdBy: actor }).select('_id name').lean();
     const match = { createdBy: new mongoose.Types.ObjectId(String(actor)), campaignId: { $in: campaigns.map(c => c._id) } };
-    if (from || to) match.createdAt = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+    if (from || to) match.createdAt = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lt: new Date(to) } : {}) };
     const turns = role => ({ $size: { $filter: { input: { $ifNull: ['$transcript', []] }, as: 't', cond: { $eq: ['$$t.role', role] } } } });
     const calls = campaigns.length ? await CallRecord.aggregate([
       { $match: match },
@@ -117,17 +129,18 @@ class CallAnalyticsService {
     const live = rows.filter(r => !r.isTest);
     const tests = rows.filter(r => r.isTest);
 
-    const sumCost = list => list.reduce((s, r) => s + r.cost.amount, 0);
+    const sumCost = list => list.reduce((s, r) => s + (r.cost.currency === 'USD' ? r.cost.amount : 0), 0);
     const tokens = addTokens(emptyTokens(), {});
     const components = { model: 0, telephony: 0, platform: 0, other: 0 };
     const modelDetail = { audioIn: 0, audioOut: 0, textIn: 0, textOut: 0 };
     for (const r of live) {
       addTokens(tokens, r.cost.tokens);
+      if (r.cost.currency !== 'USD') continue;
       for (const k of Object.keys(components)) components[k] += r.cost.components?.[k] || 0;
       for (const k of Object.keys(modelDetail)) modelDetail[k] += r.cost.components?.modelDetail?.[k] || 0;
     }
     const connected = live.filter(r => REACHED.has(r.disposition));
-    const qualified = live.filter(r => r.qualification === 'qualified').length;
+    const qualified = new Set(live.filter(r => r.qualification === 'qualified').map(r => r.leadId)).size;
     const totalCost = sumCost(live);
     const totalSeconds = live.reduce((s, r) => s + r.durationSeconds, 0);
     const uniqueLeads = new Set(live.map(r => r.leadId)).size;
@@ -138,7 +151,7 @@ class CallAnalyticsService {
     for (const r of live) {
       const day = new Date(r.at).toISOString().slice(0, 10);
       const d = byDay.get(day) || { date: day, calls: 0, connected: 0, cost: 0, seconds: 0, tokens: 0 };
-      d.calls += 1; d.connected += REACHED.has(r.disposition) ? 1 : 0; d.cost += r.cost.amount; d.seconds += r.durationSeconds; d.tokens += r.cost.tokens?.total || 0;
+      d.calls += 1; d.connected += REACHED.has(r.disposition) ? 1 : 0; d.cost += r.cost.currency === 'USD' ? r.cost.amount : 0; d.seconds += r.durationSeconds; d.tokens += r.cost.tokens?.total || 0;
       byDay.set(day, d);
     }
     const tone = { positive: 0, neutral: 0, hesitant: 0, negative: 0, unrecorded: 0 };
@@ -150,10 +163,11 @@ class CallAnalyticsService {
     for (const r of live) {
       const l = leadMap.get(r.leadId) || {
         leadId: r.leadId, name: r.leadName, phone: r.leadPhone, status: ctx.leads.get(r.leadId)?.status || null,
-        calls: 0, connected: 0, seconds: 0, cost: 0, tokens: 0, last: null,
+        calls: 0, connected: 0, seconds: 0, cost: 0, tokens: 0, last: null, pricingIncomplete: false,
       };
       l.calls += 1; l.connected += REACHED.has(r.disposition) ? 1 : 0; l.seconds += r.durationSeconds;
-      l.cost += r.cost.amount; l.tokens += r.cost.tokens?.total || 0;
+      l.cost += r.cost.currency === 'USD' ? r.cost.amount : 0; l.tokens += r.cost.tokens?.total || 0;
+      l.pricingIncomplete ||= r.cost.unpriced || r.cost.currency !== 'USD' || (r.cost.source === 'none' && r.durationSeconds > 0);
       if (!l.last) l.last = r; // rows are newest first
       leadMap.set(r.leadId, l);
     }
@@ -169,7 +183,7 @@ class CallAnalyticsService {
       totals: {
         calls: live.length, connected: connected.length, completed: live.filter(r => r.disposition === 'answered_completed').length,
         qualified, leads: uniqueLeads, totalCost: round(totalCost), totalSeconds,
-        avgCostPerCall: per(totalCost, live.length), avgCostPerConnectedCall: per(totalCost, connected.length),
+        avgCostPerCall: per(totalCost, live.length), avgCostPerConnectedCall: per(sumCost(connected), connected.length),
         avgCostPerLead: per(totalCost, uniqueLeads), costPerQualifiedLead: per(totalCost, qualified),
         costPerMinute: per(totalCost, totalSeconds / 60),
         avgDurationSeconds: connected.length ? Math.round(connected.reduce((s, r) => s + r.durationSeconds, 0) / connected.length) : 0,
@@ -177,13 +191,21 @@ class CallAnalyticsService {
         tokens, avgTokensPerCall: withUsage ? Math.round(tokens.total / withUsage) : null,
         components: Object.fromEntries(Object.entries(components).map(([k, v]) => [k, round(v)])),
         modelDetail: Object.fromEntries(Object.entries(modelDetail).map(([k, v]) => [k, round(v)])),
-        callsWithUsage: withUsage, callsWithoutCost: live.filter(r => !r.cost.amount && r.durationSeconds > 0).length,
+        callsWithUsage: withUsage, callsWithoutCost: live.filter(r => r.cost.unpriced && r.durationSeconds > 0).length,
       },
       testing: { calls: tests.length, totalCost: round(sumCost(tests)), seconds: tests.reduce((s, r) => s + r.durationSeconds, 0), tokens: tests.reduce((s, r) => s + (r.cost.tokens?.total || 0), 0) },
       pricing: {
         telephonyRatePerMinute: Number(process.env.AI_CALLING_TELEPHONY_COST_PER_MINUTE || 0),
         platformRatePerMinute: Number(process.env.AI_CALLING_PLATFORM_COST_PER_MINUTE || 0),
-        model: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime',
+        model: [...new Set(rows.map(r => r.cost.model).filter(Boolean))].join(', ') || null,
+      },
+      billing: {
+        status: 'not_reconciled', timezone: 'UTC', currency: 'USD', from: filters.from || null, to: filters.to || null,
+        modelEstimate: round(components.model), additionalEstimate: round(components.telephony + components.platform),
+        unpricedCalls: live.filter(r => r.cost.unpriced).length,
+        foreignCurrencyCalls: live.filter(r => r.cost.currency !== 'USD').length,
+        // ASR/post-call extraction are separate services; never claim a complete OpenAI bill.
+        excludes: ['input_transcription', 'post_call_analysis', 'other_agents_and_api_requests'],
       },
       tone, outcomes,
       byDay: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, cost: round(d.cost) })),
@@ -198,7 +220,7 @@ class CallAnalyticsService {
     const headers = ['callId', 'startedAt', 'lead', 'phone', 'campaign', 'test', 'attempt', 'durationSeconds', 'disposition', 'qualification',
       'tone', 'toneEvidence', 'leadTurns', 'agentTurns', 'validAnswers', 'totalCost', 'modelCost', 'telephonyCost', 'platformCost',
       'currency', 'costSource', 'model', 'inputAudioTokens', 'inputTextTokens', 'cachedInputTokens', 'outputAudioTokens', 'outputTextTokens',
-      'totalTokens', 'summary', 'blockers'];
+      'totalTokens', 'costEstimated', 'pricingComplete', 'invoiceVerified', 'pricingVersion', 'summary', 'blockers'];
     const rows = ctx.calls.map(c => this._row(c, ctx)).map(r => ({
       callId: r.internalCallId, startedAt: r.at, lead: r.leadName, phone: r.leadPhone || '', campaign: r.campaignName, test: r.isTest ? 'yes' : 'no',
       attempt: r.attemptNumber, durationSeconds: r.durationSeconds, disposition: r.disposition || '', qualification: r.qualification || '',
@@ -209,7 +231,8 @@ class CallAnalyticsService {
       inputAudioTokens: r.cost.tokens?.inputAudio ?? '', inputTextTokens: r.cost.tokens?.inputText ?? '',
       cachedInputTokens: r.cost.tokens ? r.cost.tokens.inputCachedAudio + r.cost.tokens.inputCachedText : '',
       outputAudioTokens: r.cost.tokens?.outputAudio ?? '', outputTextTokens: r.cost.tokens?.outputText ?? '',
-      totalTokens: r.cost.tokens?.total ?? '', summary: r.summary, blockers: r.blockers.join(' | '),
+      totalTokens: r.cost.tokens?.total ?? '', costEstimated: r.cost.estimate, pricingComplete: !r.cost.unpriced && r.cost.source !== 'none',
+      invoiceVerified: false, pricingVersion: r.cost.pricingVersion || '', summary: r.summary, blockers: r.blockers.join(' | '),
     }));
     return String.fromCharCode(0xFEFF) + toCsv(headers, rows);
   }

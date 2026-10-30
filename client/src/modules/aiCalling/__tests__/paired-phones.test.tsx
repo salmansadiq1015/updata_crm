@@ -258,6 +258,7 @@ describe('PairedPhonesPanel', () => {
     expect(reconnect).toBeEnabled();
     fireEvent.click(reconnect);
     expect(screen.getByRole('region', { name: 'Reconnect computer gateway' })).toHaveTextContent('node bin/updata-gateway.mjs run');
+    expect(screen.getByRole('region', { name: 'Reconnect computer gateway' })).toHaveTextContent('--api');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Check gateway status' })).toBeEnabled());
     expect(api.setupAction).not.toHaveBeenCalled();
     expect(api.rotateKey).not.toHaveBeenCalled();
@@ -301,6 +302,14 @@ describe('PairedPhonesPanel', () => {
       command: { id: 'done', action: 'status', state: 'succeeded', expiresAt: new Date(Date.now() + 60_000).toISOString(), message: 'Gateway confirmed the action completed' } } }]);
     wrap(<PairedPhonesPanel />);
     expect(await screen.findByText('Gateway confirmed the action completed')).toBeVisible();
+  });
+
+  it('does not present an earlier successful setup command as a current online connection', async () => {
+    api.devices.mockResolvedValue([{ ...controllable(), online: false, setup: { autoConnect: true, playbackGainDb: 0,
+      command: { id: 'done', action: 'status', state: 'succeeded', expiresAt: new Date(Date.now() + 60_000).toISOString(), message: 'Gateway confirmed the action completed' } } }]);
+    wrap(<PairedPhonesPanel />);
+    expect(await screen.findByText('The last setup action completed earlier. The gateway is currently offline.')).toBeVisible();
+    expect(screen.queryByText('Gateway confirmed the action completed')).toBeNull();
   });
 
   it('keeps the phone and its recovery controls when a background refresh fails', async () => {

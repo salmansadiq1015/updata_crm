@@ -22,10 +22,11 @@ import { GatewayDaemon, GATEWAY_VERSION } from '../src/gateway/daemon.js';
 import { KeepAwake, acquireLock, deleteConfig, gatewayPaths, loadConfig, saveConfig } from '../src/gateway/system.js';
 import { closeSerialDevice, createBoardOpener, findBoardPort, listPorts, openSerialDevice } from '../src/esp32/serial.js';
 import { manageService } from '../src/gateway/service.js';
+import { reconnectConfig } from '../src/gateway/reconnect.js';
 
 const { values: a, positionals } = parseArgs({
   allowPositionals: true,
-  options: { api: { type: 'string' }, code: { type: 'string' }, profile: { type: 'string' }, port: { type: 'string' }, 'presence-wait': { type: 'string', default: '5' }, 'playback-gain-db': { type: 'string', default: '0' } },
+  options: { api: { type: 'string' }, 'check-crm': { type: 'boolean' }, code: { type: 'string' }, profile: { type: 'string' }, port: { type: 'string' }, 'presence-wait': { type: 'string', default: '5' }, 'playback-gain-db': { type: 'string', default: '0' } },
 });
 const log = (event, data = {}) => process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), event, ...data })}\n`);
 const die = (msg, code = 2) => {
@@ -71,6 +72,15 @@ async function resolvePort(cfg) {
 }
 
 const commands = {
+  async configure() {
+    if (!a.api) die('configure needs --api <CRM API URL ending in /api/v1>');
+    const release = acquireLock(paths.lock);
+    try {
+      const cfg = await reconnectConfig(requireConfig(), a.api);
+      saveConfig(cfg, paths.config);
+      log('crm_configured', { apiBase: cfg.apiBase, deviceId: cfg.deviceId, credentialsPreserved: true });
+    } finally { release(); }
+  },
   async service() { log('login_service', await manageService(positionals[1], { profile: a.profile })); },
   async pair() {
     if (!a.api || !a.code) die('pair needs --api <CRM API URL ending in /api/v1> and --code <pairing code>');
@@ -109,8 +119,15 @@ const commands = {
   async run() {
     const agentGainDb = Number(a['playback-gain-db']);
     if (!Number.isFinite(agentGainDb) || agentGainDb < 0 || agentGainDb > 12) die('--playback-gain-db must be 0–12 dB');
-    const cfg = requireConfig();
+    let cfg = requireConfig();
     const release = acquireLock(paths.lock);
+    try {
+      if (a.api) {
+        cfg = await reconnectConfig(cfg, a.api);
+        saveConfig(cfg, paths.config);
+        log('crm_configured', { apiBase: cfg.apiBase, deviceId: cfg.deviceId, credentialsPreserved: true });
+      }
+    } catch (error) { release(); throw error; }
     const path = a.port || cfg.port || null;
     const crm = new CrmClient({ apiBase: cfg.apiBase, token: cfg.token });
     const outbox = new EventOutbox({ client: crm, file: paths.outbox, log });
@@ -143,6 +160,11 @@ const commands = {
       apiBase: cfg?.apiBase || null,
       ports: await listPorts(),
     });
+    if (a['check-crm']) {
+      if (!cfg?.token) die('This phone has no saved gateway connection.');
+      await reconnectConfig(cfg, cfg.apiBase);
+      log('crm_connection_ok', { apiBase: cfg.apiBase, deviceId: cfg.deviceId });
+    }
   },
 
   async unpair() {
@@ -153,5 +175,5 @@ const commands = {
 };
 
 const mode = positionals[0];
-if (!commands[mode]) die('usage: updata-gateway pair|provision|run|status|unpair (see the header of bin/updata-gateway.mjs)');
+if (!commands[mode]) die('usage: updata-gateway pair|configure|provision|run|status|unpair|service (see the header of bin/updata-gateway.mjs)');
 commands[mode]().catch((err) => die(`${err.code ? `[${err.code}] ` : ''}${err.message}`, 1));

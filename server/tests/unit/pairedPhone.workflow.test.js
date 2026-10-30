@@ -150,6 +150,16 @@ beforeEach(async () => {
 });
 
 describe('phone creation, recovery and deletion', () => {
+  it('checks the saved gateway identity without changing heartbeat, key or setup state', async () => {
+    const d = await readyDevice();
+    const before = await PairedDevice.findById(d.deviceId).lean();
+    const response = await request(serve(app)).post('/gw/connection').set('Authorization', `Bearer ${d.token}`).send({}).expect(200);
+    expect(response.body.data).toEqual({ deviceId: d.deviceId, deviceName: before.name });
+    expect(JSON.stringify(response.body)).not.toContain(d.token);
+    expect(await PairedDevice.findById(d.deviceId).lean()).toEqual(before);
+    await request(serve(app)).post('/gw/connection').send({}).expect(401);
+    await request(serve(app)).post('/gw/connection').set('Authorization', 'Bearer unknown-token').send({}).expect(401);
+  });
   it('archives and restores an idle phone without losing credentials, setup or campaign history', async () => {
     const d = await readyDevice();
     const campaign = await pairedCampaign(d.deviceId);

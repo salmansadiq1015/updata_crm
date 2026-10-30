@@ -56,7 +56,7 @@ test('outbox: persists before sending, retries transient failures, drops permane
 
 test('CRM client refuses plain http except localhost, and maps errors', async () => {
   assert.throws(() => new CrmClient({ apiBase: 'http://crm.example.com/api/v1' }), /https/);
-  const ok = new CrmClient({ apiBase: 'http://127.0.0.1:9097/api/v1', fetchImpl: async () => ({ ok: false, status: 401, json: async () => ({ success: false, error: { code: 'GATEWAY_UNAUTHORIZED', message: 'revoked' } }) }) });
+  const ok = new CrmClient({ apiBase: 'http://127.0.0.1:9097/api/v1', fetchImpl: async () => globalThis.Response.json({ success: false, error: { code: 'GATEWAY_UNAUTHORIZED', message: 'revoked' } }, { status: 401 }) });
   await assert.rejects(ok.heartbeat({}), (e) => e.status === 401 && e.code === 'GATEWAY_UNAUTHORIZED' && !e.retryable);
   const down = new CrmClient({ apiBase: 'https://crm.test/api/v1', fetchImpl: async () => { throw new TypeError('fetch failed'); } });
   await assert.rejects(down.claim('00'.repeat(16)), (e) => e.retryable);

@@ -10,22 +10,31 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
+export function normalizeApiBase(apiBase) {
+  let url;
+  try { url = new URL(apiBase); } catch { throw new Error('apiBase must be the CRM API URL, e.g. https://crm.example.com/api/v1'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error('The CRM API URL must use http/https and must not contain credentials, query parameters or a fragment');
+  }
+  if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    throw new Error('The CRM API must use https (plain http is only allowed for localhost)');
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
 export class CrmError extends Error {
-  constructor(message, { status = 0, code = null, retryable = false } = {}) {
+  constructor(message, { status = 0, code = null, retryable = false, endpoint = null } = {}) {
     super(message);
     this.status = status;
     this.code = code;
     this.retryable = retryable;
+    this.endpoint = endpoint;
   }
 }
 
 export class CrmClient {
   constructor({ apiBase, token = null, fetchImpl = globalThis.fetch, timeoutMs = 10_000 }) {
-    if (!/^https?:\/\//.test(apiBase || '')) throw new Error('apiBase must be the CRM API URL, e.g. https://crm.example.com/api/v1');
-    if (apiBase.startsWith('http://') && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/)/.test(apiBase)) {
-      throw new Error('The CRM API must use https (plain http is only allowed for localhost)');
-    }
-    this.apiBase = apiBase.replace(/\/+$/, '');
+    this.apiBase = normalizeApiBase(apiBase);
     this.token = token;
     this.fetch = fetchImpl;
     this.timeoutMs = timeoutMs;
@@ -33,25 +42,28 @@ export class CrmClient {
 
   async request(path, body = {}) {
     let res;
+    let json = null;
+    const endpoint = `${this.apiBase}/paired-phone/gateway${path}`;
     try {
-      res = await this.fetch(`${this.apiBase}/paired-phone/gateway${path}`, {
+      res = await this.fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
+      // The timeout must cover the response body too, not just its headers.
+      const responseBody = await res.text();
+      try { json = JSON.parse(responseBody); } catch { /* report invalid API response below */ }
     } catch (err) {
-      throw new CrmError(`CRM unreachable: ${err.cause?.code || err.name || err.message}`, { retryable: true });
-    }
-    let json = null;
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
+      const timeout = ['TimeoutError', 'AbortError'].includes(err.name);
+      throw new CrmError(timeout ? `CRM request timed out after ${this.timeoutMs}ms at ${endpoint}. Check that this is the API for the application you are using.`
+        : `CRM unreachable at ${endpoint}: ${err.cause?.code || err.name || 'network error'}`, {
+        code: timeout ? 'CRM_TIMEOUT' : 'CRM_UNREACHABLE', endpoint, retryable: true,
+      });
     }
     if (!res.ok || !json?.success) {
-      const message = json?.error?.message || json?.message || `HTTP ${res.status}`;
-      throw new CrmError(message, { status: res.status, code: json?.error?.code || null, retryable: res.status === 429 || res.status >= 500 });
+      const message = json?.error?.message || json?.message || (res.ok ? 'The URL did not return a CRM API response. Check the saved API URL.' : `HTTP ${res.status}`);
+      throw new CrmError(message, { status: res.status, code: json?.error?.code || 'CRM_INVALID_RESPONSE', endpoint, retryable: res.status === 429 || res.status >= 500 || (res.ok && !json) });
     }
     return json.data;
   }
@@ -63,6 +75,8 @@ export class CrmClient {
   heartbeat(body) {
     return this.request('/heartbeat', body);
   }
+
+  connection() { return this.request('/connection'); }
 
   takeDialKey() {
     return this.request('/dial-key');

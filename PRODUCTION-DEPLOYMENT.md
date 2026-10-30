@@ -385,6 +385,38 @@ usually remain during an application rollback; review migration-specific
 restore and does not reverse user actions or external calls/SMS. Restore the
 verified backup only as a separate, deliberate recovery operation.
 
+## Gateway reconnect correction (0.4.4)
+
+Deploy the API's read-only `/paired-phone/gateway/connection` route with gateway
+0.4.4 and the updated client. Rebuild the downloadable package with
+`cd server && npm run build:phone-gateway`. No new environment variable, migration,
+firmware flash, calling key or Bluetooth pairing is required for this correction.
+
+The computer gateway retains its own API URL across application restarts. If a
+local application is being used with a profile saved against the live domain,
+stop that profile's gateway, then run in its installed package folder:
+
+```bash
+node bin/updata-gateway.mjs run --profile PHONE_ID --api http://127.0.0.1:9097/api/v1
+```
+
+Replace `PHONE_ID` with that phone's existing ID. For live production, use the
+actual HTTPS API URL instead of localhost. The URL is checked against the existing
+phone credential and saved only when the phone identity matches. A different
+database that does not recognize the credential needs Link computer in that CRM.
+Do not rotate the ESP32 key to resolve an HTTP timeout.
+
+`node bin/updata-gateway.mjs status --profile PHONE_ID --check-crm` checks the saved
+URL without dialing or opening the serial port. Normal runs keep retrying during
+an API outage; reports resume when the same API becomes available. See the
+[gateway recovery guide](server/phone-gateway/README.md#reconnect-after-restarting-the-crm).
+
+This correction passed 104 gateway tests, 91 paired-phone backend tests, 33 paired
+phone UI tests, typecheck and targeted lint. The package was rebuilt. The real
+local phone was reconnected and verified online with USB, Bluetooth, the saved
+key and audio verification intact. The recovery checks did not create a campaign
+or request a test phone call.
+
 ## Release verification performed locally
 
 | Check | Result |

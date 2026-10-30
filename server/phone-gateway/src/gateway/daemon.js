@@ -12,7 +12,7 @@ import { CallRunner } from './callRunner.js';
 import { LiveKitLeg } from './livekitLeg.js';
 import { performSetup } from './setup.js';
 
-export const GATEWAY_VERSION = '0.4.3';
+export const GATEWAY_VERSION = '0.4.4';
 
 const NUM_STATS = ['uptimeMs', 'heapFree', 'heapMin', 'audioUpFrames', 'audioDownFrames', 'downUnderruns', 'downOverruns', 'upDrops', 'rxCrcErrors', 'rxResyncs', 'downSeqGaps', 'downLevelBytes'];
 
@@ -46,6 +46,7 @@ export class GatewayDaemon {
     this.setupBusy = false;
     this.settingsLoaded = false;
     this.crmConnected = false;
+    this.heartbeatInFlight = false;
     this.claiming = false;
     this.reconnectDelay = this.o.reconnectMinMs;
     this.connecting = null;
@@ -54,7 +55,7 @@ export class GatewayDaemon {
   }
 
   async start() {
-    this.log('gateway_start', { version: GATEWAY_VERSION });
+    this.log('gateway_start', { version: GATEWAY_VERSION, apiBase: this.crm.apiBase });
     this.scheduleHeartbeat(0);
     this.timers.push(setInterval(() => this.tryClaim().catch((err) => this.fail('claim_failed', err)), this.o.claimEveryMs));
     this.timers.push(setInterval(() => this.outbox.flush().catch(() => {}), 5_000));
@@ -164,10 +165,14 @@ export class GatewayDaemon {
   }
 
   async heartbeat() {
+    if (this.stopped || this.heartbeatInFlight) return;
+    this.heartbeatInFlight = true;
     try {
       const res = await this.crm.heartbeat(this.heartbeatBody());
+      if (this.stopped) return;
       if (!this.crmConnected) this.log('crm_connected', { readiness: res.readiness?.ok ?? false });
       this.crmConnected = true;
+      if (this.lastError?.code === 'HEARTBEAT_FAILED') this.lastError = null;
       this.server = res;
       this.settingsLoaded = true;
       if (res.setup) {
@@ -197,8 +202,10 @@ export class GatewayDaemon {
         return;
       }
       this.fail('heartbeat_failed', err);
+    } finally {
+      this.heartbeatInFlight = false;
+      this.scheduleHeartbeat(this.runner ? this.o.heartbeatCallMs : this.o.heartbeatIdleMs);
     }
-    this.scheduleHeartbeat(this.runner ? this.o.heartbeatCallMs : this.o.heartbeatIdleMs);
   }
 
   canClaim() {
@@ -280,7 +287,7 @@ export class GatewayDaemon {
 
   fail(code, err) {
     this.lastError = { code: code.toUpperCase().slice(0, 60), message: String(err?.message || err).slice(0, 300) };
-    this.log(code, { error: this.lastError.message });
+    this.log(code, { error: this.lastError.message, ...(err.code ? { code: err.code } : {}), ...(err.endpoint ? { endpoint: err.endpoint } : {}) });
   }
 
   async stop() {

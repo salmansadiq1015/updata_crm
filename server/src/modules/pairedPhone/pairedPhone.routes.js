@@ -45,6 +45,8 @@ export async function authenticateGateway(req, res, next) {
 /** Gateway routes: /api/v1/paired-phone/gateway */
 export const gatewayRoutes = Router();
 gatewayRoutes.post('/pair', validate(schemas.redeem), controller.redeem);
+// Read-only identity check: URL recovery must not reserve a call or reset board state.
+gatewayRoutes.post('/connection', authenticateGateway, controller.connection);
 gatewayRoutes.post('/heartbeat', authenticateGateway, validate(schemas.heartbeat), controller.heartbeat);
 gatewayRoutes.post('/dial-key', authenticateGateway, controller.takeKey);
 gatewayRoutes.post('/dial-key/confirm', authenticateGateway, validate(schemas.confirmKey), controller.confirmKey);

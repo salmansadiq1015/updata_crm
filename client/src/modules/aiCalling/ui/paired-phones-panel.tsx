@@ -240,7 +240,7 @@ function DeviceCard({ device: d, now, canManage }: { device: PairedDevice; now: 
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
         <div><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.readiness.ok && connection.gatewayOnline ? 'Ready' : 'Next step'}</p><p className="text-sm font-semibold">{nextStep.title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{nextStep.detail}</p></div>
       </div>}
-      {canManage && <BridgeSetupControls device={d} now={now} onVerifyAudio={() => setDialog('verify')} />}
+      {canManage && <BridgeSetupControls device={d} now={now} apiBase={gatewayApiBase()} onVerifyAudio={() => setDialog('verify')} />}
       {canManage && !connection.gatewayOnline && <button type="button" onClick={() => setDialog('link')} className={`${btn} self-start border border-brand-500/30 text-brand-600 hover:bg-brand-500/10 dark:text-brand-400`}><Link2 className="h-4 w-4" aria-hidden="true" />Link computer<span className="font-normal text-muted-foreground">· first setup or lost connection settings</span></button>}
 
       {d.attention ? (

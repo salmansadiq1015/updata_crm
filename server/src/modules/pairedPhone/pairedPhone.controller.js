@@ -26,6 +26,7 @@ export default {
   hangup: wrap(async (req, res) => res.success({ data: await service.requestCallControl(req.user._id, req.params.callId, 'hangup', meta(req)), message: 'Hang-up requested' })),
 
   // ---- gateway (device token) ----
+  connection: wrap(async (req, res) => res.success({ data: { deviceId: String(req.gatewayDevice._id), deviceName: req.gatewayDevice.name } })),
   redeem: wrap(async (req, res) => res.success({ data: await service.redeemPairingCode(req.body.code, req.body.gateway, meta(req)), message: 'Gateway paired', statusCode: 201 })),
   heartbeat: wrap(async (req, res) => res.success({ data: await service.heartbeat(req.gatewayDevice, req.body) })),
   takeKey: wrap(async (req, res) => res.success({ data: await service.takeDialKey(req.gatewayDevice) })),

@@ -89,6 +89,38 @@ sending DIAL. Deploy the updated voice worker with this gateway. A startup
 failure, closed room, or missing readiness signal refuses the call before dialing;
 room disconnect codes are also logged with the call phase.
 
+## Reconnect after restarting the CRM
+
+Gateway 0.4.4 retries a temporarily unavailable CRM and resumes its heartbeat
+when that same API returns. USB/phone pairing and the saved calling key remain
+in place. The CRM shows the computer offline while reports cannot reach it;
+Bluetooth being connected does not prove that the gateway can reach the CRM.
+
+Check the saved endpoint and its connection without making a call:
+
+```sh
+node bin/updata-gateway.mjs status --profile PHONE_ID --check-crm
+```
+
+If the gateway was linked to live CRM but you are using a local application,
+stop its existing process with Ctrl-C, then use the correct API explicitly:
+
+```sh
+node bin/updata-gateway.mjs run --profile PHONE_ID --api http://127.0.0.1:9097/api/v1
+```
+
+`run --api` now checks that the existing token identifies the same phone in that
+CRM, then saves the URL for subsequent runs and login-service restarts. Older
+versions ignored this flag on `run`. A failed connection check leaves the saved
+configuration unchanged. To save without starting USB, use `configure --profile
+PHONE_ID --api URL`. Switching to a separate database that does not recognize
+the existing token requires Link computer in that environment instead.
+
+Logs show the selected API URL and distinguish `CRM_TIMEOUT` from a revoked
+credential. A timeout is a connection/API availability issue; it does not require
+reflashing ESP32, pressing BOOT, or resetting phone pairing. Do not point a local
+gateway at the live URL unless live CRM is the environment you intend to use.
+
 **Edit** on a phone card changes its name and SIM label. **Delete** disconnects
 its gateway and removes the card; past call records are retained. Finish any
 active call or setup command and resolve phone alerts before deleting. To use a

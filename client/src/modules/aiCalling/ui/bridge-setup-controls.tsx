@@ -11,7 +11,7 @@ import type { BridgeAudioTest, PairedDevice, SetupAction } from '../types/ai-cal
 const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50';
 const errorMessage = (e: unknown) => (e as { response?: { data?: { error?: { message?: string } } }; message?: string })?.response?.data?.error?.message || (e as Error)?.message || 'Request failed. Check the gateway and try again.';
 
-export function BridgeSetupControls({ device: d, now, onVerifyAudio }: { device: PairedDevice; now: number; onVerifyAudio?: () => void }) {
+export function BridgeSetupControls({ device: d, now, apiBase, onVerifyAudio }: { device: PairedDevice; now: number; apiBase: string; onVerifyAudio?: () => void }) {
   const qc = useQueryClient();
   const [gainOverride, setGain] = useState<number | null>(null);
   const gain = gainOverride ?? d.setup?.playbackGainDb ?? 0;
@@ -39,7 +39,7 @@ export function BridgeSetupControls({ device: d, now, onVerifyAudio }: { device:
   const keyReady = d.keyState === 'provisioned' && d.board.keyProvisioned;
   const activeCommand = command && ['pending', 'running'].includes(command.state) && new Date(command.expiresAt).getTime() > now;
   const actionLabels: Record<SetupAction, string> = { status: 'Checking connection', connect_phone: 'Connecting phone', disconnect_phone: 'Disconnecting phone', pair_phone: 'Opening phone pairing', provision_key: 'Saving security key', reconnect_usb: 'Reconnecting USB bridge' };
-  const startCommand = `node bin/updata-gateway.mjs run --profile ${d.id}`;
+  const startCommand = `node bin/updata-gateway.mjs run --profile ${d.id} --api '${apiBase.replaceAll("'", "'\"'\"'")}'`;
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center gap-2">
       <button type="button" className={`${button} border-transparent bg-brand-600 text-white hover:bg-brand-700`} disabled={connection.gatewayOnline ? disabled : checkGateway.isPending} onClick={() => {
@@ -55,7 +55,8 @@ export function BridgeSetupControls({ device: d, now, onVerifyAudio }: { device:
     </div>
     {gatewayHelp && !connection.gatewayOnline && <section aria-label="Reconnect computer gateway" className="space-y-3 rounded-xl border border-brand-500/25 bg-brand-500/5 p-4">
       <h4 className="text-sm font-semibold">Reconnect this computer</h4>
-      <p className="text-xs leading-relaxed text-muted-foreground">The CRM has not received a recent report from this computer. USB power and phone Bluetooth can stay connected while the gateway is stopped. Start the gateway below; this website cannot launch the computer program for you.</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">The CRM has not received a recent report from this computer. USB power and phone Bluetooth can stay connected while the gateway is stopped or cannot reach this CRM. This website cannot launch the computer program for you.</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">If Terminal shows heartbeat_failed or CRM_TIMEOUT, check its saved CRM URL. Stop that gateway with Ctrl-C, then use the command below to connect to this application. Use gateway 0.4.4 or newer. The connection is checked before saving; your phone pairing and security key are kept.</p>
       <p className="text-xs leading-relaxed text-muted-foreground">Keep the ESP32 plugged in. Open Terminal in your installed Updata gateway folder and run the command below. Keep that Terminal open while using your phone bridge.</p>
       <div className="flex min-w-0 items-start gap-2 rounded-lg border border-border bg-background p-3"><code className="min-w-0 flex-1 break-all text-xs">{startCommand}</code><button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Copy gateway start command" onClick={async () => { try { await navigator.clipboard.writeText(startCommand); setCopyStatus('Command copied.'); } catch { setCopyStatus('Select and copy the command above.'); } }}><Copy className="size-4" aria-hidden="true" /></button></div>
       {copyStatus && <p role="status" className="text-xs text-muted-foreground">{copyStatus}</p>}
@@ -69,7 +70,7 @@ export function BridgeSetupControls({ device: d, now, onVerifyAudio }: { device:
     {!supported && <p className="text-xs text-amber-600">Install gateway 0.3.0 or newer using Setup guide to enable these controls.</p>}
     {!connection.gatewayOnline && <p className="text-xs text-muted-foreground">Open the Updata gateway on the computer plugged into your bridge. Then choose Connect phone here. Setup guide explains the first installation.</p>}
     {activeCommand && <p role="status" className="text-xs" aria-live="polite">{actionLabels[command.action]}… {command.action === 'provision_key' ? 'Keep holding BOOT until the key is saved.' : 'Waiting for the computer to confirm. Your connection status will update automatically.'}</p>}
-    {command?.state === 'succeeded' && <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">{command.message || 'Gateway confirmed the action completed.'}</p>}
+    {command?.state === 'succeeded' && <p role="status" className={`text-xs ${connection.gatewayOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{connection.gatewayOnline ? command.message || 'Gateway confirmed the action completed.' : 'The last setup action completed earlier. The gateway is currently offline.'}</p>}
     {command && ['pending', 'running'].includes(command.state) && !activeCommand && <p role="alert" className="text-xs text-amber-600">The computer did not finish in time. Check that the gateway is running, then try again.</p>}
     {command && ['failed', 'expired'].includes(command.state) && <p role="alert" className="text-xs text-amber-600">{command.state === 'expired' ? 'The computer did not finish in time. Check that the gateway is running, then try again.' : command.message || 'That step did not finish. Check the USB cable and phone Bluetooth, then try again.'}</p>}
     {action.isError && <p role="alert" className="text-xs text-rose-600">{errorMessage(action.error)}</p>}

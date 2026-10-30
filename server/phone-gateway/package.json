@@ -1,6 +1,6 @@
 {
   "name": "updata-phone-gateway",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "type": "module",
   "description": "Paired-phone gateway: connection lifecycle, ESP32 HFP bridge host (src/esp32, bin/esp32-probe.mjs, esp32/firmware), macOS probe (macos/), Linux BlueZ probe (linux/).",

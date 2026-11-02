@@ -12,6 +12,7 @@ vi.mock('@/lib/api/client', () => ({
 
 import {
   accDocService,
+  chartService,
   accountingEntityService,
   accountingSearchService,
   arService,
@@ -498,5 +499,44 @@ describe('accounting service normalization', () => {
         }),
       ],
     }));
+  });
+});
+
+
+describe('account picker cursor pagination', () => {
+  beforeEach(() => apiClient.get.mockReset());
+
+  test('loads the requested options in valid pages and preserves filters', async () => {
+    const first = Array.from({ length: 100 }, (_, id) => ({ _id: `account-${id}` }));
+    const second = Array.from({ length: 50 }, (_, id) => ({ _id: `account-${100 + id}` }));
+    apiClient.get.mockResolvedValueOnce({ data: first, pagination: { hasNext: true, nextCursor: 'next-page' } });
+    apiClient.get.mockResolvedValueOnce({ data: second, pagination: { hasNext: false, nextCursor: null } });
+    const result = await chartService.list({ limit: 150, isActive: true });
+    expect(result.data).toHaveLength(150);
+    expect(result.data[149]._id).toBe('account-149');
+    expect(apiClient.get.mock.calls.map(([, options]) => options.params)).toEqual([
+      { limit: 100, isActive: true },
+      { limit: 50, isActive: true, cursor: 'next-page' },
+    ]);
+    expect(result.pagination.hasNext).toBe(false);
+  });
+
+  test('stops when the backend has no more accounts', async () => {
+    apiClient.get.mockResolvedValue({ data: [{ _id: 'only-account' }], pagination: { hasNext: false } });
+    expect((await chartService.list({ limit: 500 })).data).toHaveLength(1);
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps an ordinary cursor request unchanged', async () => {
+    const response = { data: [], pagination: { hasNext: false } };
+    apiClient.get.mockResolvedValue(response);
+    expect(await chartService.list({ limit: 25, cursor: 'existing' })).toBe(response);
+    expect(apiClient.get.mock.calls[0][1].params).toEqual({ limit: 25, cursor: 'existing' });
+  });
+
+  test('does not present a partial account list after a later page fails', async () => {
+    apiClient.get.mockResolvedValueOnce({ data: [{ _id: 'first' }], pagination: { hasNext: true, nextCursor: 'next' } });
+    apiClient.get.mockRejectedValueOnce(new Error('Account page unavailable'));
+    await expect(chartService.list({ limit: 500 })).rejects.toThrow('Account page unavailable');
   });
 });

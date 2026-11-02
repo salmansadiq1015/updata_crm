@@ -16,6 +16,7 @@ for (const locale of ['en', 'fr', 'de', 'ar']) {
     for (const [index, path] of pages.entries()) {
       const response = await page.goto(`/${path}`);
       expect(response?.status()).toBe(200);
+      await expect(page.locator('body')).toHaveCSS('margin', '0px');
       await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
       await expect(page).toHaveTitle(`${names[locale][index]} — Updata`);
       await expect(page.locator('h1')).toBeVisible();

@@ -57,7 +57,9 @@ export function BridgeSetupControls({ device: d, now, apiBase, onVerifyAudio }: 
       <h4 className="text-sm font-semibold">Reconnect this computer</h4>
       <p className="text-xs leading-relaxed text-muted-foreground">The CRM has not received a recent report from this computer. USB power and phone Bluetooth can stay connected while the gateway is stopped or cannot reach this CRM. This website cannot launch the computer program for you.</p>
       <p className="text-xs leading-relaxed text-muted-foreground">If Terminal shows heartbeat_failed or CRM_TIMEOUT, check its saved CRM URL. Stop that gateway with Ctrl-C, then use the command below to connect to this application. Use gateway 0.4.4 or newer. The connection is checked before saving; your phone pairing and security key are kept.</p>
-      <p className="text-xs leading-relaxed text-muted-foreground">Keep the ESP32 plugged in. Open Terminal in your installed Updata gateway folder and run the command below. Keep that Terminal open while using your phone bridge.</p>
+      <GatewayFolderInstructions />
+      <details className="text-xs"><summary className="cursor-pointer font-medium">Cannot find the gateway folder or have not installed it?</summary><div className="mt-3"><GatewayInstallSteps profile={d.id} /></div></details>
+      <p className="text-xs leading-relaxed text-muted-foreground">Once Terminal is open in the gateway folder, paste the command below. Keep the ESP32 plugged in and leave that Terminal window open during calls.</p>
       <div className="flex min-w-0 items-start gap-2 rounded-lg border border-border bg-background p-3"><code className="min-w-0 flex-1 break-all text-xs">{startCommand}</code><button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Copy gateway start command" onClick={async () => { try { await navigator.clipboard.writeText(startCommand); setCopyStatus('Command copied.'); } catch { setCopyStatus('Select and copy the command above.'); } }}><Copy className="size-4" aria-hidden="true" /></button></div>
       {copyStatus && <p role="status" className="text-xs text-muted-foreground">{copyStatus}</p>}
       <button type="button" className={button} disabled={checkGateway.isPending} onClick={() => checkGateway.mutate()}><RefreshCw className={`size-4 ${checkGateway.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />{checkGateway.isPending ? 'Checking gateway status…' : 'Check gateway status'}</button>
@@ -151,13 +153,32 @@ export function GatewayInstallSteps({ profile }: { profile?: string }) {
     <ol className="list-decimal space-y-2 ps-4 leading-relaxed">
       <li><strong>Install Node.js 20 or newer.</strong> This runs the gateway. If you are unsure whether it is installed, ask the person who manages your computer to check.</li>
       <li><button type="button" className={`${button} my-1 text-brand-600 dark:text-brand-400`} disabled={download.isPending} onClick={() => download.mutate()}>{download.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}Download gateway</button><p>Extract the downloaded file into a permanent folder, then open its <strong>package</strong> folder. You should see <strong>bin</strong>, <strong>src</strong> and <strong>package.json</strong>.</p></li>
-      <li><strong>Open a command window in that folder.</strong> {platform === 'mac' ? 'In Finder, end-click the package folder and choose Services → New Terminal at Folder. Terminal is the window where you paste commands.' : platform === 'windows' ? 'In File Explorer, open the package folder, end-click empty space and choose Open in Terminal.' : 'In your file manager, open the package folder and choose Open in Terminal.'}</li>
+      <li><strong>Open a command window in that folder.</strong> {platform === 'mac' ? 'In Terminal, type cd followed by a space. Drag the package folder from Finder into Terminal, then press Enter.' : platform === 'windows' ? 'In File Explorer, open the package folder, right-click empty space and choose Open in Terminal.' : 'In your file manager, open the package folder, right-click empty space and choose Open in Terminal.'}</li>
       <li>Paste <code className="rounded bg-muted px-1.5 py-0.5">npm ci --omit=dev</code> and press Enter. Wait for installation to finish, then use the phone’s pairing command. If it says Node or npm is not found, close Terminal after installing Node.js and open it again.</li>
     </ol>
     <div className="flex gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" /><p><strong>Using several phones?</strong> Each needs a separate prepared bridge, a different USB port and its own gateway window. Use each phone’s own pairing and start commands so one phone does not replace another.</p></div>
     {profile && <p className="text-muted-foreground">This phone’s commands include its connection profile automatically. Copy the whole command.</p>}
     {download.isError && <p role="alert" className="rounded-lg border border-rose-500/20 p-2 text-rose-600 dark:text-rose-400">{errorMessage(download.error)} Ask your administrator to provide the Updata gateway package if the download is unavailable.</p>}
   </section>;
+}
+
+function GatewayFolderInstructions() {
+  const [platform, setPlatform] = useState('mac');
+  return <div className="space-y-3 rounded-lg border border-border bg-background p-3 text-xs">
+    <p className="font-semibold">First, open the gateway folder on this computer</p>
+    <label className="flex flex-wrap items-center gap-2 font-medium">Computer type
+      <select aria-label="Reconnect computer type" value={platform} onChange={event => setPlatform(event.target.value)} className="rounded-lg border border-border bg-card p-2">
+        <option value="mac">Mac (macOS)</option><option value="windows">Windows</option><option value="linux">Linux</option>
+      </select>
+    </label>
+    <ol className="list-decimal space-y-2 ps-4 leading-relaxed text-muted-foreground">
+      <li>Find the extracted Updata gateway folder. Open the folder containing <strong className="text-foreground">bin</strong>, <strong className="text-foreground">src</strong> and <strong className="text-foreground">package.json</strong>. A downloaded gateway archive normally contains a folder named <strong className="text-foreground">package</strong>.</li>
+      {platform === 'mac' ? <li>Open Terminal and type <code className="rounded bg-muted px-1">cd </code> followed by a space. Drag that folder from Finder into Terminal, then press Enter. This selects the gateway folder without typing its path.</li>
+        : <li>{platform === 'windows' ? 'In File Explorer' : 'In your file manager'}, open that folder, right-click empty space and choose <strong className="text-foreground">Open in Terminal</strong>.</li>}
+      <li>Paste the start command below into that Terminal window and press Enter.</li>
+    </ol>
+    <p className="border-t border-border pt-3 leading-relaxed text-muted-foreground"><strong className="text-foreground">Seeing “Cannot find module” or “MODULE_NOT_FOUND”?</strong> If the missing file ends with <code>bin/updata-gateway.mjs</code>, Terminal is in the wrong folder or the gateway has not been extracted. Follow the steps above before trying the start command again. If another module is missing, run <code>npm ci --omit=dev</code> in the gateway folder.</p>
+  </div>;
 }
 
 export function BridgeSetupGuide({ apiBase }: { apiBase: string }) {

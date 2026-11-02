@@ -261,7 +261,7 @@ class LeadFollowUpService {
    * open buckets sort by next due time ascending, `done` by close time descending.
    */
   async list({
-    scope = 'mine', bucket = 'open', cursor = null, limit = 25, tz = 'UTC', leadId = null, ownerId = null,
+    scope = 'mine', bucket = 'open', cursor = null, limit = 25, tz = 'UTC', leadId = null, ownerId = null, q = '', channel = null,
   }, viewer, now = new Date()) {
     const zone = isValidTimezone(tz) ? tz : 'UTC';
     const endOfToday = startOfNextZonedDay(now, zone);
@@ -269,6 +269,7 @@ class LeadFollowUpService {
       ...(await this._scopeMatch(scope, viewer, ownerId)),
       ...this._bucketMatch(bucket, now, endOfToday),
       ...(leadId ? { leadId: oid(leadId) } : {}),
+      ...(channel ? { channel } : {}),
     };
     const desc = bucket === 'done';
     const sortField = desc ? 'closedAt' : 'nextDueAt';
@@ -278,8 +279,12 @@ class LeadFollowUpService {
       match.$or = [{ [sortField]: { [op]: c.at } }, { [sortField]: c.at, _id: { [op]: c.id } }];
     }
     const dir = desc ? -1 : 1;
+    // Search after the governed lead lookup, before pagination. Treat input as
+    // literal text so punctuation cannot change the meaning of the query.
+    const search = q.trim() ? new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
     const rows = await LeadFollowUp.aggregate([
       ...this._pipelineHead(match),
+      ...(search ? [{ $match: { $or: [{ 'lead.name': search }, { 'lead.leadNumber': search }, { note: search }] } }] : []),
       { $sort: { [sortField]: dir, _id: dir } },
       { $limit: limit + 1 },
       { $lookup: { from: 'users', localField: 'ownerId', foreignField: '_id', pipeline: [{ $project: USER_FIELDS }], as: 'owner' } },
@@ -300,17 +305,18 @@ class LeadFollowUpService {
     const endOfToday = startOfNextZonedDay(now, zone);
     const base = await this._scopeMatch(scope, viewer);
     const [row] = await LeadFollowUp.aggregate([
-      ...this._pipelineHead({ ...base, status: { $in: FOLLOW_UP_OPEN_STATUSES } }),
+      ...this._pipelineHead(base),
       {
         $group: {
           _id: null,
-          overdue: { $sum: { $cond: [{ $lt: ['$nextDueAt', now] }, 1, 0] } },
-          today: { $sum: { $cond: [{ $and: [{ $gte: ['$nextDueAt', now] }, { $lt: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
-          upcoming: { $sum: { $cond: [{ $gte: ['$nextDueAt', endOfToday] }, 1, 0] } },
+          overdue: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $lt: ['$nextDueAt', now] }] }, 1, 0] } },
+          today: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', now] }, { $lt: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
+          upcoming: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
+          done: { $sum: { $cond: [{ $in: ['$status', ['done', 'cancelled']] }, 1, 0] } },
         },
       },
     ]);
-    return { overdue: row?.overdue ?? 0, today: row?.today ?? 0, upcoming: row?.upcoming ?? 0, timezone: zone };
+    return { overdue: row?.overdue ?? 0, today: row?.today ?? 0, upcoming: row?.upcoming ?? 0, done: row?.done ?? 0, timezone: zone };
   }
 
   async getById(id, viewer, now = new Date()) {
@@ -340,6 +346,7 @@ class LeadFollowUpService {
         leadId: String(r.leadId),
         lead: { id: String(r.lead._id), name: r.lead.name, leadNumber: r.lead.leadNumber ?? null, status: r.lead.status },
         owner: { id: String(r.ownerId), name: name(r.owner?.[0]) },
+        createdBy: r.createdBy ? String(r.createdBy) : null,
         dueAt: iso(r.dueAt),
         nextDueAt: iso(r.nextDueAt),
         timezone: r.timezone ?? null,

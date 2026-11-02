@@ -6,7 +6,7 @@
  */
 
 // The production CRM web origin — the default the extension connects back to.
-export const CRM_WEB_ORIGIN = 'https://updata.behjja.com';
+export const CRM_WEB_ORIGIN = 'https://updata-crm.vercel.app';
 
 // Every web origin allowed to drive the extension through externally_connectable.
 // Keep in lockstep with manifest.json `externally_connectable.matches` and the
@@ -15,8 +15,8 @@ export const CRM_WEB_ORIGIN = 'https://updata.behjja.com';
 // drive the extension, so the production alias is pinned explicitly. localhost
 // entries let the card work while running the CRM web app locally in development.
 export const ALLOWED_CRM_ORIGINS: readonly string[] = [
-  CRM_WEB_ORIGIN, // https://updata.behjja.com (future custom domain)
-  'https://updata-crm.vercel.app', // current production (Vercel) frontend
+  CRM_WEB_ORIGIN,
+  'https://updata.behjja.com',
   'http://localhost:3000',
   'http://localhost:9097',
 ];

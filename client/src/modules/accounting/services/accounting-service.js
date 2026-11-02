@@ -55,7 +55,32 @@ function normalizeBankTransaction(transaction = {}) {
 }
 
 export const chartService = {
-  list:       (params = {}) => apiClient.get(E.ACCOUNTS, { params }),
+  // Account pickers request up to 500 options, while the existing API accepts
+  // at most 100 per cursor page. Preserve the requested set without raising
+  // the backend limit or silently truncating the available accounts.
+  list: async (params = {}) => {
+    const requested = Number(params.limit);
+    if (!Number.isInteger(requested) || requested <= 100) {
+      return apiClient.get(E.ACCOUNTS, { params });
+    }
+    const target = Math.floor(requested);
+    const data = [];
+    let cursor = params.cursor;
+    let response;
+    const seen = new Set(cursor ? [cursor] : []);
+    while (data.length < target) {
+      response = await apiClient.get(E.ACCOUNTS, {
+        params: { ...params, limit: Math.min(100, target - data.length), ...(cursor ? { cursor } : {}) },
+      });
+      const rows = Array.isArray(response.data) ? response.data : [];
+      data.push(...rows);
+      const next = response.pagination?.nextCursor;
+      if (!rows.length || !response.pagination?.hasNext || !next || seen.has(next)) break;
+      seen.add(next);
+      cursor = next;
+    }
+    return { ...response, data, pagination: { ...response.pagination, limit: target } };
+  },
   tree:       ()            => apiClient.get(E.ACCOUNT_TREE),
   getById:    (id)          => apiClient.get(E.ACCOUNT_BY_ID(id)),
   create:     (data)        => apiClient.post(E.ACCOUNTS, data),

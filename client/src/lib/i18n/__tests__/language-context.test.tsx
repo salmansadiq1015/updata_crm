@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { LanguageProvider, useLanguage } from '../language-context';
 
@@ -19,5 +19,12 @@ describe('LanguageProvider translation arguments', () => {
 
     expect(result.current.t('missing.test.key', 'Hello {name}', { name: 'Ada' }))
       .toBe('Hello Ada');
+  });
+
+  it('preserves authored French while translating an English fallback only once', () => {
+    const { result } = renderHook(() => useLanguage(), { wrapper });
+    act(() => result.current.setLocale('fr'));
+    expect(result.current.t('experience.faq.q1')).toBe('Comment obtenir un accès ?');
+    expect(result.current.t('missing.comment.label', 'Comment')).toBe('Commentaire');
   });
 });

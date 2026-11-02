@@ -61,6 +61,8 @@ export const listFollowUps = {
     tz: ianaTimezone.default('UTC'),
     leadId: objectId,
     ownerId: objectId,
+    q: Joi.string().trim().max(200).allow(''),
+    channel: Joi.string().valid(...FOLLOW_UP_CHANNELS),
   }),
 };
 

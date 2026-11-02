@@ -61,6 +61,9 @@ describe('agent call analytics', () => {
     expect(await screen.findByText('Estimated call total')).toBeTruthy();
     expect(screen.getAllByText('$0.3696').length).toBeGreaterThan(1);
     expect(screen.getAllByText('$0.1848').length).toBeGreaterThan(0); // avg per call (also a trend axis label)
+    const leadAttempt = screen.getByText('Cost / lead attempt').parentElement!;
+    expect(within(leadAttempt).getByText('$0.1848')).toBeTruthy();
+    expect(within(leadAttempt).getByText('2 call attempts')).toBeTruthy();
     expect(screen.getAllByText('15,000').length).toBeGreaterThan(0);
     expect(screen.getByText(/3 test call\(s\) \(\$0\.5000\) are excluded/)).toBeTruthy();
     expect(screen.getByText(/Telephony minutes are not included/)).toBeTruthy();

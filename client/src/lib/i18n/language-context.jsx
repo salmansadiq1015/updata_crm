@@ -147,7 +147,8 @@ export function LanguageProvider({ children, initialLocale }) {
       const fallback = typeof fallbackOrVars === 'string' ? fallbackOrVars : null;
       const interpolationVars = vars
         ?? (fallbackOrVars && typeof fallbackOrVars === 'object' ? fallbackOrVars : undefined);
-      const raw = translations[locale]?.[key] ?? translations[DEFAULT_LOCALE][key];
+      const localized = translations[locale]?.[key];
+      const raw = localized ?? translations[DEFAULT_LOCALE][key];
       let out;
       if (raw !== undefined && raw !== null) {
         out = raw;
@@ -156,7 +157,10 @@ export function LanguageProvider({ children, initialLocale }) {
       } else {
         out = key;
       }
-      if (locale !== 'de' && typeof out === 'string') {
+      // Authored and completed locale entries are already translated. Running
+      // the word fallback on them corrupts valid copy (French "Comment" was
+      // turned into the noun "Commentaire"). Only missing entries need it.
+      if (localized == null && locale !== 'de' && typeof out === 'string') {
         out = localizeFallback(out, locale);
       }
       if (interpolationVars && typeof out === 'string') {

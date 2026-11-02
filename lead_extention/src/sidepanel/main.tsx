@@ -5,6 +5,7 @@ import { LeadRepository, SearchRepository, SettingsRepository } from '../storage
 import { createXlsx, downloadBlob, filenameFor, toCsv } from '../export/exporters';
 import { BUSINESS_TYPE_PRESETS, DEFAULT_MAX_RESULTS, DEFAULT_REQUEST_DELAY_MS, MAX_RADIUS_KM, RADIUS_OPTIONS, REQUEST_DELAY_OPTIONS } from '../shared/constants';
 import { DEFAULT_CRM_API_BASE_URL } from '../integration/crm-api';
+import { CRM_WEB_ORIGIN } from '../shared/crm-connect';
 import type { CrmAuthState, CrmImportProgress, DiscoveryConfig, DiscoveryProgress, Lead, MapsContext, RatingBreakdown, SearchRecord } from '../shared/types';
 import { completedTaskCount, normalizeBusinessTypes } from '../shared/campaign';
 import { formatDistance, nowIso } from '../shared/utils';
@@ -226,8 +227,8 @@ function App() {
       setNotice('Full business details loaded from Google Maps.');
     } finally { setDetailLoading(false); }
   };
-  // CRM web origin (for "View lead" deep links) derived from the stored API base.
-  const crmOrigin = useMemo(() => (auth?.apiBaseUrl ? auth.apiBaseUrl.replace(/\/api\/v1\/?$/, '') : null), [auth]);
+  // Browser links open the CRM client; the stored API base targets the backend.
+  const crmOrigin = CRM_WEB_ORIGIN;
   // The leads this import run actually created in the CRM, with their L-numbers.
   const importedLeads = useMemo(() => {
     if (!crmImport?.leadIds?.length) return [] as Lead[];

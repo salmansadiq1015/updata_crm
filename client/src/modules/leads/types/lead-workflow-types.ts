@@ -123,6 +123,7 @@ export type FollowUp = {
   leadId: string;
   lead: { id: string; name: string; leadNumber: string | null; status: string | null };
   owner: { id: string; name: string | null };
+  createdBy?: string | null;
   dueAt: string | null;
   nextDueAt: string | null;
   timezone: string | null;
@@ -152,13 +153,16 @@ export type FollowUpPage = {
   pagination: { hasNext: boolean; nextCursor: string | null };
 };
 
-export type FollowUpSummary = { overdue: number; today: number; upcoming: number; timezone: string };
+export type FollowUpSummary = { overdue: number; today: number; upcoming: number; done: number; timezone: string };
 
 export type FollowUpListParams = {
   scope: FollowUpScope;
   bucket: FollowUpBucket;
   tz: string;
   leadId?: string;
+  q?: string;
+  channel?: string;
+  ownerId?: string;
 };
 
 export type CreateFollowUpInput = {

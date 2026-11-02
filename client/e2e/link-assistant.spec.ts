@@ -92,10 +92,18 @@ async function installApiMocks(page: Page) {
     }));
     if (path === '/ai-calling/campaigns' && request.method() === 'GET') return respond(route, envelope([campaign], { page: 1, limit: 25, total: 1, pages: 1 }));
     if (path === '/ai-calling/campaigns/c-link') return respond(route, envelope(campaign));
-    if (path === '/ai-calling/telephony/health') return respond(route, envelope({ ready: false, checks: [] }));
+    if (path === '/ai-calling/telephony/health') return respond(route, envelope({ ready: false, livekitReady: true, checks: [] }));
+    if (path === '/ai-calling/agents') return respond(route, envelope({ agents: [], summary: { agents: 0, activeCampaigns: 0, inProgress: 0, completed: 0, eligible: 0 } }));
     if (path === '/ai-calling/analytics') return respond(route, envelope({
       campaigns: 1, totalCalls: 0, answered: 0, answerRate: null, qualified: 0, qualificationRate: null, callbacks: 0,
       avgCallSeconds: 0, totalCost: 0, reviews: 0, byDisposition: [], byQualification: [], byDay: [],
+    }));
+    if (path === '/ai-calling/settings/providers') return respond(route, envelope({
+      primaryProvider: 'gemini', secondaryProvider: 'openai', primaryModel: 'gemini-test-live', secondaryModel: 'gpt-test-realtime', experimentalModel: '', geminiVoice: 'test-voice', fallbackEnabled: false,
+      maxSessionSeconds: 60, maxCallCostUsd: 0, connectionTimeoutMs: 10000,
+      credentials: { gemini: { stored: false, apiEnvironmentConfigured: false }, openai: { stored: false, apiEnvironmentConfigured: false } },
+      health: { gemini: { status: 'unverified', scope: 'fixture', model: 'gemini-test-live' }, openai: { status: 'unverified', scope: 'fixture', model: 'gpt-test-realtime' } },
+      pricing: {}, pricingVerifiedAt: 'test fixture',
     }));
     if (path === '/link-assistant/settings') return respond(route, envelope(settings));
     if (path === '/link-assistant/templates') return respond(route, envelope(templates));
@@ -125,8 +133,11 @@ for (const width of [360, 768, 1440]) {
   test(`${width}px: link campaign results, conversations and transcript fit the screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 800 ? 800 : 900 });
     await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('tab', { name: 'Connections', exact: true }).click();
     await expect(page.getByRole('region', { name: 'SMS link assistant status' })).toBeVisible();
-    await page.getByText(campaign.name).first().click();
+    await page.getByRole('tab', { name: 'Campaign History', exact: true }).click();
+    await page.getByRole('tab', { name: 'Campaign History', exact: true }).click();
+  await page.getByText(campaign.name).first().click();
     await page.getByRole('tab', { name: 'SMS link chats' }).click();
 
     const funnel = page.getByRole('heading', { name: 'Funnel' }).locator('xpath=ancestor::section[1]');
@@ -155,9 +166,9 @@ for (const [width, height] of [[1440, 900], [1280, 720], [390, 844]]) {
   test(`${width}×${height}: the AI calling page scrolls; no section is squeezed or clipped`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'AI Voice Calling' })).toBeVisible();
-    const header = page.locator('header').filter({ has: page.getByRole('heading', { name: 'AI Voice Calling' }) });
-    for (const name of ['Test agent', 'New campaign']) {
+    await expect(page.getByRole('heading', { name: 'Calling Agents', exact: true })).toBeVisible();
+    const header = page.locator('header').filter({ has: page.getByRole('heading', { name: 'Calling Agents' }) });
+    for (const name of ['Create Agent']) {
       const button = header.getByRole('button', { name });
       await expect(button).toBeVisible();
       const [b, h] = [await button.boundingBox(), await header.boundingBox()];
@@ -185,7 +196,8 @@ test('agent test studio: the orb is centred and never overlaps the title', async
     : route.fallback()));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /Test agent/ }).first().click();
+  await page.getByRole('tab', { name: 'Test Studio', exact: true }).click();
+  await page.getByRole('button', { name: /Open test studio|Set up a test/ }).first().click();
   const dialog = page.getByRole('dialog');
   const orb = dialog.getByRole('img', { name: 'Voice agent is idle' }).first();
   await expect(orb).toBeVisible();
@@ -200,13 +212,14 @@ test('agent test studio: the orb is centred and never overlaps the title', async
 test('status filter is applied by the server; revoking a link needs confirmation', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('tab', { name: 'Campaign History', exact: true }).click();
   await page.getByText(campaign.name).first().click();
   await page.getByRole('tab', { name: 'SMS link chats' }).click();
-  await page.getByRole('combobox', { name: 'Status' }).selectOption('completed');
+  await page.getByRole('region', { name: 'Campaign details', exact: true }).getByRole('combobox', { name: 'Status' }).selectOption('completed');
   await expect(page.getByText(sessions[0].leadName)).toHaveCount(0);
   await expect(page.getByText('Ayesha Textiles')).toBeVisible();
   expect(calls.sessionQueries.some((q) => q.includes('status=completed'))).toBe(true);
-  await page.getByRole('combobox', { name: 'Status' }).selectOption('');
+  await page.getByRole('region', { name: 'Campaign details', exact: true }).getByRole('combobox', { name: 'Status' }).selectOption('');
 
   await page.getByText(sessions[0].leadName).click();
   await page.getByRole('button', { name: 'Revoke link' }).click();
@@ -214,6 +227,9 @@ test('status filter is applied by the server; revoking a link needs confirmation
   await expect(confirm).toBeVisible();
   await shot(page, 'crm-revoke-confirm');
   await confirm.getByRole('button', { name: 'Keep link' }).click();
+  // Radix retains the closing dialog for its exit animation. Wait until its
+  // identically named destructive button is removed before reopening.
+  await expect(confirm).toHaveCount(0);
   expect(calls.revoke).toBe(0);
   await page.getByRole('button', { name: 'Revoke link' }).click();
   await page.getByRole('dialog', { name: 'Revoke this link?' }).getByRole('button', { name: 'Revoke link' }).click();
@@ -224,13 +240,17 @@ for (const width of [360, 1440]) {
   test(`${width}px: SMS link campaign wizard validates inline, previews the SMS and guards unsaved work`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 800 ? 800 : 900 });
     await page.goto('/ai-calling', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'New campaign' }).click();
+    await page.getByRole('tab', { name: 'Campaign History', exact: true }).click();
+    await page.getByRole('button', { name: 'Legacy / SMS campaign', exact: true }).click();
     const wizard = page.getByRole('dialog', { name: /New calling campaign|New SMS link campaign/ });
     await wizard.getByRole('radio', { name: /SMS link/ }).click();
     await wizard.getByRole('button', { name: 'Next' }).click();
     await expect(wizard.getByRole('alert')).toContainText('Give the campaign a name');
 
     await wizard.getByLabel('Campaign name').fill('Lahore solar follow-up');
+    await wizard.getByRole('button', { name: 'Next' }).click();
+    await expect(wizard.getByRole('alert')).toContainText('Describe the outcome');
+    await wizard.getByLabel(/Objective \(for the AI/).fill('Qualify interest in a solar installation.');
     await wizard.getByRole('button', { name: 'Next' }).click();
     await wizard.getByRole('button', { name: 'Next' }).click();
     await expect(wizard.getByRole('alert')).toContainText('company name');

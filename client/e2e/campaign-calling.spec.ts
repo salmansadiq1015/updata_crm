@@ -57,8 +57,9 @@ for (const width of [390, 1440]) {
     await expect(overview.getByRole('button', { name: 'Start calling', exact: true })).toBeVisible();
     await drawer.getByRole('tab', { name: 'Simulate', exact: true }).click();
     await expect(drawer.getByRole('button', { name: 'Start calling', exact: true })).toBeVisible();
-    await expect(drawer.getByText(/Calling hours:/)).toBeVisible();
-    await expect(drawer.getByText('Waiting for the campaign’s calling hours.', { exact: true })).toBeVisible();
+    await expect(drawer.getByText(/Immediate calling/)).toBeVisible();
+    await drawer.getByRole('tab', { name: 'Configuration', exact: true }).click();
+    await expect(drawer.getByText('09:00–18:00', { exact: true })).toBeVisible();
     if (process.env.CAMPAIGN_UI_SHOTS) await page.screenshot({ path: `${process.env.CAMPAIGN_UI_SHOTS}/campaign-${width}.png` });
   });
 }

@@ -133,7 +133,9 @@ export function PairedPhonesPanel() {
 function PhoneActions({ device, onEdit, onArchive, onRestore, onDelete, blocked = false, pending = false }: {
   device: PairedDevice; onEdit: () => void; onArchive?: () => void; onRestore?: () => void; onDelete: () => void; blocked?: boolean; pending?: boolean;
 }) {
-  return <DropdownMenu>
+  // Actions open modal dialogs. Keeping the menu non-modal avoids overlapping
+  // Radix pointer locks when a dialog opens before the menu finishes exiting.
+  return <DropdownMenu modal={false}>
     <DropdownMenuTrigger asChild><button type="button" aria-label={`Actions for ${device.name}`} disabled={pending} className={`${btn} h-9 w-9 border border-border p-0 text-muted-foreground hover:bg-muted hover:text-foreground`}><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="min-w-44">
       <DropdownMenuItem onSelect={onEdit} aria-label={`Edit ${device.name}`} className="px-3 py-2.5"><Pencil aria-hidden="true" />Edit</DropdownMenuItem>

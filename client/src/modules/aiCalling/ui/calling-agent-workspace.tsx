@@ -62,11 +62,36 @@ function AgentSpendSummary({ agentId, onOpen }: { agentId: string; onOpen: () =>
   const { data, isError } = useAgentCallAnalytics(agentId);
   const t = data?.totals;
   if (isError) return null;
-  const items: Array<[string, string]> = t ? [['Estimated total', estimateMoney(data, t.totalCost)], ['Avg cost / call', estimateMoney(data, t.avgCostPerCall)], ['Cost / lead', estimateMoney(data, t.avgCostPerLead)], ['Avg duration', t.avgDurationSeconds ? `${Math.floor(t.avgDurationSeconds / 60)}:${String(t.avgDurationSeconds % 60).padStart(2, '0')}` : '—']] : [];
-  return <section className="relative overflow-hidden rounded-2xl border border-sky-400/15 bg-card p-4 sm:p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><Coins className="size-4 text-primary" />Call economics</h2><button className={secondaryClass} onClick={onOpen}>Open call analytics<ArrowRight className="h-3.5 w-3.5" /></button></div>
-    {!t ? <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Loading spend…</p> : !t.calls ? <p className="mt-3 text-sm text-muted-foreground">Cost per call, per lead and token usage appear here after the first call.</p>
-      : <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">{items.map(([label, value]) => <div key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p></div>)}</div>}
+  return <section aria-labelledby="call-economics-heading" className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-6">
+      <h2 id="call-economics-heading" className="flex items-center gap-2 text-sm font-semibold"><Coins aria-hidden="true" className="size-4 text-primary" />Call economics</h2>
+      <button type="button" className={`${secondaryClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`} onClick={onOpen}>Open call analytics<ArrowRight aria-hidden="true" className="h-3.5 w-3.5" /></button>
+    </div>
+    {!t ? <p role="status" className="flex items-center gap-2 px-5 pb-5 text-sm text-muted-foreground sm:px-6"><Loader2 aria-hidden="true" className="size-3.5 animate-spin" />Loading spend…</p> : !t.calls ? <p className="px-5 pb-5 text-sm text-muted-foreground sm:px-6">Cost per attempt and total spend appear here after the first call.</p>
+      : <>
+        <dl className="grid border-t border-border md:grid-cols-[1.2fr_1fr_1fr]">
+          <div className="min-w-0 bg-primary/5 px-5 py-5 sm:px-6">
+            <dt className="text-sm font-medium text-primary">Cost / lead attempt</dt>
+            <dd className="mt-2 break-words text-3xl font-semibold tracking-tight text-foreground tabular-nums">{estimateMoney(data, t.avgCostPerCall)}</dd>
+            <dd className="mt-2 text-xs text-muted-foreground">Average cost / call · includes retries</dd>
+          </div>
+          <div className="min-w-0 border-t border-border px-5 py-5 sm:px-6 md:border-s md:border-t-0">
+            <dt className="text-sm text-muted-foreground">Estimated total</dt>
+            <dd className="mt-2 break-words text-2xl font-semibold text-foreground tabular-nums">{estimateMoney(data, t.totalCost)}</dd>
+            <dd className="mt-2 text-xs text-muted-foreground">Across all {t.calls.toLocaleString()} call attempts</dd>
+          </div>
+          <div className="min-w-0 border-t border-border px-5 py-5 sm:px-6 md:border-s md:border-t-0">
+            <dt className="text-sm text-muted-foreground">Avg duration</dt>
+            <dd className="mt-2 text-2xl font-semibold text-foreground tabular-nums">{t.avgDurationSeconds ? `${Math.floor(t.avgDurationSeconds / 60)}:${String(t.avgDurationSeconds % 60).padStart(2, '0')}` : '—'}</dd>
+            <dd className="mt-2 text-xs text-muted-foreground">Connected calls</dd>
+          </div>
+        </dl>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border px-5 py-3 text-xs text-muted-foreground sm:px-6">
+          <span>All time</span>
+          <span><span className="font-medium text-foreground tabular-nums">{t.calls.toLocaleString()}</span> attempts</span>
+          <span><span className="font-medium text-foreground tabular-nums">{t.leads.toLocaleString()}</span> {t.leads === 1 ? 'lead' : 'leads'} called</span>
+        </div>
+      </>}
   </section>;
 }
 

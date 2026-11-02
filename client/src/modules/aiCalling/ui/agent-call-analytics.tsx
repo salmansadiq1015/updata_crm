@@ -143,7 +143,7 @@ function CostHero({ data }: { data: AgentCallAnalytics }) {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Kpi accent icon={<Phone className="size-3.5" />} label="Avg / call" value={estimateMoney(data, t.avgCostPerCall)} hint="All attempts" />
       <Kpi accent icon={<Phone className="size-3.5" />} label="Avg / connected" value={estimateMoney(data, t.avgCostPerConnectedCall)} hint={`${t.connected} connected`} />
-      <Kpi accent icon={<Users className="size-3.5" />} label="Cost / lead" value={estimateMoney(data, t.avgCostPerLead)} hint={`${t.leads} leads called`} />
+      <Kpi accent icon={<Users className="size-3.5" />} label="Cost / lead attempt" value={estimateMoney(data, t.avgCostPerCall)} hint={`${t.calls} call attempts`} />
       <Kpi accent icon={<Sparkles className="size-3.5" />} label="Cost / qualified" value={estimateMoney(data, t.costPerQualifiedLead)} hint={`${t.qualified} qualified`} />
       <Kpi icon={<Clock3 className="size-3.5" />} label="Avg duration" value={t.avgDurationSeconds ? duration(t.avgDurationSeconds) : '—'} hint="Connected calls" />
       <Kpi icon={<Gauge className="size-3.5" />} label="Cost / minute" value={estimateMoney(data, t.costPerMinute)} hint="Of talk time" />

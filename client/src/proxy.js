@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 
 const publicPaths = ['/login', '/reset-password', '/forgot-password', '/activate'];
+// Only these document routes are public. Prefix matches must not expose a
+// private route such as /security-admin or a future nested management screen.
+const companyPaths = new Set(['/about', '/contact', '/support', '/privacy', '/terms', '/security']);
 
 const EMBED_PARENT_ORIGINS = [
   'https://appnity.ch',
@@ -37,7 +40,7 @@ function nextWithEmbedHeaders(request) {
 export function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === '/') {
+  if (pathname === '/' || companyPaths.has(pathname)) {
     return nextWithEmbedHeaders(request);
   }
 

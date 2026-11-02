@@ -79,8 +79,8 @@ import { validateGeographicResult } from '../shared/geographic-validation';
 import { buildDiscoveryQueries, isResolvedGeocodeCamera } from '../shared/search-context';
 import { discoverPublicEmails } from '../enrichment/website-discovery';
 import { clearAllLocalData, LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
-import { clearAuth, connectWithGrant, getAuthState, heartbeat, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
-import { CRM_WEB_ORIGIN, crmApiBaseForOrigin, isTrustedCrmOrigin } from '../shared/crm-connect';
+import { DEFAULT_CRM_API_BASE_URL, clearAuth, connectWithGrant, getAuthState, heartbeat, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
+import { isTrustedCrmOrigin } from '../shared/crm-connect';
 
 const DISCOVERY_ALARM = 'lead-finder-discovery-recovery';
 // Keeps the MV3 service worker alive / wakes it during a CRM import so a large
@@ -156,7 +156,7 @@ chrome.runtime.onMessageExternal.addListener((message: { type?: string; grant?: 
         .catch((error) => sendResponse({ ok: false, installed: true, error: errorMessage(error) }));
       return true;
     case 'CRM_CONNECT': {
-      const apiBaseUrl = typeof message.apiBaseUrl === 'string' && message.apiBaseUrl ? message.apiBaseUrl : crmApiBaseForOrigin(CRM_WEB_ORIGIN);
+      const apiBaseUrl = typeof message.apiBaseUrl === 'string' && message.apiBaseUrl ? message.apiBaseUrl : DEFAULT_CRM_API_BASE_URL;
       void connectWithGrant(apiBaseUrl, String(message.grant ?? ''))
         .then((auth) => { broadcastAuthChanged(); sendResponse({ ok: true, auth }); })
         .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));

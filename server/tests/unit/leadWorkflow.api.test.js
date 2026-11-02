@@ -450,7 +450,7 @@ describe('follow-up inbox', () => {
     expect(Date.parse(overdue.body.data[0].nextDueAt)).toBeLessThan(Date.parse(page2.body.data[0].nextDueAt));
 
     const summary = await request(server).get(`${FU}/summary`).query({ tz: 'Asia/Karachi' }).set(auth(tokenA)).expect(200);
-    expect(summary.body.data).toMatchObject({ overdue: 2, upcoming: 1, timezone: 'Asia/Karachi' });
+    expect(summary.body.data).toMatchObject({ overdue: 2, upcoming: 1, done: 1, timezone: 'Asia/Karachi' });
     const done = await request(server).get(FU).query({ bucket: 'done' }).set(auth(tokenA)).expect(200);
     expect(done.body.data).toHaveLength(1);
     const team = await request(server).get(`${FU}/summary`).query({ scope: 'team' }).set(auth(tokenA)).expect(200);
@@ -459,6 +459,44 @@ describe('follow-up inbox', () => {
     const all = await request(server).get(`${FU}/summary`).query({ scope: 'all' }).set(auth(tokenBoss)).expect(200);
     expect(all.body.data.overdue).toBe(3);
     await request(server).get(FU).query({ tz: 'Mars/Base' }).set(auth(tokenA)).expect(400);
+  });
+
+  it('searches literal lead names, numbers and notes before pagination and combines channel/owner filters', async () => {
+    const lead = await makeLead({ name: 'Acme (Europe)' });
+    const other = await makeLead({ name: 'Other company' });
+    const now = Date.now();
+    const mk = (leadId, channel, note, offset, owner = userA) => LeadFollowUp.create({
+      leadId, ownerId: owner._id, createdBy: owner._id, dueAt: new Date(now - offset), nextDueAt: new Date(now - offset),
+      status: 'open', channel, note, source: { type: 'manual' },
+    });
+    await mk(other._id, 'phone', 'Unrelated', 5 * HOUR);
+    await mk(lead._id, 'email', 'First proposal', 3 * HOUR);
+    await mk(lead._id, 'email', 'Second proposal', 2 * HOUR);
+    await mk(lead._id, 'phone', 'Call', HOUR);
+    await mk(lead._id, 'email', 'Hidden owner', HOUR, userB);
+    const query = { bucket: 'overdue', q: '(Europe)', channel: 'email', limit: 1 };
+    const first = await request(server).get(FU).query(query).set(auth(tokenA)).expect(200);
+    expect(first.body.data).toHaveLength(1);
+    expect(first.body.data[0].note).toBe('First proposal');
+    expect(first.body.pagination.hasNext).toBe(true);
+    const second = await request(server).get(FU).query({ ...query, cursor: first.body.pagination.nextCursor }).set(auth(tokenA)).expect(200);
+    expect(second.body.data[0].note).toBe('Second proposal');
+    expect(second.body.pagination.hasNext).toBe(false);
+    const notes = await request(server).get(FU).query({ bucket: 'overdue', q: 'second PROPOSAL' }).set(auth(tokenA)).expect(200);
+    expect(notes.body.data).toHaveLength(1);
+    const number = await request(server).get(FU).query({ bucket: 'overdue', q: lead.leadNumber }).set(auth(tokenA)).expect(200);
+    expect(number.body.data).toHaveLength(3);
+    const regex = await request(server).get(FU).query({ bucket: 'overdue', q: '.*' }).set(auth(tokenA)).expect(200);
+    expect(regex.body.data).toEqual([]);
+    await request(server).get(FU).query({ channel: 'invalid' }).set(auth(tokenA)).expect(400);
+    await request(server).get(FU).query({ q: 'x'.repeat(201) }).set(auth(tokenA)).expect(400);
+    await request(server).get(FU).query({ ownerId: String(userB._id) }).set(auth(tokenA)).expect(403);
+    const boss = await request(server).get(FU).query({ scope: 'all', ownerId: String(userB._id), bucket: 'overdue', channel: 'email' }).set(auth(tokenBoss)).expect(200);
+    expect(boss.body.data).toHaveLength(1);
+    const cancelled = await LeadFollowUp.create({ leadId: lead._id, ownerId: userA._id, dueAt: new Date(now - DAY), nextDueAt: new Date(now - DAY), status: 'cancelled', closedAt: new Date(), source: { type: 'manual' } });
+    const summary = await request(server).get(`${FU}/summary`).set(auth(tokenA)).expect(200);
+    expect(summary.body.data).toMatchObject({ overdue: 4, done: 1 });
+    expect(cancelled.status).toBe('cancelled');
   });
 
   it('complete / snooze / cancel / reassign with ownership rules', async () => {

@@ -234,6 +234,42 @@ describe('FollowUpInbox', () => {
     await waitFor(() => expect(completed).toEqual({ note: 'Reached them' }));
   });
 
+  it('hides editing controls for read-only viewers and supports keyboard bucket navigation', async () => {
+    auth.permissions = ['lead:read'];
+    server.use(
+      http.get(`${FU}/summary`, () => HttpResponse.json(ok({ overdue: 1, today: 0, upcoming: 0, done: 3 }))),
+      http.get(FU, () => HttpResponse.json({ ...ok([row({})]), pagination: { hasNext: false, nextCursor: null } })),
+    );
+    const user = userEvent.setup();
+    renderUi(<FollowUpInbox />);
+    expect(await screen.findByText('Acme AG')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New follow-up' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Done', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument();
+    const done = screen.getByRole('tab', { name: /Done/ });
+    expect(done).toHaveTextContent('3');
+    screen.getByRole('tab', { name: /Overdue/ }).focus();
+    await user.keyboard('{End}');
+    expect(done).toHaveFocus();
+    expect(done).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', done.id);
+  });
+
+  it('hides lifecycle actions for a team member but keeps them available to the creator', async () => {
+    server.use(
+      http.get(`${FU}/summary`, () => HttpResponse.json(ok({ overdue: 2, today: 0, upcoming: 0, done: 0 }))),
+      http.get(FU, () => HttpResponse.json({ ...ok([
+        row({ owner: { id: 'u-ben', name: 'Ben' } }),
+        row({ id: 'f2', lead: { id: 'l2', name: 'My assigned follow-up' }, owner: { id: 'u-ben', name: 'Ben' }, createdBy: 'u-me' }),
+      ]), pagination: { hasNext: false, nextCursor: null } })),
+    );
+    renderUi(<FollowUpInbox />);
+    const other = (await screen.findByText('Acme AG')).closest('li') as HTMLElement;
+    expect(within(other).queryByRole('button', { name: 'Done', exact: true })).not.toBeInTheDocument();
+    const own = screen.getByText('My assigned follow-up').closest('li') as HTMLElement;
+    expect(within(own).getByRole('button', { name: 'Done', exact: true })).toBeEnabled();
+  });
+
   it('re-checks suppression at action time and refuses to open the lead when blocked', async () => {
     server.use(
       http.get(`${FU}/summary`, () => HttpResponse.json(ok({ overdue: 1, today: 0, upcoming: 0, timezone: 'UTC' }))),

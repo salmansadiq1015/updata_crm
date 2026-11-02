@@ -29,13 +29,13 @@ async function prepare(page: Page, readOnly = false, events?: { assignments: Rec
     else if (path === '/ai-calling/agents') { data = { agents: [agent], summary: { agents: 1, activeCampaigns: 0, inProgress: 0, completed: 0, eligible: 1 } }; pagination = { page: 1, limit: 24, total: 1, pages: 1 }; }
     else if (/\/agents\/[^/]+\/launch$/.test(path)) {
       const input = req.postDataJSON(); launches.push(input);
-      campaign = { ...agent, _id: 'campaign-ui', name: 'Sarah outreach', status: input.mode === 'scheduled' ? 'scheduled' : 'running', runMode: input.mode === 'scheduled' ? 'scheduled' : 'immediate', agentId: agent._id, agentSnapshot: { name: agent.name, title: agent.title, version: agent.version }, questionnaireVersion: 1, scheduledAt: input.scheduledAt, waitReason: 'calling_hours', summary: { total: 1, eligible: 1, queued: 1, inProgress: 0, completed: 0, answered: 0, noAnswer: 0, qualified: 0, unqualified: 0, callbacks: 0, needsReview: 0, failed: 0, totalCallSeconds: 0 } }; data = campaign;
+      campaign = { ...agent, _id: 'campaign-ui', name: 'Sarah outreach', status: input.mode === 'scheduled' ? 'scheduled' : 'running', runMode: input.mode === 'scheduled' ? 'scheduled' : 'immediate', agentId: agent._id, agentSnapshot: { name: agent.name, title: agent.title, version: agent.version }, questionnaireVersion: 1, scheduledAt: input.scheduledAt, waitReason: input.mode === 'scheduled' ? 'calling_hours' : null, summary: { total: 1, eligible: 1, queued: 1, inProgress: 0, completed: 0, answered: 0, noAnswer: 0, qualified: 0, unqualified: 0, callbacks: 0, needsReview: 0, failed: 0, totalCallSeconds: 0 } }; data = campaign;
     } else if (/\/agents\/[^/]+\/leads$/.test(path)) { const input = req.postDataJSON(); events?.assignments.push(input); agent = { ...agent, assignedLeadIds: input.mode === 'add' ? [...new Set([...agent.assignedLeadIds, ...input.leadIds])] : input.leadIds, version: agent.version + 1 }; data = agent; }
     else if (/\/agents\/[^/]+$/.test(path)) { if (req.method() === 'PATCH') agent = { ...agent, ...req.postDataJSON(), version: agent.version + 1, avatarUrl: req.postDataJSON().avatarPresetId ? `/avatars/agents/${req.postDataJSON().avatarPresetId}-v1.webp` : null }; data = agent; }
     else if (path === '/ai-calling/agent-avatar-presets') data = premiumAvatars;
     else if (path === '/ai-calling/campaigns') { data = campaign ? [campaign] : []; pagination = { page: 1, limit: 25, total: campaign ? 1 : 0, pages: 1 }; }
     else if (path === '/ai-calling/campaigns/campaign-ui') data = campaign;
-    else if (path.endsWith('/run-status')) data = { status: campaign?.status, pending: 1, inProgress: 0, canStart: false, blockers: [], waits: [{ code: 'calling_hours', message: 'Waiting for permitted calling hours. Starting now does not bypass calling hours or recipient quiet hours.' }], nextAt: '2030-11-04T04:00:00Z', displayStatus: 'waiting' };
+    else if (path.endsWith('/run-status')) data = { status: campaign?.status, pending: 1, inProgress: 0, canStart: false, blockers: [], waits: campaign?.runMode === 'scheduled' ? [{ code: 'calling_hours', message: 'Waiting for permitted calling hours.' }] : [], nextAt: campaign?.runMode === 'scheduled' ? '2030-11-04T04:00:00Z' : null, displayStatus: campaign?.runMode === 'scheduled' ? 'waiting' : 'queued' };
     else if (path === '/ai-calling/languages') data = { languages: [{ code: 'en', name: 'English', nativeName: 'English', support: 'full' }], defaultLanguage: 'en' };
     else if (path === '/ai-calling/recipients/preview') data = agent.eligibility;
     else if (path === '/ai-calling/telephony/health') data = { configured: true, livekitReady: true, eligible: true, reachable: true };
@@ -50,7 +50,7 @@ async function prepare(page: Page, readOnly = false, events?: { assignments: Rec
   return launches;
 }
 
-test('agent gallery, workspace tabs, lead assignment, immediate launch and truthful waiting state', async ({ page }) => {
+test('agent gallery, workspace tabs, lead assignment, immediate launch and truthful run state', async ({ page }) => {
   const launches = await prepare(page);
   await expect(page.getByRole('heading', { name: 'Calling Agents', exact: true })).toBeVisible();
   await expect(page.getByText('Paired phones', { exact: true })).toHaveCount(0);
@@ -70,7 +70,7 @@ test('agent gallery, workspace tabs, lead assignment, immediate launch and truth
   await expect.poll(() => launches.length).toBe(1);
   expect(launches[0]).toMatchObject({ mode: 'now', scheduledAt: null, continueAcrossDays: false });
   const details = page.getByRole('region', { name: 'Campaign details', exact: true });
-  await expect(details.getByText(/Waiting for permitted calling hours/)).toBeVisible();
+  await expect(details.getByText(/Immediate calling/)).toBeVisible();
   await details.getByRole('tab', { name: 'Configuration', exact: true }).click();
   await expect(details.getByText('Saved campaign configuration', { exact: true })).toBeVisible();
   await expect(details.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);

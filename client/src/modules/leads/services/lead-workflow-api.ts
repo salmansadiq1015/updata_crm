@@ -135,6 +135,7 @@ export function parseFollowUp(raw: unknown): FollowUp | null {
     leadId: str(raw.leadId) ?? '',
     lead: { id: str(lead.id) ?? str(raw.leadId) ?? '', name: str(lead.name) ?? '', leadNumber: str(lead.leadNumber), status: str(lead.status) },
     owner: { id: str(owner.id) ?? '', name: str(owner.name) },
+    createdBy: str(raw.createdBy),
     dueAt: str(raw.dueAt),
     nextDueAt: str(raw.nextDueAt),
     timezone: str(raw.timezone),
@@ -241,6 +242,9 @@ export const leadWorkflowApi = {
   async followUps(params: FollowUpListParams, cursor: string | null, limit = 25): Promise<FollowUpPage> {
     const query: Record<string, string | number> = { scope: params.scope, bucket: params.bucket, tz: params.tz, limit };
     if (params.leadId) query.leadId = params.leadId;
+    if (params.q) query.q = params.q;
+    if (params.channel) query.channel = params.channel;
+    if (params.ownerId) query.ownerId = params.ownerId;
     if (cursor) query.cursor = cursor;
     return page((await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UPS, { params: query })) as Envelope, parseFollowUp);
   },
@@ -248,7 +252,7 @@ export const leadWorkflowApi = {
   async followUpSummary(scope: string, tz: string): Promise<FollowUpSummary> {
     const response = (await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UP_SUMMARY, { params: { scope, tz } })) as Envelope;
     const d = isRec(response.data) ? response.data : {};
-    return { overdue: num(d.overdue) ?? 0, today: num(d.today) ?? 0, upcoming: num(d.upcoming) ?? 0, timezone: str(d.timezone) ?? tz };
+    return { overdue: num(d.overdue) ?? 0, today: num(d.today) ?? 0, upcoming: num(d.upcoming) ?? 0, done: num(d.done) ?? 0, timezone: str(d.timezone) ?? tz };
   },
 
   async createFollowUp(input: CreateFollowUpInput): Promise<FollowUp | null> {

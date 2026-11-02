@@ -36,6 +36,12 @@ async function mockCrm(page: Page, devices: () => unknown[]) {
       callbacks: 0, avgCallSeconds: 0, totalCost: 0, reviews: 0, byDisposition: [], byQualification: [], byDay: [],
     };
     else if (path === '/ai-calling/settings') data = { voicePaused: false, pausedByEnv: false };
+    else if (path === '/ai-calling/settings/providers') data = {
+      primaryProvider: 'gemini', secondaryProvider: 'openai', primaryModel: 'gemini-test-live', secondaryModel: 'gpt-test-realtime', experimentalModel: '', geminiVoice: 'test-voice', fallbackEnabled: false,
+      maxSessionSeconds: 60, maxCallCostUsd: 0, connectionTimeoutMs: 10000,
+      credentials: { gemini: { stored: false, apiEnvironmentConfigured: false }, openai: { stored: false, apiEnvironmentConfigured: false } },
+      health: { gemini: { status: 'unverified' }, openai: { status: 'unverified' } }, pricing: {}, pricingVerifiedAt: 'test fixture',
+    };
     else if (path === '/link-assistant/settings') data = { paused: false, pausedByEnv: false, aiConfigured: false };
     await route.fulfill({
       contentType: 'application/json',

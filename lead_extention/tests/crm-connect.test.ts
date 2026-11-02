@@ -17,7 +17,8 @@ describe('CRM connect origin trust gate', () => {
   });
 
   it('derives the versioned API base from a web origin', () => {
-    expect(crmApiBaseForOrigin(CRM_WEB_ORIGIN)).toBe('https://updata.behjja.com/api/v1');
+    expect(CRM_WEB_ORIGIN).toBe('https://updata-crm.vercel.app');
+    expect(crmApiBaseForOrigin(CRM_WEB_ORIGIN)).toBe('https://updata-crm.vercel.app/api/v1');
     expect(crmApiBaseForOrigin('https://updata.behjja.com/')).toBe('https://updata.behjja.com/api/v1');
   });
 });

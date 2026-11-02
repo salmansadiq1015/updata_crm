@@ -43,7 +43,9 @@ const step2Schema = z.object({
   note: z.string().optional(),
 });
 
-const fullSchema = step1Schema.merge(step2Schema);
+// Zod 4 rejects merge on a refined object. safeExtend preserves the time-order
+// refinement as well as the activity fields when the complete form is checked.
+export const fieldOpsTimeFormSchema = step1Schema.safeExtend(step2Schema.shape);
 
 const STEP_FIELDS = [
   ['orderId', 'date', 'startTime', 'endTime', 'breakDurationMin'],
@@ -268,7 +270,7 @@ export function FieldOpsTimeFormDialog({ open, onOpenChange, onSave, isLoading, 
   const [direction, setDirection] = useState(1);
 
   const form = useForm({
-    resolver: zodResolver(fullSchema),
+    resolver: zodResolver(fieldOpsTimeFormSchema),
     defaultValues: BLANK,
     mode: 'onTouched',
   });

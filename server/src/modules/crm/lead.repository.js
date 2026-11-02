@@ -1,4 +1,5 @@
 import Lead from './lead.model.js';
+import { businessIdentityKeys, googleIdentityKeys, identityAfterPatch, sameBusinessIdentity } from './leadIdentity.js';
 import {
   buildCursorQuery,
   buildCursorSort,
@@ -134,7 +135,7 @@ class LeadRepository {
    * backfilled. Soft-deleted leads are excluded by the find hook.
    */
   async getProviderMeta(id) {
-    return Lead.findById(id).select('_id providerMeta').lean();
+    return Lead.findById(id).select('_id providerMeta source sourceMetadata address notes').lean();
   }
 
   /** Minimal snapshot used to safely canonicalize a partial address PATCH. */
@@ -419,6 +420,14 @@ class LeadRepository {
   async update(id, data, { createdBy } = {}) {
     const filter = { _id: id };
     if (createdBy) filter.createdBy = createdBy;
+    const changed = Object.keys(data.$set ?? data);
+    if (changed.some((path) => /^(name|type|source|address|providerMeta|sourceMetadata|notes)(\.|$)/.test(path))) {
+      const current = await Lead.findOne(filter).select('name type source address providerMeta.mapsUrl sourceMetadata notes').lean();
+      if (current) {
+        const keys = identityAfterPatch(current, data);
+        data = data.$set ? { ...data, $set: { ...data.$set, businessIdentityKeys: keys } } : { ...data, businessIdentityKeys: keys };
+      }
+    }
     // Populated like getById/list: the client replaces its cached lead with this
     // response, so an unpopulated one would drop the creator's name from the UI.
     return Lead.findOneAndUpdate(filter, data, {
@@ -516,8 +525,7 @@ class LeadRepository {
     if (googlePlaceId) {
       const docs = await Lead.find({
         ...scope,
-        source: 'google_places',
-        'sourceMetadata.googlePlaceId': googlePlaceId,
+        $or: [{ 'sourceMetadata.googlePlaceId': googlePlaceId }, { businessIdentityKeys: { $in: googleIdentityKeys({ sourceMetadata: { googlePlaceId } }) } }],
       }).select(DUPLICATE_SELECT).limit(10).lean();
       push(docs, 'PLACE_ID', 1.0);
     }
@@ -542,6 +550,30 @@ class LeadRepository {
     }
 
     return matches;
+  }
+
+  /** Confirm import identity across extension, provider and legacy CSV sources. */
+  async findImportDuplicates(lead) {
+    const keys = businessIdentityKeys(lead);
+    const clauses = [];
+    if (keys.length) clauses.push({ businessIdentityKeys: { $in: keys } });
+    if (lead.sourceMetadata?.googlePlaceId) clauses.push({ 'sourceMetadata.googlePlaceId': lead.sourceMetadata.googlePlaceId });
+    const select = '_id leadNumber name type source sourceMetadata address location providerMeta.mapsUrl notes businessIdentityKeys';
+    const matches = (candidates) => candidates.filter((candidate) => sameBusinessIdentity(lead, candidate))
+      .map((candidate) => ({ method: 'BUSINESS_IDENTITY', confidence: 1, lead: candidate }));
+    // Resolve indexed identities first: a large chain's name matches must not
+    // crowd the actual place out of a bounded legacy fallback query.
+    if (clauses.length) {
+      const exact = matches(await Lead.find({ $or: clauses }).select(select).limit(100).lean());
+      if (exact.length) return exact;
+    }
+    // Before the backfill runs, a legacy import may only have its Maps URL in
+    // notes. Locate exact-name candidates and compare their actual evidence.
+    if (!lead.name) return [];
+    const candidates = await Lead.find({ name: { $regex: `^${accentSafeRegex(lead.name.trim())}$`, $options: 'i' } })
+      .select(select)
+      .sort({ createdAt: 1, _id: 1 }).limit(100).lean();
+    return matches(candidates);
   }
 
   /**
@@ -581,13 +613,18 @@ class LeadRepository {
   async findByPlaceIds(placeIds = [], { createdBy } = {}) {
     if (!placeIds.length) return [];
     const filter = {
-      source: 'google_places',
-      'sourceMetadata.googlePlaceId': { $in: placeIds },
+      $or: [
+        { 'sourceMetadata.googlePlaceId': { $in: placeIds } },
+        { businessIdentityKeys: { $in: placeIds.flatMap((googlePlaceId) => googleIdentityKeys({ sourceMetadata: { googlePlaceId } })) } },
+      ],
     };
     if (createdBy) filter.createdBy = createdBy;
-    return Lead.find(filter)
-      .select('_id leadNumber name status source sourceMetadata.googlePlaceId')
+    const matches = await Lead.find(filter)
+      .select('_id leadNumber name status source sourceMetadata businessIdentityKeys')
       .lean();
+    return matches.flatMap((lead) => placeIds.filter((id) => id === lead.sourceMetadata?.googlePlaceId
+      || googleIdentityKeys({ sourceMetadata: { googlePlaceId: id } }).some((key) => lead.businessIdentityKeys?.includes(key)))
+      .map((id) => ({ ...lead, sourceMetadata: { ...lead.sourceMetadata, googlePlaceId: id } })));
   }
 }
 

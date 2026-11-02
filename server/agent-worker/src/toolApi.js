@@ -38,6 +38,7 @@ export class ToolApi {
   }
 
   answered() { return this._post('/answered'); }
+  providerAttempt(attempt) { return this._postEvent('/voice-provider', attempt); }
   disclose() { return this._post('/disclose'); }
   recordAnswer(fieldKey, rawAnswer) { return this._post('/record-answer', { fieldKey, rawAnswer }); }
   recordAnswers(answers) { return this._post('/record-answers', { answers }); }
@@ -103,10 +104,10 @@ export function actionToInstruction(action) {
   if (!action) return 'Wait for the backend.';
   switch (action.type) {
     case 'disclose':
-      return 'Say the disclosure (above) and ask if they have a moment. As soon as they agree (yes, sure, okay, go ahead), ' +
+      return 'Say the disclosure (above) in the conversation language and ask if they have a moment. As soon as they agree (yes, sure, okay, go ahead), ' +
         'call the disclose tool before saying anything else. Do not ask any other question first.';
     case 'ask':
-      return `Ask this question naturally (you may rephrase, keep the meaning): "${action.question.text}". ` +
+      return `Ask this question naturally in the current conversation language (translate or rephrase, keep the meaning): "${action.question.text}". ` +
         `Check that their reply directly supplies the information requested. If they give an unrelated, incomplete or unintelligible response, call no_response instead of saving it as an answer. A greeting, acknowledgement, question echo or random statement is not an answer. When they answer, call record_answer with fieldKey="${action.question.fieldKey}" and their answer.${answerFormat(action.question)}`;
     case 'clarify':
       return `No usable answer was recorded for "${action.question.text}"${action.reason ? ` (reason: ${action.reason})` : ''}. Explain briefly what information is needed and ask this same question politely. Do not change its meaning or claim an answer was given. Ask ONE brief clarifying question, then WAIT for a new reply. If it is still unrelated, incomplete or unintelligible, call no_response; only call record_answer with fieldKey="${action.question.fieldKey}" when they supply the requested information. Use mark_answer_unknown only for an explicit request to skip or statement that they do not know.${answerFormat(action.question)}`;

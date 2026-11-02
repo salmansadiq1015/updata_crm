@@ -260,10 +260,10 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
           aria-describedby="wizard-step-label"
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           onPointerDownOutside={(e) => { e.preventDefault(); requestClose(); }}
-          className="dark fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0a1020] text-slate-100 focus:outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[92vh] sm:w-[calc(100%-2rem)] sm:max-w-5xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-white/10 sm:shadow-[0_32px_100px_rgba(0,0,0,.68)]"
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-foreground focus:outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[92vh] sm:w-[calc(100%-2rem)] sm:max-w-5xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_32px_100px_rgba(0,0,0,.68)]"
         >
         {/* header + stepper */}
-        <div className="border-b border-white/8 bg-[#0b1223] px-4 py-3 sm:px-5 sm:py-4">
+        <div className="border-b border-border bg-card px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <UpdataVoiceOrb state="idle" size="compact" />
@@ -314,7 +314,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
                 <ChannelCard active={!isLink} disabled={editing} onClick={() => setChannel('voice')} icon={PhoneCall} title="AI phone call" text="The AI calls the lead from a cloud phone line or from your own paired phone (chosen under Schedule & leads)." />
                 <ChannelCard active={isLink} disabled={editing} onClick={() => setChannel('web_link')} icon={MessageSquareText} title="SMS link → AI chat" text="You text each lead a personal link from your own SIM; an AI assistant collects the answers in a chat." />
               </div>
-              {editing ? <p className="text-xs text-slate-500">Channel, lead selection, and test mode are locked after campaign creation. Draft and paused campaign configuration can still be updated safely.</p> : null}
+              {editing ? <p className="text-xs text-muted-foreground">Channel, lead selection, and test mode are locked after campaign creation. Draft and paused campaign configuration can still be updated safely.</p> : null}
               <Field label="Campaign name" required error={fieldError('name')}>
                 <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Q1 heating-system qualification" aria-invalid={Boolean(fieldError('name'))} autoFocus />
               </Field>
@@ -450,7 +450,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
                     <h3 className="font-semibold">Preflight</h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">{editing ? 'Saving keeps recipients and prior attempts intact. Server-side readiness still runs before subsequent calls.' : 'Creation saves a draft. A second server-side readiness check still runs before any real call.'}</p>
                   </div>
-                  <span className="rounded-full border border-blue-400/20 bg-blue-400/8 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-300">{editing ? `${campaign?.status} edit` : 'Draft only'}</span>
+                  <span className="rounded-full border border-blue-400/20 bg-blue-400/8 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">{editing ? `${campaign?.status} edit` : 'Draft only'}</span>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <PreflightItem icon={ShieldCheck} title="Calling safety" detail="Consent, suppression, calling hours and retry limits are rechecked by the server." status="pass" />
@@ -500,7 +500,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
                 ) : isLink ? (
                   <>The campaign is created as a <strong>draft</strong>. Use <strong>Preview as customer</strong> in its detail panel, then start it and send the links from the mobile app (Call Agent → Text leads from your phone). Every lead is told it is an AI assistant; &quot;STOP&quot; always opts out.</>
                 ) : (
-                  <>The campaign is created as a <strong>draft</strong>. Review eligibility and run a browser simulation from its detail panel before starting real calls. OpenAI Realtime + SIP usage is billable.</>
+                  <>The campaign is created as a <strong>draft</strong>. Review eligibility and run a browser simulation from its detail panel before starting real calls. AI voice and SIP usage is billable.</>
                 )}
               </div>
             </div>
@@ -508,7 +508,7 @@ export function CampaignWizard({ onClose, onCreated, initialLeadIds, campaign }:
         </div>
 
         {/* footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-white/8 bg-[#0b1223] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+        <div className="flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
           <button type="button" onClick={() => (step === 0 ? requestClose() : goTo(step - 1))} disabled={saving} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-60">
             {step === 0 ? 'Cancel' : <><ChevronLeft className="h-4 w-4" /> Back</>}
           </button>
@@ -552,7 +552,7 @@ function Summary({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-b border-border/60 py-1.5">
       <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 text-right font-medium wrap-break-word">{value}</span>
+      <span className="min-w-0 text-end font-medium wrap-break-word">{value}</span>
     </div>
   );
 }
@@ -584,7 +584,7 @@ function PreflightItem({
 
 function ChannelCard({ active, disabled = false, onClick, icon: Icon, title, text }: { active: boolean; disabled?: boolean; onClick: () => void; icon: React.ComponentType<{ className?: string }>; title: string; text: string }) {
   return (
-    <button type="button" role="radio" aria-checked={active} disabled={disabled} onClick={onClick} className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-65 ${active ? 'border-brand-500 bg-brand-500/5 ring-1 ring-brand-500' : 'border-border hover:border-brand-500/60'}`}>
+    <button type="button" role="radio" aria-checked={active} disabled={disabled} onClick={onClick} className={`rounded-xl border p-3 text-start transition disabled:cursor-not-allowed disabled:opacity-65 ${active ? 'border-brand-500 bg-brand-500/5 ring-1 ring-brand-500' : 'border-border hover:border-brand-500/60'}`}>
       <span className="flex items-center gap-2 text-sm font-semibold"><Icon className="h-4 w-4 text-brand-500" /> {title}</span>
       <span className="mt-1 block text-xs text-muted-foreground">{text}</span>
     </button>
@@ -622,7 +622,7 @@ function LinkAgentFields({ link, setLink, agent, setAgent, fieldError }: {
           </select>
         </Field>
       </div>
-      {link.voiceTier === 'premium' ? <p className="text-[11px] text-muted-foreground">The link opens a voice call screen: the lead talks with the AI in the browser (LiveKit + OpenAI Realtime, about $0.12 per minute measured, counted against the daily AI budget). Typing stays available. Needs LiveKit configured and the voice agent worker running; otherwise the link opens the text chat.</p> : null}
+      {link.voiceTier === 'premium' ? <p className="text-[11px] text-muted-foreground">The link opens a voice call screen: the lead talks with the AI in the browser (LiveKit + the configured AI voice provider, counted against the daily AI budget). Typing stays available. Needs LiveKit configured and the voice agent worker running; otherwise the link opens the text chat.</p> : null}
       {link.voiceTier === 'browser' ? <p className="text-[11px] text-muted-foreground">The microphone button only appears on phones whose browser supports speech input; everyone else types.</p> : null}
       </FormSection>
 

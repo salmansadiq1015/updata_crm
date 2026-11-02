@@ -58,7 +58,7 @@ for (const width of [390, 768, 1440]) {
     }
     await card.getByRole('button', { name: '2026-10-29: 1', exact: true }).click();
     await expect(card.getByText(/1 call · 1 connected/)).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Billing comparison' })).toContainText('not reconciled with OpenAI billing');
+    await expect(page.getByRole('region', { name: 'Billing comparison' })).toContainText('not reconciled with provider billing');
     await page.screenshot({ path: `/private/tmp/updata-call-cost-${width}-${test.info().project.name}.png`, fullPage: true });
   });
 }

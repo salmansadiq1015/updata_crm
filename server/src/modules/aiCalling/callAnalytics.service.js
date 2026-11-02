@@ -6,6 +6,8 @@ import Lead from '../crm/lead.model.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import { toCsv } from '../../shared/utils/csv.js';
 import { computeCallCost, COST_PRICING_VERSION, needsPricing } from './engine/callCost.js';
+import { providerComparison } from './engine/providerComparison.js';
+import { costDiagnostics } from './engine/costDiagnostics.js';
 
 /**
  * Cost and outcome analytics for one calling agent: every call its campaigns
@@ -92,7 +94,7 @@ class CallAnalyticsService {
       { $project: {
         campaignId: 1, leadId: 1, internalCallId: 1, attemptNumber: 1, isTest: 1, provider: 1, state: 1, disposition: 1,
         qualification: 1, createdAt: 1, initiatedAt: 1, answeredAt: 1, endedAt: 1, durationSeconds: 1, cost: 1,
-        callNotes: 1, reviewRequired: 1, failureCode: 1, failureMessage: 1,
+        callNotes: 1, reviewRequired: 1, failureCode: 1, failureMessage: 1, aiVoice: 1, quality: 1,
         leadTurns: turns('customer'), agentTurns: turns('assistant'),
         interruptions: { $size: { $filter: { input: { $ifNull: ['$transcript', []] }, as: 't', cond: { $and: [{ $eq: ['$$t.role', 'assistant'] }, '$$t.interrupted'] } } } },
         answersTotal: { $size: { $ifNull: ['$answers', []] } },
@@ -119,7 +121,10 @@ class CallAnalyticsService {
       summary: call.callNotes?.summary || '', description: call.callNotes?.description || '', blockers: call.callNotes?.blockers || [],
       notesSource: call.callNotes?.source || null,
       behavior: behaviorProfile(call),
+      aiVoice: call.aiVoice || call.cost?.breakdown?.aiVoice || null,
+      quality: call.quality || null,
       cost,
+      costDiagnostics: costDiagnostics(cost, call.cost?.breakdown?.usage, call.durationSeconds || 0),
     };
   }
 
@@ -180,6 +185,7 @@ class CallAnalyticsService {
     return {
       agent: { id: String(ctx.agent._id), name: ctx.agent.name },
       currency: 'USD',
+      providerComparison: providerComparison(rows),
       totals: {
         calls: live.length, connected: connected.length, completed: live.filter(r => r.disposition === 'answered_completed').length,
         qualified, leads: uniqueLeads, totalCost: round(totalCost), totalSeconds,
@@ -220,7 +226,7 @@ class CallAnalyticsService {
     const headers = ['callId', 'startedAt', 'lead', 'phone', 'campaign', 'test', 'attempt', 'durationSeconds', 'disposition', 'qualification',
       'tone', 'toneEvidence', 'leadTurns', 'agentTurns', 'validAnswers', 'totalCost', 'modelCost', 'telephonyCost', 'platformCost',
       'currency', 'costSource', 'model', 'inputAudioTokens', 'inputTextTokens', 'cachedInputTokens', 'outputAudioTokens', 'outputTextTokens',
-      'totalTokens', 'costEstimated', 'pricingComplete', 'invoiceVerified', 'pricingVersion', 'summary', 'blockers'];
+      'totalTokens', 'costEstimated', 'pricingComplete', 'invoiceVerified', 'pricingVersion', 'summary', 'blockers', 'aiProvider', 'aiModel', 'aiFallback', 'aiProviderErrors'];
     const rows = ctx.calls.map(c => this._row(c, ctx)).map(r => ({
       callId: r.internalCallId, startedAt: r.at, lead: r.leadName, phone: r.leadPhone || '', campaign: r.campaignName, test: r.isTest ? 'yes' : 'no',
       attempt: r.attemptNumber, durationSeconds: r.durationSeconds, disposition: r.disposition || '', qualification: r.qualification || '',
@@ -233,6 +239,8 @@ class CallAnalyticsService {
       outputAudioTokens: r.cost.tokens?.outputAudio ?? '', outputTextTokens: r.cost.tokens?.outputText ?? '',
       totalTokens: r.cost.tokens?.total ?? '', costEstimated: r.cost.estimate, pricingComplete: !r.cost.unpriced && r.cost.source !== 'none',
       invoiceVerified: false, pricingVersion: r.cost.pricingVersion || '', summary: r.summary, blockers: r.blockers.join(' | '),
+      aiProvider: r.aiVoice?.provider || '', aiModel: r.aiVoice?.model || '', aiFallback: r.aiVoice ? Boolean(r.aiVoice.fallback) : '',
+      aiProviderErrors: (r.aiVoice?.attempts || []).filter(a => a.status !== 'established').map(a => `${a.provider}:${a.reason || a.status}`).join(' | '),
     }));
     return String.fromCharCode(0xFEFF) + toCsv(headers, rows);
   }

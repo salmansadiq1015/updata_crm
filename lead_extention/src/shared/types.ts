@@ -59,6 +59,8 @@ export interface BusinessTypeTask {
   stage: DiscoveryPhase | null;
   resultCount: number;
   newCount: number;
+  /** Persisted limit of new unique leads for this business type. */
+  newResultLimit?: number;
   duplicateCount: number;
   invalidCount: number;
   rejectedOutOfAreaCount: number;
@@ -80,6 +82,8 @@ export interface DiscoveryCampaign {
   queueIndex: number;
   currentBusinessType: string | null;
   tasks: BusinessTypeTask[];
+  /** Absent on historical campaigns that used a shared maximum. */
+  perTypeMaxResults?: number;
   globalMaxResults: number;
   uniqueCount: number;
   duplicateCount: number;
@@ -349,8 +353,8 @@ export type ExtensionMessage =
   | { type: 'PAUSE_DISCOVERY' }
   | { type: 'RESUME_DISCOVERY' }
   | { type: 'STOP_DISCOVERY' }
-  | { type: 'RETRY_DISCOVERY' }
-  | { type: 'RETRY_BUSINESS_TYPE'; businessType: string }
+  | { type: 'RETRY_DISCOVERY'; searchId?: string }
+  | { type: 'RETRY_BUSINESS_TYPE'; businessType: string; searchId?: string }
   | { type: 'GET_PROGRESS' }
   | { type: 'MARK_EXPORTED'; searchId: string; count: number }
   | { type: 'ENRICH_LEAD'; leadId: string; maxPages: number }

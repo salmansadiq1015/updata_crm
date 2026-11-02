@@ -25,7 +25,7 @@ const apiError = (err: unknown) => (err as ApiErr)?.response?.data?.error;
 
 const METHOD_FALLBACK: Record<string, string> = {
   PLACE_ID: 'Same place', PHONE: 'Same phone', EMAIL: 'Same email', WEBSITE: 'Same website',
-  NAME_POSTAL: 'Same name + postcode', NAME_NEARBY: 'Same name nearby',
+  NAME_POSTAL: 'Same name + postcode', NAME_NEARBY: 'Same name nearby', BUSINESS_IDENTITY: 'Same business identity',
 };
 
 function methodLabel(t: TranslateFn, method: string) {

@@ -17,9 +17,26 @@ const REF_FALLBACK: Record<string, string> = {
 const GROUP_FALLBACK: Record<string, string> = {
   business: 'Business information', qualification: 'Qualification answers', engagement: 'Engagement',
 };
+const SOURCE_LABELS: Record<string, string> = {
+  provider: 'Business listing', google_places: 'Google Maps', lead: 'Lead record',
+  'lead.lastContactedAt': 'Lead record', user: 'Team member', user_correction: 'Team correction',
+  ai_proposed_user_confirmed: 'AI suggestion confirmed by team', sms_agent: 'SMS assistant',
+  ai_call_agent: 'AI calling assistant', ai_call: 'AI call', call_record: 'AI call',
+  mobile_call: 'Phone call', calls: 'Call history', communication: 'Communication history',
+  lead_communication: 'Phone call / SMS', sim_sms: 'SMS conversation',
+  call_suppression: 'Do-not-call list', message_suppression: 'Message opt-out list', opt_out: 'Opt-out request',
+  manual: 'Manual entry', import: 'Imported data', extension: 'Browser extension', website: 'Website', referral: 'Referral',
+};
+
+function sourceLabel(t: TranslateFn, source: string) {
+  const key = source.split(':')[0];
+  return SOURCE_LABELS[key]
+    ? t(`leads.score.source.${key}`, SOURCE_LABELS[key])
+    : t('leads.score.source.other', 'Other source');
+}
 
 export const factorLabel = (t: TranslateFn, factor: { key: string; label?: string }) =>
-  t(`leads.score.factor.${factor.key}`, factor.label || factor.key);
+  t(`leads.score.factor.${factor.key}`, factor.key === 'provider_rating' ? 'Business rating' : factor.label || factor.key.replace(/[_.]/g, ' '));
 
 function formatDate(value: string | null, locale: string) {
   if (!value) return null;
@@ -45,17 +62,15 @@ function EvidenceLine({ evidence }: { evidence: LeadScoreEvidence }) {
   return (
     <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
       <p>
-        <code className="rounded bg-muted px-1 py-px font-mono text-[10px]">{evidence.field}</code>
-        {' = '}
         <span className="font-medium text-foreground/80">{formatValue(t, evidence.value)}</span>
-        {evidence.source && <span>{` · ${t('leads.score.evidence.source', 'Source')}: ${evidence.source.replace(/_/g, ' ')}`}</span>}
+        {evidence.source && <span>{` · ${t('leads.score.evidence.source', 'Source')}: ${sourceLabel(t, evidence.source)}`}</span>}
         {date && <span>{` · ${date}`}</span>}
       </p>
       {evidence.quote && <p className="italic">“{evidence.quote}”</p>}
       {ref?.id && ref.type !== 'lead' && (
         <p>
           <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-1.5 py-px text-[10px] font-medium text-primary" title={ref.id}>
-            {t(`leads.score.ref.${ref.type}`, REF_FALLBACK[ref.type] ?? ref.type)} · {ref.id.slice(-6)}
+            {t(`leads.score.ref.${ref.type}`, REF_FALLBACK[ref.type] ?? 'Record')} · {ref.id.slice(-6)}
           </span>
         </p>
       )}

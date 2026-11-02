@@ -64,22 +64,22 @@ export function CampaignOverview({
   };
   const selectedDeletable = [...selected].filter((id) => { const c = campaigns.find((x) => x._id === id); return c && canDelete(c.status); });
   return (
-    <section aria-labelledby="campaign-overview-title" className="overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] shadow-[0_16px_42px_rgba(2,6,23,.18)]">
-      <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
+    <section aria-labelledby="campaign-overview-title" className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_42px_rgba(2,6,23,.18)]">
+      <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-400/10 text-sky-300"><Activity className="h-4 w-4" /></span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-400/10 text-primary"><Activity className="h-4 w-4" /></span>
           <div>
             <h2 id="campaign-overview-title" className="text-sm font-semibold">Campaign overview</h2>
-            <p className="text-[11px] text-slate-500">Open a campaign to control it, inspect recipients, or monitor live calls</p>
+            <p className="text-[11px] text-muted-foreground">Open a campaign to control it, inspect recipients, or monitor live calls</p>
           </div>
         </div>
-        <span className="text-xs font-medium text-slate-500">{total} total</span>
+        <span className="text-xs font-medium text-muted-foreground">{total} total</span>
       </div>
       {selected.size > 0 ? (
-        <div className="flex items-center justify-between gap-2 border-b border-white/8 bg-blue-400/[.06] px-4 py-2 text-xs">
-          <span className="font-semibold text-slate-200">{selected.size} selected</span>
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-blue-400/[.06] px-4 py-2 text-xs">
+          <span className="font-semibold text-foreground">{selected.size} selected</span>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => setSelected(new Set())} className="rounded-md px-2 py-1 font-medium text-slate-400 hover:bg-white/8">Clear</button>
+            <button type="button" onClick={() => setSelected(new Set())} className="rounded-md px-2 py-1 font-medium text-muted-foreground hover:bg-muted">Clear</button>
             <button
               type="button"
               onClick={() => setConfirm({ kind: 'delete', ids: selectedDeletable, label: `${selectedDeletable.length} campaign${selectedDeletable.length === 1 ? '' : 's'}` })}
@@ -97,13 +97,13 @@ export function CampaignOverview({
           {[0, 1, 2].map((row) => <div key={row} className="h-16 animate-pulse rounded-xl bg-white/4" />)}
         </div>
       ) : isError ? (
-        <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-slate-400">
+        <div className="flex flex-col items-center gap-2 p-10 text-center text-sm text-muted-foreground">
           <AlertTriangle className="h-5 w-5 text-amber-400" />
           Campaigns could not be loaded.
-          <button type="button" onClick={onRetry} className="font-semibold text-blue-300 hover:text-blue-200">Try again</button>
+          <button type="button" onClick={onRetry} className="font-semibold text-primary hover:text-blue-200">Try again</button>
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="p-8 text-slate-300">
+        <div className="p-8 text-muted-foreground">
           <EmptyState
             icon={Phone}
             title="No calling campaigns yet"
@@ -114,16 +114,16 @@ export function CampaignOverview({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
             <thead>
-              <tr className="border-b border-white/7 bg-white/[.018] text-left text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">
+              <tr className="border-b border-border bg-white/[.018] text-start text-[10px] font-bold uppercase tracking-[.13em] text-muted-foreground">
                 <th className="w-9 px-3 py-2.5"><input type="checkbox" aria-label="Select all campaigns" className="h-4 w-4 accent-blue-500" checked={allSelected} onChange={toggleAll} /></th>
                 <th className="px-4 py-2.5">Campaign</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5">Progress</th>
-                <th className="px-4 py-2.5 text-right">Qualified</th>
-                <th className="px-4 py-2.5 text-right">Callbacks</th>
-                <th className="px-4 py-2.5 text-right">Review</th>
-                <th className="px-4 py-2.5 text-right">Talk time</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
+                <th className="px-4 py-2.5 text-end">Qualified</th>
+                <th className="px-4 py-2.5 text-end">Callbacks</th>
+                <th className="px-4 py-2.5 text-end">Review</th>
+                <th className="px-4 py-2.5 text-end">Talk time</th>
+                <th className="px-4 py-2.5 text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -139,18 +139,18 @@ export function CampaignOverview({
                     role="button"
                     onClick={() => onSelect(campaign._id)}
                     onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect(campaign._id); } }}
-                    className={`cursor-pointer border-b border-white/6 text-slate-300 outline-none transition last:border-0 hover:bg-blue-400/[.045] focus-visible:bg-blue-400/[.065] ${selected.has(campaign._id) ? 'bg-blue-400/[.06]' : ''}`}
+                    className={`cursor-pointer border-b border-border text-muted-foreground outline-none transition last:border-0 hover:bg-blue-400/[.045] focus-visible:bg-blue-400/[.065] ${selected.has(campaign._id) ? 'bg-blue-400/[.06]' : ''}`}
                   >
                     <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" aria-label={`Select ${campaign.name}`} className="h-4 w-4 accent-blue-500" checked={selected.has(campaign._id)} onChange={() => toggle(campaign._id)} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2 font-semibold text-slate-100">
-                        <button type="button" onClick={event => { event.stopPropagation(); onSelect(campaign._id); }} className="min-w-0 truncate text-left font-semibold hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{campaign.name}</button>
+                      <div className="flex items-center gap-2 font-semibold text-foreground">
+                        <button type="button" onClick={event => { event.stopPropagation(); onSelect(campaign._id); }} className="min-w-0 truncate text-start font-semibold hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{campaign.name}</button>
                         {campaign.isTest ? <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">TEST</span> : null}
-                        {campaign.transport === 'paired_phone' ? <span title="Paired phone transport" className="rounded bg-blue-400/10 px-1.5 py-0.5 text-[9px] font-bold text-blue-300">SIM</span> : null}
+                        {campaign.transport === 'paired_phone' ? <span title="Paired phone transport" className="rounded bg-blue-400/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">SIM</span> : null}
                       </div>
-                      <div className="mt-1 text-[11px] text-slate-500">{campaign.questionnaire?.questions?.length ?? 0} questions · {campaign.agentConfig.agentName}{!campaign.agentId ? ' · Legacy campaign' : ''}</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">{campaign.questionnaire?.questions?.length ?? 0} questions · {campaign.agentConfig.agentName}{!campaign.agentId ? ' · Legacy campaign' : ''}</div>
                       {canStart(campaign.status) || canPause(campaign.status) ? <button type="button"
                         disabled={!canManage || lifecycleBusy || noWaitingLeads}
                         title={noWaitingLeads ? 'No eligible leads are waiting. Open the campaign to check Recipients.' : undefined}
@@ -159,17 +159,17 @@ export function CampaignOverview({
                         {lifecycleBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : canPause(campaign.status) ? <Pause className="h-3.5 w-3.5" aria-hidden="true" /> : <PhoneOutgoing className="h-3.5 w-3.5" aria-hidden="true" />}
                         {canPause(campaign.status) ? campaign.channel === 'web_link' ? 'Pause campaign' : 'Pause calling' : campaign.channel === 'web_link' ? 'Start campaign' : 'Start calling'}
                       </button> : null}
-                      {noWaitingLeads ? <p className="mt-1 text-[11px] text-slate-400">No eligible leads waiting · check Recipients</p> : null}
+                      {noWaitingLeads ? <p className="mt-1 text-[11px] text-muted-foreground">No eligible leads waiting · check Recipients</p> : null}
                     </td>
                     <td className="px-4 py-3"><StatusPill status={campaign.status === 'running' ? (campaign.summary.inProgress > 0 ? 'calling' : campaign.waitReason ? 'waiting' : 'queued') : campaign.status} /></td>
                     <td className="min-w-48 px-4 py-3">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500"><span>{completed}/{totalLeads}</span><span>{progress}%</span></div>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>{completed}/{totalLeads}</span><span>{progress}%</span></div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6"><span className="block h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500" style={{ width: `${progress}%` }} /></div>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-emerald-300">{campaign.summary.qualified}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-blue-300">{campaign.summary.callbacks}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-rose-300">{(campaign.summary.needsReview || 0) + (campaign.summary.needsReconcile || 0)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-slate-500">{fmtDuration(campaign.summary.totalCallSeconds)}</td>
+                    <td className="px-4 py-3 text-end font-semibold tabular-nums text-emerald-300">{campaign.summary.qualified}</td>
+                    <td className="px-4 py-3 text-end tabular-nums text-primary">{campaign.summary.callbacks}</td>
+                    <td className="px-4 py-3 text-end tabular-nums text-rose-300">{(campaign.summary.needsReview || 0) + (campaign.summary.needsReconcile || 0)}</td>
+                    <td className="px-4 py-3 text-end tabular-nums text-muted-foreground">{fmtDuration(campaign.summary.totalCallSeconds)}</td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {canCancel(campaign.status) ? (
@@ -216,7 +216,7 @@ function RowAction({ label, icon: Icon, onClick, tone, busy, disabled }: {
     emerald: 'text-emerald-300 hover:bg-emerald-400/10',
     amber: 'text-amber-300 hover:bg-amber-400/10',
     rose: 'text-rose-300 hover:bg-rose-400/10',
-    slate: 'text-slate-400 hover:bg-white/8',
+    slate: 'text-muted-foreground hover:bg-muted',
   };
   return (
     <button
@@ -235,7 +235,7 @@ function RowAction({ label, icon: Icon, onClick, tone, busy, disabled }: {
 export function TelephonyBanner({ telephony, failed }: { telephony?: TelephonyHealth; failed?: boolean }) {
   if (!telephony) {
     if (!failed) {
-      return <div className="h-14 animate-pulse rounded-2xl border border-white/6 bg-white/3" aria-label="Checking calling readiness" role="status" />;
+      return <div className="h-14 animate-pulse rounded-2xl border border-border bg-muted/40" aria-label="Checking calling readiness" role="status" />;
     }
     return (
       <div className="flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/7 px-4 py-3 text-sm text-amber-100">
@@ -249,21 +249,21 @@ export function TelephonyBanner({ telephony, failed }: { telephony?: TelephonyHe
   const browserReady = Boolean(telephony.livekitReady || telephony.configured);
   const sipReady = Boolean(telephony.configured && telephony.eligible);
   return (
-    <section aria-label="Calling readiness" className="grid overflow-hidden rounded-2xl border border-white/8 bg-[#0b1223] md:grid-cols-[1fr_auto]">
+    <section aria-label="Calling readiness" className="grid overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-[1fr_auto]">
       <div className="flex items-start gap-3 px-4 py-3.5">
-        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${browserReady ? 'bg-blue-400/10 text-blue-300' : 'bg-amber-400/10 text-amber-300'}`}>
+        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${browserReady ? 'bg-blue-400/10 text-primary' : 'bg-amber-400/10 text-amber-300'}`}>
           {browserReady ? <RadioTower className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
         </span>
         <div>
           <p className="text-sm font-semibold">{browserReady ? 'Browser agent route configured' : 'Voice infrastructure needs setup'}</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             {browserReady
-              ? `Browser tests can connect through LiveKit and OpenAI. ${sipReady ? 'Cloud SIP is configured for real phone calls.' : 'Cloud SIP is not ready; use a verified paired phone for SIM campaigns.'}`
+              ? `Browser tests can connect through LiveKit and the configured AI provider. ${sipReady ? 'Cloud SIP is configured for real phone calls.' : 'Cloud SIP is not ready; use a verified paired phone for SIM campaigns.'}`
               : 'Campaign design and text simulation are available, but a real browser or phone voice session cannot start.'}
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-3 border-t border-white/8 md:border-l md:border-t-0">
+      <div className="grid grid-cols-3 border-t border-border md:border-l md:border-t-0">
         <ReadinessFact label="Browser" value={browserReady ? 'Configured' : 'Offline'} ok={browserReady} />
         <ReadinessFact label="Cloud SIP" value={sipReady ? 'Eligible' : 'Not ready'} ok={sipReady} />
         <ReadinessFact label="Operations" value={warnings.length ? `${warnings.length} alert${warnings.length === 1 ? '' : 's'}` : 'Clear'} ok={!warnings.length} />
@@ -282,7 +282,7 @@ function ReadinessFact({ label, value, ok }: { label: string; value: string; ok:
   return (
     <div className="flex min-w-24 flex-col justify-center px-3 py-2.5 text-center">
       <span className="text-[9px] font-bold uppercase tracking-[.13em] text-slate-600">{label}</span>
-      <span className={`mt-1 inline-flex items-center justify-center gap-1 text-[11px] font-semibold ${ok ? 'text-emerald-300' : 'text-slate-400'}`}>
+      <span className={`mt-1 inline-flex items-center justify-center gap-1 text-[11px] font-semibold ${ok ? 'text-emerald-300' : 'text-muted-foreground'}`}>
         {ok ? <ShieldCheck className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{value}
       </span>
     </div>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_BUSINESS_TYPE_ATTEMPTS,
+  allocateTaskBudget,
+  campaignRetryError,
+  hasTaskCapacity,
   completeTask,
   completedTaskCount,
   createCampaign,
@@ -57,6 +60,58 @@ function runTypes(campaign: DiscoveryCampaign, outcomes: Record<string, 'ok' | '
 }
 
 describe('multi-business-type sequential campaign', () => {
+  it('allows ten new unique results for each business type', () => {
+    const campaign = createCampaign('fair', ['Gym', 'Beauty Salon'], 10);
+    for (const task of campaign.tasks) {
+      startTask(campaign, task, task.businessType);
+      while (hasTaskCapacity(campaign)) { task.newCount += 1; campaign.uniqueCount += 1; }
+      completeTask(campaign, task);
+    }
+    expect(campaign.tasks.map((task) => task.newCount)).toEqual([10, 10]);
+    expect(campaign.uniqueCount).toBe(20);
+    expect(campaign.tasks.every((task) => task.status === 'completed')).toBe(true);
+  });
+
+  it('keeps the next type at ten when the first type is sparse', () => {
+    const campaign = createCampaign('sparse', ['Gym', 'Beauty Salon'], 10);
+    const first = campaign.tasks[0]; startTask(campaign, first, 'Gym');
+    first.newCount = 2; campaign.uniqueCount = 2; completeTask(campaign, first);
+    startTask(campaign, campaign.tasks[1], 'Beauty Salon');
+    expect(campaign.tasks[1].newResultLimit).toBe(10);
+  });
+
+  it('keeps each type’s full limit across MV3 recovery', () => {
+    const campaign = createCampaign('odd', ['Gym', 'Beauty Salon', 'Dentist'], 10);
+    startTask(campaign, campaign.tasks[0], 'Gym');
+    campaign.tasks[0].newCount = 2; campaign.uniqueCount = 2;
+    const recovered = structuredClone(campaign);
+    expect(allocateTaskBudget(recovered, recovered.tasks[0])).toBe(10);
+    recovered.tasks[0].newCount = 4; recovered.uniqueCount = 4; completeTask(recovered, recovered.tasks[0]);
+    startTask(recovered, recovered.tasks[1], 'Beauty Salon');
+    expect(recovered.tasks[1].newResultLimit).toBe(10);
+  });
+
+  it('rejects a full type retry even when other business types still have room', () => {
+    const campaign = createCampaign('full', ['Gym', 'Beauty Salon'], 10);
+    campaign.tasks[0].newCount = 10; campaign.tasks[0].status = 'completed-with-errors'; campaign.uniqueCount = 10;
+    const before = structuredClone(campaign);
+    expect(campaignRetryError(campaign, 'Gym')).toContain('Gym already has its 10');
+    expect(retryTask(campaign, 'Gym')).toBeNull();
+    expect(campaign).toEqual(before);
+    campaign.tasks[1].status = 'failed';
+    expect(retryTask(campaign, 'Beauty Salon')).toBe(campaign.tasks[1]);
+  });
+
+  it('retries a partial failed type against the remaining capacity without resetting saved totals', () => {
+    const campaign = createCampaign('partial', ['Gym', 'Beauty Salon'], 10);
+    const first = campaign.tasks[0]; startTask(campaign, first, 'Gym');
+    first.newCount = 2; campaign.uniqueCount = 2; failTask(campaign, first, 'Maps error');
+    expect(retryTask(campaign, 'Gym')).toBe(first);
+    startTask(campaign, first, 'Gym');
+    expect(first.newCount).toBe(2);
+    expect(first.newResultLimit).toBe(10);
+    expect(campaign.uniqueCount).toBe(2);
+  });
   it('1 — completes one selected business type', () => {
     const campaign = createCampaign('one', ['Hotel'], 100);
     expect(runTypes(campaign, { Hotel: 'ok' })).toEqual(['Hotel']);
@@ -142,11 +197,16 @@ describe('multi-business-type sequential campaign', () => {
     expect(merged.discoveryCategories).toEqual(['Hotel', 'Restaurant']);
   });
 
-  it('12 — global maximum skips all remaining types after cross-type deduplication', () => {
+  it('12 — a maximum of one allows one unique result for every selected business type', () => {
     const campaign = createCampaign('limit', ['Hotel', 'Restaurant', 'Gym'], 1);
-    const first = nextRunnableTask(campaign)!; startTask(campaign, first, 'Hotel near Lahore'); first.newCount = 1; first.resultCount = 1; completeTask(campaign, first); syncCampaignTotals(campaign, 1);
-    skipPendingTasks(campaign, 'global-limit-reached');
-    expect(campaign.tasks.slice(1).every((task) => task.status === 'skipped' && task.skipReason === 'global-limit-reached')).toBe(true);
+    for (const task of campaign.tasks) {
+      startTask(campaign, task, task.businessType);
+      while (hasTaskCapacity(campaign)) { task.newCount += 1; campaign.uniqueCount += 1; }
+      completeTask(campaign, task);
+    }
+    expect(campaign.globalMaxResults).toBe(3);
+    expect(campaign.tasks.map((task) => task.newCount)).toEqual([1, 1, 1]);
+    expect(campaign.tasks.every((task) => task.status === 'completed')).toBe(true);
   });
 
   it('13 — builds an independent area-scoped query for every business type', () => {

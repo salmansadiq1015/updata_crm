@@ -19,7 +19,7 @@ export function LeadGenerationSection() {
       <div className="pointer-events-none absolute start-[-15%] top-[20%] size-[520px] rounded-full bg-blue-600/[0.08] blur-[130px]" />
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-10">
         <div className="grid items-end gap-10 lg:grid-cols-[1fr_.72fr]">
-          <SectionIntro eyebrow={t('landing.leadgen.eyebrow')} title={t('landing.leadgen.title')} description={t('landing.leadgen.description')} />
+          <SectionIntro eyebrow={t('landing.leadgen.eyebrow')} title={t('experience.discover.title')} description={t('experience.discover.description')} />
           <Reveal delay={0.1} className="lg:justify-self-end lg:max-w-md"><p className="border-s border-blue-400/40 ps-5 text-sm leading-6 text-slate-400">{t('landing.leadgen.proof')}</p></Reveal>
         </div>
 
@@ -43,7 +43,7 @@ export function LeadGenerationSection() {
         </div>
 
         <Reveal delay={0.12} className="mt-10 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.018] px-4 py-5 sm:px-7">
-          <div className="scrollbar-hide flex items-center gap-2 overflow-x-auto" aria-label="Lead discovery workflow">
+          <div className="scrollbar-hide flex items-center gap-2 overflow-x-auto" aria-label={t('landing.leadgen.eyebrow')}>
             {['location', 'area', 'discover', 'review', 'dedupe', 'import'].map((key, index, items) => <div key={key} className="flex shrink-0 items-center gap-2"><span className="rounded-lg border border-white/[0.08] bg-[#0b1322] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t(`landing.leadgen.${key}`)}</span>{index < items.length - 1 ? <ArrowRight className="size-3.5 text-blue-400/50 rtl:rotate-180" /> : null}</div>)}
             <span className="ms-auto hidden shrink-0 items-center gap-2 rounded-full bg-emerald-400/[0.08] px-3 py-1.5 text-[10px] font-semibold text-emerald-300 xl:flex"><Check className="size-3" />CRM</span>
           </div>

@@ -149,6 +149,13 @@ cd client && npm test     # Vitest
 cd lead_extention && npm test && npm run typecheck
 ```
 
+## Architecture context for coding assistants
+
+Graphify integrations for Cursor, Claude Code, and Codex provide a local code
+graph and automatic Git hook updates. See [GRAPHIFY.md](GRAPHIFY.md) for setup,
+queries, visualization, scope, and hook diagnostics. Generated graphs remain
+local; the shared investigation policy lives in [AGENTS.md](AGENTS.md).
+
 ---
 
 ## Notes

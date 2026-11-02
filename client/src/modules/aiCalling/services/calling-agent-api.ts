@@ -9,10 +9,19 @@ export interface AgentPage {
   summary: { agents: number; activeCampaigns: number; inProgress: number; completed: number; eligible: number };
 }
 export const callingAgentApi = {
-  async list(params: AgentFilters = {}): Promise<AgentPage> {
+  async list(params: AgentFilters & { limit?: number } = {}): Promise<AgentPage> {
     const res = await api.get(`${root}/agents`, { params }) as unknown as { data: { agents: CallingAgent[]; summary: AgentPage['summary'] }; pagination: AgentPage['pagination'] };
     if (!Array.isArray(res.data?.agents)) throw new Error('The calling agent response could not be read. Refresh and try again.');
     return { data: res.data.agents, summary: res.data.summary, pagination: res.pagination ?? { page: 1, limit: 24, total: res.data.agents.length, pages: res.data.agents.length ? 1 : 0 } };
+  },
+  async listAll(): Promise<CallingAgent[]> {
+    const first = await callingAgentApi.list({ page: 1, limit: 100, sort: 'name' });
+    const agents = [...first.data];
+    for (let page = 2; page <= first.pagination.pages; page += 1) {
+      const next = await callingAgentApi.list({ page, limit: 100, sort: 'name' });
+      agents.push(...next.data);
+    }
+    return [...new Map(agents.map(agent => [agent._id, agent])).values()];
   },
   async get(id: string) { return unwrap<CallingAgent>(await api.get(`${root}/agents/${id}`)); },
   async create(input: CallingAgentInput) { return unwrap<CallingAgent>(await api.post(`${root}/agents`, input)); },

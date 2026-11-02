@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
   Activity,
   AlertTriangle,
@@ -86,7 +86,7 @@ import { UiPreviewBanner } from '@/shared/components/ui-preview-banner';
 import { APP_LOGOS, APP_NAME, APP_PRODUCT_NAME } from '@/shared/constants/application';
 
 // Nav model. A section item is either a leaf (link) or a group (parent w/ children).
-const navSectionDefs = [
+const originalNavSectionDefs = [
   // Navigation follows the business process: the cross-cutting tools first,
   // then a chantier from customer enquiry to closing. Client feedback: new
   // staff should find their way by following the work, not the module names.
@@ -218,11 +218,25 @@ function isGroupActive(group, pathname) {
   return pathname === group.basePath || pathname.startsWith(group.basePath + '/');
 }
 
+// Group the existing navigation model without changing permission or role UI contracts.
+const growthRoutes = new Set(['/leads', '/lead-generation', '/leads/follow-ups']);
+const communicationRoutes = new Set(['/ai-calling', '/sim-calls', '/sms-ops']);
+const insightRoutes = new Set(['/campaign-performance']);
+const originalBusinessItems = originalNavSectionDefs[1].items;
+const navSectionDefs = [
+  originalNavSectionDefs[0],
+  { titleKey: 'experience.nav.growth', items: originalBusinessItems.filter(item => growthRoutes.has(item.href)) },
+  { titleKey: 'experience.nav.communication', items: originalBusinessItems.filter(item => communicationRoutes.has(item.href)) },
+  { titleKey: 'experience.nav.insights', items: originalBusinessItems.filter(item => insightRoutes.has(item.href)) },
+  { ...originalNavSectionDefs[1], items: originalBusinessItems.filter(item => !growthRoutes.has(item.href) && !communicationRoutes.has(item.href) && !insightRoutes.has(item.href)) },
+  ...originalNavSectionDefs.slice(2),
+];
+
 // ── Shared nav content (used by both desktop + mobile) ──────
 
 function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
   const pathname = usePathname();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const isActive = isLeafActive(leaf.href, pathname);
   const Icon = leaf.icon;
   const label = t(leaf.labelKey);
@@ -235,32 +249,33 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
   const linkEl = (
     <Link
       ref={ref}
+      aria-current={isActive ? 'page' : undefined}
       href={leaf.disabled ? '#' : leaf.href}
       onClick={leaf.disabled ? undefined : onNavigate}
       className={cn(
         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
         isActive
-          ? 'bg-gradient-to-r from-sidebar-primary/15 to-transparent text-sidebar-foreground sidebar-active-glow'
-          : 'text-sidebar-foreground/35 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/65',
+          ? 'bg-sidebar-primary/10 text-sidebar-primary'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/65',
         leaf.disabled && 'opacity-20 pointer-events-none',
         collapsed && 'justify-center px-0 py-2.5',
-        nested && !collapsed && 'pl-[26px] py-1.5'
+        nested && !collapsed && 'ps-[26px] py-1.5'
       )}
     >
       {isActive && !nested && (
         <motion.div
           layoutId="sidebar-active-pill"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-sidebar-primary shadow-[0_0_8px_color-mix(in_oklab,var(--sidebar-primary)_70%,transparent)]"
+          className="absolute start-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-sidebar-primary shadow-[0_0_8px_color-mix(in_oklab,var(--sidebar-primary)_70%,transparent)]"
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         />
       )}
       {isActive && nested && (
-        <span className="w-1.5 h-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_color-mix(in_oklab,var(--sidebar-primary)_60%,transparent)] mr-1 shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_color-mix(in_oklab,var(--sidebar-primary)_60%,transparent)] me-1 shrink-0" />
       )}
       <span className="relative shrink-0">
         <Icon className={cn(
           'h-[18px] w-[18px] transition-all duration-200',
-          isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55',
+          isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/60 group-hover:text-sidebar-foreground/55',
           nested && 'h-[14px] w-[14px]'
         )} />
         {leaf.href === '/sms-ops' && <SmsRecoveryNavBadge />}
@@ -285,7 +300,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
         )}
       </AnimatePresence>
       {!collapsed && leaf.disabled && (
-        <span className="ml-auto text-[8px] rounded-full bg-sidebar-foreground/[0.06] px-1.5 py-0.5 text-sidebar-foreground/15 uppercase tracking-widest font-bold">
+        <span className="ms-auto text-[8px] rounded-full bg-sidebar-foreground/[0.06] px-1.5 py-0.5 text-sidebar-foreground/15 uppercase tracking-widest font-bold">
           {t('common.soon', 'Soon')}
         </span>
       )}
@@ -296,7 +311,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
+        <TooltipContent side={isRTL ? 'left' : 'right'} sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
           {label}
         </TooltipContent>
       </Tooltip>
@@ -308,7 +323,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
 function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
   const pathname = usePathname();
   const { hasPermission } = usePermissions();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const { expandedGroups, toggleGroup } = useSidebarStore();
 
   const children = getVisibleChildren(group, hasPermission);
@@ -330,15 +345,15 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
                   groupActive ? 'bg-sidebar-foreground/[0.08] text-sidebar-foreground sidebar-active-glow' : 'text-sidebar-foreground/45 hover:bg-sidebar-foreground/[0.05]'
                 )}
               >
-                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
+                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/60 group-hover:text-sidebar-foreground/55')} />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
+          <TooltipContent side={isRTL ? 'left' : 'right'} sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
             {label}
           </TooltipContent>
         </Tooltip>
-        <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-2 bg-popover border border-border rounded-xl shadow-2xl">
+        <PopoverContent side={isRTL ? 'left' : 'right'} sideOffset={12} align="start" className="w-52 p-2 bg-popover border border-border rounded-xl shadow-2xl">
           <p className="px-2 py-1 text-[10px] text-sidebar-primary uppercase tracking-wider font-semibold">{label}</p>
           <div className="space-y-0.5">
             {children.map((leaf) => (
@@ -359,15 +374,15 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
         onClick={() => toggleGroup(group.key)}
         className={cn(
           'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
-          groupActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/50 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/80'
+          groupActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/70 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/80'
         )}
       >
-        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
-        <span className={cn('truncate whitespace-nowrap flex-1 text-left', groupActive ? 'text-sidebar-foreground/85' : 'text-sidebar-foreground/50')}>{label}</span>
+        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/60 group-hover:text-sidebar-foreground/55')} />
+        <span className={cn('truncate whitespace-nowrap flex-1 text-start', groupActive ? 'text-sidebar-foreground/85' : 'text-sidebar-foreground/70')}>{label}</span>
         {groupActive && (
-          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_var(--sidebar-primary)]" />
+          <span className="ms-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_var(--sidebar-primary)]" />
         )}
-        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-sidebar-foreground/20 transition-transform duration-200 group-hover:text-sidebar-foreground/40', expanded && 'rotate-180')} />
+        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-sidebar-foreground/60 transition-transform duration-200 group-hover:text-sidebar-foreground/40', expanded && 'rotate-180')} />
       </button>
       <AnimatePresence initial={false}>
         {expanded && (
@@ -380,7 +395,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-0.5 space-y-0.5 border-l-2 border-sidebar-primary/20 ml-[22px]">
+            <div className="mt-0.5 space-y-0.5 border-s-2 border-sidebar-primary/20 ms-[22px]">
               {children.map((leaf) => (
                 <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} unreadCount={unreadCount} />
               ))}
@@ -394,7 +409,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
 
 function SidebarNav({ collapsed, onNavigate }) {
   const { hasPermission } = usePermissions();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const notificationUnread = useUnreadCount();
   const uiConfig = useUiConfig();
 
@@ -412,7 +427,7 @@ function SidebarNav({ collapsed, onNavigate }) {
             <div key={section.titleKey} className={cn(sIdx > 0 && 'pt-4')}>
               {!collapsed && (
                 <div className="flex items-center gap-2.5 px-3 mb-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-sidebar-foreground/20 select-none whitespace-nowrap">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/60 select-none whitespace-nowrap">
                     {t(section.titleKey)}
                   </p>
                   <div className="flex-1 h-px bg-gradient-to-r from-sidebar-foreground/[0.06] to-transparent" />
@@ -502,7 +517,7 @@ function SidebarLogo({ collapsed }) {
 function SidebarUserCard({ collapsed }) {
   const { user } = useAuth();
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
 
   const logout = async () => {
     await authService.logout();
@@ -524,7 +539,7 @@ function SidebarUserCard({ collapsed }) {
         </AvatarFallback>
       </Avatar>
       {!collapsed && (
-        <div className="text-left min-w-0 flex-1">
+        <div className="text-start min-w-0 flex-1">
           <p className="text-[13px] font-semibold truncate text-sidebar-foreground/85 leading-tight">
             {user?.firstName} {user?.lastName}
           </p>
@@ -556,7 +571,7 @@ function SidebarUserCard({ collapsed }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium">
+        <TooltipContent side={isRTL ? 'left' : 'right'} sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium">
           {user?.firstName} {user?.lastName}
         </TooltipContent>
       </Tooltip>
@@ -586,7 +601,7 @@ function SidebarUserCard({ collapsed }) {
 
 export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
@@ -598,7 +613,7 @@ export function Sidebar() {
       <motion.aside
         animate={{ width: collapsed ? 68 : 256 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-sidebar-border sidebar-inner-glow"
+        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-e border-sidebar-border sidebar-inner-glow"
       >
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
@@ -621,9 +636,10 @@ export function Sidebar() {
           <div className="py-1 mt-1">
             <button
               onClick={toggleCollapsed}
+              aria-label={t(collapsed ? 'experience.navigation.expand' : 'sidebar.collapse')}
               className={cn(
                 'flex items-center justify-center w-full rounded-lg py-1.5 transition-all duration-200',
-                'text-[11px] text-sidebar-foreground/25 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/[0.04]'
+                'text-[11px] text-sidebar-foreground/65 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/[0.04]'
               )}
             >
               {collapsed ? (
@@ -649,6 +665,7 @@ export function Sidebar() {
 export function MobileSidebar() {
   const { isMobileOpen, setMobileOpen } = useSidebarStore();
   const pathname = usePathname();
+  const { t, isRTL } = useLanguage();
 
   // Auto-close on route change
   useEffect(() => {
@@ -658,10 +675,12 @@ export function MobileSidebar() {
   return (
     <Sheet open={isMobileOpen} onOpenChange={setMobileOpen}>
       <SheetContent
-        side="left"
+        side={isRTL ? 'right' : 'left'}
+        aria-label={t('experience.navigation.title')}
         showCloseButton={false}
-        className="w-[280px] p-0 bg-sidebar border-r-0 text-sidebar-foreground gap-0 sidebar-inner-glow"
+        className="updata-sidebar w-[min(320px,90vw)] p-0 bg-sidebar border-r-0 text-sidebar-foreground gap-0 sidebar-inner-glow"
       >
+        <SheetTitle className="sr-only">{t('experience.navigation.title')}</SheetTitle>
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
 

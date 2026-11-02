@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./shadcn-tailwind.css";
+@import "./experience.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -134,9 +135,9 @@
   --brand-red: #D00A19;
   --brand-red-dark: #A00812;
 
-  --background: #F7F8FC;
+  --background: #F6F7FB;
   --surface: #FFFFFF;
-  --foreground: #111827;
+  --foreground: #17223B;
   --card: #FFFFFF;
   --card-foreground: #111827;
   --popover: #FFFFFF;
@@ -149,8 +150,8 @@
   --secondary: var(--brand-600);
   --secondary-foreground: #FFFFFF;
 
-  --muted: #F1F5F9;
-  --muted-foreground: #6B7280;
+  --muted: #F0F2F7;
+  --muted-foreground: #626E84;
 
   --accent: var(--brand-50);
   --accent-foreground: var(--brand-700);
@@ -166,8 +167,8 @@
   --info: #3B82F6;
   --info-foreground: #FFFFFF;
 
-  --border: #E5E7EB;
-  --input: #E5E7EB;
+  --border: #E3E7F0;
+  --input: #D7DDE8;
   --ring: var(--brand-700);
 
   --chart-1: var(--brand-600);
@@ -197,12 +198,12 @@
    Design System — Dark Theme
    ═══════════════════════════════════════════ */
 .dark {
-  --background: #0F172A;
-  --surface: #111827;
-  --foreground: #E5E7EB;
-  --card: #111827;
-  --card-foreground: #E5E7EB;
-  --popover: #111827;
+  --background: #0C111D;
+  --surface: #121A2A;
+  --foreground: #E8ECF5;
+  --card: #121A2A;
+  --card-foreground: #E8ECF5;
+  --popover: #161F31;
   --popover-foreground: #E5E7EB;
 
   --primary: var(--brand-500);
@@ -258,9 +259,9 @@
    Base Layer
    ═══════════════════════════════════════════ */
 
-*::-webkit-scrollbar{
-  display: none;
-}
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-foreground) 28%, transparent) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-foreground) 28%, transparent); border-radius: 8px; }
 
 /* State-driven AI voice identity. Transform-only SVG animation keeps this
    inexpensive and isolated from WebRTC/audio processing. */
@@ -687,12 +688,7 @@
   background: var(--background);
   color: var(--foreground);
 }
-.dark .accounting-premium {
-  background:
-    linear-gradient(135deg, #070b16 0%, #0b1020 42%, #0f172a 100%),
-    radial-gradient(140% 120% at 50% -20%, rgb(14 165 233 / 0.16), transparent 56%);
-  color: #e5e7eb;
-}
+.dark .accounting-premium { background: var(--background); color: var(--foreground); }
 
 /* Decorative aurora/mesh are dark-only (they'd muddy the light theme). */
 .accounting-premium__aurora,
@@ -704,7 +700,7 @@
 }
 .dark .accounting-premium__aurora,
 .dark .accounting-premium__mesh {
-  display: block;
+  display: none;
 }
 
 .accounting-premium__aurora {
@@ -739,24 +735,9 @@
   box-shadow: var(--shadow-sm);
   padding: 1.25rem;
 }
-.dark .accounting-hero-panel {
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.035)),
-    linear-gradient(120deg, rgb(20 184 166 / 0.12), transparent 36%, rgb(124 58 237 / 0.12));
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.34), inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
+.dark .accounting-hero-panel { background: var(--card); box-shadow: var(--shadow-sm); }
 
-.dark .accounting-hero-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.12), transparent),
-    linear-gradient(135deg, rgb(16 185 129 / 0.1), transparent 34%, rgb(168 85 247 / 0.12));
-  background-size: 200% 100%, auto;
-  opacity: 0.8;
-  animation: accounting-border-sweep 12s linear infinite;
-}
+.dark .accounting-hero-panel::before { content: none; }
 
 .accounting-kicker,
 .accounting-chip {
@@ -802,25 +783,14 @@
 }
 .dark .accounting-card,
 .dark .accounting-premium .rounded-xl.border:not([data-slot="input"]) {
-  border-color: rgb(255 255 255 / 0.1) !important;
-  background:
-    linear-gradient(145deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.025)) !important;
-  box-shadow: 0 18px 60px rgb(0 0 0 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.08);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border-color: var(--border) !important;
+  background: var(--card) !important;
+  box-shadow: var(--elevation-card);
 }
 
 /* Glass sheen overlay — dark-only. */
 .dark .accounting-card::after,
-.dark .accounting-premium .rounded-xl.border:not([data-slot="input"])::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgb(255 255 255 / 0.1), transparent 32%, rgb(255 255 255 / 0.035));
-  opacity: 0.74;
-}
+.dark .accounting-premium .rounded-xl.border:not([data-slot="input"])::after { content: none; }
 
 /* Decorative colored corner glow — dark-only (would blur the flat light theme). */
 .accounting-card-glow {

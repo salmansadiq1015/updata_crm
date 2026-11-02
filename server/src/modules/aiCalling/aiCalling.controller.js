@@ -77,6 +77,7 @@ class AiCallingController {
   // ---- agent tool API (worker-authenticated via req.agentCall.callId) ----
   async agentContext(req, res, next) {
     try {
+      res.set('Cache-Control', 'no-store');
       const context = await service.getCallContext(req.agentCall.callId);
       // SMS link conversations add their persona, language, FAQ and limits.
       const link = await linkVoice.contextFor(req.agentCall.callId);

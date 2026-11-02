@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { cn } from '@/lib/utils';
@@ -31,11 +31,10 @@ import {
   PRIORITY_CONFIG,
 } from '../constants';
 
-const TYPE_LABELS = { feedback: 'Feedback', bug: 'Bug', feature_request: 'Feature', other: 'Sonstiges' };
-const PRIORITY_LABELS = { low: 'Niedrig', normal: 'Normal', high: 'Hoch', urgent: 'Dringend' };
 
 export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onSubmit, initialFile, origin }) {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const formId = useId();
   const {
     register,
     handleSubmit,
@@ -90,14 +89,14 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg p-0 flex flex-col" showCloseButton={false}>
+      <SheetContent side={isRTL ? 'left' : 'right'} className="w-full sm:max-w-lg p-0 flex flex-col" showCloseButton={false}>
         <SheetTitle className="sr-only">{t('support.form.title', 'Problem melden')}</SheetTitle>
         <SheetDescription className="sr-only">{t('support.form.desc', 'Beschreiben Sie das Problem')}</SheetDescription>
 
         {/* Gradient Header */}
         <div className="relative overflow-hidden px-6 pt-5 pb-4 border-b bg-gradient-to-br from-primary/[0.08] via-primary/[0.04] to-transparent border-primary/10 dark:from-primary/15 dark:via-primary/10 dark:to-transparent dark:border-primary/20 shrink-0">
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full blur-2xl bg-primary/10 dark:bg-primary/15" />
+            <div className="absolute -top-8 -end-8 h-28 w-28 rounded-full blur-2xl bg-primary/10 dark:bg-primary/15" />
           </div>
           <div className="relative flex items-start justify-between">
             <div className="flex items-center gap-3">
@@ -112,6 +111,7 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
             <button
               type="button"
               onClick={() => onOpenChange(false)}
+              aria-label={t('common.close')}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-background/90 hover:bg-muted transition-colors shadow-sm"
             >
               <X className="h-4 w-4" />
@@ -124,13 +124,13 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
           {/* Type & Priority */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">{t('support.form.type', 'Typ')} <span className="text-destructive">*</span></Label>
+              <Label htmlFor={`${formId}-type`} className="text-xs font-medium">{t('support.form.type', 'Typ')} <span className="text-destructive">*</span></Label>
               <Controller
                 name="type"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className={cn('h-9 text-xs rounded-lg', errors.type && 'border-destructive')}>
+                    <SelectTrigger id={`${formId}-type`} aria-label={t('support.form.type')} className={cn('h-9 text-xs rounded-lg', errors.type && 'border-destructive')}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -138,7 +138,7 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
                         <SelectItem key={tt} value={tt}>
                           <span className="flex items-center gap-2">
                             <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', TYPE_CONFIG[tt]?.dot)} />
-                            {TYPE_LABELS[tt] || tt}
+                            {t(`support.type.${tt}`)}
                           </span>
                         </SelectItem>
                       ))}
@@ -149,13 +149,13 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">{t('support.form.priority', 'Prioritaet')}</Label>
+              <Label htmlFor={`${formId}-priority`} className="text-xs font-medium">{t('support.form.priority', 'Prioritaet')}</Label>
               <Controller
                 name="priority"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="h-9 text-xs rounded-lg">
+                    <SelectTrigger id={`${formId}-priority`} aria-label={t('support.form.priority')} className="h-9 text-xs rounded-lg">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -163,7 +163,7 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
                         <SelectItem key={p} value={p}>
                           <span className="flex items-center gap-2">
                             <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', PRIORITY_CONFIG[p]?.dot)} />
-                            {PRIORITY_LABELS[p] || p}
+                            {t(`support.priority.${p}`)}
                           </span>
                         </SelectItem>
                       ))}
@@ -179,10 +179,14 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
           {/* Subject */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium">{t('support.form.subject', 'Betreff')} <span className="text-destructive">*</span></Label>
+              <Label htmlFor={`${formId}-subject`} className="text-xs font-medium">{t('support.form.subject', 'Betreff')} <span className="text-destructive">*</span></Label>
               <span className="text-[10px] text-muted-foreground">{(watch('subject') || '').length}/200</span>
             </div>
             <Input
+              id={`${formId}-subject`}
+              aria-label={t('support.form.subject')}
+              aria-required="true"
+              aria-invalid={Boolean(errors.subject)}
               className={cn('h-9 text-sm rounded-lg border-border/60', errors.subject && 'border-destructive')}
               placeholder={t('support.form.subjectPlaceholder', 'Kurze Zusammenfassung des Problems')}
               maxLength={200}
@@ -198,10 +202,14 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
           {/* Description */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium">{t('support.form.description', 'Beschreibung')} <span className="text-destructive">*</span></Label>
+              <Label htmlFor={`${formId}-description`} className="text-xs font-medium">{t('support.form.description', 'Beschreibung')} <span className="text-destructive">*</span></Label>
               <span className="text-[10px] text-muted-foreground">{(watchedDescription || '').length}/5000</span>
             </div>
             <Textarea
+              id={`${formId}-description`}
+              aria-label={t('support.form.description')}
+              aria-required="true"
+              aria-invalid={Boolean(errors.description)}
               className={cn('min-h-[120px] text-sm rounded-lg border-border/60', errors.description && 'border-destructive')}
               placeholder={t('support.form.descriptionPlaceholder', 'Was ist passiert? Was haben Sie erwartet?')}
               maxLength={5000}
@@ -224,8 +232,8 @@ export default function SupportFormSheet({ open, onOpenChange, isSubmitting, onS
                 <img src={preview} alt="Preview" className="w-32 h-24 object-cover rounded-lg border border-border/60" />
                 <button
                   type="button"
-                  onClick={removeFile}
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md hover:bg-red-700"
+                  aria-label={t('support.form.removeAttachment')} onClick={removeFile}
+                  className="absolute -top-1.5 -end-1.5 h-5 w-5 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md hover:bg-red-700"
                 >
                   <X className="h-3 w-3" />
                 </button>

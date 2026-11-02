@@ -25,7 +25,7 @@ export function TeamWorkspaceSection() {
           <Reveal delay={0.1} className="relative">
             <div className="grid overflow-hidden rounded-[22px] border border-white/[0.09] bg-[#090f1b] shadow-[0_30px_100px_rgba(0,0,0,.35)] sm:grid-cols-[.72fr_1.28fr]">
               <div className="border-b border-white/[0.07] p-5 sm:border-b-0 sm:border-e sm:p-6">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Team workspace</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('experience.preview.team')}</p>
                 <div className="relative mt-8 grid place-items-center py-6">
                   <div className="absolute size-44 rounded-full border border-dashed border-blue-400/20" />
                   <div className="absolute size-28 rounded-full border border-cyan-400/15" />
@@ -37,7 +37,7 @@ export function TeamWorkspaceSection() {
                     ['start-2 top-1/2 -translate-y-1/2', 'MJ', 'bg-amber-500'],
                   ].map(([position, initials, color]) => <motion.span key={initials} initial={{ opacity: 0, scale: 0.7 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.4 }} className={`absolute ${position} z-10 grid size-9 place-items-center rounded-full border-2 border-[#090f1b] ${color} text-[8px] font-bold text-white shadow-lg`}>{initials}</motion.span>)}
                 </div>
-                <div className="mt-8 grid grid-cols-3 gap-1.5">{[['8', 'Team'], ['12', 'Tasks'], ['3', 'Meetings']].map(([value, label]) => <div key={label} className="rounded-lg bg-white/[0.03] p-2 text-center"><p className="text-sm font-semibold text-white">{value}</p><p className="text-[6px] uppercase tracking-wider text-slate-600">{label}</p></div>)}</div>
+                <div className="mt-8 grid grid-cols-3 gap-1.5">{[['8', t('landing.team.people')], ['12', t('landing.ecosystem.tasks')], ['3', t('landing.team.calendar')]].map(([value, label]) => <div key={label} className="rounded-lg bg-white/[0.03] p-2 text-center"><p className="text-sm font-semibold text-white">{value}</p><p className="text-[6px] uppercase tracking-wider text-slate-600">{label}</p></div>)}</div>
               </div>
               <div className="p-5 sm:p-6">
                 <div className="flex items-center justify-between"><p className="text-sm font-semibold text-white">{t('landing.team.activity')}</p><span className="flex items-center gap-1.5 text-[7px] font-medium text-cyan-300"><span className="size-1.5 rounded-full bg-cyan-400" />{t('landing.showcase.demo')}</span></div>

@@ -1,5 +1,51 @@
 # Updata CRM — Voice Agent worker
 
+The voice engine now selects Gemini `gemini-3.8-live` first and OpenAI
+`gpt-realtime-2.1-mini` on failed establishment. Explicit `SECONDARY_MODEL`
+overrides remain configurable. Copy any desired legacy `OPENAI_REALTIME_MODEL`
+selection to `SECONDARY_MODEL` or select it in the admin panel. Admin settings under
+Calling Agents → Connections take precedence for new calls. Gemini preview
+`gemini-3.1-flash-live-preview` is restricted to test calls. No active-call provider
+switch is performed. Collected answers stay in the CRM.
+
+Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and `OPENAI_API_KEY` on the worker.
+Alternatively, administrators can save AES-256-GCM encrypted credentials; API and
+worker then require the same `AI_CALLING_CREDENTIAL_SECRET` (64 hex characters).
+Never put that secret or a permanent provider key in a client/mobile environment.
+The call-scoped context contains only sealed credentials. Keep `server/shared`
+next to `server/agent-worker` when deploying the standalone worker process.
+
+The runtime and both plugins are pinned to LiveKit 1.9.2, with `@google/genai`
+2.32.0. `providers/googleSocketOwnership.js` confines an SDK transport ownership
+shim to these calls so even a WebSocket awaiting setup acknowledgement is closed
+before fallback. SDK upgrades require the local protocol tests, including setup
+timeout, to pass; do not remove the pins without reviewing that compatibility
+boundary. Official SDKs still own authentication, payloads and audio processing.
+
+`AI_CALLING_MAX_SESSION_SECONDS` caps campaign duration; an optional
+`AI_CALLING_MAX_CALL_COST_USD` stops after observed response usage reaches the
+configured list-price limit. A response can overshoot it. Missing prices stop a
+budget-limited call rather than treating unknown spend as free. Connection tests
+in the admin panel check API-server model access; use a browser Live test to
+verify worker credentials and audio.
+
+Run isolated live transport checks, without dialing or modifying CRM records:
+
+```bash
+node scripts/provider-smoke.mjs --live --provider=gemini
+node scripts/provider-smoke.mjs --live --provider=openai
+node scripts/provider-smoke.mjs --live --provider=auto
+# Optional identical raw 24 kHz mono PCM16 fixture for both providers:
+node scripts/provider-smoke.mjs --live --provider=gemini --audio=/path/to/fixture.pcm
+```
+
+These checks consume provider usage. Output separates measured tokens/TTFT from
+calculated costs and never claims invoice reconciliation. The complete audit,
+acceptance matrix and measured evidence are in `MULTI_PROVIDER_VOICE_REPORT.md` at
+the repository root. The older OpenAI setup notes below remain relevant to the
+fallback adapter and existing SIP deployments; a SIM gateway does not require a
+new telephony service.
+
 A standalone [LiveKit Agents](https://docs.livekit.io/agents/) worker that runs an
 [OpenAI Realtime](https://platform.openai.com/docs/guides/realtime) voice session
 and bridges each call to the CRM's constrained **agent tool API**.

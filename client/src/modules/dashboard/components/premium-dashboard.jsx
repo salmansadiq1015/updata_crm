@@ -411,7 +411,7 @@ export function PremiumDashboard() {
               {t('dashboard.analytics.badge', 'Executive analytics')}
             </div>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                 {t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}
               </h1>
               <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
@@ -545,7 +545,7 @@ export function PremiumDashboard() {
                       <TabsTrigger
                         key={tab.id}
                         value={tab.id}
-                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-brand-400/70 data-active:bg-[linear-gradient(135deg,var(--brand-600),var(--brand-800))] data-active:text-white data-active:hover:text-white data-active:ring-1 data-active:ring-brand-400/60 data-active:shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand-400)_35%,transparent),0_0_28px_color-mix(in_oklab,var(--brand-500)_34%,transparent),inset_0_1px_0_rgba(255,255,255,0.16)]"
+                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-brand-400/70 data-active:bg-primary data-active:text-white data-active:hover:text-white data-active:ring-1 data-active:ring-brand-400/60 data-active:shadow-sm"
                       >
                         <Icon className="h-4 w-4" />
                         {t(tab.labelKey, tab.fallback)}

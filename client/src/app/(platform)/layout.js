@@ -10,6 +10,7 @@ import { FullPageSpinner } from '@/shared/components/loading-spinner';
 import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
 import { useAiStore } from '@/modules/ai/store/ai-store';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 // Incoming AI-call transfer offers (context card + live audio join) wherever the user is in the CRM.
 const IncomingTransferHost = lazy(() =>
@@ -22,6 +23,7 @@ const AiAssistantPanel = lazy(() =>
 
 export default function PlatformLayout({ children }) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { isAuthenticated, isLoading } = useAuthStore();
   const pathname = usePathname();
   const isChatPage = pathname?.includes('/chat');
@@ -47,7 +49,8 @@ export default function PlatformLayout({ children }) {
   if (!isAuthenticated) return <FullPageSpinner />;
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="updata-workspace flex h-dvh overflow-hidden bg-background">
+      <a href="#workspace-content" className="skip-link">{t('experience.skip')}</a>
       <div className="hidden md:block shrink-0">
         <Sidebar />
       </div>
@@ -58,13 +61,13 @@ export default function PlatformLayout({ children }) {
       <div className={cn(
         'flex flex-1 flex-col overflow-hidden min-w-0',
         'transition-all duration-300',
-        isDocked && 'xl:pr-96'
+        isDocked && 'xl:pe-96'
       )}>
         {/* On the assistant's own page the header keeps everything but its
             shortcut to the assistant, which would only reopen where you are. */}
         <Header showAiAssistant={!isAiPage} />
 
-        <main className={cn(
+        <main id="workspace-content" tabIndex={-1} className={cn(
           'flex-1',
           isAiPage
             ? 'overflow-hidden p-0'

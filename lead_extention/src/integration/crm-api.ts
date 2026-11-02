@@ -2,6 +2,7 @@ import { CRM_IMPORT_HEADERS } from '../shared/constants';
 import type { CrmAuthState, CrmAuthUser, Lead } from '../shared/types';
 import { SettingsRepository } from '../storage/repositories';
 import { cleanPhone } from '../shared/utils';
+import { businessCategory } from '../shared/business-category';
 
 export const DEFAULT_CRM_API_BASE_URL = 'https://updata.behjja.com/api/v1';
 const AUTH_SETTING = 'crm-auth';
@@ -314,7 +315,8 @@ function toExtensionRecord(lead: Lead): Record<string, unknown> {
   return {
     clientId: (lead.id ?? '').slice(0, 128),
     businessName: clampText(lead.businessName, 255) ?? 'Unnamed business',
-    category: clampText(lead.category, 120),
+    category: clampText(businessCategory(lead), 120),
+    discoveryCategories: (lead.discoveryCategories ?? []).map((item) => clampText(item, 120)).filter(Boolean).slice(0, 50),
     categories: [...new Set((lead.categories ?? []).map((item) => clampText(item, 80)).filter((item): item is string => Boolean(item)))].slice(0, 50),
     placeIdentifier: clampText(lead.placeIdentifier, 255),
     phone: cleanPhone(lead.phone, 50),
@@ -354,7 +356,8 @@ async function importViaExistingFileRoute(leads: Lead[]): Promise<{ total: numbe
   const form = new FormData();
   form.append('file', new Blob([toCrmImportCsv(leads)], { type: 'text/csv;charset=utf-8' }), 'lead-finder-import.csv');
   form.append('mode', 'new');
-  const data = await request('/crm/leads/import', { method: 'POST', body: form }) as { summary?: { total?: number; created?: number; skipped?: number; duplicates?: number; failed?: number }; errors?: Array<{ row?: number; message?: string }> };
+  form.append('source', 'extension');
+  const data = await request('/crm/leads/import', { method: 'POST', body: form }) as { results?: Array<{ clientId: string; status: string; message?: string }>; summary?: { total?: number; created?: number; skipped?: number; duplicates?: number; failed?: number }; errors?: Array<{ row?: number; message?: string }> };
   const summary = data.summary ?? {};
   const failedRows = new Map((data.errors ?? []).map((item) => [Math.max(0, Number(item.row ?? 0) - 2), item.message ?? 'Import failed']));
   const created = Number(summary.created ?? 0);
@@ -366,10 +369,10 @@ async function importViaExistingFileRoute(leads: Lead[]): Promise<{ total: numbe
     // accurate totals and use the count to label successful rows best-effort.
     return { clientId: lead.id, status: index < created ? 'created' : index < created + existing ? 'existing' : 'failed', ...(index >= created + existing ? { message: 'The CRM did not confirm this row as created or existing.' } : {}) };
   });
-  return { total: Number(summary.total ?? leads.length), created, existing, failed: Number(summary.failed ?? failedRows.size), results };
+  return { total: Number(summary.total ?? leads.length), created, existing, failed: Number(summary.failed ?? failedRows.size), results: data.results ?? results };
 }
 
-function toCrmImportCsv(leads: Lead[]): string {
+export function toCrmImportCsv(leads: Lead[]): string {
   const rows = [CRM_IMPORT_HEADERS.join(',')];
   for (const lead of leads) {
     const values: Record<string, unknown> = {
@@ -380,9 +383,11 @@ function toCrmImportCsv(leads: Lead[]): string {
       // location below, so we no longer drop a non-2-letter country.
       country: lead.country ?? '', phone: cleanPhone(lead.phone, 50) ?? '',
       mobile: '', email: safeEmails(lead.emails)[0] ?? '', website: safeWebsite(lead.website) ?? '',
-      notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: [...new Set([...(lead.discoveryCategories ?? []), ...lead.categories])].join(', '),
+      notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: [...new Set([...(lead.discoveryCategories ?? []), ...(lead.categories ?? [])])].join(', '),
       latitude: inRange(lead.latitude, -90, 90) ?? '', longitude: inRange(lead.longitude, -180, 180) ?? '',
       searchLocation: lead.searchLocation ?? '',
+      // Preserve the exact structured contract when the upload route is used.
+      extensionRecord: JSON.stringify(toExtensionRecord(lead)),
     };
     rows.push(CRM_IMPORT_HEADERS.map((header) => escapeCsv(values[header])).join(','));
   }

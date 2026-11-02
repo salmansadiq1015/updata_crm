@@ -5,7 +5,8 @@ import { transcription, turnDetection } from '../src/transcription.js';
 test('uses contextual committed-turn transcription instead of the mini model', () => {
   const options = transcription('en', {});
   assert.equal(options.model, 'gpt-transcribe');
-  assert.deepEqual(options.languages, ['en']);
+  assert.equal(options.languages, undefined);
+  assert.match(options.prompt, /call opens in en, but the caller may use any language/);
   assert.match(options.prompt, /spelled letters, email addresses, phone digits and dates exactly/);
   assert.match(options.prompt, /Do not translate/);
   assert.match(options.prompt, /inaudible speech/);
@@ -14,8 +15,8 @@ test('uses contextual committed-turn transcription instead of the mini model', (
 test('normalizes configured languages and supports multilingual speech without translating', () => {
   for (const [setting, expected] of [['en-US', 'en'], ['de-CH', 'de'], ['fr-CA', 'fr'], ['pt-BR', 'pt'], ['roman_ur', 'ur'], ['fil', 'tl'], ['ar', 'ar'], ['ja', 'ja'], ['yue', 'yue']]) {
     const options = transcription(setting, {});
-    assert.equal(options.languages[0], expected);
-    if (expected !== 'en') assert.ok(options.languages.includes('en'), 'English spelling/code-switching stays recognizable');
+    assert.equal(options.languages, undefined, 'opening language must not constrain recognition');
+    assert.match(options.prompt, new RegExp(`call opens in ${expected}, but the caller may use any language`));
     assert.match(options.prompt, /original language, including language switches/);
   }
   for (const language of ['auto', null, '', 'invalid language']) {
@@ -39,7 +40,7 @@ test('retains compatibility with explicitly selected legacy transcription models
   assert.equal(options.languages, undefined);
   const live = transcription('ur', { OPENAI_REALTIME_TRANSCRIBE_MODEL: 'gpt-live-transcribe' });
   assert.equal(live.language, undefined);
-  assert.deepEqual(live.languages, ['ur', 'en']);
+  assert.equal(live.languages, undefined);
 });
 
 test('gives ASR question context without feeding it known or expected personal answers', () => {

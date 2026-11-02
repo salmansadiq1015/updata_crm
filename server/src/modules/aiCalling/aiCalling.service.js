@@ -7,6 +7,7 @@ import CallProviderAttempt from './callProviderAttempt.model.js';
 import CallSuppression from './callSuppression.model.js';
 import CallConsent from './callConsent.model.js';
 import AiCallingSettings from './aiCallingSettings.model.js';
+import { providerSettings } from './voiceProvider.service.js';
 import PairedDevice from '../pairedPhone/pairedDevice.model.js';
 import pairedPhoneService from '../pairedPhone/pairedPhone.service.js';
 import { LeadCallTransition, CallWebhookEvent } from './leadCallEvent.model.js';
@@ -33,7 +34,7 @@ import { evaluateOutcome } from './engine/statusRuleEngine.js';
 import { buildCallNotes } from './engine/callNotes.js';
 import { conversationInsights } from './engine/conversationInsights.js';
 import { computeCallCost } from './engine/callCost.js';
-import { leadContext, buildSystemPrompt, disclosureText } from './engine/leadContext.js';
+import { leadContext, buildSystemPrompt, dynamicLeadInstruction, disclosureText } from './engine/leadContext.js';
 import knowledgeService from './knowledge.service.js';
 import callIntelligenceService from './callIntelligence.service.js';
 import humanTransferService from './humanTransfer.service.js';
@@ -602,7 +603,7 @@ class AiCallingService {
       maxAttemptsPerLead: schedule.maxAttemptsPerLead,
       retryDelayMinutes: schedule.retryDelayMinutes,
       telephony: await telephonyHealth(),
-      note: 'Cost depends on OpenAI Realtime usage and SIP/carrier charges; these are not free.',
+      note: 'Cost depends on the selected AI voice provider and configured carrier/platform charges.',
     };
   }
 
@@ -1434,6 +1435,8 @@ class AiCallingService {
     return {
       callId: internalCallId,
       persistTranscript: true,
+      voiceProviders: await providerSettings({ worker: true, isTest: call.isTest || call.provider === 'livekit_web' || call.provider === 'web_link_preview' }),
+      questionnaireFingerprint: crypto.createHash('sha256').update(JSON.stringify(campaign.questionnaire)).digest('hex'),
       participantIdentity: call.provider === 'livekit_web' ? `admin-${call.createdBy}` : `sip-${internalCallId}`,
       agentConfig: campaign.agentConfig,
       transcriptionContext: { questions: (campaign.questionnaire?.questions || []).map(q => ({ text: q.text, type: answerRequirements(q).type })) },
@@ -1442,9 +1445,18 @@ class AiCallingService {
         agentConfig: campaign.agentConfig, lead, objective: campaign.agentConfig?.objective,
         questions: [...(campaign.questionnaire?.questions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       }), knowledge.section, transfer ? TRANSFER_PROMPT_RULE : null].filter(Boolean).join('\n\n'),
+      dynamicLeadInstruction: dynamicLeadInstruction(lead),
       knowledgeVersion: knowledge.stamp?.version ?? null,
       transfer: { enabled: Boolean(transfer) },
       leadContext: leadContext(lead),
+      conversationMemory: {
+        disclosed: Boolean(state.disclosed), endedReason: state.endedReason || null,
+        answers: Object.fromEntries(Object.entries(state.answers || {}).map(([key, a]) => [key, {
+          validation: a.validation, value: a.normalizedValue, raw: a.rawAnswer,
+          confirmed: Boolean(a.confirmed), confirmSkipped: Boolean(a.confirmSkipped),
+        }])),
+        progress: engine.progress(campaign.questionnaire, state),
+      },
       ...(campaign.agentConfig?.shareLeadNotes && lead?.notes ? { leadNotes: String(lead.notes).slice(0, 1000) } : {}),
       nextAction: this._serializeAction(engine.nextAction(campaign.questionnaire, state, { maxRepeats: engine.VOICE_QUESTION_REPEATS })),
     };
@@ -2774,7 +2786,7 @@ class AiCallingService {
     const worker = await livekit.waitForAgentWorker({ roomName });
     if (worker === 'no_worker' || worker === 'failed') {
       const failureMessage = worker === 'failed'
-        ? 'The voice agent worker accepted the test but failed to start it. Check the agent worker logs (OpenAI key / model) and try again.'
+        ? 'The voice agent worker accepted the test but failed to start it. Check the agent worker logs (provider credentials / model) and try again.'
         : `No voice agent worker is online for "${livekit.agentName}". Start the agent worker (cd server/agent-worker && npm run dev) and make sure its LIVEKIT_URL and LIVEKIT_AGENT_NAME match the API.`;
       await CallRecord.updateOne({ _id: call._id }, { $set: { state: 'failed', disposition: 'failed', failureMessage, endedAt: new Date(), resultsProcessedAt: new Date() } });
       await livekit.endCall({ roomName });

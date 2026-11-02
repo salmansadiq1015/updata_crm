@@ -8,7 +8,7 @@ import {
 import { Fragment } from 'react';
 import { leadApi } from '@/modules/leads/services/lead-api';
 import type { Lead, LeadStatus, LeadSource, LeadFilters } from '@/modules/leads/types/lead-types';
-import { LEAD_STATUSES, LEAD_STATUS_LABEL, LEAD_SOURCE_LABEL } from '@/modules/leads/ui/lead-ui-constants';
+import { LEAD_STATUSES, LEAD_STATUS_LABEL, LEAD_SOURCES, LEAD_SOURCE_LABEL } from '@/modules/leads/ui/lead-ui-constants';
 import { LEAD_STATUS_META } from '@/modules/leads/ui/status-badge';
 import {
   getAddressLines, getLeadBusinessTypeLabel, getLeadLocationLine, getOpeningHoursLines, getWebsiteLabel, toSafeWebUrl,
@@ -183,10 +183,10 @@ export function CampaignLeadPicker({ selected, onChange, verb = 'call', purpose 
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
             aria-label="Search leads"
-            className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-border bg-background py-2 ps-9 pe-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             placeholder="Search by name, phone, email…"
             value={search}
             maxLength={100}
@@ -202,7 +202,7 @@ export function CampaignLeadPicker({ selected, onChange, verb = 'call', purpose 
           <option value="">All statuses</option>
           {LEAD_STATUSES.map((s) => <option key={s} value={s}>{LEAD_STATUS_LABEL[s]}</option>)}
         </select>
-        <select aria-label="Lead source" value={source} onChange={e => { setSource(e.target.value as LeadSource | ''); setOnlySelected(false); }} className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="">All sources</option>{Object.entries(LEAD_SOURCE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select aria-label="Lead source" value={source} onChange={e => { setSource(e.target.value as LeadSource | ''); setOnlySelected(false); }} className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="">All sources</option>{LEAD_SOURCES.map(value => <option key={value} value={value}>{LEAD_SOURCE_LABEL[value]}</option>)}</select>
       </div>
 
       {purpose === 'assignment' && <fieldset className="rounded-xl border border-border bg-muted/20 p-3">
@@ -262,7 +262,7 @@ export function CampaignLeadPicker({ selected, onChange, verb = 'call', purpose 
                   title={purpose !== 'assignment' && !reachable ? 'No phone number' : full && !checked ? `Limit of ${MAX_CAMPAIGN_LEADS} leads reached` : undefined}
                   onChange={() => toggle(lead)}
                 />
-                <button type="button" onClick={() => setOpenId(openId === lead.id ? null : lead.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Show details for ${lead.name}`}>
+                <button type="button" onClick={() => setOpenId(openId === lead.id ? null : lead.id)} className="flex min-w-0 flex-1 items-center gap-3 text-start" aria-label={`Show details for ${lead.name}`}>
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate text-sm font-medium ${reachable ? '' : 'text-muted-foreground'}`}>{lead.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">

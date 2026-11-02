@@ -1,0 +1,25 @@
+{
+  "tool": "built-in image_gen",
+  "assets": [{
+    "id": "ai-voice-sculpture",
+    "prompt": "Premium studio 3D composition for Updata CRM: a sculptural deep navy glass and brushed aluminum continuous loop, like a sound wave folded into an orbital ribbon, with a cobalt glass sphere nestled inside. Navy #1C388E, icy blue highlights, a muted red accent, matte near-black navy #060b16 background. Soft directional lighting, tactile materials, precise edges, calm enterprise software art direction. Wide composition, subject in the right two thirds, negative space left. No text, logos, UI, charts, humanoid robots, neon rainbow, stars, busy particles or watermark.",
+    "sourceSize": [1536, 1024],
+    "outputs": [
+      { "path": "public/landing/ai-voice-sculpture-1280.webp", "width": 1280, "quality": 84 },
+      { "path": "public/landing/ai-voice-sculpture-640.webp", "width": 640, "quality": 84 }
+    ],
+    "uses": ["AI calling marketing section", "authentication brand panel"],
+    "notes": "Decorative artwork uses empty alt text. The adjacent product preview is real translated HTML, explicitly labeled illustrative. Next Image provides responsive sizes; the authentication image is prioritized and the below-fold calling artwork is lazy-loaded. No transparency was requested."
+  }],
+  "retainedAssets": ["public/landing/lead-discovery-map-blue.png", "public/landing/operations-workflow-blue.png", "public/landing/connected-operations-blue.png", "public/avatars/agents"],
+  "strategy": {
+    "hero": "Translated interactive dashboard preview",
+    "discovery": "Map-based HTML preview and retained discovery artwork",
+    "leadManagement": "Translated lead table and pipeline preview",
+    "calling": "Generated voice sculpture, HTML transcript and CSS waveform",
+    "automation": "Existing workflow and assistant previews",
+    "analytics": "Existing illustrative dashboard preview; private metrics remain API-backed",
+    "integrations": "Lucide iconography and supported integration routes",
+    "emptyStates": "Scalable contextual Lucide illustrations using semantic theme tokens"
+  }
+}

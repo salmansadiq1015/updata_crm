@@ -58,8 +58,7 @@ function ProductFrame({ children, active = 'dashboard', className, label }) {
       <div className="flex min-h-0">
         <aside className="hidden w-32 shrink-0 border-e border-white/[0.07] bg-[#080d19] p-2.5 sm:block">
           <div className="mb-4 flex items-center gap-2 px-1.5">
-            <div className="grid size-6 place-items-center rounded-md bg-blue-500 text-[10px] font-black text-white">U</div>
-            <span className="text-[9px] font-bold text-white">UPDATA</span>
+            <Image src="/updata-logo-dark.svg" alt="Updata ERP" width={220} height={56} className="h-6 w-auto" />
           </div>
           <div className="space-y-1">
             {previewNavigation.map((item) => {
@@ -118,10 +117,10 @@ export function DashboardVisual({ className, framed = true }) {
     <div className="p-3 sm:p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-blue-300">Operations overview</p>
-          <p className="mt-1 text-sm font-semibold text-white">Business workspace</p>
+          <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-blue-300">{t('experience.preview.overview')}</p>
+          <p className="mt-1 text-sm font-semibold text-white">{t('experience.preview.business')}</p>
         </div>
-        <div className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-400" /><span className="text-[8px] text-slate-500">Live workspace</span></div>
+        <div className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-400" /><span className="text-[8px] text-slate-500">{t('experience.preview.live')}</span></div>
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Metric label={t('landing.ecosystem.customers')} value="2,847" color="cyan" icon={Users} active={activeMetric === 'customers'} onSelect={() => setActiveMetric('customers')} />
@@ -137,7 +136,7 @@ export function DashboardVisual({ className, framed = true }) {
           </div>
         </div>
         <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
-          <p className="text-[9px] font-semibold text-slate-300">Today</p>
+          <p className="text-[9px] font-semibold text-slate-300">{t('experience.preview.today')}</p>
           <div className="mt-3 space-y-2">
             {[['09:30', 'Customer follow-up'], ['11:00', 'Project review'], ['14:15', 'Site visit']].map(([time, title], index) => (
               <div key={time} className="flex gap-2"><span className={cn('mt-1 size-1.5 shrink-0 rounded-full', index === 0 ? 'bg-blue-400' : index === 1 ? 'bg-cyan-400' : 'bg-sky-300')} /><div><p className="text-[8px] text-slate-300">{title}</p><p className="text-[7px] text-slate-600">{time}</p></div></div>
@@ -327,8 +326,8 @@ export function LeadsVisual({ className, framed = true }) {
   const content = (
     <div className="p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><p className="text-sm font-semibold text-white">{t('landing.ecosystem.leads')}</p><p className="mt-1 text-[8px] text-slate-600">Pipeline and relationship context</p></div>
-        <div className="flex gap-1.5"><div className="flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.08] px-2 text-[7px] text-slate-500"><Search className="size-3" />Search leads</div><div className="grid size-7 place-items-center rounded-lg bg-blue-500 text-white"><Plus className="size-3" /></div></div>
+        <div><p className="text-sm font-semibold text-white">{t('landing.ecosystem.leads')}</p><p className="mt-1 text-[8px] text-slate-600">{t('experience.preview.relationship')}</p></div>
+        <div className="flex gap-1.5"><div className="flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.08] px-2 text-[7px] text-slate-500"><Search className="size-3" />{t('experience.preview.search')}</div><div className="grid size-7 place-items-center rounded-lg bg-blue-500 text-white"><Plus className="size-3" /></div></div>
       </div>
       <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08]">
         <div className="grid grid-cols-[1.3fr_.85fr_.75fr_.42fr_.7fr] gap-2 border-b border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[7px] uppercase tracking-wider text-slate-600">
@@ -358,7 +357,7 @@ export function OperationsVisual({ className, framed = true }) {
   ];
   const content = (
     <div className="p-3 sm:p-4">
-      <div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">{t('landing.operations.projectLabel')}</p><p className="mt-1 text-[8px] text-slate-600">Customer → commercial → delivery</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[7px] font-semibold text-emerald-300">On track</span></div>
+      <div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">{t('landing.operations.projectLabel')}</p><p className="mt-1 text-[8px] text-slate-600">{t('experience.preview.deliveryFlow')}</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[7px] font-semibold text-emerald-300">{t('experience.preview.onTrack')}</span></div>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         {cards.map(([Icon, title, desc, color], index) => (
           <div key={title} className="relative rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
@@ -369,12 +368,12 @@ export function OperationsVisual({ className, framed = true }) {
         ))}
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-[1.25fr_.75fr]">
-        <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div className="flex justify-between text-[8px]"><span className="font-semibold text-slate-300">{t('landing.operations.progress')}</span><span className="text-blue-300">68%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" /></div><div className="mt-3 grid grid-cols-3 gap-1 text-[7px] text-slate-600"><span>Planning</span><span className="text-center">Delivery</span><span className="text-end">Closeout</span></div></div>
-        <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] text-slate-600">{t('landing.operations.deadline')}</p><div className="mt-2 flex items-center gap-2"><CalendarDays className="size-4 text-cyan-300" /><div><p className="text-[9px] font-semibold text-slate-200">Site handoff</p><p className="text-[7px] text-slate-600">Thursday · 10:30</p></div></div></div>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div className="flex justify-between text-[8px]"><span className="font-semibold text-slate-300">{t('landing.operations.progress')}</span><span className="text-blue-300">68%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" /></div><div className="mt-3 grid grid-cols-3 gap-1 text-[7px] text-slate-600"><span>{t('experience.preview.planning')}</span><span className="text-center">{t('experience.preview.delivery')}</span><span className="text-end">{t('experience.preview.closeout')}</span></div></div>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] text-slate-600">{t('landing.operations.deadline')}</p><div className="mt-2 flex items-center gap-2"><CalendarDays className="size-4 text-cyan-300" /><div><p className="text-[9px] font-semibold text-slate-200">{t('experience.preview.handoff')}</p><p className="text-[7px] text-slate-600">{t('experience.preview.thursday')}</p></div></div></div>
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-[.82fr_1.18fr]">
         <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
-          <div className="flex items-center justify-between"><p className="text-[8px] font-semibold text-slate-300">{t('landing.ecosystem.tasks')}</p><span className="text-[7px] text-blue-300">3 active</span></div>
+          <div className="flex items-center justify-between"><p className="text-[8px] font-semibold text-slate-300">{t('landing.ecosystem.tasks')}</p><span className="text-[7px] text-blue-300">{t('experience.preview.active')}</span></div>
           <div className="mt-2 space-y-1.5">
             {['Confirm site requirements', 'Prepare delivery schedule', 'Assign installation team'].map((item, index) => <div key={item} className="flex items-center gap-2 rounded-lg bg-black/15 px-2 py-1.5"><span className={cn('size-1.5 rounded-full', index === 2 ? 'bg-cyan-300' : 'bg-blue-400')} /><span className="min-w-0 flex-1 truncate text-[7px] text-slate-400">{item}</span><span className="grid size-4 place-items-center rounded-full bg-white/[0.06] text-[5px] font-semibold text-slate-400">{['SK', 'AM', 'ML'][index]}</span></div>)}
           </div>
@@ -394,9 +393,9 @@ export function CustomerVisual({ className, framed = true }) {
   const { t } = useLanguage();
   const content = (
     <div className="p-3 sm:p-4">
-      <div className="flex items-start justify-between"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><Building2 className="size-5" /></span><div><p className="text-sm font-semibold text-white">Weber Building Tech AG</p><p className="mt-1 text-[8px] text-slate-600">Bern, Switzerland · Active customer</p></div></div><MoreHorizontal className="size-4 text-slate-600" /></div>
+      <div className="flex items-start justify-between"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><Building2 className="size-5" /></span><div><p className="text-sm font-semibold text-white">Weber Building Tech AG</p><p className="mt-1 text-[8px] text-slate-600">{t('experience.preview.customerLocation')}</p></div></div><MoreHorizontal className="size-4 text-slate-600" /></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Metric label="Active projects" value="3" icon={FolderKanban} /><Metric label="Open quotes" value="2" color="amber" icon={FileText} /><Metric label="Sites" value="4" color="emerald" icon={MapPin} /></div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-[.8fr_1.2fr]"><div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] font-semibold text-slate-300">Primary contact</p><div className="mt-3 flex items-center gap-2"><CircleUserRound className="size-6 text-blue-300" /><div><p className="text-[8px] text-slate-200">Lea Weber</p><p className="text-[7px] text-slate-600">Operations director</p></div></div></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] font-semibold text-slate-300">Recent activity</p><div className="mt-3 space-y-2">{['Quote prepared', 'Site visit completed', 'Project note added'].map((item, i) => <div key={item} className="flex items-center gap-2 text-[7px] text-slate-500"><span className={cn('size-1.5 rounded-full', i === 0 ? 'bg-emerald-400' : 'bg-blue-400')} />{item}<span className="ms-auto text-slate-700">{i + 1}d</span></div>)}</div></div></div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[.8fr_1.2fr]"><div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] font-semibold text-slate-300">{t('experience.preview.primaryContact')}</p><div className="mt-3 flex items-center gap-2"><CircleUserRound className="size-6 text-blue-300" /><div><p className="text-[8px] text-slate-200">Lea Weber</p><p className="text-[7px] text-slate-600">{t('experience.preview.director')}</p></div></div></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><p className="text-[8px] font-semibold text-slate-300">{t('experience.preview.recent')}</p><div className="mt-3 space-y-2">{['Quote prepared', 'Site visit completed', 'Project note added'].map((item, i) => <div key={item} className="flex items-center gap-2 text-[7px] text-slate-500"><span className={cn('size-1.5 rounded-full', i === 0 ? 'bg-emerald-400' : 'bg-blue-400')} />{item}<span className="ms-auto text-slate-700">{i + 1}d</span></div>)}</div></div></div>
     </div>
   );
   return framed ? <ProductFrame active="customers" className={cn('relative', className)} label={t('landing.showcase.demo')}>{content}</ProductFrame> : content;
@@ -416,7 +415,7 @@ export function AiVisual({ className, framed = true }) {
           <div className="mt-3 flex flex-wrap gap-1.5">{['landing.ai.open', 'landing.ai.followup', 'landing.ai.assign'].map((action, index) => <span key={action} className={cn('rounded-md border px-2 py-1 text-[7px] font-medium', index === 0 ? 'border-blue-400/30 bg-blue-500/10 text-blue-300' : 'border-white/[0.08] text-slate-400')}>{t(action)}</span>)}</div>
         </div>
       </div>
-      <div className="mt-3 flex h-8 items-center gap-2 rounded-lg border border-white/[0.08] bg-black/10 px-3 text-[7px] text-slate-600">Ask Updata about your business…<Send className="ms-auto size-3 text-blue-400" /></div>
+      <div className="mt-3 flex h-8 items-center gap-2 rounded-lg border border-white/[0.08] bg-black/10 px-3 text-[7px] text-slate-600">{t('experience.preview.ask')}<Send className="ms-auto size-3 text-blue-400" /></div>
     </div>
   );
   return framed ? <ProductFrame active="ai" className={cn('relative', className)} label={t('landing.ai.demo')}>{content}</ProductFrame> : content;
@@ -425,7 +424,7 @@ export function AiVisual({ className, framed = true }) {
 export function TasksVisual({ className, framed = true }) {
   const { t } = useLanguage();
   const cols = [['Open', ['Call restaurant leads', 'Review quote']], ['In progress', ['Prepare site plan', 'Update customer']], ['Done', ['Assign project', 'Confirm meeting']]];
-  const content = <div className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">{t('landing.ecosystem.tasks')}</p><p className="mt-1 text-[8px] text-slate-600">Board · List · Calendar · Timeline</p></div><span className="flex h-7 items-center gap-1 rounded-lg bg-blue-500 px-2 text-[7px] font-semibold text-white"><Plus className="size-3" />Task</span></div><div className="mt-4 grid grid-cols-3 gap-2">{cols.map(([title, items], index) => <div key={title} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-2"><div className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400"><span className={cn('size-1.5 rounded-full', index === 0 ? 'bg-slate-500' : index === 1 ? 'bg-blue-400' : 'bg-cyan-400')} />{title}</div><div className="mt-2 space-y-1.5">{items.map((item, itemIndex) => <div key={item} className="rounded-lg border border-white/[0.06] bg-[#0d1422] p-2"><p className="text-[7px] leading-3 text-slate-300">{item}</p><div className="mt-2 flex items-center"><span className={cn('rounded px-1 py-0.5 text-[5px]', itemIndex ? 'bg-cyan-400/10 text-cyan-300' : 'bg-blue-400/10 text-blue-300')}>{itemIndex ? 'PROJECT' : 'CRM'}</span><CircleUserRound className="ms-auto size-3 text-slate-600" /></div></div>)}</div></div>)}</div></div>;
+  const content = <div className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">{t('landing.ecosystem.tasks')}</p><p className="mt-1 text-[8px] text-slate-600">{t('experience.preview.views')}</p></div><span className="flex h-7 items-center gap-1 rounded-lg bg-blue-500 px-2 text-[7px] font-semibold text-white"><Plus className="size-3" />{t('experience.preview.task')}</span></div><div className="mt-4 grid grid-cols-3 gap-2">{cols.map(([title, items], index) => <div key={title} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-2"><div className="flex items-center gap-1.5 text-[8px] font-semibold text-slate-400"><span className={cn('size-1.5 rounded-full', index === 0 ? 'bg-slate-500' : index === 1 ? 'bg-blue-400' : 'bg-cyan-400')} />{title}</div><div className="mt-2 space-y-1.5">{items.map((item, itemIndex) => <div key={item} className="rounded-lg border border-white/[0.06] bg-[#0d1422] p-2"><p className="text-[7px] leading-3 text-slate-300">{item}</p><div className="mt-2 flex items-center"><span className={cn('rounded px-1 py-0.5 text-[5px]', itemIndex ? 'bg-cyan-400/10 text-cyan-300' : 'bg-blue-400/10 text-blue-300')}>{itemIndex ? 'PROJECT' : 'CRM'}</span><CircleUserRound className="ms-auto size-3 text-slate-600" /></div></div>)}</div></div>)}</div></div>;
   return framed ? <ProductFrame active="tasks" className={cn('relative', className)} label={t('landing.showcase.demo')}>{content}</ProductFrame> : content;
 }
 

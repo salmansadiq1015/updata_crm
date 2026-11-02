@@ -83,6 +83,8 @@ const linkSessionSchema = new mongoose.Schema({
     seconds: { type: Number, default: 0 },
     cost: { type: Number, default: 0 },
     costedRooms: { type: [String], default: [] },
+    // Bounded per-room usage/cost evidence; reservations are never labelled bills.
+    costReports: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   // One customer turn at a time per session (double taps, two tabs).
   turnLockUntil: { type: Date, default: null },

@@ -65,7 +65,7 @@ class CallIntelligenceService {
       ...(config.ai?.baseUrl ? {} : { response_format: { type: 'json_object' } }),
       messages,
     }, { timeout: LLM_TIMEOUT_MS }), LLM_TIMEOUT_MS);
-    return { raw: response?.choices?.[0]?.message?.content || '', model };
+    return { raw: response?.choices?.[0]?.message?.content || '', model, usage: response?.usage || null };
   }
 
   /**
@@ -108,20 +108,22 @@ class CallIntelligenceService {
 
     let proposals;
     let model = null;
+    let providerUsage = null;
     try {
       const out = await this._model(buildExtractionMessages(turns, { language: campaign?.agentConfig?.language }));
       model = out.model;
+      providerUsage = out.usage || null;
       proposals = parseExtraction(out.raw);
     } catch (error) {
       logger.warn('Call intelligence extraction failed', { module: 'ai-calling', callId: String(callId), error: error.message });
       return save({ status: 'failed', error: String(error.message).slice(0, 500), reason: 'model_error' });
     }
-    if (!proposals) return save({ status: 'failed', model, error: 'The model reply was not valid JSON', reason: 'unparseable_model_output' });
+    if (!proposals) return save({ status: 'failed', model, usage: providerUsage, error: 'The model reply was not valid JSON', reason: 'unparseable_model_output' });
 
     const accepted = acceptProposals(proposals, turns, { answeredAt: claimed.answeredAt });
     const items = markConflicts(mergeWithPrevious(accepted.items, previous.items || []));
     const leadWriteFailed = await this._writeAutoAccepted(claimed, campaign, items);
-    const doc = await save({ status: runStatus({ items, rejected: accepted.rejected, leadWriteFailed }), model, items, rejected: accepted.rejected });
+    const doc = await save({ status: runStatus({ items, rejected: accepted.rejected, leadWriteFailed }), model, usage: providerUsage, items, rejected: accepted.rejected });
     if (doc.pendingReview && !previous.pendingReview) {
       notificationService.create({
         channels: ['IN_APP'], recipientIds: [claimed.createdBy], type: 'ai_calling.intelligence_review', category: 'CRM', priority: 'NORMAL',

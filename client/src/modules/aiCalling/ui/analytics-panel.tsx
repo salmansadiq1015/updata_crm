@@ -81,7 +81,7 @@ export function AnalyticsPanel() {
                   <span className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
                     <span className={`block h-full rounded-full ${DISPOSITION_COLORS[String(d._id)] || 'bg-brand-500'}`} style={{ width: `${(d.count / maxDisp) * 100}%` }} />
                   </span>
-                  <span className="w-8 shrink-0 text-right font-medium tabular-nums">{d.count}</span>
+                  <span className="w-8 shrink-0 text-end font-medium tabular-nums">{d.count}</span>
                 </li>
               ))}
             </ul>

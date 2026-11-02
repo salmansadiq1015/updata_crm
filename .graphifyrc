@@ -1,0 +1,2 @@
+# Above this size, show communities instead of thousands of individual nodes.
+viz_node_limit=5000

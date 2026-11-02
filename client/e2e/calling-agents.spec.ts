@@ -63,7 +63,7 @@ test('agent gallery, workspace tabs, lead assignment, immediate launch and truth
   await page.getByRole('button', { name: 'Confirm assignments' }).click();
   await expect(page.getByRole('button', { name: 'Review 2 assignments' })).toBeDisabled();
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await page.getByRole('button', { name: 'Start Campaign', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Now', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Start Campaign', exact: true });
   await expect(dialog.getByLabel(/Launch date and time/)).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Start Now', exact: true }).click();
@@ -92,7 +92,7 @@ test('draft agent creation and future scheduled launch use separate flows', asyn
   await page.getByLabel('Agent availability', { exact: true }).selectOption('active');
   await page.getByRole('button', { name: 'Save settings', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Start Campaign', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Now', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Start Campaign', exact: true });
   await dialog.getByRole('radio', { name: /Schedule Campaign/ }).check();
   await dialog.getByLabel(/Launch date and time/).fill('2030-11-04T09:15');

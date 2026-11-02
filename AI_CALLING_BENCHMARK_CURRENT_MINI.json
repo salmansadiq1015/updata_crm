@@ -1,0 +1,2315 @@
+{
+  "version": 1,
+  "date": "2026-10-30T15:49:08.800Z",
+  "baselineRef": "HEAD",
+  "baselineCommit": "a8d330e42355666a267c2e2e84073a72c2cfd786",
+  "scenario": "8-question qualification",
+  "limitations": [
+    "Synthetic local English speech; manual commits; no ASR, VAD, LiveKit transport, SIM leg or carrier charges.",
+    "Costs are provider-reported tokens at configured rates, not reconciled invoices.",
+    "Same 1024 output cap for both variants; no production model/configuration changes.",
+    "Model accuracy and latency are observations of this small fixture only."
+  ],
+  "runs": [
+    {
+      "model": "gpt-realtime-2.1-mini",
+      "variant": "baseline",
+      "responses": [
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7oDMWgh05iYXf8pbwN",
+          "status": "completed",
+          "inputTokens": 2077,
+          "outputTokens": 262,
+          "inputAudioTokens": 0,
+          "inputTextTokens": 2077,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 165,
+          "outputTextTokens": 97,
+          "ttftMs": 1007
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7qvMufb42VNUG6j3Bn",
+          "status": "completed",
+          "inputTokens": 2137,
+          "outputTokens": 110,
+          "inputAudioTokens": 20,
+          "inputTextTokens": 2117,
+          "inputCachedTokens": 2048,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 2048,
+          "outputAudioTokens": 65,
+          "outputTextTokens": 45,
+          "ttftMs": 1476
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7tn2SyIbIifCFYhX3h",
+          "status": "completed",
+          "inputTokens": 2309,
+          "outputTokens": 209,
+          "inputAudioTokens": 20,
+          "inputTextTokens": 2289,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 162,
+          "outputTextTokens": 47,
+          "ttftMs": 834
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7wUOXNegxwSvNWSDuS",
+          "status": "completed",
+          "inputTokens": 2369,
+          "outputTokens": 39,
+          "inputAudioTokens": 37,
+          "inputTextTokens": 2332,
+          "inputCachedTokens": 2304,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 2304,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 39,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7xcp67x3M9BopQdudA",
+          "status": "completed",
+          "inputTokens": 2597,
+          "outputTokens": 118,
+          "inputAudioTokens": 37,
+          "inputTextTokens": 2560,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 86,
+          "outputTextTokens": 32,
+          "ttftMs": 841
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej7zyd5L19DzPGhWkCir",
+          "status": "completed",
+          "inputTokens": 2655,
+          "outputTokens": 49,
+          "inputAudioTokens": 65,
+          "inputTextTokens": 2590,
+          "inputCachedTokens": 2624,
+          "inputCachedAudioTokens": 64,
+          "inputCachedTextTokens": 2560,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 49,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej81io1joZbzmlnsWdui",
+          "status": "completed",
+          "inputTokens": 2835,
+          "outputTokens": 87,
+          "inputAudioTokens": 65,
+          "inputTextTokens": 2770,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 61,
+          "outputTextTokens": 26,
+          "ttftMs": 802
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej82xy3kHJkruDocmww4",
+          "status": "completed",
+          "inputTokens": 2924,
+          "outputTokens": 60,
+          "inputAudioTokens": 128,
+          "inputTextTokens": 2796,
+          "inputCachedTokens": 2816,
+          "inputCachedAudioTokens": 64,
+          "inputCachedTextTokens": 2752,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 60,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej84avSm8R8PdCYFIyFG",
+          "status": "completed",
+          "inputTokens": 3010,
+          "outputTokens": 83,
+          "inputAudioTokens": 128,
+          "inputTextTokens": 2882,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 58,
+          "outputTextTokens": 25,
+          "ttftMs": 1123
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej851LqRaJPCi6MBscig",
+          "status": "completed",
+          "inputTokens": 3045,
+          "outputTokens": 23,
+          "inputAudioTokens": 138,
+          "inputTextTokens": 2907,
+          "inputCachedTokens": 3008,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 2880,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 23,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej86l0x2FnRMtSNlmGcg",
+          "status": "completed",
+          "inputTokens": 3175,
+          "outputTokens": 107,
+          "inputAudioTokens": 138,
+          "inputTextTokens": 3037,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 81,
+          "outputTextTokens": 26,
+          "ttftMs": 814
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej88uArxoxmFUsaWhNoO",
+          "status": "completed",
+          "inputTokens": 3233,
+          "outputTokens": 103,
+          "inputAudioTokens": 170,
+          "inputTextTokens": 3063,
+          "inputCachedTokens": 3136,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 3008,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 103,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8Afc2qQudw5NWrL7sI",
+          "status": "completed",
+          "inputTokens": 3450,
+          "outputTokens": 151,
+          "inputAudioTokens": 170,
+          "inputTextTokens": 3280,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 121,
+          "outputTextTokens": 30,
+          "ttftMs": 792
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8CeIwaKlbJXKy9f4D4",
+          "status": "completed",
+          "inputTokens": 3511,
+          "outputTokens": 57,
+          "inputAudioTokens": 203,
+          "inputTextTokens": 3308,
+          "inputCachedTokens": 3456,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 3264,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 57,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8DjmP0dTnJIQxxlAj5",
+          "status": "completed",
+          "inputTokens": 3666,
+          "outputTokens": 87,
+          "inputAudioTokens": 203,
+          "inputTextTokens": 3463,
+          "inputCachedTokens": 768,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 768,
+          "outputAudioTokens": 61,
+          "outputTextTokens": 26,
+          "ttftMs": 833
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8F8qAXJ8fJYnQxZE8n",
+          "status": "completed",
+          "inputTokens": 3710,
+          "outputTokens": 56,
+          "inputAudioTokens": 221,
+          "inputTextTokens": 3489,
+          "inputCachedTokens": 3648,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 3456,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 56,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8GANKpXVN1tWYbGCic",
+          "status": "completed",
+          "inputTokens": 3801,
+          "outputTokens": 122,
+          "inputAudioTokens": 221,
+          "inputTextTokens": 3580,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 91,
+          "outputTextTokens": 31,
+          "ttftMs": 851
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8IRmzalj4GySbkpagm",
+          "status": "completed",
+          "inputTokens": 3848,
+          "outputTokens": 24,
+          "inputAudioTokens": 239,
+          "inputTextTokens": 3609,
+          "inputCachedTokens": 3776,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 3584,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 24,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8JLWFGzjV7StSaC0ML",
+          "status": "completed",
+          "inputTokens": 3861,
+          "outputTokens": 284,
+          "inputAudioTokens": 239,
+          "inputTextTokens": 3622,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 72,
+          "outputTextTokens": 212,
+          "ttftMs": 821
+        }
+      ],
+      "transcripts": [
+        "Hello, this is QA assistant, an AI assistant calling on behalf of Updata QA. Do you have a moment to continue?",
+        "Thanks for confirming—let me take care of the next step now.",
+        "Hello, this is QA assistant, an AI assistant calling on behalf of Updata QA. Let’s get started—what is your full name?",
+        "Got it, Morgan Ray—thanks. Next, what is your email address?",
+        "Thanks, Morgan. Next, what is your phone number?",
+        "Thanks. Next, what city do you live in?",
+        "Okay, thanks. What is your highest completed education level?",
+        "Great, thanks. Next, what is your complete date of birth?",
+        "Thanks! Next, how many people are in your family?",
+        "Alright, thanks so much. One last question: what is your occupation?",
+        "Thanks for sharing all of that—let me wrap this up and close the call now."
+      ],
+      "errors": [],
+      "completed": true,
+      "answers": {
+        "name": {
+          "validation": "valid",
+          "normalizedValue": "Morgan Ray",
+          "rawAnswer": "Morgan Ray",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "email": {
+          "validation": "valid",
+          "normalizedValue": "morgan@example.com",
+          "rawAnswer": "morgan@example.com",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "phone": {
+          "validation": "valid",
+          "normalizedValue": "+14155550101",
+          "rawAnswer": "+1 415 555 0101",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "city": {
+          "validation": "valid",
+          "normalizedValue": "Boston",
+          "rawAnswer": "Boston",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "education": {
+          "validation": "valid",
+          "normalizedValue": "Bachelor’s degree",
+          "rawAnswer": "Bachelor’s degree",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "birth": {
+          "validation": "valid",
+          "normalizedValue": "2023-01-10",
+          "rawAnswer": "2023-01-10",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "family": {
+          "validation": "valid",
+          "normalizedValue": "4",
+          "rawAnswer": "4",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "occupation": {
+          "validation": "valid",
+          "normalizedValue": "Software engineer",
+          "rawAnswer": "Software engineer",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        }
+      },
+      "validAnswers": 8,
+      "expectedAnswers": {
+        "name": "Morgan Reed",
+        "email": "morgan@example.com",
+        "phone": "+14155550101",
+        "city": "Boston",
+        "education": "bachelor",
+        "birth": "2001-01-10",
+        "family": 4,
+        "occupation": "software engineer"
+      },
+      "exactFieldMatches": 5,
+      "requiredAnswers": 8,
+      "instructionCharacters": 5954,
+      "toolSchemaCharacters": 4657,
+      "instructionFingerprint": "6fa11b3045de03cf76c73be8199733fd40387be89dfdc7582d3319813ebf194b",
+      "toolSchemaFingerprint": "0b3d779c691753e47259543b3e58bb3d030ea147c48af897a962a34c1498d776",
+      "elapsedSeconds": 34.664,
+      "estimatedCost": 0.054998,
+      "tokens": {
+        "inputAudio": 2442,
+        "inputCachedAudio": 960,
+        "inputText": 55771,
+        "inputCachedText": 30464,
+        "outputAudio": 1023,
+        "outputText": 1008,
+        "input": 58213,
+        "output": 2031,
+        "total": 60244
+      },
+      "costBreakdown": {
+        "source": "token_usage",
+        "estimate": true,
+        "pricingVersion": 2,
+        "model": "gpt-realtime-2.1-mini",
+        "pricedAs": null,
+        "unpriced": false,
+        "models": [
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 0,
+              "inputCachedAudio": 0,
+              "inputText": 2077,
+              "inputCachedText": 0,
+              "outputAudio": 165,
+              "outputText": 97,
+              "input": 2077,
+              "output": 262,
+              "total": 2339
+            },
+            "amount": 0.004779,
+            "detail": {
+              "total": 0.004779,
+              "audioIn": 0,
+              "audioOut": 0.0033,
+              "textIn": 0.001246,
+              "textOut": 0.000233
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 20,
+              "inputCachedAudio": 0,
+              "inputText": 2117,
+              "inputCachedText": 2048,
+              "outputAudio": 65,
+              "outputText": 45,
+              "input": 2137,
+              "output": 110,
+              "total": 2247
+            },
+            "amount": 0.001772,
+            "detail": {
+              "total": 0.001772,
+              "audioIn": 0.0002,
+              "audioOut": 0.0013,
+              "textIn": 0.000164,
+              "textOut": 0.000108
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 20,
+              "inputCachedAudio": 0,
+              "inputText": 2289,
+              "inputCachedText": 768,
+              "outputAudio": 162,
+              "outputText": 47,
+              "input": 2309,
+              "output": 209,
+              "total": 2518
+            },
+            "amount": 0.004511,
+            "detail": {
+              "total": 0.004511,
+              "audioIn": 0.0002,
+              "audioOut": 0.00324,
+              "textIn": 0.000959,
+              "textOut": 0.000113
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 37,
+              "inputCachedAudio": 0,
+              "inputText": 2332,
+              "inputCachedText": 2304,
+              "outputAudio": 0,
+              "outputText": 39,
+              "input": 2369,
+              "output": 39,
+              "total": 2408
+            },
+            "amount": 0.000619,
+            "detail": {
+              "total": 0.000619,
+              "audioIn": 0.00037,
+              "audioOut": 0,
+              "textIn": 0.000155,
+              "textOut": 0.000094
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 37,
+              "inputCachedAudio": 0,
+              "inputText": 2560,
+              "inputCachedText": 768,
+              "outputAudio": 86,
+              "outputText": 32,
+              "input": 2597,
+              "output": 118,
+              "total": 2715
+            },
+            "amount": 0.003288,
+            "detail": {
+              "total": 0.003288,
+              "audioIn": 0.00037,
+              "audioOut": 0.00172,
+              "textIn": 0.001121,
+              "textOut": 0.000077
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 65,
+              "inputCachedAudio": 64,
+              "inputText": 2590,
+              "inputCachedText": 2560,
+              "outputAudio": 0,
+              "outputText": 49,
+              "input": 2655,
+              "output": 49,
+              "total": 2704
+            },
+            "amount": 0.000318,
+            "detail": {
+              "total": 0.000318,
+              "audioIn": 0.000029,
+              "audioOut": 0,
+              "textIn": 0.000172,
+              "textOut": 0.000118
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 65,
+              "inputCachedAudio": 0,
+              "inputText": 2770,
+              "inputCachedText": 768,
+              "outputAudio": 61,
+              "outputText": 26,
+              "input": 2835,
+              "output": 87,
+              "total": 2922
+            },
+            "amount": 0.00318,
+            "detail": {
+              "total": 0.00318,
+              "audioIn": 0.00065,
+              "audioOut": 0.00122,
+              "textIn": 0.001247,
+              "textOut": 0.000062
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 128,
+              "inputCachedAudio": 64,
+              "inputText": 2796,
+              "inputCachedText": 2752,
+              "outputAudio": 0,
+              "outputText": 60,
+              "input": 2924,
+              "output": 60,
+              "total": 2984
+            },
+            "amount": 0.000995,
+            "detail": {
+              "total": 0.000995,
+              "audioIn": 0.000659,
+              "audioOut": 0,
+              "textIn": 0.000192,
+              "textOut": 0.000144
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 128,
+              "inputCachedAudio": 0,
+              "inputText": 2882,
+              "inputCachedText": 768,
+              "outputAudio": 58,
+              "outputText": 25,
+              "input": 3010,
+              "output": 83,
+              "total": 3093
+            },
+            "amount": 0.003814,
+            "detail": {
+              "total": 0.003814,
+              "audioIn": 0.00128,
+              "audioOut": 0.00116,
+              "textIn": 0.001314,
+              "textOut": 0.00006
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 138,
+              "inputCachedAudio": 128,
+              "inputText": 2907,
+              "inputCachedText": 2880,
+              "outputAudio": 0,
+              "outputText": 23,
+              "input": 3045,
+              "output": 23,
+              "total": 3068
+            },
+            "amount": 0.000383,
+            "detail": {
+              "total": 0.000383,
+              "audioIn": 0.000138,
+              "audioOut": 0,
+              "textIn": 0.000189,
+              "textOut": 0.000055
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 138,
+              "inputCachedAudio": 0,
+              "inputText": 3037,
+              "inputCachedText": 768,
+              "outputAudio": 81,
+              "outputText": 26,
+              "input": 3175,
+              "output": 107,
+              "total": 3282
+            },
+            "amount": 0.00447,
+            "detail": {
+              "total": 0.00447,
+              "audioIn": 0.00138,
+              "audioOut": 0.00162,
+              "textIn": 0.001407,
+              "textOut": 0.000062
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 170,
+              "inputCachedAudio": 128,
+              "inputText": 3063,
+              "inputCachedText": 3008,
+              "outputAudio": 0,
+              "outputText": 103,
+              "input": 3233,
+              "output": 103,
+              "total": 3336
+            },
+            "amount": 0.000919,
+            "detail": {
+              "total": 0.000919,
+              "audioIn": 0.000458,
+              "audioOut": 0,
+              "textIn": 0.000213,
+              "textOut": 0.000247
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 170,
+              "inputCachedAudio": 0,
+              "inputText": 3280,
+              "inputCachedText": 0,
+              "outputAudio": 121,
+              "outputText": 30,
+              "input": 3450,
+              "output": 151,
+              "total": 3601
+            },
+            "amount": 0.00616,
+            "detail": {
+              "total": 0.00616,
+              "audioIn": 0.0017,
+              "audioOut": 0.00242,
+              "textIn": 0.001968,
+              "textOut": 0.000072
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 203,
+              "inputCachedAudio": 192,
+              "inputText": 3308,
+              "inputCachedText": 3264,
+              "outputAudio": 0,
+              "outputText": 57,
+              "input": 3511,
+              "output": 57,
+              "total": 3568
+            },
+            "amount": 0.000527,
+            "detail": {
+              "total": 0.000527,
+              "audioIn": 0.000168,
+              "audioOut": 0,
+              "textIn": 0.000222,
+              "textOut": 0.000137
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 203,
+              "inputCachedAudio": 0,
+              "inputText": 3463,
+              "inputCachedText": 768,
+              "outputAudio": 61,
+              "outputText": 26,
+              "input": 3666,
+              "output": 87,
+              "total": 3753
+            },
+            "amount": 0.004975,
+            "detail": {
+              "total": 0.004975,
+              "audioIn": 0.00203,
+              "audioOut": 0.00122,
+              "textIn": 0.001663,
+              "textOut": 0.000062
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 221,
+              "inputCachedAudio": 192,
+              "inputText": 3489,
+              "inputCachedText": 3456,
+              "outputAudio": 0,
+              "outputText": 56,
+              "input": 3710,
+              "output": 56,
+              "total": 3766
+            },
+            "amount": 0.000709,
+            "detail": {
+              "total": 0.000709,
+              "audioIn": 0.000348,
+              "audioOut": 0,
+              "textIn": 0.000227,
+              "textOut": 0.000134
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 221,
+              "inputCachedAudio": 0,
+              "inputText": 3580,
+              "inputCachedText": 0,
+              "outputAudio": 91,
+              "outputText": 31,
+              "input": 3801,
+              "output": 122,
+              "total": 3923
+            },
+            "amount": 0.006252,
+            "detail": {
+              "total": 0.006252,
+              "audioIn": 0.00221,
+              "audioOut": 0.00182,
+              "textIn": 0.002148,
+              "textOut": 0.000074
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 239,
+              "inputCachedAudio": 192,
+              "inputText": 3609,
+              "inputCachedText": 3584,
+              "outputAudio": 0,
+              "outputText": 24,
+              "input": 3848,
+              "output": 24,
+              "total": 3872
+            },
+            "amount": 0.000815,
+            "detail": {
+              "total": 0.000815,
+              "audioIn": 0.000528,
+              "audioOut": 0,
+              "textIn": 0.00023,
+              "textOut": 0.000058
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 239,
+              "inputCachedAudio": 0,
+              "inputText": 3622,
+              "inputCachedText": 0,
+              "outputAudio": 72,
+              "outputText": 212,
+              "input": 3861,
+              "output": 284,
+              "total": 4145
+            },
+            "amount": 0.006512,
+            "detail": {
+              "total": 0.006512,
+              "audioIn": 0.00239,
+              "audioOut": 0.00144,
+              "textIn": 0.002173,
+              "textOut": 0.000509
+            },
+            "unpriced": false,
+            "issues": []
+          }
+        ],
+        "invoiceVerified": false,
+        "tokens": {
+          "inputAudio": 2442,
+          "inputCachedAudio": 960,
+          "inputText": 55771,
+          "inputCachedText": 30464,
+          "outputAudio": 1023,
+          "outputText": 1008,
+          "input": 58213,
+          "output": 2031,
+          "total": 60244
+        },
+        "rates": null,
+        "components": {
+          "model": 0.054998,
+          "modelDetail": {
+            "total": 0.054998,
+            "audioIn": 0.015108,
+            "audioOut": 0.02046,
+            "textIn": 0.01701,
+            "textOut": 0.002419
+          },
+          "telephony": 0,
+          "platform": 0
+        },
+        "billedMinutes": 0,
+        "telephonyRatePerMinute": 0,
+        "platformRatePerMinute": 0
+      },
+      "cacheHitPercent": 53.98106952055383,
+      "averageTtftMs": 926.7272727272727,
+      "estimatedCostPerHarnessMinute": 0.095196168936072
+    },
+    {
+      "model": "gpt-realtime-2.1-mini",
+      "variant": "optimized",
+      "responses": [
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8OjtORfzsl12LOl7uN",
+          "status": "completed",
+          "inputTokens": 1659,
+          "outputTokens": 240,
+          "inputAudioTokens": 0,
+          "inputTextTokens": 1659,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 159,
+          "outputTextTokens": 81,
+          "ttftMs": 970
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8QPG5pPWuIPta4iLsf",
+          "status": "completed",
+          "inputTokens": 1720,
+          "outputTokens": 14,
+          "inputAudioTokens": 20,
+          "inputTextTokens": 1700,
+          "inputCachedTokens": 1664,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 1664,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 14,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8RjCvwHfwHBgIo4uDQ",
+          "status": "completed",
+          "inputTokens": 1830,
+          "outputTokens": 120,
+          "inputAudioTokens": 20,
+          "inputTextTokens": 1810,
+          "inputCachedTokens": 1728,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 1728,
+          "outputAudioTokens": 58,
+          "outputTextTokens": 62,
+          "ttftMs": 869
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8TdpxpdbQHqxO1GoDG",
+          "status": "completed",
+          "inputTokens": 1873,
+          "outputTokens": 34,
+          "inputAudioTokens": 37,
+          "inputTextTokens": 1836,
+          "inputCachedTokens": 1792,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 1792,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 34,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8UoB928WeZermBj13q",
+          "status": "completed",
+          "inputTokens": 2051,
+          "outputTokens": 55,
+          "inputAudioTokens": 37,
+          "inputTextTokens": 2014,
+          "inputCachedTokens": 1856,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 1856,
+          "outputAudioTokens": 39,
+          "outputTextTokens": 16,
+          "ttftMs": 799
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8Vn4a19QgffaIwiNhZ",
+          "status": "completed",
+          "inputTokens": 2099,
+          "outputTokens": 26,
+          "inputAudioTokens": 65,
+          "inputTextTokens": 2034,
+          "inputCachedTokens": 2048,
+          "inputCachedAudioTokens": 64,
+          "inputCachedTextTokens": 1984,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 26,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8WtbBV9pNWsmUJIA9X",
+          "status": "completed",
+          "inputTokens": 2279,
+          "outputTokens": 46,
+          "inputAudioTokens": 65,
+          "inputTextTokens": 2214,
+          "inputCachedTokens": 2112,
+          "inputCachedAudioTokens": 64,
+          "inputCachedTextTokens": 2048,
+          "outputAudioTokens": 30,
+          "outputTextTokens": 16,
+          "ttftMs": 770
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8X85Rybb4yutBb6ksa",
+          "status": "completed",
+          "inputTokens": 2362,
+          "outputTokens": 43,
+          "inputAudioTokens": 128,
+          "inputTextTokens": 2234,
+          "inputCachedTokens": 2240,
+          "inputCachedAudioTokens": 64,
+          "inputCachedTextTokens": 2176,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 43,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8YARyfW3h0g02R7aoC",
+          "status": "completed",
+          "inputTokens": 2497,
+          "outputTokens": 50,
+          "inputAudioTokens": 128,
+          "inputTextTokens": 2369,
+          "inputCachedTokens": 2368,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 2240,
+          "outputAudioTokens": 33,
+          "outputTextTokens": 17,
+          "ttftMs": 1235
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8ZgSBeSPb8weCJEPkq",
+          "status": "completed",
+          "inputTokens": 2528,
+          "outputTokens": 23,
+          "inputAudioTokens": 138,
+          "inputTextTokens": 2390,
+          "inputCachedTokens": 2496,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 2368,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 23,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8bes1BnhkbJw5PmoWz",
+          "status": "completed",
+          "inputTokens": 2657,
+          "outputTokens": 72,
+          "inputAudioTokens": 138,
+          "inputTextTokens": 2519,
+          "inputCachedTokens": 0,
+          "inputCachedAudioTokens": 0,
+          "inputCachedTextTokens": 0,
+          "outputAudioTokens": 50,
+          "outputTextTokens": 22,
+          "ttftMs": 1015
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8ca59aqZu2GC3JhoXH",
+          "status": "completed",
+          "inputTokens": 2711,
+          "outputTokens": 25,
+          "inputAudioTokens": 170,
+          "inputTextTokens": 2541,
+          "inputCachedTokens": 2496,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 2368,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 25,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8dLV3MdKQRxZKZaBsb",
+          "status": "completed",
+          "inputTokens": 2885,
+          "outputTokens": 322,
+          "inputAudioTokens": 170,
+          "inputTextTokens": 2715,
+          "inputCachedTokens": 2688,
+          "inputCachedAudioTokens": 128,
+          "inputCachedTextTokens": 2560,
+          "outputAudioTokens": 256,
+          "outputTextTokens": 66,
+          "ttftMs": 799
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8gA7x8cWClZWWLSVxa",
+          "status": "completed",
+          "inputTokens": 2976,
+          "outputTokens": 62,
+          "inputAudioTokens": 203,
+          "inputTextTokens": 2773,
+          "inputCachedTokens": 2880,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 2688,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 62,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8hXUC3q1MXIh9xTJPT",
+          "status": "completed",
+          "inputTokens": 3142,
+          "outputTokens": 58,
+          "inputAudioTokens": 203,
+          "inputTextTokens": 2939,
+          "inputCachedTokens": 2944,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 2752,
+          "outputAudioTokens": 38,
+          "outputTextTokens": 20,
+          "ttftMs": 795
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8ihohPfy1dB1pWtgHT",
+          "status": "completed",
+          "inputTokens": 3182,
+          "outputTokens": 39,
+          "inputAudioTokens": 221,
+          "inputTextTokens": 2961,
+          "inputCachedTokens": 3136,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 2944,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 39,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8jyIKLGMohNJIA9esR",
+          "status": "completed",
+          "inputTokens": 3308,
+          "outputTokens": 39,
+          "inputAudioTokens": 221,
+          "inputTextTokens": 3087,
+          "inputCachedTokens": 3136,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 2944,
+          "outputAudioTokens": 24,
+          "outputTextTokens": 15,
+          "ttftMs": 918
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8kRcqFx9mjurbL2jWz",
+          "status": "completed",
+          "inputTokens": 3345,
+          "outputTokens": 24,
+          "inputAudioTokens": 239,
+          "inputTextTokens": 3106,
+          "inputCachedTokens": 3264,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 3072,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 24,
+          "ttftMs": null
+        },
+        {
+          "type": "llm_usage",
+          "provider": "api.openai.com",
+          "model": "gpt-realtime-2.1-mini",
+          "responseId": "resp_Eej8lHDrxVhD5vyNJUFIb",
+          "status": "completed",
+          "inputTokens": 3415,
+          "outputTokens": 194,
+          "inputAudioTokens": 239,
+          "inputTextTokens": 3176,
+          "inputCachedTokens": 3328,
+          "inputCachedAudioTokens": 192,
+          "inputCachedTextTokens": 3136,
+          "outputAudioTokens": 0,
+          "outputTextTokens": 194,
+          "ttftMs": null
+        }
+      ],
+      "transcripts": [
+        "Hello, this is QA assistant, an AI assistant calling on behalf of Updata QA.\n\nDo you have a moment to continue?",
+        "Great, thanks for that. What is your full name?",
+        "What’s your email address?",
+        "What’s your phone number?",
+        "What city do you live in?",
+        "What is your highest completed education level?",
+        "What is your complete date of birth, with day, month, and year? For example, April 15, 1992 would be spoken as 04-15-1992. Please say each part clearly.",
+        "How many people are in your family?",
+        "What is your occupation?"
+      ],
+      "errors": [],
+      "completed": true,
+      "answers": {
+        "name": {
+          "validation": "valid",
+          "normalizedValue": "Morgan Ray",
+          "rawAnswer": "Morgan Ray",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "email": {
+          "validation": "valid",
+          "normalizedValue": "morgan@example.com",
+          "rawAnswer": "morgan@example.com",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "phone": {
+          "validation": "valid",
+          "normalizedValue": "+14155550101",
+          "rawAnswer": "+1 415-555-0101",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "city": {
+          "validation": "valid",
+          "normalizedValue": "Boston",
+          "rawAnswer": "Boston",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "education": {
+          "validation": "valid",
+          "normalizedValue": "Bachelor's degree",
+          "rawAnswer": "Bachelor's degree",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "birth": {
+          "validation": "valid",
+          "normalizedValue": "2001-01-10",
+          "rawAnswer": "2001-01-10",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "family": {
+          "validation": "valid",
+          "normalizedValue": "4",
+          "rawAnswer": "4",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        },
+        "occupation": {
+          "validation": "valid",
+          "normalizedValue": "Software engineer",
+          "rawAnswer": "Software engineer",
+          "reason": null,
+          "clarifications": 0,
+          "noResponseCount": 0,
+          "noResponseIds": [],
+          "confirmResponseIds": [],
+          "confirmed": false
+        }
+      },
+      "validAnswers": 8,
+      "expectedAnswers": {
+        "name": "Morgan Reed",
+        "email": "morgan@example.com",
+        "phone": "+14155550101",
+        "city": "Boston",
+        "education": "bachelor",
+        "birth": "2001-01-10",
+        "family": 4,
+        "occupation": "software engineer"
+      },
+      "exactFieldMatches": 6,
+      "requiredAnswers": 8,
+      "instructionCharacters": 4011,
+      "toolSchemaCharacters": 4657,
+      "instructionFingerprint": "f2f26fca57efa5975660db9a8dccb95391279e2b1ed73d30ce2d1d8780fb82d9",
+      "toolSchemaFingerprint": "0b3d779c691753e47259543b3e58bb3d030ea147c48af897a962a34c1498d776",
+      "elapsedSeconds": 27.521,
+      "estimatedCost": 0.027949,
+      "tokens": {
+        "inputAudio": 2442,
+        "inputCachedAudio": 1856,
+        "inputText": 46077,
+        "inputCachedText": 40320,
+        "outputAudio": 687,
+        "outputText": 799,
+        "input": 48519,
+        "output": 1486,
+        "total": 50005
+      },
+      "costBreakdown": {
+        "source": "token_usage",
+        "estimate": true,
+        "pricingVersion": 2,
+        "model": "gpt-realtime-2.1-mini",
+        "pricedAs": null,
+        "unpriced": false,
+        "models": [
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 0,
+              "inputCachedAudio": 0,
+              "inputText": 1659,
+              "inputCachedText": 0,
+              "outputAudio": 159,
+              "outputText": 81,
+              "input": 1659,
+              "output": 240,
+              "total": 1899
+            },
+            "amount": 0.00437,
+            "detail": {
+              "total": 0.00437,
+              "audioIn": 0,
+              "audioOut": 0.00318,
+              "textIn": 0.000995,
+              "textOut": 0.000194
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 20,
+              "inputCachedAudio": 0,
+              "inputText": 1700,
+              "inputCachedText": 1664,
+              "outputAudio": 0,
+              "outputText": 14,
+              "input": 1720,
+              "output": 14,
+              "total": 1734
+            },
+            "amount": 0.000355,
+            "detail": {
+              "total": 0.000355,
+              "audioIn": 0.0002,
+              "audioOut": 0,
+              "textIn": 0.000121,
+              "textOut": 0.000034
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 20,
+              "inputCachedAudio": 0,
+              "inputText": 1810,
+              "inputCachedText": 1728,
+              "outputAudio": 58,
+              "outputText": 62,
+              "input": 1830,
+              "output": 120,
+              "total": 1950
+            },
+            "amount": 0.001662,
+            "detail": {
+              "total": 0.001662,
+              "audioIn": 0.0002,
+              "audioOut": 0.00116,
+              "textIn": 0.000153,
+              "textOut": 0.000149
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 37,
+              "inputCachedAudio": 0,
+              "inputText": 1836,
+              "inputCachedText": 1792,
+              "outputAudio": 0,
+              "outputText": 34,
+              "input": 1873,
+              "output": 34,
+              "total": 1907
+            },
+            "amount": 0.000586,
+            "detail": {
+              "total": 0.000586,
+              "audioIn": 0.00037,
+              "audioOut": 0,
+              "textIn": 0.000134,
+              "textOut": 0.000082
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 37,
+              "inputCachedAudio": 0,
+              "inputText": 2014,
+              "inputCachedText": 1856,
+              "outputAudio": 39,
+              "outputText": 16,
+              "input": 2051,
+              "output": 55,
+              "total": 2106
+            },
+            "amount": 0.001395,
+            "detail": {
+              "total": 0.001395,
+              "audioIn": 0.00037,
+              "audioOut": 0.00078,
+              "textIn": 0.000206,
+              "textOut": 0.000038
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 65,
+              "inputCachedAudio": 64,
+              "inputText": 2034,
+              "inputCachedText": 1984,
+              "outputAudio": 0,
+              "outputText": 26,
+              "input": 2099,
+              "output": 26,
+              "total": 2125
+            },
+            "amount": 0.000241,
+            "detail": {
+              "total": 0.000241,
+              "audioIn": 0.000029,
+              "audioOut": 0,
+              "textIn": 0.000149,
+              "textOut": 0.000062
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 65,
+              "inputCachedAudio": 64,
+              "inputText": 2214,
+              "inputCachedText": 2048,
+              "outputAudio": 30,
+              "outputText": 16,
+              "input": 2279,
+              "output": 46,
+              "total": 2325
+            },
+            "amount": 0.00089,
+            "detail": {
+              "total": 0.00089,
+              "audioIn": 0.000029,
+              "audioOut": 0.0006,
+              "textIn": 0.000222,
+              "textOut": 0.000038
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 128,
+              "inputCachedAudio": 64,
+              "inputText": 2234,
+              "inputCachedText": 2176,
+              "outputAudio": 0,
+              "outputText": 43,
+              "input": 2362,
+              "output": 43,
+              "total": 2405
+            },
+            "amount": 0.000928,
+            "detail": {
+              "total": 0.000928,
+              "audioIn": 0.000659,
+              "audioOut": 0,
+              "textIn": 0.000165,
+              "textOut": 0.000103
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 128,
+              "inputCachedAudio": 128,
+              "inputText": 2369,
+              "inputCachedText": 2240,
+              "outputAudio": 33,
+              "outputText": 17,
+              "input": 2497,
+              "output": 50,
+              "total": 2547
+            },
+            "amount": 0.000951,
+            "detail": {
+              "total": 0.000951,
+              "audioIn": 0.000038,
+              "audioOut": 0.00066,
+              "textIn": 0.000212,
+              "textOut": 0.000041
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 138,
+              "inputCachedAudio": 128,
+              "inputText": 2390,
+              "inputCachedText": 2368,
+              "outputAudio": 0,
+              "outputText": 23,
+              "input": 2528,
+              "output": 23,
+              "total": 2551
+            },
+            "amount": 0.000349,
+            "detail": {
+              "total": 0.000349,
+              "audioIn": 0.000138,
+              "audioOut": 0,
+              "textIn": 0.000155,
+              "textOut": 0.000055
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 138,
+              "inputCachedAudio": 0,
+              "inputText": 2519,
+              "inputCachedText": 0,
+              "outputAudio": 50,
+              "outputText": 22,
+              "input": 2657,
+              "output": 72,
+              "total": 2729
+            },
+            "amount": 0.003944,
+            "detail": {
+              "total": 0.003944,
+              "audioIn": 0.00138,
+              "audioOut": 0.001,
+              "textIn": 0.001511,
+              "textOut": 0.000053
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 170,
+              "inputCachedAudio": 128,
+              "inputText": 2541,
+              "inputCachedText": 2368,
+              "outputAudio": 0,
+              "outputText": 25,
+              "input": 2711,
+              "output": 25,
+              "total": 2736
+            },
+            "amount": 0.000764,
+            "detail": {
+              "total": 0.000764,
+              "audioIn": 0.000458,
+              "audioOut": 0,
+              "textIn": 0.000246,
+              "textOut": 0.00006
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 170,
+              "inputCachedAudio": 128,
+              "inputText": 2715,
+              "inputCachedText": 2560,
+              "outputAudio": 256,
+              "outputText": 66,
+              "input": 2885,
+              "output": 322,
+              "total": 3207
+            },
+            "amount": 0.005983,
+            "detail": {
+              "total": 0.005983,
+              "audioIn": 0.000458,
+              "audioOut": 0.00512,
+              "textIn": 0.000247,
+              "textOut": 0.000158
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 203,
+              "inputCachedAudio": 192,
+              "inputText": 2773,
+              "inputCachedText": 2688,
+              "outputAudio": 0,
+              "outputText": 62,
+              "input": 2976,
+              "output": 62,
+              "total": 3038
+            },
+            "amount": 0.000529,
+            "detail": {
+              "total": 0.000529,
+              "audioIn": 0.000168,
+              "audioOut": 0,
+              "textIn": 0.000212,
+              "textOut": 0.000149
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 203,
+              "inputCachedAudio": 192,
+              "inputText": 2939,
+              "inputCachedText": 2752,
+              "outputAudio": 38,
+              "outputText": 20,
+              "input": 3142,
+              "output": 58,
+              "total": 3200
+            },
+            "amount": 0.001253,
+            "detail": {
+              "total": 0.001253,
+              "audioIn": 0.000168,
+              "audioOut": 0.00076,
+              "textIn": 0.000277,
+              "textOut": 0.000048
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 221,
+              "inputCachedAudio": 192,
+              "inputText": 2961,
+              "inputCachedText": 2944,
+              "outputAudio": 0,
+              "outputText": 39,
+              "input": 3182,
+              "output": 39,
+              "total": 3221
+            },
+            "amount": 0.000628,
+            "detail": {
+              "total": 0.000628,
+              "audioIn": 0.000348,
+              "audioOut": 0,
+              "textIn": 0.000187,
+              "textOut": 0.000094
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 221,
+              "inputCachedAudio": 192,
+              "inputText": 3087,
+              "inputCachedText": 2944,
+              "outputAudio": 24,
+              "outputText": 15,
+              "input": 3308,
+              "output": 39,
+              "total": 3347
+            },
+            "amount": 0.001126,
+            "detail": {
+              "total": 0.001126,
+              "audioIn": 0.000348,
+              "audioOut": 0.00048,
+              "textIn": 0.000262,
+              "textOut": 0.000036
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 239,
+              "inputCachedAudio": 192,
+              "inputText": 3106,
+              "inputCachedText": 3072,
+              "outputAudio": 0,
+              "outputText": 24,
+              "input": 3345,
+              "output": 24,
+              "total": 3369
+            },
+            "amount": 0.00079,
+            "detail": {
+              "total": 0.00079,
+              "audioIn": 0.000528,
+              "audioOut": 0,
+              "textIn": 0.000205,
+              "textOut": 0.000058
+            },
+            "unpriced": false,
+            "issues": []
+          },
+          {
+            "model": "gpt-realtime-2.1-mini",
+            "provider": "api.openai.com",
+            "pricedAs": "gpt-realtime-2.1-mini",
+            "rates": {
+              "audioIn": 10,
+              "audioCachedIn": 0.3,
+              "audioOut": 20,
+              "textIn": 0.6,
+              "textCachedIn": 0.06,
+              "textOut": 2.4
+            },
+            "tokens": {
+              "inputAudio": 239,
+              "inputCachedAudio": 192,
+              "inputText": 3176,
+              "inputCachedText": 3136,
+              "outputAudio": 0,
+              "outputText": 194,
+              "input": 3415,
+              "output": 194,
+              "total": 3609
+            },
+            "amount": 0.001205,
+            "detail": {
+              "total": 0.001205,
+              "audioIn": 0.000528,
+              "audioOut": 0,
+              "textIn": 0.000212,
+              "textOut": 0.000466
+            },
+            "unpriced": false,
+            "issues": []
+          }
+        ],
+        "invoiceVerified": false,
+        "tokens": {
+          "inputAudio": 2442,
+          "inputCachedAudio": 1856,
+          "inputText": 46077,
+          "inputCachedText": 40320,
+          "outputAudio": 687,
+          "outputText": 799,
+          "input": 48519,
+          "output": 1486,
+          "total": 50005
+        },
+        "rates": null,
+        "components": {
+          "model": 0.027949,
+          "modelDetail": {
+            "total": 0.027949,
+            "audioIn": 0.006417,
+            "audioOut": 0.01374,
+            "textIn": 0.005871,
+            "textOut": 0.001918
+          },
+          "telephony": 0,
+          "platform": 0
+        },
+        "billedMinutes": 0,
+        "telephonyRatePerMinute": 0,
+        "platformRatePerMinute": 0
+      },
+      "cacheHitPercent": 86.92677095570808,
+      "averageTtftMs": 907.7777777777778,
+      "estimatedCostPerHarnessMinute": 0.0609331056284292
+    }
+  ]
+}

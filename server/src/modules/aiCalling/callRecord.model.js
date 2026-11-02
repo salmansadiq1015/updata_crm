@@ -95,6 +95,8 @@ const callRecordSchema = new mongoose.Schema({
     default: undefined,
   },
   agentSessionId: { type: String, maxlength: 200, default: null },
+  // Voice intelligence identity is independent of the SIM/SIP transport provider.
+  aiVoice: { type: mongoose.Schema.Types.Mixed, default: undefined },
   // Paired phone: the agent's /end, held until the gateway reports how the phone call ended
   // (the agent leaving is no evidence that the line is down). Merged by processCallResults.
   agentEnd: {

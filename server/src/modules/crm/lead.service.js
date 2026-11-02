@@ -340,8 +340,11 @@ class LeadService {
 
   /** GLOBAL dedup ladder lookup (placeId → phone → website → name+postal). */
   async findDuplicates({
-    name, postalCode, phone, website, placeId,
+    name, postalCode, phone, website, placeId, address, mapsUrl, strictIdentity = false,
   } = {}) {
+    if (strictIdentity) return leadRepository.findImportDuplicates({
+      name, address, source: 'extension', providerMeta: { mapsUrl }, sourceMetadata: { googlePlaceId: placeId },
+    });
     return leadRepository.findDuplicates({
       name,
       postalCode,

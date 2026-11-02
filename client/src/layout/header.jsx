@@ -9,6 +9,7 @@ import { CommandSearch } from './command-search';
 import { ThemeToggle } from './theme-toggle';
 import { NotificationBell } from './notification-bell';
 import { LanguageToggle } from './language-toggle';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 const AiAssistantButton = lazy(() =>
   import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
@@ -21,15 +22,17 @@ const AiAssistantButton = lazy(() =>
  */
 export function Header({ showAiAssistant = true }) {
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
+  const { t } = useLanguage();
 
   return (
-    <header className="flex items-center justify-between h-14 border-b border-border bg-card/80 backdrop-blur-md pl-4 sticky top-0 z-30 shrink-0">
+    <header data-slot="app-header" className="flex items-center justify-between h-14 border-b border-border bg-card/95 backdrop-blur-md ps-3 sm:ps-6 sticky top-0 z-30 shrink-0">
       {/* Left: hamburger + breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setMobileOpen(true)}
+          aria-label={t('experience.navigation.open')}
           className="md:hidden h-8 w-8 shrink-0 text-foreground"
         >
           <Menu className="h-4 w-4" />

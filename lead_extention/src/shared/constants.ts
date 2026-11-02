@@ -86,5 +86,5 @@ export const CSV_HEADERS = [
 export const CRM_IMPORT_HEADERS = [
   'name', 'type', 'status', 'street', 'addressSupplement', 'area', 'postalCode',
   'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'notes', 'tags',
-  'latitude', 'longitude', 'searchLocation'
+  'latitude', 'longitude', 'searchLocation', 'extensionRecord'
 ] as const;

@@ -14,6 +14,8 @@
 import crypto from 'node:crypto';
 
 import CallCampaign from '../aiCalling/callCampaign.model.js';
+import CallRecord from '../aiCalling/callRecord.model.js';
+import { computeCallCost } from '../../../shared/voiceCost.js';
 import aiCallingService from '../aiCalling/aiCalling.service.js';
 import * as qEngine from '../aiCalling/engine/questionEngine.js';
 import { issueAgentToken } from '../aiCalling/callAuth.js';
@@ -237,11 +239,28 @@ class LinkVoiceService {
     if (!campaign) return { acknowledged: true };
     const room = roomName || session.voice?.roomName;
     const seconds = Math.max(0, Math.round(Number(durationSeconds) || 0));
-    const { amount, estimated } = voiceCallCost(cost?.breakdown?.usage, seconds);
+    const priced = voiceCallCost(cost?.breakdown?.usage, seconds);
+    const { amount, estimated } = priced;
     const charged = room ? await LinkSession.updateOne(
       { _id: session._id, 'voice.costedRooms': { $ne: room } },
-      { $addToSet: { 'voice.costedRooms': room }, $inc: { 'voice.seconds': seconds, 'voice.cost': amount, 'usage.cost': amount } },
+      { $addToSet: { 'voice.costedRooms': room }, $inc: { 'voice.seconds': seconds, 'voice.cost': amount, 'usage.cost': amount },
+        $push: { 'voice.costReports': { $each: [{ roomName: room, seconds, aiVoice: cost?.breakdown?.aiVoice || null,
+          source: priced.source || 'budget_reservation', calculatedApiCostUsd: priced.calculatedApiCostUsd ?? null,
+          budgetAmountUsd: amount, unpriced: priced.unpriced ?? true, models: priced.breakdown?.models || [],
+          usage: cost?.breakdown?.usage?.modelUsage || [], invoiceVerified: false }], $slice: -20 } } },
     ) : { modifiedCount: 0 };
+    if (charged.modifiedCount === 1) {
+      const fresh = await LinkSession.findById(session._id).select('voice').lean();
+      const reports = fresh?.voice?.costReports || [];
+      const historyIncomplete = (fresh?.voice?.costedRooms?.length || 0) > reports.length;
+      const usage = { modelUsage: reports.flatMap(report => report.usage || []), historyIncomplete };
+      const summary = computeCallCost({ usage, durationSeconds: fresh?.voice?.seconds || 0, provider: 'web_link', isTest: session.isTest });
+      await CallRecord.updateOne({ _id: session.callRecordId }, { $set: {
+        durationSeconds: fresh?.voice?.seconds || 0,
+        cost: { amount: summary.amount, currency: 'USD', breakdown: { ...summary.breakdown, usage,
+          unpriced: summary.breakdown.unpriced || historyIncomplete, historyIncomplete } },
+      } });
+    }
     if (charged.modifiedCount === 1 && amount > 0) {
       addCost(amount);
       await linkAssistant._recordSpend(campaign, linkConfigOf(campaign), amount);

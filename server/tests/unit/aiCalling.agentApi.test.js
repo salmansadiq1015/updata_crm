@@ -96,6 +96,61 @@ beforeEach(async () => {
 });
 
 describe('agent tool API over HTTP', () => {
+  it('records voice fallback independently of SIM transport and preserves answers across attempts', async () => {
+    const { internalCallId } = await setupCall();
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const post = (path, body) => request(serve(app)).post(`/agent/${internalCallId}/${path}`).set(auth).send(body);
+    await post('disclose', {}).expect(200);
+    await post('record-answer', { fieldKey: 'active', rawAnswer: 'yes' }).expect(200);
+    await CallRecord.updateOne({ internalCallId }, { $set: { provider: 'paired_phone' } });
+    const before = await CallRecord.findOne({ internalCallId }).lean();
+    const first = { provider: 'gemini', model: 'gemini-3.8-live', status: 'failed', reason: 'RATE_LIMIT_OR_QUOTA', at: new Date().toISOString(), latencyMs: 50 };
+    await post('voice-provider', first).expect(200); await post('voice-provider', first).expect(200);
+    await post('voice-provider', { provider: 'openai', model: 'gpt-realtime-2.1-mini', status: 'established', at: new Date().toISOString(), latencyMs: 30 }).expect(200);
+    const after = await CallRecord.findOne({ internalCallId }).lean();
+    expect(after.provider).toBe('paired_phone');
+    expect(after.aiVoice).toMatchObject({ provider: 'openai', model: 'gpt-realtime-2.1-mini', fallback: true });
+    expect(after.aiVoice.attempts).toHaveLength(2);
+    expect(after.conversationState).toEqual(before.conversationState);
+    expect(after.answers).toEqual(before.answers);
+    await post('voice-provider', { provider: 'gemini', model: 'gemini-3.8-live', status: 'established', at: new Date().toISOString(), latencyMs: 10 }).expect(409);
+    expect((await CallRecord.findOne({ internalCallId }).lean()).aiVoice.provider).toBe('openai');
+    await request(serve(app)).post(`/agent/${internalCallId}/voice-provider`).send(first).expect(401);
+  });
+
+  it('stores admin credentials encrypted and exposes only sealed credentials to scoped workers', async () => {
+    const envBefore = process.env.AI_CALLING_CREDENTIAL_SECRET;
+    process.env.AI_CALLING_CREDENTIAL_SECRET = 'a'.repeat(64);
+    try {
+      const providers = await import('../../src/modules/aiCalling/voiceProvider.service.js');
+      const saved = await providers.saveProviderSettings({ credentials: { gemini: 'test-permanent-key-value' }, fallbackEnabled: false }, actor);
+      expect(saved.credentials.gemini.stored).toBe(true);
+      expect(JSON.stringify(saved)).not.toContain('test-permanent-key-value');
+      expect(saved.sealedCredentials).toBeUndefined();
+      const { internalCallId } = await setupCall();
+      const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+      const response = await request(serve(app)).get(`/agent/${internalCallId}/context`).set(auth).expect(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body.data.voiceProviders.fallbackEnabled).toBe(false);
+      expect(response.body.data.voiceProviders.sealedCredentials.gemini).toMatch(/^v1\./);
+      expect(JSON.stringify(response.body)).not.toContain('test-permanent-key-value');
+    } finally {
+      if (envBefore === undefined) delete process.env.AI_CALLING_CREDENTIAL_SECRET;
+      else process.env.AI_CALLING_CREDENTIAL_SECRET = envBefore;
+    }
+  });
+  it('allows a resumed voice room to establish a provider while retaining the CRM conversation', async () => {
+    const { internalCallId } = await setupCall();
+    const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };
+    const post = body => request(serve(app)).post(`/agent/${internalCallId}/voice-provider`).set(auth).send(body);
+    const attempt = { provider: 'gemini', model: 'gemini-3.8-live', status: 'established', at: new Date().toISOString(), latencyMs: 10 };
+    await post({ ...attempt, sessionId: 'room-one' }).expect(200);
+    await post({ ...attempt, sessionId: 'room-two', provider: 'openai', model: 'gpt-realtime-2.1-mini' }).expect(200);
+    const call = await CallRecord.findOne({ internalCallId }).lean();
+    expect(call.aiVoice).toMatchObject({ provider: 'openai', sessionId: 'room-two' });
+    expect(call.aiVoice.attempts).toHaveLength(2);
+    expect(call.conversationState).toBeNull();
+  });
   it('provides recognition with questionnaire context without supplying lead answers', async () => {
     const { internalCallId } = await setupCall();
     const auth = { Authorization: `Bearer ${issueAgentToken(internalCallId)}` };

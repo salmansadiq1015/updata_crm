@@ -61,6 +61,7 @@ export const intelligenceSchema = new mongoose.Schema({
   reason: { type: String, maxlength: 120, default: null },
   error: { type: String, maxlength: 500, default: null },
   model: { type: String, maxlength: 80, default: null },
+  usage: { type: Mixed, default: null },
   promptVersion: { type: String, maxlength: 80, default: null },
   transcriptVersion: { type: Number, default: null },
   turnCount: { type: Number, default: 0 },

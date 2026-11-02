@@ -10,7 +10,7 @@ import mongoose from 'mongoose';
  * by detection. A merged pair records the merge that resolved it.
  */
 export const DUPLICATE_METHODS = Object.freeze([
-  'PLACE_ID', 'PHONE', 'EMAIL', 'WEBSITE', 'NAME_POSTAL', 'NAME_NEARBY',
+  'PLACE_ID', 'PHONE', 'EMAIL', 'WEBSITE', 'NAME_POSTAL', 'NAME_NEARBY', 'BUSINESS_IDENTITY',
 ]);
 export const CANDIDATE_STATUSES = Object.freeze(['open', 'dismissed', 'merged', 'stale']);
 

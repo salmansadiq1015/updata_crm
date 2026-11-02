@@ -1,0 +1,49 @@
+# Gitignore syntax; these exclusions also apply to tracked files.
+# Keep application source, tests, migrations, schemas and documentation in scope.
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.cache/
+.vite/
+.expo/
+.gradle/
+vendor/
+Pods/
+DerivedData/
+__pycache__/
+.venv/
+.git/
+.screenshots/
+.superpowers/
+graphify-out/
+.graphify-cache/
+
+# Assistant packages are tooling, not application architecture.
+.claude/
+.codex/
+.agents/
+.cursor/
+
+# Local credentials, environment files and backups.
+.env
+.env.*
+*.env.backup
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+*.log
+*.tsbuildinfo
+
+# Generated dependency inventories and benchmark output.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lock
+bun.lockb
+AI_CALLING_BENCHMARK_*.json
+AI_CALLING_*_PROVIDER_SMOKE.json
+AI_CALLING_PRODUCTION_BASELINE.json

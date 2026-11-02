@@ -1,4 +1,4 @@
-import { FileUp, MapPin, PenLine, Puzzle } from 'lucide-react';
+import { FileUp, Globe, MapPin, PenLine, Puzzle } from 'lucide-react';
 import type { LeadScoreBand } from '../types/lead-quality-types';
 import type { LucideIcon } from 'lucide-react';
 import type { Lead, LeadSource, LeadStatus, LeadType } from '../types/lead-types';
@@ -26,7 +26,7 @@ export const LEAD_EDITABLE_STATUSES: readonly LeadStatus[] = [
   'unqualified',
 ];
 
-export const LEAD_SOURCES: readonly LeadSource[] = ['google_places', 'manual', 'widget', 'import'];
+export const LEAD_SOURCES: readonly LeadSource[] = ['extension', 'google_places', 'manual', 'import'];
 export const LEAD_TYPES: readonly LeadType[] = ['business', 'private'];
 
 /** Page sizes offered by the table footer; the API caps `limit` at 100. */
@@ -50,6 +50,7 @@ export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
 };
 
 export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
+  extension: 'Chrome extension',
   google_places: 'Google Places',
   manual: 'Manual entry',
   widget: 'Website widget',
@@ -57,6 +58,7 @@ export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
 };
 
 export const LEAD_SOURCE_ICON: Record<LeadSource, LucideIcon> = {
+  extension: Globe,
   google_places: MapPin,
   manual: PenLine,
   widget: Puzzle,

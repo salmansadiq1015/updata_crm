@@ -44,8 +44,9 @@ export function LanguageSelect({ value, onChange, className }: { value: string; 
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className={`${className ?? ''} flex items-center justify-between gap-2 text-left`}
+        className={`${className ?? ''} flex items-center justify-between gap-2 text-start`}
         aria-haspopup="listbox"
+        aria-label="Conversation language"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         disabled={isLoading}
@@ -85,7 +86,7 @@ export function LanguageSelect({ value, onChange, className }: { value: string; 
                   <button
                     type="button"
                     onClick={() => choose(l.code)}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted ${active ? 'font-semibold' : ''}`}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-start text-sm hover:bg-muted ${active ? 'font-semibold' : ''}`}
                   >
                     <span className="min-w-0">
                       <span className="block truncate" dir={l.rtl ? 'rtl' : undefined}>{l.nativeName}</span>

@@ -47,7 +47,7 @@ for (const width of [390, 1440]) {
     await expect(start).toBeVisible();
     await start.click();
     await expect(overview.getByRole('button', { name: 'Pause calling', exact: true })).toBeVisible();
-    expect(starts).toEqual([{}]);
+    expect(starts).toEqual([{ scheduledAt: null, sequential: true, startNow: true }]);
     await expect(page.getByRole('region', { name: 'Campaign details', exact: true })).toHaveCount(0);
     await overview.getByRole('button', { name: 'Follow up with selected leads', exact: true }).click();
     const drawer = page.getByRole('region', { name: 'Campaign details', exact: true });
@@ -85,12 +85,12 @@ test('a running campaign waiting for hours cannot bypass calling restrictions', 
   expect(starts).toHaveLength(0);
 });
 
-test('Start on schedule retains the calling-hours option', async ({ page }) => {
+test('Start on schedule retains the calling-hours option and explicit immediate start', async ({ page }) => {
   const starts = await prepare(page);
   await page.getByRole('button', { name: 'Follow up with selected leads', exact: true }).click();
   const drawer = page.getByRole('region', { name: 'Campaign details', exact: true });
   await drawer.getByRole('button', { name: 'Start on schedule', exact: true }).click();
   await expect.poll(() => starts).toEqual([{ scheduledAt: null, sequential: true, startNow: false }]);
-  await expect(drawer.getByRole('button', { name: 'Start calling now', exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: 'Start calling now', exact: true })).toBeEnabled();
   await expect(drawer.getByText('Waiting for the campaign’s calling hours.', { exact: true })).toBeVisible();
 });

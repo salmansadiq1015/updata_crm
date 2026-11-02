@@ -7,6 +7,14 @@ import type { AgentFilters, AgentLaunchInput, CallingAgentInput } from '../types
 export function useCallingAgents(filters: AgentFilters = {}) {
   return useQuery({ queryKey: ['ai-calling', 'agents', filters], queryFn: () => callingAgentApi.list(filters), refetchInterval: 15000 });
 }
+export function useAllCallingAgents(enabled = true) {
+  return useQuery({
+    queryKey: ['ai-calling', 'agents', 'all'],
+    queryFn: () => callingAgentApi.listAll(),
+    enabled,
+    staleTime: 30_000,
+  });
+}
 export function useCallingAgent(id: string) {
   return useQuery({ queryKey: ['ai-calling', 'agent', id], queryFn: () => callingAgentApi.get(id), refetchInterval: 10000 });
 }

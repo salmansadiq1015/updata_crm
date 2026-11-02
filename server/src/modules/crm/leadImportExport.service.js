@@ -5,7 +5,9 @@ import leadService from './lead.service.js';
 import leadRepository from './lead.repository.js';
 import counterService from './counter.service.js';
 import { resolveLeadAddress } from './leadLocation.js';
-import { normalizeBusinessType } from './businessTypeLabel.js';
+import { bulkImport } from './lead.validation.js';
+import { extensionBusinessType, isLegacyExtensionLead } from './leadExtensionProvenance.js';
+import { googleIdentityKeys, mapsUrls } from './leadIdentity.js';
 import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -600,10 +602,29 @@ class LeadImportExportService {
    *   errors:{row,message}[], format:string, warnings:string[] }>}
    */
   async importLeads({
-    buffer, mimetype, originalname, mode = 'new',
+    buffer, mimetype, originalname, mode = 'new', source = 'import',
   } = {}, createdBy, meta = {}) {
     const normalizedMode = IMPORT_MODES.includes(mode) ? mode : 'new';
     const { rows, format, warnings } = await this.parseFile({ buffer, mimetype, originalname });
+
+    // The extension upload fallback must use the same validation, provenance,
+    // deduplication and metadata mapping as the structured endpoint.
+    if (source === LEAD_SOURCE.EXTENSION) {
+      const records = rows.map((row, index) => {
+        try { return JSON.parse(row.extensionRecord); } catch {
+          throw new AppError(`Invalid extension record at row ${index + 2}`, 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+      });
+      const { value, error } = bulkImport.body.validate({ leads: records }, { stripUnknown: true });
+      if (error) throw new AppError(error.message, 400, ERROR_CODES.VALIDATION_ERROR);
+      const imported = await this.importExtensionLeads(value.leads, createdBy, meta);
+      return {
+        summary: { total: imported.total, created: imported.created, duplicates: imported.existing, skipped: 0, failed: imported.failed },
+        results: imported.results,
+        errors: imported.results.flatMap((result, index) => result.status === 'failed' ? [{ row: index + 2, message: result.message }] : []),
+        format, warnings,
+      };
+    }
 
     if (normalizedMode === 'update') {
       warnings.push('Update mode is not supported for file import — rows were treated as new (existing matches skipped).');
@@ -681,6 +702,10 @@ class LeadImportExportService {
       const result = await leadService.bulkCreate(numbered);
       summary.created = result.insertedCount || 0;
       for (const writeError of result.errors || []) {
+        if (writeError.code === 11000 && /lead_business_identity_unique|lead_extension_place_unique|sourceMetadata\.googlePlaceId/.test(writeError.message ?? '')) {
+          summary.duplicates += 1;
+          continue;
+        }
         summary.failed += 1;
         const rowNumber = toCreate[writeError.index]?.rowNumber ?? null;
         pushError(rowNumber, writeError.message || 'Insert failed');
@@ -719,6 +744,7 @@ class LeadImportExportService {
     const results = [];
     for (const record of records) {
       const clientId = String(record.clientId ?? '');
+      let resolvedAddress;
       try {
         const placeId = cleanString(record.placeIdentifier);
         const name = cleanString(record.businessName)?.slice(0, 255);
@@ -747,13 +773,18 @@ class LeadImportExportService {
           latitude,
           longitude,
           fallbackLocation: searchLocation,
+          resolveArea: true,
         });
+        resolvedAddress = address;
         const matches = await leadService.findDuplicates({
           name,
           postalCode: address.postalCode,
           phone: phoneValue,
           website: websiteValue,
           placeId,
+          address,
+          mapsUrl: record.googleMapsUrl,
+          strictIdentity: true,
         });
         if (matches.length) {
           const existing = matches[0].lead;
@@ -764,7 +795,7 @@ class LeadImportExportService {
           // CRM shows the same rating detail the extension does, without ever
           // overwriting data the lead already has. Non-blocking: an enrichment
           // failure still reports the row as an honest "existing".
-          await this._enrichExistingProviderMeta(existing._id, record, meta).catch((error) => logger.warn(
+          await this._enrichExistingProviderMeta(existing._id, record, meta, address).catch((error) => logger.warn(
             'Lead provider-meta enrich on re-import failed (non-blocking)',
             { module: 'crm', action: 'lead.extension_import.enrich', leadId: String(existing._id), error: { message: error?.message } },
           ));
@@ -794,10 +825,12 @@ class LeadImportExportService {
             photos: normalizeLeadPhotos(record.photos),
             mapsUrl: normalizeMapsUrl(record.googleMapsUrl),
           },
-          source: placeId ? LEAD_SOURCE.GOOGLE_PLACES : LEAD_SOURCE.IMPORT,
+          source: LEAD_SOURCE.EXTENSION,
           sourceMetadata: {
+            importMethod: 'extension',
             googlePlaceId: placeId || null,
-            businessType: normalizeBusinessType(record.category),
+            businessType: extensionBusinessType(record),
+            discoveryBusinessTypes: record.discoveryCategories ?? [],
             searchLocation,
             discoveredAt: record.discoveredAt || null,
           },
@@ -809,8 +842,12 @@ class LeadImportExportService {
       } catch (error) {
         // A concurrent request can win the unique place-id race. Report it as
         // existing when possible; never turn the remaining batch into failure.
-        if (error?.code === 11000 && record.placeIdentifier) {
-          const matches = await leadService.findDuplicates({ placeId: record.placeIdentifier }).catch(() => []);
+        if (error?.code === 11000) {
+          const matches = await leadService.findDuplicates({
+            name: record.businessName, placeId: record.placeIdentifier,
+            address: resolvedAddress ?? { street: record.street, city: record.city, country: record.country },
+            mapsUrl: record.googleMapsUrl, strictIdentity: true,
+          }).catch(() => []);
           if (matches.length) {
             summary.existing += 1;
             results.push({ clientId, status: 'existing', leadId: String(matches[0].lead._id), leadNumber: matches[0].lead.leadNumber });
@@ -846,12 +883,37 @@ class LeadImportExportService {
    * leaves untouched providerMeta fields (and the rest of the lead) intact.
    * Returns true when at least one field was filled.
    */
-  async _enrichExistingProviderMeta(existingId, record, meta = {}) {
+  async _enrichExistingProviderMeta(existingId, record, meta = {}, address = {}) {
     const current = await leadRepository.getProviderMeta(existingId);
     if (!current) return false;
     const have = current.providerMeta ?? {};
     const isEmpty = (value) => value === null || value === undefined;
     const set = {};
+
+    const aliases = [...new Set([...googleIdentityKeys(current), ...googleIdentityKeys(record)])];
+    if (aliases.some((alias) => !(current.sourceMetadata?.identityAliases ?? []).includes(alias))) {
+      set['sourceMetadata.identityAliases'] = aliases;
+    }
+
+    const businessType = extensionBusinessType(record);
+    if (businessType && !extensionBusinessType({ category: current.sourceMetadata?.businessType })) {
+      set['sourceMetadata.businessType'] = businessType;
+    }
+    if (current.address || address.area || address.city || address.country) {
+      const nextAddress = { ...(current.address ?? {}) };
+      let changed = false;
+      for (const field of ['area', 'city', 'country', 'region', 'street', 'postalCode', 'formatted']) {
+        if (!nextAddress[field] && address[field]) { nextAddress[field] = address[field]; changed = true; }
+      }
+      // Update the full address block so leadService recomputes canonical filter IDs.
+      if (changed) set.address = nextAddress;
+    }
+    // Correct only records already identified as extension imports. A manual or
+    // provider lead encountered as a duplicate retains its original provenance.
+    if (current.sourceMetadata?.importMethod === 'extension' || isLegacyExtensionLead(current)) {
+      if (current.source !== LEAD_SOURCE.EXTENSION) set.source = LEAD_SOURCE.EXTENSION;
+      if (!current.sourceMetadata?.importMethod) set['sourceMetadata.importMethod'] = 'extension';
+    }
 
     const ratingDistribution = normalizeRatingDistribution(record.ratingDistribution);
     if (ratingDistribution && isEmpty(have.ratingDistribution)) set['providerMeta.ratingDistribution'] = ratingDistribution;
@@ -955,6 +1017,7 @@ class LeadImportExportService {
         postalCode: dto.address?.postalCode,
         phone: dto.phone || dto.mobile,
         website: dto.website,
+        ...(mapsUrls(dto).length ? { strictIdentity: true, address: dto.address, mapsUrl: mapsUrls(dto)[0] } : {}),
       });
       return Array.isArray(matches) && matches.length > 0;
     } catch (err) {

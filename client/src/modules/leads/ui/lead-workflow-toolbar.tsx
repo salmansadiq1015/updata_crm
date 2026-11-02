@@ -30,6 +30,7 @@ export function LeadWorkflowToolbar({ overdueOnly, onOverdueOnlyChange, policyOp
       <Button
         variant="outline"
         className={cn('h-9 gap-2', overdueOnly && 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300')}
+        aria-label={t('leads.sla.filterOverdue')}
         aria-pressed={overdueOnly}
         onClick={() => onOverdueOnlyChange(!overdueOnly)}
       >
@@ -37,7 +38,7 @@ export function LeadWorkflowToolbar({ overdueOnly, onOverdueOnlyChange, policyOp
         <span className="hidden sm:inline">{t('leads.sla.filterOverdue', 'Response overdue')}</span>
       </Button>
       <Button asChild variant="outline" className="h-9 gap-2">
-        <Link href="/leads/follow-ups">
+        <Link aria-label={t('leads.followUps.title')} href="/leads/follow-ups">
           <CalendarClock className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">{t('leads.followUps.title', 'Follow-ups')}</span>
           {overdue > 0 && (
@@ -49,7 +50,7 @@ export function LeadWorkflowToolbar({ overdueOnly, onOverdueOnlyChange, policyOp
       </Button>
       {canPolicy && (
         <>
-          <Button variant="outline" className="h-9 gap-2" onClick={() => onPolicyOpenChange(true)}>
+          <Button aria-label={t('leads.policy.open')} variant="outline" className="h-9 gap-2" onClick={() => onPolicyOpenChange(true)}>
             <Settings2 className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('leads.policy.open', 'Assignment & SLA')}</span>
           </Button>

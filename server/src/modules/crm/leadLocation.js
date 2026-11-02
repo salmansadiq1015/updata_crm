@@ -83,7 +83,7 @@ export function sanitizeCity(value) {
   return s.slice(0, 120);
 }
 
-// Reverse-geocode cache keyed by ~1 km rounded coordinates, plus a rolling
+// Reverse-geocode cache keyed by a rounded business pin, plus a rolling
 // per-window budget, so a bulk import issues a handful of calls (not one per
 // lead) and never floods Nominatim.
 const reverseCache = new Map();
@@ -172,11 +172,14 @@ function withinBudget() {
  * @returns {{ city, area, region, postalCode, country, street }|null}
  */
 export async function resolveFromCoordinates(latitude, longitude) {
+  if (latitude == null || longitude == null || latitude === '' || longitude === '') return null;
   const lat = Number(latitude);
   const lng = Number(longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   if (typeof nominatimProvider.isConfigured === 'function' && !nominatimProvider.isConfigured()) return null;
-  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  // Neighbourhood boundaries can be metres apart; a 1 km cache cell gave
+  // distinct businesses the same (sometimes wrong) area.
+  const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
   if (reverseCache.has(key)) return reverseCache.get(key);
   if (!withinBudget()) return null;
   reverseCalls += 1;
@@ -219,22 +222,34 @@ export async function resolveLeadAddress(input = {}) {
   let outPostal = clean(postalCode);
   let outStreet = clean(street);
 
-  // Geocode only when a CORE field (city/country) is missing/invalid — the
-  // cost guarantee for well-formed leads. When it fires, area/region/street are
-  // filled opportunistically from the same call; the rate-limited backfill
-  // migration enriches area/region for leads that already had a good city.
+  // A full Maps address can carry a neighbourhood even when the separate field
+  // was omitted. Only use a segment before a known city, never the city itself.
+  if (!outArea && outCity && formatted) {
+    const parts = String(formatted).split(',').map(clean).filter(Boolean);
+    const cityKey = normalizeGeographyKey(outCity);
+    const cityIndex = parts.findIndex((part) => normalizeGeographyKey(part.replace(/\b\d{4,6}\b/g, '').trim()) === cityKey);
+    if (cityIndex > 1) {
+      const candidate = sanitizeCity(parts[cityIndex - 1]);
+      if (candidate && !normalizeCountryCode(candidate) && normalizeGeographyKey(candidate) !== normalizeGeographyKey(outRegion)) outArea = candidate;
+    }
+  }
+
+  // General callers geocode missing/invalid core fields. Extension imports can
+  // also request a missing area; valid supplied fields are still preserved.
   // A city/area written only in a non-Latin script or that is not a place
   // ("A Rosewood Hotel · Visited link") is repaired the same way, so it never
   // becomes its own filter option.
   const badCity = Boolean(outCity) && needsGeoRepair(outCity);
   const badArea = Boolean(outArea) && needsGeoRepair(outArea);
-  if ((!outCity || !outCountry || badCity || badArea)
+  if ((!outCity || !outCountry || badCity || badArea || (input.resolveArea && !outArea))
+    && latitude != null && longitude != null
     && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
     const geo = await resolveFromCoordinates(latitude, longitude);
     if (geo) {
       const replaceCity = (!outCity || badCity) && Boolean(geo.city);
       if (replaceCity) outCity = geo.city;
-      if (!outArea || badArea || replaceCity) outArea = geo.area ?? (badArea ? null : outArea);
+      const sameCity = !outCity || !geo.city || normalizeGeographyKey(outCity) === normalizeGeographyKey(geo.city);
+      if (sameCity && (!outArea || badArea || replaceCity)) outArea = geo.area ?? (badArea ? null : outArea);
       if (!outRegion) outRegion = geo.region;
       if (!outCountry) outCountry = geo.country;
       if (!outPostal) outPostal = geo.postalCode;

@@ -10,15 +10,15 @@ export function ListPage({ children, className }) {
 
 function Header({ icon: Icon, title, description, action }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div data-slot="page-header" className="flex flex-wrap items-start justify-between gap-4 pb-2">
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/40 text-foreground/80">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border border-primary/10 bg-primary/5 text-primary">
             <Icon className="h-5 w-5" />
           </div>
         )}
         <div>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
           {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
         </div>
       </div>

@@ -8,6 +8,16 @@ const question = {
   answerHint: 'Please give your birth day, month, and full four-digit year. Do not guess a missing year.',
 };
 
+test('spoken steps use the conversation language while preserving CRM field keys and choice values', () => {
+  assert.match(actionToInstruction({ type: 'disclose' }), /disclosure .*in the conversation language/);
+  const instruction = actionToInstruction({ type: 'ask', question: {
+    fieldKey: 'interest', text: 'Are you interested?', type: 'single_choice', options: ['interested', 'not_interested'],
+  } });
+  assert.match(instruction, /current conversation language/);
+  assert.match(instruction, /fieldKey="interest"/);
+  assert.match(instruction, /written exactly as one of: interested \| not_interested/);
+});
+
 test('a rejected answer tells the agent it was not saved and keeps the same question', () => {
   const result = { accepted: false, validation: 'invalid', reason: 'birth_year_required', nextAction: { type: 'clarify', reason: 'birth_year_required', question } };
   const instruction = answerResultInstruction(result, actionToInstruction(result.nextAction));

@@ -13,6 +13,8 @@ import { ProductShowcase } from '@/components/landing/product-showcase';
 import { CtaSection } from '@/components/landing/cta-section';
 import { LandingFooter } from '@/components/landing/landing-footer';
 import { LandingMotionProvider } from '@/components/landing/landing-motion-provider';
+import { AICallingSection } from '@/components/landing/ai-calling-section';
+import { PlatformIntelligence, PlatformAssurance } from '@/components/landing/platform-assurance';
 
 export const metadata = {
   title: 'Updata ERP — One Intelligent Workspace for Your Business',
@@ -51,6 +53,8 @@ export default function HomePage() {
           <CapabilityStrip />
           <LeadGenerationSection />
           <CrmSection />
+          <AICallingSection />
+          <PlatformIntelligence />
           <OperationsSection />
           <TeamWorkspaceSection />
           <AIAssistantSection />
@@ -58,6 +62,7 @@ export default function HomePage() {
           <FeatureEcosystem />
           <WorkflowTimeline />
           <ProductShowcase />
+          <PlatformAssurance />
           <CtaSection />
         </main>
         <LandingFooter />

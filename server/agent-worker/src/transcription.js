@@ -9,15 +9,15 @@ const languageCode = value => {
 export const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-transcribe';
 export const DEFAULT_SILENCE_MS = 1000;
 
-export function turnDetection(env = process.env) {
+export function turnDetection(env = process.env, { allowBargeIn = true } = {}) {
   if (env.OPENAI_REALTIME_TURN_DETECTION === 'semantic') {
-    return { type: 'semantic_vad', eagerness: env.OPENAI_REALTIME_EAGERNESS || 'high', create_response: true, interrupt_response: true };
+    return { type: 'semantic_vad', eagerness: ['low', 'medium', 'high', 'auto'].includes(env.OPENAI_REALTIME_EAGERNESS) ? env.OPENAI_REALTIME_EAGERNESS : 'high', create_response: true, interrupt_response: allowBargeIn };
   }
   const configured = Number(env.OPENAI_REALTIME_SILENCE_MS);
   return {
     type: 'server_vad', threshold: 0.5, prefix_padding_ms: 500,
     silence_duration_ms: Number.isFinite(configured) && configured >= 200 && configured <= 5000 ? configured : DEFAULT_SILENCE_MS,
-    create_response: true, interrupt_response: true,
+    create_response: true, interrupt_response: allowBargeIn,
   };
 }
 
@@ -27,7 +27,9 @@ export function transcription(language, env = process.env, context = {}) {
   const forced = languageCode(env.OPENAI_REALTIME_TRANSCRIBE_LANGUAGE);
   const configured = String(env.OPENAI_REALTIME_TRANSCRIBE_LANGUAGES || '').split(',').map(languageCode).filter(Boolean);
   const primary = languageCode(language);
-  const languages = [...new Set(configured.length ? configured : forced ? [forced] : primary ? [primary, ...(primary === 'en' ? [] : ['en'])] : [])];
+  // The opening language must not restrict recognition when the lead switches.
+  // Only an explicit deployment override constrains the recognizer's languages.
+  const languages = [...new Set(configured.length ? configured : forced ? [forced] : [])];
   const questions = (context.questions || []).slice(0, 40).map(q => {
     // Only question wording/types, never stored answers, to avoid prompting ASR
     // to fill missing speech with a known or expected personal detail.
@@ -37,7 +39,7 @@ export function transcription(language, env = process.env, context = {}) {
     'A customer answering a CRM questionnaire on a voice call.',
     'Transcribe only the words actually spoken, in the original language, including language switches. Do not translate, answer questions, or invent missing or inaudible speech.',
     'Preserve personal names, spelled letters, email addresses, phone digits and dates exactly. The caller may pause between letters or digits. Keep corrections and unfinished phrases.',
-    languages.length ? `Expected language hints: ${languages.join(', ')}. The caller may switch languages.` : 'Detect the spoken language; the caller may switch languages.',
+    languages.length ? `Expected language hints: ${languages.join(', ')}. The caller may switch languages.` : `Detect the spoken language; the caller may switch languages.${primary ? ` The call opens in ${primary}, but the caller may use any language.` : ''}`,
     questions ? `Questionnaire topics (context only, never answers to insert): ${questions}` : '',
   ].filter(Boolean).join(' ');
   return {

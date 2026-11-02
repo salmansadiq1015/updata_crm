@@ -4,6 +4,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import { validate } from '../../shared/validation/validate.js';
 import { authenticateAgentCall } from './callAuth.js';
 import * as schemas from './aiCalling.validation.js';
+import { providerSettings, saveProviderSettings, testProviderAccess, recordVoiceProviderAttempt } from './voiceProvider.service.js';
 
 import callingAgentRoutes from './callingAgent.routes.js';
 import callingQualityRoutes from './callingQuality.routes.js';
@@ -56,6 +57,15 @@ router.get('/telephony/health', authenticate, requirePermission('ai-calling:read
 // Global voice kill switch (stops cloud SIP and paired-phone dialing).
 router.get('/settings', authenticate, requirePermission('ai-calling:read'), (req, res, next) => controller.getVoiceSettings(req, res, next));
 router.put('/settings', authenticate, requirePermission('ai-calling:admin'), validate(schemas.voiceSettings), (req, res, next) => controller.setVoiceSettings(req, res, next));
+router.get('/settings/providers', authenticate, requirePermission('ai-calling:admin'), async (req, res, next) => {
+  try { res.success({ data: await providerSettings() }); } catch (error) { next(error); }
+});
+router.put('/settings/providers', authenticate, requirePermission('ai-calling:admin'), validate(schemas.providerSettings), async (req, res, next) => {
+  try { res.success({ data: await saveProviderSettings(req.body, req.user._id, { ipAddress: req.ip }) }); } catch (error) { next(error); }
+});
+router.post('/settings/providers/:provider/test', authenticate, requirePermission('ai-calling:admin'), validate(schemas.providerTest), async (req, res, next) => {
+  try { res.success({ data: await testProviderAccess(req.params.provider) }); } catch (error) { next(error); }
+});
 
 /**
  * Agent tool API — invoked by the LiveKit voice agent worker during a live call,
@@ -64,6 +74,9 @@ router.put('/settings', authenticate, requirePermission('ai-calling:admin'), val
  * constrained to the one call the token was issued for.
  */
 export const agentToolRoutes = Router();
+agentToolRoutes.post('/:callId/voice-provider', authenticateAgentCall, validate(schemas.providerAttempt), async (req, res, next) => {
+  try { res.success({ data: await recordVoiceProviderAttempt(req.agentCall.callId, req.body) }); } catch (error) { next(error); }
+});
 agentToolRoutes.get('/:callId/context', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentContext(req, res, next));
 agentToolRoutes.post('/:callId/answered', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentAnswered(req, res, next));
 agentToolRoutes.post('/:callId/disclose', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDisclose(req, res, next));

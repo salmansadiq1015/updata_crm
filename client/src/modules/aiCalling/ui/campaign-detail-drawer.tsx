@@ -272,13 +272,13 @@ export function RecipientsTab({ campaignId }: { campaignId: string }) {
       ) : null}
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+          <tr className="border-b border-border text-start text-xs uppercase text-muted-foreground">
             <th className="w-8 py-2">
               <input type="checkbox" aria-label="Select all removable recipients" className="h-4 w-4 accent-brand-500" checked={allSelected} disabled={!removableIds.length} onChange={toggleAll} />
             </th>
             <th className="py-2 font-medium">Lead</th>
             <th className="py-2 font-medium">State</th>
-            <th className="py-2 font-medium text-right">Attempts</th>
+            <th className="py-2 font-medium text-end">Attempts</th>
             <th className="py-2 font-medium">Outcome</th>
           </tr>
         </thead>
@@ -316,7 +316,7 @@ export function RecipientsTab({ campaignId }: { campaignId: string }) {
                   <RecipientReasons leadId={r.leadId?._id ? String(r.leadId._id) : null} reasons={reasons} />
                 </td>
                 <td className="py-2 align-top"><StatusPill status={r.state} /></td>
-                <td className="py-2 text-right align-top tabular-nums">{r.attemptCount ?? 0}</td>
+                <td className="py-2 text-end align-top tabular-nums">{r.attemptCount ?? 0}</td>
                 <td className="py-2 align-top">
                   {r.qualification ? <StatusPill status={r.qualification} />
                     : r.finalDisposition === 'needs_reconcile' ? <span className="inline-flex items-center gap-1"><StatusPill status="needs_reconcile" /><span className="text-xs font-medium text-brand-600">Resolve</span></span>

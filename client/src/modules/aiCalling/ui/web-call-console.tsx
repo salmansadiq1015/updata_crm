@@ -39,7 +39,7 @@ function agentErrorOf(p?: LkParticipant): string | null {
   if (!raw) return null;
   try { return (JSON.parse(raw) as { message?: string }).message || null; } catch { return raw; }
 }
-const AGENT_LEFT_EARLY = 'The voice agent ended the session before it started talking. Check the agent worker logs: its OpenAI key, model or connection to this CRM failed.';
+const AGENT_LEFT_EARLY = 'The voice agent ended the session before it started talking. Check the agent worker logs: its provider credentials, model or connection to this CRM failed.';
 const CONNECTION_LOST_EARLY = 'The connection to the call was lost before the agent started talking. Check your internet connection and try again.';
 
 export type WebCallPhase = 'idle' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'ended' | 'error';
@@ -526,15 +526,15 @@ export function WebCallConsole({
         : 'bg-slate-500';
 
   return (
-    <div className="flex h-full min-h-[520px] flex-col overflow-y-auto bg-[#090f1f] text-slate-100">
+    <div className="flex h-full min-h-[520px] flex-col overflow-y-auto bg-card text-foreground">
       <audio ref={audioElRef} autoPlay className="hidden" />
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/8 bg-[#0b1223] px-4 py-3 text-xs">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-3 text-xs">
         <div className="flex items-center gap-2 font-semibold">
           <span className={cnStatusDot(connectionTone, phase === 'live')} />
           {phase === 'live' ? 'Live browser call' : phase === 'reconnecting' ? 'Reconnecting' : active ? 'Starting browser call' : 'Private browser test'}
         </div>
-        <div className="flex items-center gap-4 text-slate-400">
+        <div className="flex items-center gap-4 text-muted-foreground">
           <span className="hidden items-center gap-1.5 sm:inline-flex">
             {agentConnected ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Wifi className="h-3.5 w-3.5" />}
             Agent {agentConnected ? 'connected' : 'waiting'}
@@ -543,13 +543,13 @@ export function WebCallConsole({
             <Headphones className={`h-3.5 w-3.5 ${audioReady ? 'text-emerald-400' : ''}`} />
             Audio {audioReady ? 'ready' : 'pending'}
           </span>
-          <span className="font-mono text-sm font-semibold tabular-nums text-slate-200" aria-label={`Call duration ${formatDuration(elapsedSeconds)}`}>
+          <span className="font-mono text-sm font-semibold tabular-nums text-foreground" aria-label={`Call duration ${formatDuration(elapsedSeconds)}`}>
             {formatDuration(elapsedSeconds)}
           </span>
         </div>
       </div>
 
-      <div className="relative flex shrink-0 flex-col items-center justify-center overflow-hidden border-b border-white/8 px-4 pb-6 pt-10 text-center sm:min-h-[440px]">
+      <div className="relative flex shrink-0 flex-col items-center justify-center overflow-hidden border-b border-border px-4 pb-6 pt-10 text-center sm:min-h-[440px]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,rgba(14,165,233,.12),transparent_30%),radial-gradient(circle_at_56%_46%,rgba(37,99,235,.16),transparent_42%),linear-gradient(180deg,rgba(15,23,42,.18),rgba(2,6,23,.22))]" />
         <div className="pointer-events-none absolute inset-0 opacity-[.16] [background-image:linear-gradient(rgba(125,211,252,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(125,211,252,.08)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
         <button
@@ -558,7 +558,7 @@ export function WebCallConsole({
           aria-label={reducedMotion ? 'Enable orb animation' : 'Pause orb animation'}
           aria-pressed={reducedMotion}
           title={reducedMotion ? 'Enable orb animation' : 'Pause orb animation'}
-          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-slate-950/30 text-slate-500 transition hover:border-white/20 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-cyan-300"
+          className="absolute end-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-slate-950/30 text-muted-foreground transition hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-cyan-300"
         >
           {reducedMotion ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
         </button>
@@ -570,20 +570,20 @@ export function WebCallConsole({
           reducedMotion={reducedMotion}
         />
         <div className="relative -mt-1" aria-live="polite" aria-atomic="true">
-          <div className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-full border border-sky-300/10 bg-slate-950/45 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.18em] text-sky-200/70 backdrop-blur-sm">
+          <div className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-full border border-sky-300/10 bg-slate-950/45 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.18em] text-primary/70 backdrop-blur-sm">
             <span className={`h-1.5 w-1.5 rounded-full ${orbState === 'speaking' ? 'bg-fuchsia-300 shadow-[0_0_8px_#e879f9]' : orbState === 'processing' ? 'bg-violet-400 shadow-[0_0_8px_#a78bfa]' : orbState === 'error' ? 'bg-rose-400' : orbState === 'muted' ? 'bg-slate-400' : 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]'}`} />
             {orbState === 'processing' ? 'Thinking' : orbState === 'speaking' ? 'Speaking' : orbState === 'listening' ? 'Listening' : orbState === 'muted' ? 'Mic muted' : orbState === 'error' ? 'Disconnected' : orbState === 'reconnecting' ? 'Reconnecting' : orbState === 'connecting' ? 'Establishing link' : phase === 'ended' ? 'Session ended' : 'Ready when you are'}
           </div>
           <p className="text-base font-semibold tracking-tight">{copy.title}</p>
-          <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-slate-400">{disabledReason || copy.detail}</p>
+          <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-muted-foreground">{disabledReason || copy.detail}</p>
         </div>
 
-        <div className="relative mt-4 flex items-center gap-2 text-[10px] text-slate-500 motion-reduce:hidden" aria-hidden="true">
+        <div className="relative mt-4 flex items-center gap-2 text-[10px] text-muted-foreground motion-reduce:hidden" aria-hidden="true">
           {reducedMotion ? <><Pause className="h-3 w-3" /> Visualization paused</> : <><MousePointer2 className="h-3 w-3" /><span className="hidden sm:inline">Move to explore · </span>Drag to rotate · Tap to ripple</>}
         </div>
 
         {error ? (
-          <div role="alert" className="relative mt-3 flex max-w-lg items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-left text-xs text-amber-100">
+          <div role="alert" className="relative mt-3 flex max-w-lg items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-start text-xs text-amber-100">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
             <span>{error}</span>
           </div>
@@ -603,7 +603,7 @@ export function WebCallConsole({
           ) : null}
 
           {(phase === 'starting' || phase === 'connecting') ? (
-            <span role="status" aria-live="polite" className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-400/15 bg-blue-400/8 px-4 text-sm text-blue-100">
+            <span role="status" aria-live="polite" className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-400/15 bg-blue-400/8 px-4 text-sm text-primary">
               <Loader2 className="h-4 w-4 animate-spin" /> {phase === 'starting' ? 'Preparing…' : 'Connecting…'}
             </span>
           ) : null}
@@ -615,7 +615,7 @@ export function WebCallConsole({
                 onClick={toggleMute}
                 disabled={phase !== 'live'}
                 aria-pressed={muted}
-                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-45 ${muted ? 'border-amber-400/30 bg-amber-400/10 text-amber-200' : 'border-white/12 bg-white/4 text-slate-200 hover:bg-white/8'}`}
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-45 ${muted ? 'border-amber-400/30 bg-amber-400/10 text-amber-200' : 'border-border bg-white/4 text-foreground hover:bg-muted'}`}
               >
                 {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {muted ? 'Unmute' : 'Mute'}
               </button>
@@ -623,7 +623,7 @@ export function WebCallConsole({
                 type="button"
                 onClick={() => setDiagnosticsOpen((open) => !open)}
                 aria-expanded={diagnosticsOpen}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/12 bg-white/4 px-3 text-sm font-medium text-slate-200 transition hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-white/4 px-3 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
               >
                 <Settings2 className="h-4 w-4" /> Diagnostics
               </button>
@@ -639,15 +639,15 @@ export function WebCallConsole({
         </div>
 
         {confirmEnd ? (
-          <div role="alertdialog" aria-label="End test session" className="relative mt-3 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-[#141225] px-3 py-2 text-xs shadow-xl">
-            <span className="mr-1 text-slate-300">End this browser test now?</span>
-            <button type="button" onClick={() => setConfirmEnd(false)} className="rounded-lg px-2.5 py-1.5 font-semibold text-slate-300 hover:bg-white/8">Keep talking</button>
+          <div role="alertdialog" aria-label="End test session" className="relative mt-3 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-card px-3 py-2 text-xs shadow-xl">
+            <span className="mr-1 text-muted-foreground">End this browser test now?</span>
+            <button type="button" onClick={() => setConfirmEnd(false)} className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground hover:bg-muted">Keep talking</button>
             <button type="button" onClick={hangUp} className="rounded-lg bg-rose-600 px-2.5 py-1.5 font-semibold text-white hover:bg-rose-500">End now</button>
           </div>
         ) : null}
 
         {diagnosticsOpen ? (
-          <dl className="relative mt-3 grid w-full max-w-xl grid-cols-2 gap-2 rounded-xl border border-white/8 bg-black/20 p-3 text-left text-[11px] sm:grid-cols-4">
+          <dl className="relative mt-3 grid w-full max-w-xl grid-cols-2 gap-2 rounded-xl border border-border bg-black/20 p-3 text-start text-[11px] sm:grid-cols-4">
             <Diagnostic label="Room" value={phase === 'live' ? 'connected' : phase} healthy={phase === 'live'} />
             <Diagnostic label="Voice agent" value={agentConnected ? 'connected' : 'not connected'} healthy={agentConnected} />
             <Diagnostic label="Agent audio" value={audioReady ? 'subscribed' : 'not received'} healthy={audioReady} />
@@ -657,13 +657,13 @@ export function WebCallConsole({
       </div>
 
       {showConversation ? (
-        <section aria-labelledby="live-transcript-heading" className="flex min-h-[220px] flex-1 flex-col bg-[#0b1223]">
-          <div className="flex shrink-0 items-center justify-between border-b border-white/8 px-4 py-3">
+        <section aria-labelledby="live-transcript-heading" className="flex min-h-[220px] flex-1 flex-col bg-card">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Radio className="h-4 w-4 text-blue-400" />
-              <h2 id="live-transcript-heading" className="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-300">Live conversation</h2>
+              <h2 id="live-transcript-heading" className="text-[11px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Live conversation</h2>
             </div>
-            <span className="text-[11px] text-slate-500">Real session transcript · {transcript.length} turn{transcript.length === 1 ? '' : 's'}</span>
+            <span className="text-[11px] text-muted-foreground">Real session transcript · {transcript.length} turn{transcript.length === 1 ? '' : 's'}</span>
           </div>
           <div
             ref={transcriptScrollRef}
@@ -672,7 +672,7 @@ export function WebCallConsole({
             aria-live="polite"
           >
             {transcript.length === 0 ? (
-              <div className="flex h-full min-h-32 flex-col items-center justify-center text-center text-slate-500">
+              <div className="flex h-full min-h-32 flex-col items-center justify-center text-center text-muted-foreground">
                 <Radio className="h-5 w-5" />
                 <p className="mt-2 text-xs">Conversation text will appear here only after you or the agent speaks.</p>
                 <p className="mt-1 text-[11px]">If audio works but text never appears, transcription may be unavailable for this session.</p>
@@ -683,7 +683,7 @@ export function WebCallConsole({
                 <div className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
                   line.role === 'tester'
                     ? 'rounded-tr-md bg-blue-600 text-white'
-                    : 'rounded-tl-md border border-white/9 bg-white/5 text-slate-100'
+                    : 'rounded-tl-md border border-border bg-muted/50 text-foreground'
                 } ${line.final ? '' : 'opacity-65'}`}>
                   <div className="mb-1 flex items-center justify-between gap-4 text-[10px] font-semibold uppercase tracking-wider opacity-70">
                     <span>{line.role === 'tester' ? 'You' : agentName}</span>
@@ -691,15 +691,15 @@ export function WebCallConsole({
                   </div>
                   <p>{line.text}</p>
                 </div>
-                {line.role === 'tester' ? <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700"><UserRound className="h-3.5 w-3.5 text-slate-300" /></span> : null}
+                {line.role === 'tester' ? <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700"><UserRound className="h-3.5 w-3.5 text-muted-foreground" /></span> : null}
               </div>
             ))}
             <div ref={transcriptEndRef} />
           </div>
         </section>
       ) : (
-        <div className="flex min-h-[160px] flex-1 items-center justify-center border-t border-white/5 bg-[#0b1223] p-6 text-center">
-          <div className="max-w-md text-xs leading-relaxed text-slate-500">
+        <div className="flex min-h-[160px] flex-1 items-center justify-center border-t border-border bg-card p-6 text-center">
+          <div className="max-w-md text-xs leading-relaxed text-muted-foreground">
             <Info className="mx-auto mb-2 h-4 w-4" />
             This is an isolated browser test: no phone number is dialled and production lead data is not changed.
           </div>
@@ -716,8 +716,8 @@ function cnStatusDot(color: string, live: boolean) {
 function Diagnostic({ label, value, healthy }: { label: string; value: string; healthy: boolean }) {
   return (
     <div className="rounded-lg bg-white/4 px-2.5 py-2">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className={`mt-0.5 flex items-center gap-1 font-medium ${healthy ? 'text-emerald-300' : 'text-slate-300'}`}>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 flex items-center gap-1 font-medium ${healthy ? 'text-emerald-300' : 'text-muted-foreground'}`}>
         {healthy ? <CheckCircle2 className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{value}
       </dd>
     </div>

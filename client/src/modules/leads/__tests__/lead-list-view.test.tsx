@@ -46,7 +46,7 @@ vi.mock('@/lib/i18n/language-context', async () => {
     return vars ? text.replace(/\{(\w+)\}/g, (_, name) => (vars[name] != null ? String(vars[name]) : `{${name}}`)) : text;
   };
   const value = { locale: 'en', language: 'en', dir: 'ltr', isRTL: false, t };
-  return { useLanguage: () => value, LanguageProvider: ({ children }: { children: ReactNode }) => children };
+  return { useLanguage: () => value, useOptionalLanguage: () => value, LanguageProvider: ({ children }: { children: ReactNode }) => children };
 });
 
 // Callable store hook (selector or whole state) so useAuthStore(selector) and
@@ -218,6 +218,21 @@ const findRow = async (name: string) => {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('LeadListView', () => {
+  it('offers Chrome extension provenance, hides Widget, and sends the source filter to the API', async () => {
+    let requestedSource: string | null = null;
+    server.use(http.get(`${BASE}/crm/leads`, ({ request }) => {
+      requestedSource = new URL(request.url).searchParams.get('source');
+      return HttpResponse.json(okPage([makeLeadDTO({ name: 'PURE GYM', source: 'extension' })]));
+    }));
+    const { user } = renderLeadList();
+    await screen.findByText('PURE GYM');
+    await user.click(screen.getByRole('combobox', { name: 'Source' }));
+    expect(screen.queryByRole('option', { name: /widget/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: 'Chrome extension' }));
+    await waitFor(() => expect(requestedSource).toBe('extension'));
+    const row = await findRow('PURE GYM');
+    expect(within(row).getByText('Chrome extension')).toBeInTheDocument();
+  });
   it('renders the leads with their columns and status badges', async () => {
     renderLeadList();
 

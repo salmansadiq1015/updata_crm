@@ -1,12 +1,16 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { useOptionalLanguage } from '@/lib/i18n/language-context';
+import { callingExperienceTranslations } from '@/lib/i18n/calling-experience-translations';
+
+const defaultLabels: Record<string, string> = callingExperienceTranslations.en;
 
 const STYLES: Record<string, string> = {
-  active: 'bg-emerald-500/15 text-emerald-300',
+  active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   archived: 'bg-muted text-muted-foreground',
-  waiting: 'bg-amber-500/15 text-amber-300',
-  calling: 'bg-emerald-500/15 text-emerald-300',
+  waiting: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  calling: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   draft: 'bg-muted text-muted-foreground',
   scheduled: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
   queued: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
@@ -28,14 +32,14 @@ const STYLES: Record<string, string> = {
   needs_review: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
 };
 
-// A parked call is not a failure: nobody knows yet whether it reached the lead.
-const LABELS: Record<string, string> = { needs_reconcile: 'outcome unknown', needs_review: 'outcome unknown' };
+// Unknown future server states remain readable without inventing a label.
 
 export function StatusPill({ status }: { status: string }) {
+  const language = useOptionalLanguage();
   if (!status) return null;
   return (
     <span className={cn('inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold leading-5 capitalize', STYLES[status] || 'bg-muted text-muted-foreground')}>
-      {LABELS[status] || status.replace(/_/g, ' ')}
+      {STYLES[status] ? (language?.t(`callingExperience.status.${status}`) || defaultLabels[`callingExperience.status.${status}`]) : status.replace(/_/g, ' ')}
     </span>
   );
 }

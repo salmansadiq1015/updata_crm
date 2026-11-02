@@ -119,7 +119,7 @@ const LEAD_STATUSES: readonly LeadStatus[] = [
   'unqualified',
   'converted',
 ];
-const LEAD_SOURCES: readonly LeadSource[] = ['google_places', 'manual', 'widget', 'import'];
+const LEAD_SOURCES: readonly LeadSource[] = ['extension', 'google_places', 'manual', 'widget', 'import'];
 
 const readStatus = (value: unknown): LeadStatus => {
   const str = readString(value).toLowerCase();

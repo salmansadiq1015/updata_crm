@@ -10,6 +10,9 @@ const aiCallingSettingsSchema = new mongoose.Schema({
   voicePaused: { type: Boolean, default: false },
   pausedReason: { type: String, trim: true, maxlength: 300, default: '' },
   pausedAt: { type: Date, default: null },
+  voiceProviders: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  providerCredentials: { type: mongoose.Schema.Types.Mixed, select: false, default: undefined },
+  providerHealth: { type: mongoose.Schema.Types.Mixed, default: undefined },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 

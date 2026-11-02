@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import Lead from './lead.model.js';
+import { businessIdentityKeys, googleIdentityKeys } from './leadIdentity.js';
 import LeadMerge from './leadMerge.model.js';
 import LeadDuplicateCandidate, { pairKeyOf } from './leadDuplicateCandidate.model.js';
 import {
@@ -103,6 +104,16 @@ export function buildSurvivorPatch(survivor, loser, selections = {}) {
     patch.normalizedPhone = source ? (normalizePhone(source).e164 ?? null) : null;
   }
   if ('website' in patch) patch.websiteDomain = patch.website ? normalizeWebsiteDomain(patch.website) : null;
+  const metadata = { ...(survivor.sourceMetadata ?? {}) };
+  let metadataChanged = false;
+  for (const [field, value] of Object.entries(loser.sourceMetadata ?? {})) {
+    if (isBlank(metadata[field]) && !isBlank(value)) { metadata[field] = value; metadataChanged = true; }
+  }
+  const aliases = [...new Set([...googleIdentityKeys(survivor), ...googleIdentityKeys(loser)])].sort();
+  if (aliases.length && !same(metadata.identityAliases, aliases)) { metadata.identityAliases = aliases; metadataChanged = true; }
+  if (metadataChanged) patch.sourceMetadata = metadata;
+  const identities = businessIdentityKeys({ ...survivor, ...patch });
+  if (!same(survivor.businessIdentityKeys ?? [], identities)) patch.businessIdentityKeys = identities;
   // Contact stamps: the most recent contact of either lead.
   if (loser.lastContactedAt && (!survivor.lastContactedAt || new Date(loser.lastContactedAt) > new Date(survivor.lastContactedAt))) {
     patch.lastContactedAt = loser.lastContactedAt;
@@ -390,6 +401,9 @@ class LeadMergeService {
     const S = journal.survivorId;
     const L = journal.loserId;
     const patch = journal.survivorPatch || {};
+    // Transfer identity claims under the existing merge locks. The journal's
+    // loser snapshot retains the original keys for an explicit undo.
+    await Lead.updateOne({ _id: L }, { $set: { businessIdentityKeys: [] } });
     await Lead.updateOne(
       { _id: S },
       {
@@ -495,7 +509,7 @@ class LeadMergeService {
         if (step === 'survivor') await this._undoSurvivor(current);
         else if (step === 'children') Object.assign(result, await this._undoChildren(current));
         else if (step === 'loser') {
-          await Lead.updateOne({ _id: L }, { $set: { isDeleted: false, deletedAt: null, mergedInto: null, mergedAt: null } }, { runValidators: false });
+          await Lead.updateOne({ _id: L }, { $set: { isDeleted: false, deletedAt: null, mergedInto: null, mergedAt: null, businessIdentityKeys: current.loserBefore?.businessIdentityKeys ?? [] } }, { runValidators: false });
         } else if (step === 'candidates') {
           await LeadDuplicateCandidate.updateOne({ pairKey: pairKeyOf(S, L), mergeId: journal._id }, { $set: { status: 'open', mergeId: null } });
         }

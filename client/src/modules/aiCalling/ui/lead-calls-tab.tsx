@@ -34,15 +34,15 @@ export function LeadCallsTab({ leadId, view = 'calls' }: { leadId: string; view?
   return (
     <div className="min-w-0 space-y-3">
       {view === 'consent' && <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex gap-2">
-            <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
-            <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 basis-64 gap-2">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold">AI calling consent</p>
               <p className="text-xs text-muted-foreground">A public phone number is not permission to call. Consent is shared company-wide and re-checked immediately before every dial.</p>
             </div>
           </div>
-          <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize">
+          <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-4 capitalize">
             {consent.isError ? 'unknown' : CONSENT_LABEL[consentStatus] ?? consentStatus}
           </span>
         </div>

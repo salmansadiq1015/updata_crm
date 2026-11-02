@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { businessIdentityKeys, BUSINESS_IDENTITY_INDEX } from './leadIdentity.js';
 import { canonicalizeLeadAddress } from './leadGeography.js';
 import { QUALIFICATION_ANSWER_SOURCES, TRANSCRIPT_QUOTE_MAX } from './leadQualification.constants.js';
 
@@ -6,8 +7,8 @@ import { QUALIFICATION_ANSWER_SOURCES, TRANSCRIPT_QUOTE_MAX } from './leadQualif
  * Lead — a prospective customer (own `leads` collection), numbered L-##### via
  * the Counter service, with source/geo provenance and a one-click
  * Convert-to-Customer path (§4.3 / §5 of LEAD_GENERATION_DESIGN.md).
- * Single-tenant (createdBy), soft-deletable. Imported leads are idempotent via
- * a unique partial index on sourceMetadata.googlePlaceId.
+ * Single-tenant (createdBy), soft-deletable. Imported businesses are idempotent
+ * across sources via a partial unique index on live business identities.
  */
 
 export const LEAD_TYPE = Object.freeze({
@@ -24,6 +25,7 @@ export const LEAD_STATUS = Object.freeze({
 });
 
 export const LEAD_SOURCE = Object.freeze({
+  EXTENSION: 'extension',
   GOOGLE_PLACES: 'google_places',
   MANUAL: 'manual',
   WIDGET: 'widget',
@@ -248,6 +250,8 @@ const leadSchema = new mongoose.Schema(
       default: LEAD_SOURCE.MANUAL,
     },
     sourceMetadata: {
+      identityAliases: { type: [String], default: [] },
+      importMethod: { type: String, enum: ['extension', null], default: null },
       googlePlaceId: { type: String, trim: true, maxlength: 255, default: null },
       discoverySessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoverySession', default: null },
       discoveryResultId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryResult', default: null },
@@ -307,6 +311,7 @@ const leadSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    businessIdentityKeys: { type: [String], default: [] },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     // --- Lead quality (leadScoring.engine.js / leadMerge.service.js) ---
@@ -372,12 +377,10 @@ leadSchema.index({
   'address.geography.cityId': 1,
   'address.geography.areaId': 1,
 }, { name: 'lead_canonical_geography_filters' });
-// Import idempotency: a google-sourced place may back at most one lead.
-leadSchema.index(
-  { 'sourceMetadata.googlePlaceId': 1 },
-  { unique: true, partialFilterExpression: { source: 'google_places' } },
-);
 leadSchema.index({ normalizedPhone: 1 }); // dedup ladder
+leadSchema.index({ 'sourceMetadata.googlePlaceId': 1 }, { name: 'lead_google_place_lookup' });
+// One live business per canonical identity, regardless of its import source.
+leadSchema.index({ businessIdentityKeys: 1 }, BUSINESS_IDENTITY_INDEX);
 leadSchema.index({ websiteDomain: 1 }); // dedup ladder
 leadSchema.index({ name: 1, 'address.postalCode': 1 }); // dedup ladder
 leadSchema.index({ location: '2dsphere' }); // geo dedup / map
@@ -396,6 +399,7 @@ leadSchema.index(
 leadSchema.pre('validate', function canonicalizeAddress() {
   const address = this.address?.toObject?.({ depopulate: true }) ?? this.address ?? {};
   this.address = canonicalizeLeadAddress(address, { source: this.source || 'model' });
+  this.businessIdentityKeys = businessIdentityKeys(this.toObject({ depopulate: true }));
 });
 
 // --- Soft-delete pre-hook ---

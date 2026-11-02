@@ -7,6 +7,7 @@
 import '@/lib/dom/install-dom-guards';
 
 import { useEffect, useRef } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider } from './query-provider';
@@ -123,7 +124,7 @@ export function AppProviders({ children, initialLocale }) {
                       nuqs wraps its own `useSearchParams` (NavigationSpy) in Suspense,
                       so this does not opt pages into dynamic rendering, and the
                       per-route NuqsAdapters remain harmless when nested under this. */}
-                  <NuqsAdapter>{children}</NuqsAdapter>
+                  <MotionConfig reducedMotion="user"><NuqsAdapter>{children}</NuqsAdapter></MotionConfig>
                 </TooltipProvider>
               </ToastProvider>
             </SocketProvider>

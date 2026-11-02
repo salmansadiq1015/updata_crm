@@ -10,11 +10,11 @@
  */
 export function PageHeader({ title, description, icon: Icon, count, children }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-border">
+    <div data-slot="page-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
-          {Icon && <Icon className="w-5 h-5 text-muted-foreground shrink-0" />}
-          <h1 className="text-[22px] sm:text-2xl font-bold tracking-tight text-foreground truncate">
+          {Icon && <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/10 bg-primary/5"><Icon className="size-5 text-primary" aria-hidden="true" /></span>}
+          <h1 className="text-[22px] sm:text-2xl font-semibold tracking-tight text-foreground break-words">
             {title}
           </h1>
           {count !== undefined && (
@@ -28,7 +28,7 @@ export function PageHeader({ title, description, icon: Icon, count, children }) 
         )}
       </div>
       {children && (
-        <div className="flex items-center gap-2 shrink-0">{children}</div>
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{children}</div>
       )}
     </div>
   );

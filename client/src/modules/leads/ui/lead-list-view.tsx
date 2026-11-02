@@ -535,13 +535,13 @@ export function LeadListView() {
             <ExtensionImportBanner progress={extImportProgress} onDismiss={dismissExtImport} />
           )}
           {/* Page header */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div data-slot="page-header" className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="shrink-0 rounded-xl bg-primary/10 p-2.5 ring-1 ring-primary/20">
                 <Target className="h-5 w-5 text-primary" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-[18px] font-semibold leading-tight text-foreground">
+                <h1 className="text-2xl font-semibold tracking-tight leading-tight text-foreground">
                   {t('leads.title', 'Leads')}
                 </h1>
                 <p className="mt-0.5 text-[13px] text-muted-foreground">
@@ -586,7 +586,7 @@ export function LeadListView() {
                 onPolicyOpenChange={setPolicyOpen}
               />
 
-              <Button variant="outline" className="h-9 gap-2" onClick={() => setMapOpen(true)}>
+              <Button aria-label={t('leads.map.open', 'View on map')} variant="outline" className="h-9 gap-2" onClick={() => setMapOpen(true)}>
                 <MapPinned className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{t('leads.map.open', 'View on map')}</span>
               </Button>
@@ -605,7 +605,7 @@ export function LeadListView() {
               {/* Lead quality: duplicate review (lead:read; merging needs lead:merge) and scoring config (admin). */}
               {canExport && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link href="/leads/duplicates">
+                  <Link aria-label={t('leads.dup.open')} href="/leads/duplicates">
                     <Copy className="h-4 w-4" aria-hidden="true" />
                     <span className="hidden sm:inline">{t('leads.dup.open', 'Duplicates')}</span>
                   </Link>
@@ -613,7 +613,7 @@ export function LeadListView() {
               )}
               {(isAdmin || hasPermission('lead:scoring-admin')) && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link href="/leads/scoring">
+                  <Link aria-label={t('leads.scoring.open')} href="/leads/scoring">
                     <Gauge className="h-4 w-4" aria-hidden="true" />
                     <span className="hidden sm:inline">{t('leads.scoring.open', 'Scoring')}</span>
                   </Link>
@@ -622,9 +622,9 @@ export function LeadListView() {
 
               {canExport && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link href="/leads/outreach">
+                  <Link aria-label={t('experience.outreach')} href="/leads/outreach">
                     <Megaphone className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Outreach</span>
+                    <span className="hidden sm:inline">{t('experience.outreach')}</span>
                   </Link>
                 </Button>
               )}

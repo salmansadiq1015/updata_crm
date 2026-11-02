@@ -42,6 +42,20 @@ const renderIt = () => render(<QueryClientProvider client={new QueryClient({ def
 beforeEach(() => { vi.clearAllMocks(); mocks.callAnalytics.mockResolvedValue(analytics); });
 
 describe('agent call analytics', () => {
+  it('shows response usage and cache estimates from recorded evidence', async () => {
+    mocks.callAnalytics.mockResolvedValue({ ...analytics, calls: [{ ...call, costDiagnostics: {
+      cacheHitPercent: 52.6, cachedInputTokens: 4000, estimatedCacheSavings: 0.05, estimatedCostPerMinute: 0.12,
+      responseCount: 1, averageOutputTokens: 500, droppedResponses: 0, compactions: 0, configuration: null,
+      responses: [{ responseId: 'response-real-id', cancelled: true, tokens: call.cost.tokens, inputCachedTokens: 4000, estimatedCost: 0.03, ttftMs: 210, cacheObservation: 'cache_hit' }],
+    } }] });
+    renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: /Bilal Traders/ }));
+    const panel = screen.getByRole('region', { name: 'Cost diagnostics' });
+    expect(within(panel).getByText('52.6%')).toBeTruthy();
+    expect(within(panel).getByText('1 (cancelled)')).toBeTruthy();
+    expect(within(panel).getByText('210')).toBeTruthy();
+    expect(within(panel).getByText('$0.0300')).toBeTruthy();
+  });
   it('shows spend, per-call/per-lead averages, tokens and the excluded test spend', async () => {
     renderIt();
     expect(await screen.findByText('Estimated call total')).toBeTruthy();
@@ -51,7 +65,7 @@ describe('agent call analytics', () => {
     expect(screen.getByText(/3 test call\(s\) \(\$0\.5000\) are excluded/)).toBeTruthy();
     expect(screen.getByText(/Telephony minutes are not included/)).toBeTruthy();
     expect(mocks.callAnalytics).toHaveBeenCalledWith('a1', { from: expect.any(String), to: expect.any(String) });
-    expect(screen.getByRole('region', { name: 'Billing comparison' })).toHaveTextContent('not reconciled with OpenAI billing');
+    expect(screen.getByRole('region', { name: 'Billing comparison' })).toHaveTextContent(/not reconciled with (OpenAI|provider) billing/);
     // Cost-per-minute figure and total minutes are surfaced in the hero.
     expect(screen.getAllByText('Cost per minute').length).toBeGreaterThan(0);
     expect(screen.getByText('Total minutes')).toBeTruthy();

@@ -222,6 +222,7 @@ class LeadController {
           mimetype: req.file.mimetype,
           originalname: req.file.originalname,
           mode,
+          source: req.body?.source === 'extension' ? 'extension' : 'import',
         },
         req.user._id,
         meta,

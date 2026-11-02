@@ -9,7 +9,7 @@ export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'co
 
 export type LeadType = 'business' | 'private';
 
-export type LeadSource = 'google_places' | 'manual' | 'widget' | 'import';
+export type LeadSource = 'extension' | 'google_places' | 'manual' | 'widget' | 'import';
 
 export type LeadAddress = {
   street: string | null;

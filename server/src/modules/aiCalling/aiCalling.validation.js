@@ -181,6 +181,26 @@ export const voiceSettings = { body: Joi.object({
   reason: Joi.string().trim().max(300).allow('').default(''),
 }) };
 
+export const providerSettings = { body: Joi.object({
+  primaryModel: Joi.string().valid('gemini-3.8-live'),
+  secondaryModel: Joi.string().pattern(/^gpt-[a-z0-9.-]*realtime[a-z0-9.-]*$/).max(100),
+  experimentalModel: Joi.string().valid('', 'gemini-3.1-flash-live-preview'),
+  geminiVoice: Joi.string().pattern(/^[A-Za-z]{2,40}$/),
+  fallbackEnabled: Joi.boolean(),
+  maxSessionSeconds: Joi.number().integer().min(30).max(3600),
+  maxCallCostUsd: Joi.number().min(0).max(1000),
+  connectionTimeoutMs: Joi.number().integer().min(1000).max(60000),
+  credentials: Joi.object({ gemini: Joi.string().trim().min(10).max(500).allow(null), openai: Joi.string().trim().min(10).max(500).allow(null) }),
+}).min(1) };
+export const providerTest = { params: Joi.object({ provider: Joi.string().valid('gemini', 'openai').required() }) };
+export const providerAttempt = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
+  sessionId: Joi.string().max(200),
+  provider: Joi.string().valid('gemini', 'openai').required(), model: Joi.string().max(100).required(),
+  status: Joi.string().valid('established', 'failed', 'runtime_error').required(),
+  reason: Joi.string().pattern(/^[A-Z0-9_]+$/).max(100), at: Joi.date().iso().required(),
+  latencyMs: Joi.number().min(0).max(300000).required(),
+}) };
+
 export const campaignId = { params: Joi.object({ id: objectId.required() }) };
 export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null), sequential: Joi.boolean(), startNow: Joi.boolean() }).custom((value, helpers) => value.startNow && value.scheduledAt ? helpers.message({ custom: 'Choose Start calling now or a future scheduled start' }) : value).default({}) };
 export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link'), agentId: objectId }) };

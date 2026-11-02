@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowRightLeft,
+  Bot,
   Building2,
   CalendarClock,
   Clock,
@@ -48,6 +49,8 @@ import type { DrawerMode } from '@/shared/components/detail-drawer';
 import { RatingStars } from './rating-stars';
 import { EmailHistoryPanel as EmailHistoryPanelImpl } from '@/modules/doctpl/components/email-history-panel';
 import { LeadCallsTab } from '@/modules/aiCalling/ui/lead-calls-tab';
+import { LeadAiCalling } from './lead-ai-calling';
+import { LeadDetailTabs } from './lead-detail-tabs';
 import { LeadMobileCommunications } from './lead-mobile-communications';
 import { LeadConversationHistory } from './lead-conversation-history';
 import { LeadSlaBadge } from './lead-sla-badge';
@@ -698,7 +701,10 @@ function LeadDetailBody({
   onWhatsApp,
   onPatch,
 }: LeadDetailBodyProps) {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const { isAdmin, hasPermission } = usePermissions();
+  const canReadCalling = isAdmin || hasPermission('ai-calling:read');
+  const [activeTab, setActiveTab] = useState('overview');
   const isConverted = lead.status === 'converted';
   const contactLog = useLeadContactLog(lead.id);
   const enrich = useEnrichLead();
@@ -779,6 +785,7 @@ function LeadDetailBody({
   );
   const quickActions: QuickAction[] = [];
   if (callHref) quickActions.push({ key: 'call', label: t('leads.action.call', 'Call'), icon: Phone, href: callHref, external: false });
+  if (canReadCalling) quickActions.push({ key: 'ai-call', label: t('leads.action.aiCall', 'AI call'), icon: Bot, onClick: () => setActiveTab('calls') });
   // Email + WhatsApp open the in-app composer/deep-link dialog rather than a bare
   // link, so they are permission-gated and only shown when the lead can be reached.
   if (canEmail && mailHref) quickActions.push({ key: 'email', label: t('leads.action.email', 'Email'), icon: Mail, onClick: onEmail });
@@ -788,7 +795,7 @@ function LeadDetailBody({
   if (mapsHref) quickActions.push({ key: 'maps', label: t('leads.action.openMaps', 'Open in Google Maps'), icon: Navigation, href: mapsHref, external: true });
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       {/* Status + type */}
       <div className="flex flex-wrap items-center gap-2">
         <LeadStatusBadge status={lead.status} size="md" />
@@ -834,7 +841,7 @@ function LeadDetailBody({
                 </a>
               </Button>
             ) : (
-              <Button key={action.key} variant="outline" size="sm" className="gap-1.5" onClick={action.onClick}>
+              <Button key={action.key} variant="outline" size="sm" className={cn('gap-1.5', action.key === 'ai-call' && 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')} onClick={action.onClick}>
                 <action.icon className="h-3.5 w-3.5" aria-hidden="true" />
                 {action.label}
               </Button>
@@ -843,9 +850,8 @@ function LeadDetailBody({
         </div>
       )}
 
-      <Tabs.Root defaultValue="overview" className="space-y-5">
-        <Tabs.List aria-label={t('leads.drawer.tabs', 'Lead detail sections')} className="sticky top-0 z-10 grid grid-cols-4 gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
-          {[
+      <Tabs.Root value={activeTab} onValueChange={setActiveTab} dir={isRTL ? 'rtl' : 'ltr'} className="min-w-0 space-y-5">
+        <LeadDetailTabs value={activeTab} items={[
             ['overview', t('leads.drawer.tabOverview', 'Overview')],
             ['responses', t('leads.drawer.tabResponses', 'Responses')],
             ['calls', t('leads.drawer.tabCalls', 'AI Calls')],
@@ -855,10 +861,7 @@ function LeadDetailBody({
             ['notes', t('leads.drawer.tabNotes', 'Notes')],
             ['consent', t('leads.drawer.tabConsent', 'Consent')],
             ['details', t('leads.drawer.tabDetails', 'Details')],
-          ].map(([value, label]) => (
-            <Tabs.Trigger key={value} value={value} className="min-w-0 rounded-lg px-1 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{label}</Tabs.Trigger>
-          ))}
-        </Tabs.List>
+          ]} />
         <Tabs.Content value="history" className="space-y-5 outline-none">
           <Section title={t('leads.history.title', 'Conversation history')}>
             <LeadConversationHistory leadId={lead.id} />
@@ -1347,6 +1350,7 @@ function LeadDetailBody({
           </Section>
         </Tabs.Content>
         <Tabs.Content value="calls" className="space-y-5 outline-none">
+        <LeadAiCalling key={lead.id} leadId={lead.id} />
       {/* AI voice calls: campaigns, dispositions, collected answers, status history */}
       <Section title={t('leads.drawer.sectionAiCalls', 'AI Calls')}>
         <LeadCallsTab leadId={lead.id} />

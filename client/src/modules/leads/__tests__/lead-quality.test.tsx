@@ -185,6 +185,28 @@ describe('LeadScoreBadge', () => {
 });
 
 describe('LeadScorePanel', () => {
+  it('shows readable evidence for every business field and handles unfamiliar sources without exposing identifiers', async () => {
+    server.use(http.get(`${L}/lead-1/score`, () => HttpResponse.json(ok({
+      ...EXPLANATION,
+      factors: [
+        { key: 'review_volume', label: 'Review volume', group: 'business', points: 3, maxPoints: 5, evidence: { field: 'providerMeta.reviewCount', value: 20, source: 'extension' } },
+        { key: 'business_status', label: 'Business operational', group: 'business', points: 5, maxPoints: 5, evidence: { field: 'providerMeta.businessStatus', value: 'Open', source: 'provider' } },
+        { key: 'has_phone', label: 'Phone on record', group: 'business', points: 4, maxPoints: 4, evidence: { field: 'phone', value: true, source: 'lead' } },
+        { key: 'target_location', label: 'Target city', group: 'business', points: 1, maxPoints: 2, evidence: { field: 'address.city', value: 'Basel', source: 'legacy.internal_source' } },
+      ],
+    }))));
+    wrapper(<LeadScorePanel leadId="lead-1" canRecalculate={false} />);
+    expect(await screen.findByText('Review volume')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText('present')).toBeInTheDocument();
+    expect(screen.getByText(/Source: Browser extension/)).toBeInTheDocument();
+    expect(screen.getByText(/Source: Lead record/)).toBeInTheDocument();
+    expect(screen.getByText(/Source: Other source/)).toBeInTheDocument();
+    expect(screen.queryByText(/providerMeta\.|address\.city|legacy\.internal_source/)).toBeNull();
+    expect(document.querySelector('code')).toBeNull();
+  });
+
   it('lists every factor with points and evidence, the missing data, and recalculates', async () => {
     let recalcs = 0;
     server.use(
@@ -197,10 +219,14 @@ describe('LeadScorePanel', () => {
     expect(screen.getByText(/^Config v3 · Computed Oct 2[89], 2026$/)).toBeInTheDocument();
     const rating = document.querySelector('[data-factor="provider_rating"]') as HTMLElement;
     expect(within(rating).getByText('7 / 10 pts')).toBeInTheDocument();
-    expect(within(rating).getByText('providerMeta.rating')).toBeInTheDocument();
+    expect(within(rating).getByText('Business rating')).toBeInTheDocument();
+    expect(within(rating).getByText('4.2')).toBeInTheDocument();
+    expect(within(rating).getByText(/Source: Business listing/)).toBeInTheDocument();
+    expect(screen.queryByText(/providerMeta\.|qualification\.fields\./)).toBeNull();
     const interest = document.querySelector('[data-factor="q_interest"]') as HTMLElement;
     expect(within(interest).getByText(/SMS reply · 123456/)).toBeInTheDocument();
     expect(within(interest).getByText('“very interested”')).toBeInTheDocument();
+    expect(within(interest).getByText(/Source: SMS assistant/)).toBeInTheDocument();
     expect(screen.getByText('-3 pts (penalty)')).toBeInTheDocument();
     expect(screen.getByText(/no calls recorded/)).toBeInTheDocument();
     expect(screen.getByText(/The list shows an older value/)).toBeInTheDocument();
@@ -219,6 +245,8 @@ describe('LeadScorePanel', () => {
     wrapper(<LeadScorePanel leadId="lead-1" canRecalculate={false} />);
     expect(await screen.findByRole('alert')).toHaveTextContent(/do-not-contact is on record/);
     expect(screen.getByText(/Do-not-call entry · 999999/)).toBeInTheDocument();
+    expect(screen.getByText(/Source: Do-not-call list/)).toBeInTheDocument();
+    expect(screen.queryByText(/call_suppression|doNotContact/)).toBeNull();
     expect(screen.queryByRole('button', { name: /Recalculate/ })).toBeNull();
   });
 });

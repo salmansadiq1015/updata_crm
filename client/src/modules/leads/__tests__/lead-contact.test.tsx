@@ -44,7 +44,7 @@ vi.mock('@/lib/i18n/language-context', async () => {
     return vars ? text.replace(/\{(\w+)\}/g, (_, name) => (vars[name] != null ? String(vars[name]) : `{${name}}`)) : text;
   };
   const value = { locale: 'en', language: 'en', dir: 'ltr', isRTL: false, t };
-  return { useLanguage: () => value, LanguageProvider: ({ children }: { children: ReactNode }) => children };
+  return { useLanguage: () => value, useOptionalLanguage: () => value, LanguageProvider: ({ children }: { children: ReactNode }) => children };
 });
 
 // Mutable permission set so each test can vary what the user may do.
@@ -183,6 +183,15 @@ const openDrawer = async (leadId: string, name: string) => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('lead detail drawer — contact actions', () => {
+  it('opens the AI Calls tab from the AI call shortcut', async () => {
+    auth.permissions.push('ai-calling:read');
+    server.use(http.get(`${BASE}/ai-calling/agents`, () => HttpResponse.json({ ...ok({ agents: [], summary: {} }), pagination: { page: 1, pages: 0 } })));
+    const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: 'AI call' }));
+    expect(within(drawer).getByRole('tab', { name: 'AI Calls' })).toHaveAttribute('aria-selected', 'true');
+    expect(await within(drawer).findByRole('link', { name: 'Manage calling agents' })).toBeVisible();
+  });
+
   it('shows focused sections and supports keyboard navigation between tabs', async () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
     const user = userEvent.setup();

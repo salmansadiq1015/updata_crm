@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
+import { Direction } from 'radix-ui';
 import { translations } from './translations';
 import { normalizeGermanOrthography } from './german-orthography';
 import { localizeFallback } from './locale-completion';
@@ -174,7 +175,7 @@ export function LanguageProvider({ children, initialLocale }) {
 
   return (
     <LanguageContext.Provider value={value}>
-      {children}
+      <Direction.Provider dir={dir}>{children}</Direction.Provider>
     </LanguageContext.Provider>
   );
 }
@@ -183,4 +184,10 @@ export function useLanguage() {
   const ctx = useContext(LanguageContext);
   if (!ctx) throw new Error('useLanguage must be used within LanguageProvider');
   return ctx;
+}
+
+// Bootstrap UI can render before providers mount (and in isolated previews).
+// It may show the brand alone there; application screens still use useLanguage.
+export function useOptionalLanguage() {
+  return useContext(LanguageContext);
 }

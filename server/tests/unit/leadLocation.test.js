@@ -94,6 +94,35 @@ describe('parseLocationString (selected search location → city/country)', () =
 });
 
 describe('resolveLeadAddress — selected-search-location fallback', () => {
+  it('resolves a missing extension area even when city/country are already valid', async () => {
+    mockReverse.mockResolvedValue(lahoreRichReverse);
+    const address = await resolveLeadAddress({ city: 'Lahore', country: 'PK', latitude: 31.47, longitude: 74.28, resolveArea: true });
+    expect(address).toMatchObject({ city: 'Lahore', country: 'PK', area: 'Johar Town' });
+    expect(address.geography.areaId).toMatch(/^area:/);
+    expect(mockReverse).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers an explicit area in the full address without geocoding or substituting the city', async () => {
+    const address = await resolveLeadAddress({ city: 'Mohammedia', country: 'MA', formatted: '12 Boulevard, Park Plaza, Mohammedia, Morocco', resolveArea: true });
+    expect(address.area).toBe('Park Plaza');
+    expect(mockReverse).not.toHaveBeenCalled();
+    const noArea = await resolveLeadAddress({ city: 'Mohammedia', country: 'MA', formatted: '12 Boulevard, Mohammedia, Morocco', resolveArea: true });
+    expect(noArea.area).toBeNull();
+  });
+
+  it('does not geocode null coordinates or erase a valid area when the provider is unavailable', async () => {
+    await resolveLeadAddress({ city: 'Mohammedia', country: 'MA', latitude: null, longitude: null, resolveArea: true });
+    expect(mockReverse).not.toHaveBeenCalled();
+    mockReverse.mockRejectedValue(new Error('provider unavailable'));
+    const address = await resolveLeadAddress({ area: 'Park Plaza', city: null, country: 'MA', latitude: 33.68, longitude: -7.38, fallbackCity: 'Mohammedia', resolveArea: true });
+    expect(address).toMatchObject({ area: 'Park Plaza', city: 'Mohammedia', country: 'MA' });
+  });
+
+  it('does not attach a reverse-geocoded area from a different city', async () => {
+    mockReverse.mockResolvedValue(lahoreRichReverse);
+    const address = await resolveLeadAddress({ city: 'Mohammedia', country: 'MA', latitude: 33.68, longitude: -7.38, resolveArea: true });
+    expect(address).toMatchObject({ city: 'Mohammedia', country: 'MA', area: null });
+  });
   it('fills a missing CITY from the search location, keeping the provider country', async () => {
     const addr = await resolveLeadAddress({ city: null, country: 'FR', fallbackLocation: 'Paris, France' });
     expect(addr).toMatchObject({ city: 'Paris', country: 'FR' });
@@ -199,10 +228,12 @@ describe('resolveLeadAddress', () => {
     expect(pkAddr.canton).toBeNull();
   });
 
-  it('caches by rounded coordinates (one geocode for a cluster of nearby leads)', async () => {
+  it('caches repeat pins without assigning one neighbourhood to nearby businesses', async () => {
     mockReverse.mockResolvedValue(lahoreReverse);
     await resolveLeadAddress({ city: '54000', latitude: 31.5204, longitude: 74.3587 });
-    await resolveLeadAddress({ city: '54000', latitude: 31.5211, longitude: 74.3590 }); // ~100m away
+    await resolveLeadAddress({ city: '54000', latitude: 31.5204, longitude: 74.3587 });
     expect(mockReverse).toHaveBeenCalledTimes(1);
+    await resolveLeadAddress({ city: '54000', latitude: 31.5211, longitude: 74.3590 });
+    expect(mockReverse).toHaveBeenCalledTimes(2);
   });
 });

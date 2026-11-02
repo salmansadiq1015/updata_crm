@@ -8,6 +8,57 @@ import type {
 
 export const MAX_BUSINESS_TYPE_ATTEMPTS = 3;
 
+/** Each type gets the configured maximum; preserve old shared-limit checkpoints. */
+export function allocateTaskBudget(campaign: DiscoveryCampaign, task: BusinessTypeTask): number {
+  if (campaign.perTypeMaxResults !== undefined) {
+    task.newResultLimit = campaign.perTypeMaxResults;
+    return task.newResultLimit;
+  }
+  if (task.newResultLimit !== undefined) return task.newResultLimit;
+  const runnable = campaign.tasks.filter((item) => item.status === 'pending' || item.status === 'running');
+  const targets = new Map(runnable.map((item) => [item.id, item.newCount]));
+  const available = Math.max(0, Math.floor(campaign.globalMaxResults - campaign.uniqueCount));
+  // Give each next slot to the least represented runnable type, including
+  // partial retries and types receiving spare slots after a sparse result set.
+  for (let slot = 0; slot < available && runnable.length; slot += 1) {
+    const least = runnable.reduce((a, b) => targets.get(a.id)! <= targets.get(b.id)! ? a : b);
+    targets.set(least.id, targets.get(least.id)! + 1);
+  }
+  task.newResultLimit = targets.get(task.id) ?? task.newCount;
+  return task.newResultLimit;
+}
+
+export function hasTaskCapacity(campaign: DiscoveryCampaign, uniqueCount = campaign.uniqueCount): boolean {
+  if (uniqueCount >= campaign.globalMaxResults) return false;
+  const task = campaign.tasks[campaign.queueIndex];
+  return !task || task.newResultLimit === undefined || task.newCount < task.newResultLimit;
+}
+
+export function reopenCappedTasks(campaign: DiscoveryCampaign): boolean {
+  if (campaign.perTypeMaxResults !== undefined) return false;
+  if (campaign.uniqueCount >= campaign.globalMaxResults) return false;
+  const capped = campaign.tasks.filter((task) => ['completed', 'completed-with-errors'].includes(task.status)
+    && task.newResultLimit !== undefined && task.newResultLimit > 0 && task.newCount >= task.newResultLimit);
+  if (!capped.length) return false;
+  for (const task of capped) {
+    task.status = 'pending';
+    task.completedAt = null;
+    delete task.newResultLimit;
+  }
+  campaign.queueIndex = capped[0].order;
+  return true;
+}
+
+export function campaignRetryError(campaign: DiscoveryCampaign, businessType?: string): string | null {
+  const task = campaign.tasks.find((item) => item.businessType.toLocaleLowerCase() === businessType?.trim().toLocaleLowerCase());
+  if (task && campaign.perTypeMaxResults !== undefined && task.newCount >= campaign.perTypeMaxResults) {
+    return `${task.businessType} already has its ${campaign.perTypeMaxResults.toLocaleString()} unique-business limit. Start a new campaign to search for more.`;
+  }
+  return campaign.uniqueCount >= campaign.globalMaxResults
+    ? `This campaign already has its ${campaign.globalMaxResults.toLocaleString()}-business total. Start a new campaign to apply the maximum to each selected business type. Saved results will remain in History.`
+    : null;
+}
+
 export function normalizeBusinessTypes(config: Pick<DiscoveryConfig, 'businessType' | 'businessTypes'>): string[] {
   const source = config.businessTypes?.length ? config.businessTypes : [config.businessType];
   const seen = new Set<string>();
@@ -25,7 +76,7 @@ export function normalizeBusinessTypes(config: Pick<DiscoveryConfig, 'businessTy
 export function createCampaign(
   id: string,
   businessTypes: string[],
-  globalMaxResults: number,
+  perTypeMaxResults: number,
   timestamp = new Date().toISOString(),
 ): DiscoveryCampaign {
   return {
@@ -35,7 +86,8 @@ export function createCampaign(
     queueIndex: 0,
     currentBusinessType: null,
     tasks: businessTypes.map((businessType, order) => createTask(id, businessType, order)),
-    globalMaxResults,
+    perTypeMaxResults,
+    globalMaxResults: perTypeMaxResults * businessTypes.length,
     uniqueCount: 0,
     duplicateCount: 0,
     invalidCount: 0,
@@ -133,6 +185,7 @@ export function nextRunnableTask(campaign: DiscoveryCampaign): BusinessTypeTask 
 }
 
 export function startTask(campaign: DiscoveryCampaign, task: BusinessTypeTask, query: string, timestamp = new Date().toISOString()): void {
+  allocateTaskBudget(campaign, task);
   campaign.status = 'running';
   campaign.queueIndex = task.order;
   campaign.currentBusinessType = task.businessType;
@@ -184,8 +237,11 @@ export function failTask(campaign: DiscoveryCampaign, task: BusinessTypeTask, er
 }
 
 export function retryTask(campaign: DiscoveryCampaign, businessType: string, timestamp = new Date().toISOString()): BusinessTypeTask | null {
+  if (campaignRetryError(campaign, businessType)) return null;
   const normalized = businessType.trim().toLocaleLowerCase();
-  const task = campaign.tasks.find((item) => item.businessType.toLocaleLowerCase() === normalized && (item.status === 'failed' || item.status === 'completed-with-errors' || item.status === 'skipped'));
+  const task = campaign.tasks.find((item) => item.businessType.toLocaleLowerCase() === normalized
+    && (item.status === 'failed' || item.status === 'completed-with-errors' || item.status === 'skipped'
+      || (item.status === 'completed' && campaign.perTypeMaxResults !== undefined && item.newCount < campaign.perTypeMaxResults)));
   if (!task) return null;
   task.status = 'pending';
   task.error = null;
@@ -193,6 +249,7 @@ export function retryTask(campaign: DiscoveryCampaign, businessType: string, tim
   task.completedAt = null;
   task.stage = null;
   task.attempts = 0;
+  delete task.newResultLimit;
   campaign.queueIndex = task.order;
   campaign.currentBusinessType = null;
   campaign.status = 'queued';

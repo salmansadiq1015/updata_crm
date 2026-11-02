@@ -29,21 +29,27 @@ import { z } from 'zod';
 import {
   cli, defineAgent, voice, llm, WorkerOptions,
 } from '@livekit/agents';
-import * as openai from '@livekit/agents-plugin-openai';
-import { ToolApi, actionToInstruction, answerResultInstruction, withCurrentStep } from './toolApi.js';
+import { LiveKitVoiceAdapter, providerErrorCode } from './providers/livekitAdapters.js';
+import { establishProvider } from './providers/providerManager.js';
+import { voiceProviderConfig } from '../../shared/voiceProviderConfig.js';
+import { computeCallCost } from '../../shared/voiceCost.js';
+import { ToolApi, actionToInstruction, answerResultInstruction } from './toolApi.js';
 import { createTranscriptPublisher } from './transcriptPublisher.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { createSilenceWatchdog } from './silenceWatchdog.js';
 import { createQualityTelemetry, attachQualityTelemetry } from './qualityTelemetry.js';
 import {
-  AGENT_ERROR_ATTRIBUTE, crmUnreachable, explainRealtimeFailure, failure, probeOpenAI,
+  AGENT_ERROR_ATTRIBUTE, crmUnreachable,
 } from './failures.js';
 import {
   waitForSipAnswer, once, waitUntilQuiet, createHeard, createAnswerGate, openCall,
 } from './callControl.js';
 import { createHumanTransfer, waitForHumanParticipant } from './humanTransfer.js';
-import { transcription, turnDetection } from './transcription.js';
+import { turnDetection } from './transcription.js';
 import { billingUsage } from './billingUsage.js';
+import { contextOptions, createContextBudget, compactItems } from './contextManagement.js';
+import { createResponseUsage } from './responseUsage.js';
+import { closeVoiceSession } from './sessionCleanup.js';
 export { transcription, turnDetection } from './transcription.js';
 
 const safeJson = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
@@ -52,12 +58,17 @@ const warn = (msg, extra = {}) => console.warn(JSON.stringify({ level: 'warn', m
 const RING_TIMEOUT_MS = Number(process.env.AGENT_RING_TIMEOUT_MS || 60_000);
 // How long a failed browser call waits for the tester to join, so they can read why.
 const FAILURE_NOTICE_WAIT_MS = 15_000;
-const realtimeModel = () => process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime';
 
 export default defineAgent({
   entry: async (ctx) => {
     const startedAt = Date.now();
-    const callModel = realtimeModel();
+    let callModel = null;
+    let activeProvider = null;
+    let selection = null;
+    let providerConfig = null;
+    const limits = contextOptions();
+    const budget = createContextBudget(limits);
+    let responseUsage = createResponseUsage({ model: callModel });
     // LiveKit passes our per-call metadata (apiBase, token, callId, voice…) on the job.
     const meta = safeJson(ctx.job?.metadata) || {};
     const apiBase = meta.agentToolApi || process.env.AGENT_TOOL_API;
@@ -70,37 +81,53 @@ export default defineAgent({
       return;
     }
     const api = new ToolApi({ apiBase, token, callId });
+    const recordProviderAttempt = attempt => api.providerAttempt({ ...attempt, sessionId: ctx.room?.name || meta.roomName || callId });
     const transcripts = createTranscriptPublisher(api, { warn: (message, extra) => warn(message, { callId, ...extra }) });
     let session = null;
+    let ending = false;
+    let guard = null;
     const flushTranscripts = async (timeoutMs = 3000) => {
       for (const item of (session?.history?.items || []).slice(-100)) transcripts.add(item);
       await transcripts.flush(timeoutMs);
     };
-    ctx.addShutdownCallback?.(() => flushTranscripts(5000));
     const hangUp = once(() => ctx.deleteRoom().catch((e) => warn('deleteRoom failed', { callId, error: e?.message })));
 
     let silenceWatchdog = null;
     let answeredAt = null;
     let usage = null;
+    let inputDiagnostics = {};
     let callNotes = null;
     const quality = createQualityTelemetry({ vadSilenceMs: turnDetection().silence_duration_ms ?? null });
     // /end is sent exactly once, whichever path ends the call first.
     const endCall = once(async (disposition = null, reason = null) => {
+      ending = true;
+      clearTimeout(guard);
       silenceWatchdog?.stop();
       const durationSeconds = answeredAt ? Math.round((Date.now() - answeredAt) / 1000) : 0;
-      await flushTranscripts();
+      // Stop capture/generation before network uploads and the final usage snapshot.
+      const closedUsage = await closeVoiceSession(session, flushTranscripts, e => warn('session close failed', { callId, error: e?.message }));
+      await selection?.adapter.terminateSession().catch(() => {});
       // SDK usage is a cumulative session snapshot, not another usage event to add.
-      const finalUsage = billingUsage(session?.usage || usage, { model: callModel });
+      const finalUsage = billingUsage(closedUsage || usage, { model: callModel, provider: activeProvider || 'unknown' });
+      if (finalUsage) finalUsage.responseTelemetry = { ...responseUsage.snapshot(), configuration: {
+        version: 'multi-provider-v1', provider: activeProvider, model: callModel, voice: activeProvider === 'gemini' ? providerConfig?.geminiVoice : meta.voice || context?.agentConfig?.voice || process.env.OPENAI_REALTIME_VOICE || 'alloy',
+        language: meta.language || context?.agentConfig?.language || 'en',
+        allowBargeIn: context?.agentConfig?.allowBargeIn !== false,
+        turnDetection: activeProvider === 'gemini' ? { type: 'gemini_automatic_vad', silenceDurationMs: 1000 } : turnDetection(process.env, { allowBargeIn: context?.agentConfig?.allowBargeIn !== false }),
+        questionnaireFingerprint: context?.questionnaireFingerprint || null,
+        ...limits, ...inputDiagnostics,
+      } };
       await api.end({
         disposition,
         durationSeconds,
         ...(callNotes ? { callNotes } : {}),
         roomName: ctx.room?.name || meta.roomName || null,
-        ...(finalUsage ? { cost: { amount: 0, currency: 'USD', breakdown: { usage: finalUsage } } } : {}),
+        cost: { amount: 0, currency: 'USD', breakdown: { ...(finalUsage ? { usage: finalUsage } : {}), aiVoice: selection ? { provider: activeProvider, model: callModel, fallback: selection.fallback, attempts: selection.attempts } : null } },
         quality: (answeredAt && quality.markAnswered(), quality.summary(session?.history?.items)),
         ...(reason ? { failureCode: reason.code, failureMessage: reason.message.slice(0, 500) } : {}),
       }).catch((e) => warn('end tool call failed (the CRM reconciler will finish the call)', { callId, error: e?.message }));
     });
+    ctx.addShutdownCallback?.(() => endCall(null));
 
     // The call cannot run (OpenAI key rejected, CRM unreachable…): tell the tester why
     // (agent participant attribute, read by the browser), record it on the call, hang up.
@@ -139,11 +166,12 @@ export default defineAgent({
       await fail(crmUnreachable(apiBase, loaded.reason));
       return;
     }
-    if (!process.env.OPENAI_API_KEY) {
-      await fail(failure('OPENAI_KEY_MISSING'));
-      return;
-    }
     context = loaded.value.value;
+    try {
+      providerConfig = { ...voiceProviderConfig(context.voiceProviders || {}), sealedCredentials: context.voiceProviders?.sealedCredentials || {} };
+      if (context.voiceProviders?.selectedGeminiModel === 'gemini-3.1-flash-live-preview' && context.voiceProviders?.experimentalModel === 'gemini-3.1-flash-live-preview') providerConfig.selectedGeminiModel = context.voiceProviders.selectedGeminiModel;
+    }
+    catch { await fail({ code: 'VOICE_CONFIG_INVALID', message: 'The voice provider configuration is invalid. Review AI Provider Configuration.' }); return; }
     log('call ready', { callId, roomJoinMs: joinedRoom.value.ms, contextMs: loaded.value.ms });
     // A gateway must not dial while the worker is still loading its call context.
     await ctx.room.localParticipant.setAttributes({ 'updata.agent_ready': 'true' });
@@ -167,26 +195,22 @@ export default defineAgent({
     const config = context.agentConfig || {};
     const baseInstructions = [
       context.systemPrompt,
-      `Disclosure to deliver first, word for word: "${context.disclosure}"`,
+      `Disclosure to deliver first in the conversation language (translate faithfully; preserve the AI identity, company and consent request): "${context.disclosure}"`,
       'If you hear an automated voicemail greeting instead of a person, call reached_voicemail immediately and say nothing.',
-      'Never invent answers. If a tool call is rejected, follow the instruction it returns.',
-      'You hear the caller audio directly. The written input transcript is produced by a separate speech recognizer and may contain errors. Ground answers in what you actually hear; do not override clear spoken information with a garbled transcript. If the audio itself is unclear, say you did not catch it and ask for a repeat or spelling. Do not tell the caller their answer is wrong because recognition failed. Read back names, complete email addresses, phone numbers and dates of birth when uncertain before saving them.',
-      'Save each relevant answer promptly. If the person volunteers several configured answers, use record_answers. For unrelated or unintelligible replies, use no_response for the current question. The CRM repeats an unanswered question up to three times, then moves on. Do not mark silence or irrelevant speech as an answer. Do not use mark_answer_unknown unless the person explicitly says they do not know or prefer to skip. Stop immediately for decline, do-not-contact or human/callback requests.',
       'When calling finish_call, include private CRM notes: a brief description of the conversation, a factual summary of the lead responses and next steps, and blockers explicitly raised by the lead. Use an empty blockers list if none were stated. Never infer objections or commitments. Also give the overall tone of the lead (positive, neutral, hesitant or negative) judged only from what they said, with a short quote or paraphrase as evidence; use neutral when unclear. These notes are not spoken aloud.',
-    ].join('\n\n');
+      context.dynamicLeadInstruction,
+    ].filter(Boolean).join('\n\n');
+    inputDiagnostics = { instructionCharacters: baseInstructions.length,
+      instructionFingerprint: createHash('sha256').update(baseInstructions).digest('hex'),
+      dynamicLeadCharacters: context.dynamicLeadInstruction?.length || 0 };
     let pendingAction = context.nextAction;
     let pending = actionToInstruction(pendingAction);
     let agent = null;
-    // The realtime model only sees its instructions on ordinary turns, so the current
-    // step must live there too — otherwise it improvises questions between tool calls.
-    // Refresh instructions before returning the tool result so the next response
-    // cannot start with the previous questionnaire step.
+    // Tool results carry the next step. Never rewrite the session prefix per answer.
     const nextFrom = async (res) => {
       silenceWatchdog?.cancel();
       pendingAction = res.nextAction;
       pending = actionToInstruction(pendingAction);
-      await agent?.updateInstructions(withCurrentStep(baseInstructions, pending))
-        .catch((e) => warn('updateInstructions failed', { callId, error: e?.message }));
       return pending;
     };
     // Tool errors go back to the model as text so it can recover (e.g. disclose first).
@@ -337,17 +361,40 @@ export default defineAgent({
       }),
     };
 
-    agent = new voice.Agent({ instructions: withCurrentStep(baseInstructions, pending), tools });
+    const initialContext = new llm.ChatContext();
+    const toolSchema = JSON.stringify(Object.entries(tools).map(([name, t]) => ({ name, description: t.description, parameters: llm.toJsonSchema(t.parameters) })));
+    inputDiagnostics.toolSchemaCharacters = toolSchema.length;
+    inputDiagnostics.toolSchemaFingerprint = createHash('sha256').update(toolSchema).digest('hex');
+    initialContext.addMessage({ role: 'developer', id: 'updata_initial_step', content: `Initial CRM state: ${JSON.stringify(context.conversationMemory || {})}\nInitial step (until the first tool result): ${pending}` });
+    agent = new voice.Agent({ instructions: baseInstructions, chatCtx: initialContext, tools });
+
+    // Avoid idle provider sessions while waiting for a browser participant.
+    if (!isPstn) {
+      const joined = await Promise.race([
+        ctx.waitForParticipant(context.participantIdentity).then(() => true),
+        new Promise(resolve => { const timer = setTimeout(() => resolve(false), RING_TIMEOUT_MS); timer.unref?.(); }),
+        failedPromise.then(() => null),
+      ]);
+      if (joined === null) return;
+      if (!joined) { await finish(null, 0); return; }
+      answeredAt = Date.now();
+      await api.answered().catch(e => warn('answered tool call failed', { callId, error: e?.message }));
+    }
+    try {
+      selection = await establishProvider({ config: providerConfig,
+        deadlineAt: answeredAt + Math.min(Number(config.maxCallSeconds) || 300, providerConfig.maxSessionSeconds) * 1000,
+        createAdapter: candidate => new LiveKitVoiceAdapter({ ...candidate, config: providerConfig, instructions: baseInstructions, tools, chatCtx: initialContext, callConfig: config, meta, isPstn, maxOutputTokens: limits.maxResponseOutputTokens, transcriptionContext: context.transcriptionContext }),
+        onAttempt: recordProviderAttempt,
+      });
+      activeProvider = selection.provider; callModel = selection.model;
+      log('realtime input configuration', { callId, provider: activeProvider, model: callModel, ...inputDiagnostics, ...limits });
+      responseUsage = createResponseUsage({ model: callModel, provider: activeProvider });
+    } catch (error) {
+      await fail({ code: error.code || 'VOICE_PROVIDERS_UNAVAILABLE', message: 'Voice providers could not establish a session. Check provider credentials, model access, limits and worker connectivity.' }); return;
+    }
 
     session = new voice.AgentSession({
-      llm: new openai.realtime.RealtimeModel({
-        model: callModel,
-        voice: meta.voice || config.voice || process.env.OPENAI_REALTIME_VOICE || 'alloy',
-        apiKey: process.env.OPENAI_API_KEY,
-        turnDetection: turnDetection(),
-        inputAudioTranscription: transcription(meta.language || config.language, process.env, context.transcriptionContext),
-        ...(isPstn ? {} : { inputAudioNoiseReduction: { type: 'near_field' } }),
-      }),
+      llm: selection.adapter.livekitModel,
       // Campaign config: silence → "away" after N seconds; barge-in on/off.
       userAwayTimeout: Math.max(2, Number(config.silenceTimeoutSeconds) || 8),
       turnHandling: { interruption: { enabled: config.allowBargeIn !== false } },
@@ -364,7 +411,7 @@ export default defineAgent({
     let introRepeats = 0;
     silenceWatchdog = createSilenceWatchdog({
       timeoutMs: Math.max(2, Number(config.silenceTimeoutSeconds) || 8) * 1000,
-      isBusy: () => !opened || userSpeaking || gate.busy() || transfer.holding() || ['initializing', 'thinking', 'speaking'].includes(agentState),
+      isBusy: () => ending || !opened || userSpeaking || gate.busy() || transfer.holding() || ['initializing', 'thinking', 'speaking'].includes(agentState),
       warn: error => warn('question silence retry failed', { callId, error: error?.message }),
       onSilence: async () => {
         quality.onSilence();
@@ -389,8 +436,40 @@ export default defineAgent({
       if (userSpeaking) silenceWatchdog.cancel();
       else if (opened && ev.newState === 'listening') silenceWatchdog.arm();
     });
-    session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => { usage = ev.usage; });
+    session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
+      usage = ev.usage;
+      if (providerConfig.maxCallCostUsd > 0 && !ending) {
+        const cost = computeCallCost({ usage: billingUsage(usage, { model: callModel, provider: activeProvider }) }, { ...process.env, AI_CALLING_MODEL_PRICING: JSON.stringify(context.voiceProviders?.modelPricing || {}) });
+        if (cost.breakdown.unpriced || cost.amount >= providerConfig.maxCallCostUsd) void finish(null, 0);
+      }
+    });
+    session.on(voice.AgentSessionEventTypes.MetricsCollected, ev => {
+      if (responseUsage.observe(ev?.metrics)) budget.observe(ev.metrics);
+    });
+    let compacting = false;
+    const archivedStatements = new Map();
+    session.on(voice.AgentSessionEventTypes.AgentStateChanged, async ev => {
+      // Gemini Live cannot delete history items; use supported server compression.
+      if (activeProvider !== 'openai' || ev.newState !== 'listening' || ending || compacting || gate.busy() || userSpeaking || !budget.due() || agent.chatCtx.items.length < limits.recentItems * 2) return;
+      compacting = true;
+      try {
+        const fresh = await api.context();
+        if (ending || userSpeaking || gate.busy() || agentState !== 'listening') return;
+        const compacted = compactItems(agent.chatCtx.items, fresh.conversationMemory, actionToInstruction(fresh.nextAction), limits.recentItems, archivedStatements);
+        if (!compacted) return;
+        await flushTranscripts();
+        if (ending || userSpeaking || agentState !== 'listening') return;
+        const chat = new llm.ChatContext();
+        chat.addMessage({ role: 'developer', id: 'updata_context_checkpoint', content: compacted.checkpoint, createdAt: compacted.recent[0].createdAt - 1 });
+        chat.items.push(...compacted.recent);
+        await agent.updateChatCtx(chat);
+        budget.compacted(); responseUsage.compacted();
+        log('context compacted', { callId, removedItems: compacted.removed, retainedItems: compacted.recent.length });
+      } catch (error) { warn('context compaction deferred', { callId, error: error?.message }); }
+      finally { compacting = false; }
+    });
     attachQualityTelemetry({ session, room: ctx.room, quality, events: voice.AgentSessionEventTypes });
+    ctx.room.on?.('reconnected', () => responseUsage.reconnected());
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
       if (ev.newState === 'speaking') { heard.onSpeaking(); void publishActivity('customer'); }
     });
@@ -399,15 +478,20 @@ export default defineAgent({
     if (context.persistTranscript !== false) {
       session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => transcripts.add(ev?.item));
     }
-    const failRealtime = (error) => explainRealtimeFailure(error, { apiKey: process.env.OPENAI_API_KEY, model: realtimeModel() })
-      .then((reason) => fail(reason));
+    const failRealtime = async error => {
+      if (ending) return;
+      const code = providerErrorCode(error);
+      await recordProviderAttempt({ provider: activeProvider, model: callModel, status: 'runtime_error', reason: code, at: new Date().toISOString(), latencyMs: 0 }).catch(() => {});
+      await fail({ code: `${activeProvider.toUpperCase()}_${code}`, message: `${activeProvider} voice session failed. Collected answers remain saved. No mid-call provider switch was attempted.` });
+    };
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const error = ev?.error;
-      warn('session error', { callId, recoverable: error?.recoverable, error: String(error?.error?.message || error?.message || error || '') });
+      warn('session error', { callId, provider: activeProvider, recoverable: error?.recoverable, code: providerErrorCode(error) });
       // Unrecoverable (bad key, no credit, OpenAI unreachable after retries): the session is
       // closing, so the call cannot continue. Recoverable errors are retried by agents-js.
       if (error?.recoverable === false) failRealtime(error);
     });
+    if (selection.adapter.fatalError) { await failRealtime(selection.adapter.fatalError); return; }
 
     try {
       await session.start({ agent, room: ctx.room, inputOptions: { participantIdentity: context.participantIdentity || (isPstn ? `sip-${callId}` : undefined) } });
@@ -416,29 +500,10 @@ export default defineAgent({
       return;
     }
     if (failed) return;
-
-    // ---- Browser calls: the realtime session is already connected while the
-    // customer's browser joins; nobody to talk to until it has.
-    if (!isPstn) {
-      const joined = await Promise.race([
-        ctx.waitForParticipant(context.participantIdentity).then(() => true),
-        new Promise((resolve) => { setTimeout(() => resolve(false), RING_TIMEOUT_MS); }),
-        failedPromise.then(() => null),
-      ]);
-      if (joined === null) return; // fail() reports and hangs up
-      if (!joined) {
-        log('browser participant never joined', { callId });
-        await finish(null, 0);
-        return;
-      }
-      answeredAt = Date.now();
-      await api.answered().catch((e) => warn('answered tool call failed', { callId, error: e?.message }));
-    }
-
-    if (failed) return;
     // Kick off: tell the model to deliver the disclosure / first action. On a phone call,
     // let the callee's "Hello?" finish first (see openCall in callControl.js).
     const opener = () => {
+      if (ending) return;
       opened = true; silenceWatchdog.arm();
       gate.reset(); // a "Hello?" before the disclosure is not agreement to continue
       return session.generateReply({ instructions: `Start the call now. ${pending}` });
@@ -453,8 +518,8 @@ export default defineAgent({
     }
 
     // Max-duration guard (the CRM reconciler is the backstop if this process dies).
-    const maxMs = ((Number(config.maxCallSeconds) || 300) + 15) * 1000;
-    const guard = setTimeout(() => { if (transfer.handedOff()) return; log('max call duration reached', { callId }); finish(null, 0); }, maxMs);
+    const maxMs = Math.max(0, Math.min(Number(config.maxCallSeconds) || 300, providerConfig.maxSessionSeconds) * 1000 - (Date.now() - answeredAt));
+    guard = setTimeout(() => { if (transfer.handedOff()) return; log('max call duration reached', { callId }); finish(null, 0); }, maxMs);
 
     // The callee hung up, or the room closed: finish whatever was collected.
     ctx.room.on?.('participantDisconnected', (p) => {
@@ -467,10 +532,6 @@ export default defineAgent({
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // Say at startup when calls are bound to fail (expired key, no such model), not per call.
-  if (['start', 'dev'].includes(process.argv[2])) {
-    probeOpenAI({ apiKey: process.env.OPENAI_API_KEY, model: realtimeModel() })
-      .then((problem) => { if (problem) warn(`OpenAI check failed: ${problem.message}`, { code: problem.code }); });
-  }
   cli.runApp(new WorkerOptions({
     agent: fileURLToPath(import.meta.url),
     agentName: process.env.LIVEKIT_AGENT_NAME || 'crm-voice-agent',

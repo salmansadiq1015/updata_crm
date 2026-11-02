@@ -1,3 +1,5 @@
+import { companyTranslations } from './company-translations';
+import { callingExperienceTranslations } from './calling-experience-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
 import { callingIntelligenceTranslations } from './calling-intelligence-translations';
 import { callingQualityTranslations } from './calling-quality-translations';
@@ -5,6 +7,7 @@ import { platformGovernanceTranslations } from './platform-governance-translatio
 import { leadgenTranslations, leadgenCommonTranslations } from './leadgen-translations';
 import { leadsWorkflowTranslations } from './leads-workflow-translations';
 import { landingTranslations } from './landing-translations';
+import { experienceTranslations } from './experience-translations';
 import { smsOpsTranslations } from './sms-ops-translations';
 import { leadsQualityTranslations } from './leads-quality-translations';
 import { completeLocale } from './locale-completion';
@@ -1220,6 +1223,9 @@ const baseTranslations = {
     ...leadgenTranslations.de,
     ...leadsWorkflowTranslations.de,
     ...landingTranslations.de,
+    ...experienceTranslations.de,
+    ...companyTranslations.de,
+    ...callingExperienceTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
     // Navbar
@@ -6266,6 +6272,9 @@ const baseTranslations = {
     ...leadgenTranslations.en,
     ...leadsWorkflowTranslations.en,
     ...landingTranslations.en,
+    ...experienceTranslations.en,
+    ...companyTranslations.en,
+    ...callingExperienceTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
     // Navbar
@@ -11320,6 +11329,9 @@ const baseTranslations = {
     ...leadgenTranslations.fr,
     ...leadsWorkflowTranslations.fr,
     ...landingTranslations.fr,
+    ...experienceTranslations.fr,
+    ...companyTranslations.fr,
+    ...callingExperienceTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
     ...callingIntelligenceTranslations.fr,
     ...callingQualityTranslations.fr,
@@ -11467,6 +11479,9 @@ const baseTranslations = {
     ...leadgenTranslations.ar,
     ...leadsWorkflowTranslations.ar,
     ...landingTranslations.ar,
+    ...experienceTranslations.ar,
+    ...companyTranslations.ar,
+    ...callingExperienceTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
     ...callingIntelligenceTranslations.ar,
     ...callingQualityTranslations.ar,

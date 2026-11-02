@@ -292,6 +292,7 @@ export interface ConversationInsights {
 }
 
 export interface CallRecord {
+  aiVoice?: VoiceProviderSession | null;
   gateway?: { takenOverAt?: string | null; audioLostAt?: string | null; endReason?: string | null };
   _id: string;
   internalCallId: string;
@@ -521,6 +522,7 @@ export interface AnalyzedCallCost {
   models?: Array<{ model: string | null; provider: string | null; amount: number; unpriced: boolean; issues?: string[] }>;
 }
 export interface AnalyzedCall {
+  aiVoice?: VoiceProviderSession | null;
   id: string; internalCallId: string; attemptNumber: number; leadId: string; leadName: string; leadPhone: string | null;
   campaignId: string; campaignName: string; isTest: boolean; provider: string | null;
   at: string; answeredAt: string | null; endedAt: string | null; durationSeconds: number; state: string;
@@ -533,6 +535,12 @@ export interface AnalyzedCall {
     answers: { valid: number; total: number };
   };
   cost: AnalyzedCallCost;
+  costDiagnostics?: {
+    cacheHitPercent: number | null; cachedInputTokens: number | null; estimatedCacheSavings: number | null; estimatedCostPerMinute: number | null;
+    responseCount: number | null; averageOutputTokens: number | null; droppedResponses: number; compactions: number | null;
+    configuration: Record<string, unknown> | null;
+    responses: Array<{ responseId: string; cancelled: boolean; tokens: CallTokenUsage; inputCachedTokens?: number; estimatedCost: number | null; ttftMs: number | null; cacheObservation: string }>;
+  };
 }
 export interface AnalyzedLead {
   pricingIncomplete?: boolean;
@@ -542,6 +550,7 @@ export interface AnalyzedLead {
 }
 export interface AgentCallAnalytics {
   agent: { id: string; name: string }; currency: string;
+  providerComparison?: ProviderCostComparison;
   totals: {
     calls: number; connected: number; completed: number; qualified: number; leads: number; totalCost: number; totalSeconds: number;
     avgCostPerCall: number | null; avgCostPerConnectedCall: number | null; avgCostPerLead: number | null; costPerQualifiedLead: number | null;
@@ -561,4 +570,23 @@ export interface AgentCallAnalytics {
   outcomes: Partial<Record<CallOutcomeProfile, number>>;
   byDay: Array<{ date: string; calls: number; connected: number; cost: number; seconds: number; tokens: number }>;
   leads: AnalyzedLead[]; calls: AnalyzedCall[]; truncated: boolean;
+}
+
+export interface ProviderCostComparison {
+  providers: Array<{
+    provider: string; models: string[]; calls: number; seconds: number; turns: number;
+    inputAudio: number; outputAudio: number; inputText: number; outputText: number; cachedInput: number;
+    calculatedCostUsd: number; reportedCostUsd: number; calculatedCalls: number; reportedCalls: number; unpricedCalls: number; fallbacks: number; errors: number;
+    audioInputCostUsd: number; audioOutputCostUsd: number; textInputCostUsd: number; textOutputCostUsd: number;
+    averageLatencyMs: number | null; qualificationCompletionRate: number | null; qualificationAccuracy: null;
+    calculatedCostPerMinute: number | null; calculatedCostPerConnectedMinute: number | null;
+    calculatedCostPerQualifiedLead: number | null; distribution: number | null;
+  }>;
+  daily: ProviderPeriodCost[]; monthly: ProviderPeriodCost[]; estimatedSavings: null; savingsStatus: string;
+  errors: Array<{ provider: string; count: number }>;
+}
+export interface ProviderPeriodCost { period: string; provider: string; calls: number; calculatedCostUsd: number; reportedCostUsd: number; unpricedCalls: number }
+export interface VoiceProviderSession {
+  provider: 'gemini' | 'openai'; model: string; fallback: boolean;
+  attempts?: Array<{ provider: string; model: string; status: string; reason?: string; latencyMs: number; at: string }>;
 }

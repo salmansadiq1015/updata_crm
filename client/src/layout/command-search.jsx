@@ -8,10 +8,12 @@ import { useTheme } from 'next-themes';
 import {
   Search, LayoutDashboard, Users, Shield, ScrollText,
   User, Plus, Sun, Moon, ArrowRight, Video,
+  Radar, PhoneCall, Contact, Plug,
 } from 'lucide-react';
 import { userService } from '@/modules/users/services/user-service';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 
 export function CommandSearch() {
   const [open, setOpen] = useState(false);
@@ -20,15 +22,21 @@ export function CommandSearch() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { t } = useLanguage();
+  const { hasPermission } = usePermissions();
+  const canSearchUsers = hasPermission('users:read');
   const debounceRef = useRef(null);
   const navItems = [
     { label: t('sidebar.dashboard', 'Dashboard'), href: '/dashboard', icon: LayoutDashboard },
-    { label: t('sidebar.employmentManagement', 'Mitarbeiterverwaltung'), href: '/settings/users', icon: Users },
-    { label: t('sidebar.roles', 'Rollen'), href: '/settings/roles', icon: Shield },
-    { label: t('deploy.tabs.meetings', 'Meetings'), href: '/scheduling/meetings', icon: Video },
-    { label: t('sidebar.audit', 'Audit Log'), href: '/settings/audit', icon: ScrollText },
+    { label: t('sidebar.leads'), href: '/leads', icon: Contact, permission: 'lead:read' },
+    { label: t('sidebar.leadGeneration'), href: '/lead-generation', icon: Radar, permission: 'discovery:read' },
+    { label: t('sidebar.aiCalling'), href: '/ai-calling', icon: PhoneCall, permission: 'lead:read' },
+    { label: t('sidebar.integrations'), href: '/admin/integrations', icon: Plug, permission: 'integrations:admin' },
+    { label: t('sidebar.employmentManagement', 'Mitarbeiterverwaltung'), href: '/settings/users', icon: Users, permission: 'users:read' },
+    { label: t('sidebar.roles', 'Rollen'), href: '/settings/roles', icon: Shield, permission: 'roles:read' },
+    { label: t('deploy.tabs.meetings', 'Meetings'), href: '/scheduling/meetings', icon: Video, permission: 'meetings:read' },
+    { label: t('sidebar.audit', 'Audit Log'), href: '/settings/audit', icon: ScrollText, permission: 'audit:read' },
     { label: t('dashboard.myProfile', 'Mein Profil'), href: '/profile', icon: User },
-  ];
+  ].filter(item => !item.permission || hasPermission(item.permission));
 
   useEffect(() => {
     const handler = (e) => {
@@ -45,7 +53,7 @@ export function CommandSearch() {
   const users = userResults.query === trimmedQuery ? userResults.items : [];
 
   useEffect(() => {
-    if (!trimmedQuery) return undefined;
+    if (!trimmedQuery || !canSearchUsers) return undefined;
     let cancelled = false;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -60,7 +68,7 @@ export function CommandSearch() {
       cancelled = true;
       clearTimeout(debounceRef.current);
     };
-  }, [trimmedQuery]);
+  }, [trimmedQuery, canSearchUsers]);
 
   const handleOpenChange = (nextOpen) => {
     setOpen(nextOpen);
@@ -80,10 +88,11 @@ export function CommandSearch() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/60 hover:border-border transition-all duration-200 min-w-[200px] backdrop-blur-sm"
+        aria-label={t('common.searchTitle')}
+        className="flex size-9 items-center justify-center gap-2 rounded-lg border border-transparent text-sm text-muted-foreground hover:bg-muted transition-colors md:h-9 md:w-auto md:min-w-[180px] md:justify-start md:border-border md:bg-background md:px-3"
       >
         <Search className="h-3.5 w-3.5" />
-        <span className="flex-1 text-left">{t('common.search', 'Suchen...')}</span>
+        <span className="hidden flex-1 text-start md:inline">{t('common.search', 'Suchen...')}</span>
         <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border border-border/60 bg-background/80 px-1.5 text-[0.65rem] font-mono text-muted-foreground">
           Ctrl+K
         </kbd>

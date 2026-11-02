@@ -392,6 +392,7 @@ export const bulkImport = {
       // The selected search location this lead was discovered under, used as the
       // fallback for a city/country the scrape could not provide.
       searchLocation: Joi.string().trim().max(255).truncate(true).allow('', null),
+      discoveryCategories: Joi.array().items(Joi.string().trim().max(120).truncate(true)).max(50).default([]),
     }).unknown(true)).min(1).max(500).required(),
     // Optional import-run tracking (reporting only; ownership is always the
     // authenticated user). Batches of one run share `importId`; `importTotal`

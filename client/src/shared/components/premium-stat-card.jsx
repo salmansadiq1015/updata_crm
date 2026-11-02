@@ -52,17 +52,17 @@ export function PremiumStatCard({ label, value, icon: Icon, accent = 'violet', s
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-theme-sm transition-all duration-300 hover:shadow-theme-md hover:-translate-y-0.5">
       <div className={cn('absolute left-0 right-0 top-0 h-px bg-linear-to-r', theme.bar)} />
-      <div className={cn('pointer-events-none absolute inset-0 opacity-60 transition-opacity group-hover:opacity-100', theme.glow)} />
+
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-          <p className={cn('text-3xl font-bold tracking-tight leading-none mt-2', theme.valueGlow)}>
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className={cn('text-3xl font-semibold tabular-nums tracking-tight leading-none mt-3 text-foreground')}>
             {value}
-            {suffix ? <span className="ml-1 text-sm font-medium text-muted-foreground">{suffix}</span> : null}
+            {suffix ? <span className="ms-1 text-sm font-medium text-muted-foreground">{suffix}</span> : null}
           </p>
         </div>
         {Icon && (
-          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform group-hover:scale-110', theme.iconBg, theme.iconRing)}>
+          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform group-hover:-translate-y-0.5', theme.iconBg, theme.iconRing)}>
             <Icon className={cn('h-5 w-5', theme.iconColor)} />
           </div>
         )}

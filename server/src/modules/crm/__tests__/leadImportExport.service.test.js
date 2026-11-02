@@ -697,3 +697,71 @@ describe('leadImportExportService.parseFile (PDF best-effort)', () => {
     }
   });
 });
+
+describe('extension import provenance and lossless upload fallback', () => {
+  const record = (extra = {}) => ({
+    clientId: 'gym-1', businessName: 'PURE GYM', city: 'Mohammedia', country: 'MA',
+    category: null, categories: [], discoveryCategories: ['Gym'],
+    address: '12 Boulevard, Park Plaza, Mohammedia, Morocco',
+    googleMapsUrl: 'https://www.google.com/maps/place/PURE+GYM',
+    ...extra,
+  });
+  const setupCreate = () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({ ...doc, _id: 'lead-1', leadNumber: 'L-00001' }));
+  };
+
+  it('always records Chrome extension provenance, with or without a place identifier', async () => {
+    setupCreate();
+    const result = await service.importExtensionLeads([record(), record({ clientId: 'gym-2', placeIdentifier: 'place-2', category: 'Fitness center' })], 'user-1');
+    expect(result).toMatchObject({ total: 2, created: 2, failed: 0 });
+    for (const [doc] of mockCreate.mock.calls) {
+      expect(doc.source).toBe('extension');
+      expect(doc.sourceMetadata.importMethod).toBe('extension');
+      expect(doc.address.area).toBe('Park Plaza');
+    }
+    expect(mockCreate.mock.calls[0][0].sourceMetadata.businessType).toBe('Gym');
+    expect(mockCreate.mock.calls[1][0].sourceMetadata.businessType).toBe('Fitness center');
+  });
+
+  it('uses exactly the structured mapping for CSV uploads and preserves per-row identities', async () => {
+    setupCreate();
+    const input = record({ businessName: 'Gym "A", Studio', rating: 4.8, reviewCount: 20 });
+    const buffer = Buffer.from('name,extensionRecord\r\nignored,"' + JSON.stringify(input).replace(/"/g, '""') + '"\r\n');
+    const result = await service.importLeads({ buffer, mimetype: 'text/csv', originalname: 'leads.csv', source: 'extension' }, 'user-1');
+    expect(result.summary).toMatchObject({ created: 1, failed: 0 });
+    expect(result.results[0]).toMatchObject({ clientId: 'gym-1', leadId: 'lead-1' });
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      name: 'Gym "A", Studio', source: 'extension', address: { area: 'Park Plaza' },
+      sourceMetadata: { businessType: 'Gym', importMethod: 'extension' }, providerMeta: { rating: 4.8, reviewCount: 20 },
+    });
+  });
+
+  it('rejects malformed extension uploads instead of silently losing metadata through generic import', async () => {
+    const buffer = Buffer.from('name,extensionRecord\r\nBroken,not-json\r\n');
+    await expect(service.importLeads({ buffer, mimetype: 'text/csv', originalname: 'leads.csv', source: 'extension' }, 'user-1')).rejects.toThrow('Invalid extension record');
+    expect(mockBulkCreate).not.toHaveBeenCalled();
+  });
+
+  it('repairs missing fields on re-import and corrects only proven legacy extension sources', async () => {
+    mockFindDuplicates.mockResolvedValue([{ lead: { _id: 'existing-gym', leadNumber: 'L-00001' } }]);
+    mockGetProviderMeta.mockResolvedValue({
+      source: 'import', notes: 'Google Maps: https://www.google.com/maps/place/PURE+GYM',
+      sourceMetadata: { businessType: null }, providerMeta: {}, address: { city: 'Mohammedia', country: 'MA', area: null },
+    });
+    mockUpdate.mockResolvedValue({ _id: 'existing-gym' });
+    const result = await service.importExtensionLeads([record()], 'user-1');
+    expect(result).toMatchObject({ existing: 1, created: 0 });
+    expect(mockUpdate.mock.calls[0][1]).toMatchObject({
+      source: 'extension', 'sourceMetadata.importMethod': 'extension', 'sourceMetadata.businessType': 'Gym',
+      address: { area: 'Park Plaza', city: 'Mohammedia', country: 'MA' },
+    });
+    mockUpdate.mockClear();
+    mockGetProviderMeta.mockResolvedValue({ source: 'manual', sourceMetadata: { businessType: 'Health Club' }, providerMeta: {}, address: { area: 'City Centre', city: 'Mohammedia', country: 'MA' } });
+    await service.importExtensionLeads([record()], 'user-1');
+    const updates = mockUpdate.mock.calls[0]?.[1] ?? {};
+    expect(updates).not.toHaveProperty('source');
+    expect(updates).not.toHaveProperty('sourceMetadata.businessType');
+    expect(updates.address).toMatchObject({ area: 'City Centre', city: 'Mohammedia', country: 'MA' });
+  });
+});

@@ -568,7 +568,11 @@ class LinkAssistantService {
   }
 
   async _finish(session) {
-    return aiCallingService.processCallResults(session.callRecordId, { source: 'link_assistant' });
+    const recorded = await CallRecord.findById(session.callRecordId).select('cost durationSeconds').lean();
+    const breakdown = recorded?.cost?.breakdown;
+    return aiCallingService.processCallResults(session.callRecordId, { source: 'link_assistant',
+      ...(breakdown?.usage ? { durationSeconds: recorded.durationSeconds, cost: { amount: 0, currency: 'USD', breakdown } } : {}),
+    });
   }
 
   _classifier(sessionId, usageSink) {

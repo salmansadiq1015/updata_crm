@@ -17,7 +17,7 @@ import { languageName, pct, when, type Translate } from './quality-format';
 const LANGUAGES: BenchmarkLanguage[] = ['ur', 'en', 'mixed'];
 const CONDITIONS: BenchmarkCondition[] = ['clean', 'noise', 'interruption'];
 const QUESTION_TYPES = ['boolean', 'integer', 'decimal', 'currency', 'rating', 'single_choice', 'multiple_choice', 'email', 'phone', 'url', 'date', 'time', 'short_text', 'long_text', 'address'];
-const chip = 'rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300';
+const chip = 'rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground';
 const useT = () => (useLanguage() as { t: Translate }).t;
 
 function useRoles() {
@@ -38,22 +38,22 @@ export function BenchmarkWorkspace() {
   if (suiteId) return <SuiteDetail id={suiteId} onBack={() => setSuiteId(null)} />;
   return <div className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 className="text-lg font-semibold tracking-tight">{t('aiBench.title')}</h2><p className="mt-1 max-w-2xl text-xs text-slate-400">{t('aiBench.subtitle')}</p></div>
+      <div><h2 className="text-lg font-semibold tracking-tight">{t('aiBench.title')}</h2><p className="mt-1 max-w-2xl text-xs text-muted-foreground">{t('aiBench.subtitle')}</p></div>
       <div className="flex flex-wrap gap-2">
         <button className={secondaryClass} disabled={!canWrite || seed.isPending} onClick={async () => { const s = await seed.mutateAsync(undefined); setSuiteId(s._id); }}>{seed.isPending ? <Loader2 className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}{t('aiBench.sample.create')}</button>
         <button className={primaryClass} disabled={!canWrite} onClick={() => setCreating(true)}><Plus className="size-4" />{t('aiBench.suite.new')}</button>
       </div>
     </div>
-    {suites.isLoading && <p className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="size-3.5 animate-spin" />{t('aiQuality.loading')}</p>}
+    {suites.isLoading && <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />{t('aiQuality.loading')}</p>}
     {suites.isError && <p role="alert" className="text-sm text-rose-300">{t('aiQuality.loadError')}</p>}
-    {suites.data && !suites.data.length && <div className={`${panelClass} py-12 text-center`}><FlaskConical className="mx-auto size-8 text-sky-300/70" /><p className="mt-3 font-medium">{t('aiBench.empty.title')}</p><p className="mx-auto mt-1 max-w-md text-xs text-slate-400">{t('aiBench.empty.body')}</p></div>}
+    {suites.data && !suites.data.length && <div className={`${panelClass} py-12 text-center`}><FlaskConical className="mx-auto size-8 text-primary/70" /><p className="mt-3 font-medium">{t('aiBench.empty.title')}</p><p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">{t('aiBench.empty.body')}</p></div>}
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{suites.data?.map(s => <button key={s._id} type="button" onClick={() => setSuiteId(s._id)} className={`${panelClass} text-start transition hover:border-sky-400/30`}>
-      <div className="flex items-start justify-between gap-2"><p className="font-semibold text-slate-100">{s.name}</p>{s.sample && <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">{t('aiBench.sample.badge')}</span>}</div>
-      <p className="mt-1 line-clamp-2 text-xs text-slate-400">{s.description}</p>
-      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/8 pt-3 text-xs">
-        <div><p className="text-slate-500">{t('aiBench.cases')}</p><p className="font-semibold text-slate-100">{s.cases ?? 0}</p></div>
-        <div><p className="text-slate-500">{t('aiBench.reviewed')}</p><p className="font-semibold text-slate-100">{s.reviewedCases ?? 0}</p></div>
-        <div><p className="text-slate-500">{t('aiBench.lastAccuracy')}</p><p className="font-semibold text-slate-100">{pct(s.lastRun?.metrics?.fieldAccuracy) ?? t('aiBench.noScore')}</p></div>
+      <div className="flex items-start justify-between gap-2"><p className="font-semibold text-foreground">{s.name}</p>{s.sample && <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">{t('aiBench.sample.badge')}</span>}</div>
+      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{s.description}</p>
+      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-3 text-xs">
+        <div><p className="text-muted-foreground">{t('aiBench.cases')}</p><p className="font-semibold text-foreground">{s.cases ?? 0}</p></div>
+        <div><p className="text-muted-foreground">{t('aiBench.reviewed')}</p><p className="font-semibold text-foreground">{s.reviewedCases ?? 0}</p></div>
+        <div><p className="text-muted-foreground">{t('aiBench.lastAccuracy')}</p><p className="font-semibold text-foreground">{pct(s.lastRun?.metrics?.fieldAccuracy) ?? t('aiBench.noScore')}</p></div>
       </div>
     </button>)}</div>
     {creating && <SuiteDialog onClose={() => setCreating(false)} onCreated={id => { setCreating(false); setSuiteId(id); }} />}
@@ -95,13 +95,13 @@ function SuiteDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const suite = useBenchmarkSuite(id);
   const [tab, setTab] = useState('cases');
   const s = suite.data;
-  if (!s) return <div className={panelClass}>{suite.isError ? <p role="alert" className="text-rose-300">{t('aiQuality.loadError')}</p> : <p className="flex items-center gap-2 text-sm text-slate-400"><Loader2 className="size-4 animate-spin" />{t('aiQuality.loading')}</p>}</div>;
+  if (!s) return <div className={panelClass}>{suite.isError ? <p role="alert" className="text-rose-300">{t('aiQuality.loadError')}</p> : <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t('aiQuality.loading')}</p>}</div>;
   const reviewed = s.caseList?.filter(c => c.reviewed).length ?? 0;
   return <div className="space-y-5">
-    <button className="inline-flex items-center gap-2 text-xs text-slate-400 hover:text-slate-100" onClick={onBack}><ArrowLeft className="size-3.5" />{t('aiBench.back')}</button>
+    <button className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground" onClick={onBack}><ArrowLeft className="size-3.5" />{t('aiBench.back')}</button>
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-xl font-semibold tracking-tight">{s.name}</h2><p className="mt-1 max-w-3xl text-xs text-slate-400">{s.description}</p>
-        <p className="mt-2 text-xs text-slate-500">{t('aiBench.reviewedOf', { reviewed, total: s.caseList?.length ?? 0 })} · {t('aiBench.fieldsCount', { n: s.questionnaire.questions.length })}</p></div>
+      <div><h2 className="text-xl font-semibold tracking-tight">{s.name}</h2><p className="mt-1 max-w-3xl text-xs text-muted-foreground">{s.description}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{t('aiBench.reviewedOf', { reviewed, total: s.caseList?.length ?? 0 })} · {t('aiBench.fieldsCount', { n: s.questionnaire.questions.length })}</p></div>
     </header>
     {s.sample && <div role="note" className="flex gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/[0.05] p-4 text-xs text-amber-100"><ShieldAlert className="size-4 shrink-0 text-amber-300" />{t('aiBench.sample.notice')}</div>}
     <AgentTabs label={t('aiBench.suiteSections')} value={tab} onChange={setTab} items={[{ value: 'cases', label: t('aiBench.tab.cases') }, { value: 'runs', label: t('aiBench.tab.runs') }]}>
@@ -114,7 +114,7 @@ function ReviewBadge({ c }: { c: BenchmarkCase }) {
   const t = useT();
   return c.reviewed
     ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"><BadgeCheck className="size-3" />{t('aiBench.review.approvedOn', { date: c.reviewedAt ? new Date(c.reviewedAt).toLocaleDateString() : '' })}</span>
-    : <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-400">{t('aiBench.review.unreviewed')}</span>;
+    : <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{t('aiBench.review.unreviewed')}</span>;
 }
 
 function CaseList({ suite }: { suite: BenchmarkSuite }) {
@@ -125,17 +125,17 @@ function CaseList({ suite }: { suite: BenchmarkSuite }) {
   const remove = useQualityMutation((caseId: string) => callingQualityApi.removeCase(caseId));
   return <div className="space-y-3">
     <div className="flex justify-end"><button className={primaryClass} disabled={!canWrite} onClick={() => setEditing('new')}><Plus className="size-4" />{t('aiBench.case.new')}</button></div>
-    {!suite.caseList?.length && <p className={`${panelClass} text-center text-xs text-slate-400`}>{t('aiBench.case.none')}</p>}
-    <ul className="space-y-2">{suite.caseList?.map(c => <li key={c._id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-[#0c1425] p-4">
+    {!suite.caseList?.length && <p className={`${panelClass} text-center text-xs text-muted-foreground`}>{t('aiBench.case.none')}</p>}
+    <ul className="space-y-2">{suite.caseList?.map(c => <li key={c._id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-slate-100">{c.title}</p>
+        <p className="font-medium text-foreground">{c.title}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <span className={chip}>{languageName(t, c.language)}</span>
           {c.conditions.map(x => <span key={x} className={chip}>{t(`aiBench.condition.${x}`)}</span>)}
           {c.sample && <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">{t('aiBench.sample.badge')}</span>}
           {c.audio?.fileId && <span className={chip}>{t('aiBench.case.hasAudio')}</span>}
           <ReviewBadge c={c} />
-          <span className="text-[10px] text-slate-500">{t('aiBench.case.turns', { n: c.turns.length })} · {t('aiBench.case.expected', { n: c.groundTruth.answers.length })} · r{c.revision}</span>
+          <span className="text-[10px] text-muted-foreground">{t('aiBench.case.turns', { n: c.turns.length })} · {t('aiBench.case.expected', { n: c.groundTruth.answers.length })} · r{c.revision}</span>
         </div>
       </div>
       <div className="flex gap-2">
@@ -198,11 +198,11 @@ function CaseEditor({ suite, current, onClose }: { suite: BenchmarkSuite; curren
         <AgentField label={t('aiBench.case.title')}><input className={inputClass} value={title} onChange={e => setTitle(e.target.value)} /></AgentField>
         <AgentField label={t('aiBench.case.language')}><select className={inputClass} value={language} onChange={e => setLanguage(e.target.value as BenchmarkLanguage)}>{LANGUAGES.map(l => <option key={l} value={l}>{languageName(t, l)}</option>)}</select></AgentField>
       </div>
-      <fieldset><legend className="mb-2 text-xs font-medium text-slate-300">{t('aiBench.case.conditions')}</legend><div className="flex flex-wrap gap-3">{CONDITIONS.map(c => <label key={c} className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={conditions.includes(c)} onChange={e => setConditions(e.target.checked ? [...conditions, c] : conditions.filter(x => x !== c).length ? conditions.filter(x => x !== c) : conditions)} />{t(`aiBench.condition.${c}`)}</label>)}</div></fieldset>
+      <fieldset><legend className="mb-2 text-xs font-medium text-muted-foreground">{t('aiBench.case.conditions')}</legend><div className="flex flex-wrap gap-3">{CONDITIONS.map(c => <label key={c} className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={conditions.includes(c)} onChange={e => setConditions(e.target.checked ? [...conditions, c] : conditions.filter(x => x !== c).length ? conditions.filter(x => x !== c) : conditions)} />{t(`aiBench.condition.${c}`)}</label>)}</div></fieldset>
       <AgentField label={t('aiBench.case.notes')}><textarea className={inputClass} rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></AgentField>
       <div>
-        <p className="mb-2 text-xs font-medium text-slate-300">{t('aiBench.case.transcript')}</p>
-        <p className="mb-2 text-[11px] text-slate-500">{t('aiBench.case.transcriptHint')}</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('aiBench.case.transcript')}</p>
+        <p className="mb-2 text-[11px] text-muted-foreground">{t('aiBench.case.transcriptHint')}</p>
         <div className="space-y-2">{turns.map((turn, i) => <div key={i} className="grid grid-cols-[110px_1fr_140px_70px_70px_auto] gap-2 max-md:grid-cols-2">
           <select aria-label={t('aiBench.case.speaker')} className={inputClass} value={turn.speaker} onChange={e => setTurn(i, { speaker: e.target.value as 'lead' | 'agent' })}><option value="agent">{t('aiBench.speaker.agent')}</option><option value="lead">{t('aiBench.speaker.lead')}</option></select>
           <input dir="auto" aria-label={t('aiBench.case.text')} className={inputClass} value={turn.text} onChange={e => setTurn(i, { text: e.target.value })} />
@@ -214,17 +214,17 @@ function CaseEditor({ suite, current, onClose }: { suite: BenchmarkSuite; curren
         <button type="button" className={`${secondaryClass} mt-2`} onClick={() => setTurns([...turns, { speaker: turns.at(-1)?.speaker === 'agent' ? 'lead' : 'agent', text: '' }])}><Plus className="size-4" />{t('aiBench.case.addTurn')}</button>
       </div>
       <div>
-        <p className="mb-2 text-xs font-medium text-slate-300">{t('aiBench.case.groundTruth')}</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('aiBench.case.groundTruth')}</p>
         <div className="space-y-2">{questions.map(q => <div key={q.fieldKey} className="grid grid-cols-[160px_1fr_auto] items-center gap-2">
-          <span className="truncate text-xs text-slate-300">{q.label || q.fieldKey} <span className="text-slate-500">({q.type})</span></span>
+          <span className="truncate text-xs text-muted-foreground">{q.label || q.fieldKey} <span className="text-muted-foreground">({q.type})</span></span>
           {q.type === 'boolean'
             ? <select aria-label={q.fieldKey} className={inputClass} disabled={expected[q.fieldKey]?.unknown} value={expected[q.fieldKey]?.value || ''} onChange={e => setExpected({ ...expected, [q.fieldKey]: { value: e.target.value, unknown: false } })}><option value="">{t('aiBench.case.notAnswered')}</option><option value="true">{t('aiBench.yes')}</option><option value="false">{t('aiBench.no')}</option></select>
             : <input dir="auto" aria-label={q.fieldKey} className={inputClass} placeholder={t('aiBench.case.notAnswered')} disabled={expected[q.fieldKey]?.unknown} value={expected[q.fieldKey]?.value || ''} onChange={e => setExpected({ ...expected, [q.fieldKey]: { value: e.target.value, unknown: false } })} />}
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-400"><input type="checkbox" checked={Boolean(expected[q.fieldKey]?.unknown)} onChange={e => setExpected({ ...expected, [q.fieldKey]: { value: '', unknown: e.target.checked } })} />{t('aiBench.case.saidUnknown')}</label>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" checked={Boolean(expected[q.fieldKey]?.unknown)} onChange={e => setExpected({ ...expected, [q.fieldKey]: { value: '', unknown: e.target.checked } })} />{t('aiBench.case.saidUnknown')}</label>
         </div>)}</div>
       </div>
       <div>
-        <p className="mb-2 text-xs font-medium text-slate-300">{t('aiBench.case.extraction')}</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('aiBench.case.extraction')}</p>
         <div className="space-y-2">{items.map((it, i) => <div key={i} className="grid grid-cols-[160px_1fr_auto] gap-2">
           <input aria-label={t('aiBench.case.category')} className={inputClass} placeholder={t('aiBench.case.category')} value={it.category} onChange={e => setItems(items.map((x, j) => j === i ? { ...x, category: e.target.value } : x))} />
           <input dir="auto" aria-label={t('aiBench.case.value')} className={inputClass} placeholder={t('aiBench.case.value')} value={it.value} onChange={e => setItems(items.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
@@ -232,10 +232,10 @@ function CaseEditor({ suite, current, onClose }: { suite: BenchmarkSuite; curren
         </div>)}</div>
         <button type="button" className={`${secondaryClass} mt-2`} onClick={() => setItems([...items, { category: 'budget', value: '' }])}><Plus className="size-4" />{t('aiBench.case.addItem')}</button>
       </div>
-      <div className="rounded-xl border border-white/8 p-3">
-        <p className="mb-2 text-xs font-medium text-slate-300">{t('aiBench.case.audio')}</p>
+      <div className="rounded-xl border border-border p-3">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('aiBench.case.audio')}</p>
         {audio ? <div className="space-y-2">
-          <p className="text-[11px] text-slate-400">{t('aiBench.case.audioAttached')} <button type="button" className="text-sky-300 underline" onClick={() => setAudio(null)}>{t('aiBench.remove')}</button></p>
+          <p className="text-[11px] text-muted-foreground">{t('aiBench.case.audioAttached')} <button type="button" className="text-primary underline" onClick={() => setAudio(null)}>{t('aiBench.remove')}</button></p>
           <AgentField label={t('aiBench.case.reference')} hint={t('aiBench.case.referenceHint')}><textarea dir="auto" className={inputClass} rows={3} value={audio.referenceTranscript} onChange={e => setAudio({ ...audio, referenceTranscript: e.target.value })} /></AgentField>
           <AgentField label={t('aiBench.case.sttLanguage')}><input className={inputClass} placeholder={language === 'en' ? 'en' : 'ur'} value={audio.sttLanguage || ''} onChange={e => setAudio({ ...audio, sttLanguage: e.target.value || null })} /></AgentField>
         </div> : <label className={`${secondaryClass} cursor-pointer`}>{uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}{t('aiBench.case.upload')}
@@ -262,10 +262,10 @@ function ReviewDialog({ suite, c, onClose }: { suite: BenchmarkSuite; c: Benchma
       <button className={primaryClass} disabled={review.isPending} onClick={() => void act(true)}><BadgeCheck className="size-4" />{t('aiBench.review.approve', { revision: c.revision })}</button></div>}>
     <div className="space-y-4">
       {c.sample && <p className="rounded-xl border border-amber-400/25 bg-amber-400/[0.05] p-3 text-xs text-amber-100">{t('aiBench.review.sampleWarning')}</p>}
-      <ol className="space-y-1.5">{c.turns.map((turn, i) => <li key={i} className={`flex gap-2 text-sm ${turn.speaker === 'lead' ? 'text-slate-100' : 'text-slate-400'}`}><span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-slate-500">{t(`aiBench.speaker.${turn.speaker}`)}</span><span dir="auto">{turn.text}</span>{turn.startMs != null && <span className="ms-auto text-[10px] tabular-nums text-slate-500">{turn.startMs}–{turn.endMs ?? '?'} ms</span>}</li>)}</ol>
-      <div className="rounded-xl border border-white/8 p-3"><p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">{t('aiBench.case.groundTruth')}</p>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{c.groundTruth.answers.map(a => <div key={a.fieldKey} className="contents"><dt className="text-slate-400">{labelOf(a.fieldKey)}</dt><dd dir="auto" className="text-slate-100">{a.expectUnknown ? t('aiBench.case.saidUnknown') : display(a.expected)}</dd></div>)}</dl>
-        {c.groundTruth.extraction.length > 0 && <p className="mt-2 text-xs text-slate-400">{c.groundTruth.extraction.map(i => `${i.category}: ${display(i.value)}`).join(' · ')}</p>}
+      <ol className="space-y-1.5">{c.turns.map((turn, i) => <li key={i} className={`flex gap-2 text-sm ${turn.speaker === 'lead' ? 'text-foreground' : 'text-muted-foreground'}`}><span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">{t(`aiBench.speaker.${turn.speaker}`)}</span><span dir="auto">{turn.text}</span>{turn.startMs != null && <span className="ms-auto text-[10px] tabular-nums text-muted-foreground">{turn.startMs}–{turn.endMs ?? '?'} ms</span>}</li>)}</ol>
+      <div className="rounded-xl border border-border p-3"><p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t('aiBench.case.groundTruth')}</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{c.groundTruth.answers.map(a => <div key={a.fieldKey} className="contents"><dt className="text-muted-foreground">{labelOf(a.fieldKey)}</dt><dd dir="auto" className="text-foreground">{a.expectUnknown ? t('aiBench.case.saidUnknown') : display(a.expected)}</dd></div>)}</dl>
+        {c.groundTruth.extraction.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{c.groundTruth.extraction.map(i => `${i.category}: ${display(i.value)}`).join(' · ')}</p>}
       </div>
       <AgentField label={t('aiBench.review.note')}><textarea className={inputClass} rows={2} value={note} onChange={e => setNote(e.target.value)} /></AgentField>
     </div>
@@ -282,16 +282,16 @@ function RunsPanel({ suite }: { suite: BenchmarkSuite }) {
   const toggle = (id: string) => setCompare(compare.includes(id) ? compare.filter(x => x !== id) : [...compare.slice(-1), id]);
   return <div className="space-y-4">
     <div className="flex flex-wrap justify-end gap-2"><button className={primaryClass} disabled={!canWrite} onClick={() => setStarting(true)}><Play className="size-4" />{t('aiBench.run.start')}</button></div>
-    {runs.data && !runs.data.length && <p className={`${panelClass} text-center text-xs text-slate-400`}>{t('aiBench.run.none')}</p>}
-    <ul className="space-y-2">{runs.data?.map(r => <li key={r._id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-[#0c1425] p-3.5">
+    {runs.data && !runs.data.length && <p className={`${panelClass} text-center text-xs text-muted-foreground`}>{t('aiBench.run.none')}</p>}
+    <ul className="space-y-2">{runs.data?.map(r => <li key={r._id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-3.5">
       <input type="checkbox" aria-label={t('aiBench.run.selectCompare')} checked={compare.includes(r._id)} disabled={r.status !== 'completed'} onChange={() => toggle(r._id)} />
       <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenRun(openRun === r._id ? null : r._id)}>
-        <p className="text-sm font-medium text-slate-100">{r.label || t('aiBench.run.untitled')} <span className="text-xs font-normal text-slate-500">· {when(r.createdAt)}</span></p>
-        <p className="text-[11px] text-slate-500">{t(`aiBench.run.status.${r.status}`)}{r.scriptVersionId ? ` · ${t('aiBench.run.scriptVersion')}` : ''}{r.knowledgeVersionId ? ` · ${t('aiBench.run.knowledge', { id: r.knowledgeVersionId })}` : ''}{r.error ? ` · ${r.error}` : ''}</p>
+        <p className="text-sm font-medium text-foreground">{r.label || t('aiBench.run.untitled')} <span className="text-xs font-normal text-muted-foreground">· {when(r.createdAt)}</span></p>
+        <p className="text-[11px] text-muted-foreground">{t(`aiBench.run.status.${r.status}`)}{r.scriptVersionId ? ` · ${t('aiBench.run.scriptVersion')}` : ''}{r.knowledgeVersionId ? ` · ${t('aiBench.run.knowledge', { id: r.knowledgeVersionId })}` : ''}{r.error ? ` · ${r.error}` : ''}</p>
       </button>
-      <div className="text-end text-xs"><p className="font-semibold tabular-nums text-slate-100">{r.status === 'completed' ? pct(r.metrics?.overall.fieldAccuracy, 1) ?? t('aiBench.noScore') : '—'}</p>
-        {r.metrics && <p className="text-[10px] text-slate-500">{t('aiBench.run.scoredCases', { n: r.metrics.overall.cases, excluded: r.metrics.unreviewedExcluded })}</p>}</div>
-      {(r.status === 'queued' || r.status === 'running') && <Loader2 className="size-4 animate-spin text-sky-300" />}
+      <div className="text-end text-xs"><p className="font-semibold tabular-nums text-foreground">{r.status === 'completed' ? pct(r.metrics?.overall.fieldAccuracy, 1) ?? t('aiBench.noScore') : '—'}</p>
+        {r.metrics && <p className="text-[10px] text-muted-foreground">{t('aiBench.run.scoredCases', { n: r.metrics.overall.cases, excluded: r.metrics.unreviewedExcluded })}</p>}</div>
+      {(r.status === 'queued' || r.status === 'running') && <Loader2 className="size-4 animate-spin text-primary" />}
     </li>)}</ul>
     {compare.length === 2 && <Comparison a={compare[0]} b={compare[1]} />}
     {openRun && <RunResults runId={openRun} suite={suite} />}
@@ -319,31 +319,31 @@ function StartRunDialog({ suite, onClose }: { suite: BenchmarkSuite; onClose: ()
         <AgentField label={t('aiBench.run.version')} hint={t('aiBench.run.versionHint')}><select className={inputClass} disabled={!agentId} value={scriptVersionId} onChange={e => setScriptVersionId(e.target.value)}><option value="">—</option>{versions.data?.map(v => <option key={v._id} value={v._id}>v{v.number}{v.label ? ` · ${v.label}` : ''}{v.active ? ` (${t('aiExp.active')})` : ''}</option>)}</select></AgentField>
       </div>
       <AgentField label={t('aiBench.run.knowledgeId')} hint={t('aiBench.run.knowledgeHint')}><input className={inputClass} value={knowledgeVersionId} onChange={e => setKnowledgeVersionId(e.target.value)} /></AgentField>
-      <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={includeExtractor} onChange={e => setIncludeExtractor(e.target.checked)} /><span>{t('aiBench.run.extractor')}<span className="block text-[11px] text-slate-500">{t('aiBench.run.extractorHint')}</span></span></label>
-      <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={includeAudio} onChange={e => setIncludeAudio(e.target.checked)} /><span>{t('aiBench.run.audio')}<span className="block text-[11px] text-slate-500">{t('aiBench.run.audioHint')}</span></span></label>
+      <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={includeExtractor} onChange={e => setIncludeExtractor(e.target.checked)} /><span>{t('aiBench.run.extractor')}<span className="block text-[11px] text-muted-foreground">{t('aiBench.run.extractorHint')}</span></span></label>
+      <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={includeAudio} onChange={e => setIncludeAudio(e.target.checked)} /><span>{t('aiBench.run.audio')}<span className="block text-[11px] text-muted-foreground">{t('aiBench.run.audioHint')}</span></span></label>
     </div>
   </AgentDialog>;
 }
 
 function MetricRow({ label, m, t }: { label: string; m?: BenchmarkMetrics; t: Translate }) {
   const nr = t('aiBench.noScore');
-  return <tr className="border-t border-white/[0.06]">
-    <td className="px-3 py-2 text-slate-200">{label}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-400">{m?.cases ?? 0}</td>
-    <td className="px-3 py-2 text-end font-semibold tabular-nums text-slate-50">{pct(m?.fieldAccuracy, 1) ?? nr}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-300">{pct(m?.exactMatchRate, 1) ?? nr}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-300">{pct(m?.missRate, 1) ?? nr}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-300">{pct(m?.falsePositiveRate, 1) ?? nr}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-300">{m?.extraction ? `${pct(m.extraction.precision) ?? '—'} / ${pct(m.extraction.recall) ?? '—'}` : t('aiBench.notRun')}</td>
-    <td className="px-3 py-2 text-end tabular-nums text-slate-300">{m?.wer ? pct(m.wer.value, 1) : t('aiBench.notRun')}</td>
+  return <tr className="border-t border-border">
+    <td className="px-3 py-2 text-foreground">{label}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{m?.cases ?? 0}</td>
+    <td className="px-3 py-2 text-end font-semibold tabular-nums text-foreground">{pct(m?.fieldAccuracy, 1) ?? nr}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{pct(m?.exactMatchRate, 1) ?? nr}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{pct(m?.missRate, 1) ?? nr}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{pct(m?.falsePositiveRate, 1) ?? nr}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{m?.extraction ? `${pct(m.extraction.precision) ?? '—'} / ${pct(m.extraction.recall) ?? '—'}` : t('aiBench.notRun')}</td>
+    <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{m?.wer ? pct(m.wer.value, 1) : t('aiBench.notRun')}</td>
   </tr>;
 }
 
 function MetricsTable({ run, t }: { run: BenchmarkRun; t: Translate }) {
   const m = run.metrics!;
-  return <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0c1425]">
+  return <div className="overflow-x-auto rounded-2xl border border-border bg-card">
     <table className="w-full min-w-[760px] text-sm">
-      <thead><tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{['group', 'cases', 'accuracy', 'exact', 'missed', 'falsePositive', 'extraction', 'wer'].map((h, i) => <th key={h} className={`px-3 py-2.5 ${i ? 'text-end' : 'text-start'}`}>{t(`aiBench.metric.${h}`)}</th>)}</tr></thead>
+      <thead><tr className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{['group', 'cases', 'accuracy', 'exact', 'missed', 'falsePositive', 'extraction', 'wer'].map((h, i) => <th key={h} className={`px-3 py-2.5 ${i ? 'text-end' : 'text-start'}`}>{t(`aiBench.metric.${h}`)}</th>)}</tr></thead>
       <tbody>
         <MetricRow label={t('aiBench.metric.overall')} m={m.overall} t={t} />
         {Object.entries(m.byLanguage).map(([k, v]) => <MetricRow key={`l-${k}`} label={languageName(t, k)} m={v} t={t} />)}
@@ -353,22 +353,22 @@ function MetricsTable({ run, t }: { run: BenchmarkRun; t: Translate }) {
   </div>;
 }
 
-const OUTCOME_CLASS: Record<string, string> = { exact: 'text-emerald-300', normalized: 'text-emerald-200', wrong: 'text-rose-300', missed: 'text-amber-300', false_positive: 'text-rose-300', correct_empty: 'text-slate-500' };
+const OUTCOME_CLASS: Record<string, string> = { exact: 'text-emerald-300', normalized: 'text-emerald-200', wrong: 'text-rose-300', missed: 'text-amber-300', false_positive: 'text-rose-300', correct_empty: 'text-muted-foreground' };
 function RunResults({ runId }: { runId: string; suite: BenchmarkSuite }) {
   const t = useT();
   const run = useBenchmarkRun(runId).data;
-  if (!run) return <p className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="size-3.5 animate-spin" />{t('aiQuality.loading')}</p>;
-  if (run.status !== 'completed' || !run.metrics) return <p className={`${panelClass} text-xs text-slate-400`}>{t(`aiBench.run.status.${run.status}`)}{run.error ? ` · ${run.error}` : ''}</p>;
+  if (!run) return <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />{t('aiQuality.loading')}</p>;
+  if (run.status !== 'completed' || !run.metrics) return <p className={`${panelClass} text-xs text-muted-foreground`}>{t(`aiBench.run.status.${run.status}`)}{run.error ? ` · ${run.error}` : ''}</p>;
   return <section className="space-y-3">
     {run.metrics.unreviewedExcluded > 0 && <p className="text-xs text-amber-200">{t('aiBench.run.excludedNote', { n: run.metrics.unreviewedExcluded })}</p>}
     <MetricsTable run={run} t={t} />
-    <p className="text-[11px] text-slate-500">{t('aiBench.run.extractorUsed', { name: run.extractor || '—' })} · {t(`aiBench.run.source.${run.questionnaireSource}`)}</p>
-    <ul className="space-y-2">{run.caseResults?.map(r => <li key={r.caseId} className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-      <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-slate-100">{r.title}</p><span className={chip}>{languageName(t, r.language)}</span>
-        {!r.scored && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">{t('aiBench.run.notScored')}</span>}</div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">{r.fields.filter(f => f.outcome !== 'correct_empty').map(f => <li key={f.fieldKey}><span className="text-slate-400">{f.fieldKey}: </span><span className={OUTCOME_CLASS[f.outcome]}>{t(`aiBench.outcome.${f.outcome}`)}</span><span dir="auto" className="text-slate-500"> ({display(f.predicted) || '∅'} / {display(f.expected) || '∅'})</span></li>)}</ul>
+    <p className="text-[11px] text-muted-foreground">{t('aiBench.run.extractorUsed', { name: run.extractor || '—' })} · {t(`aiBench.run.source.${run.questionnaireSource}`)}</p>
+    <ul className="space-y-2">{run.caseResults?.map(r => <li key={r.caseId} className="rounded-xl border border-border bg-white/[0.02] p-3">
+      <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">{r.title}</p><span className={chip}>{languageName(t, r.language)}</span>
+        {!r.scored && <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">{t('aiBench.run.notScored')}</span>}</div>
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">{r.fields.filter(f => f.outcome !== 'correct_empty').map(f => <li key={f.fieldKey}><span className="text-muted-foreground">{f.fieldKey}: </span><span className={OUTCOME_CLASS[f.outcome]}>{t(`aiBench.outcome.${f.outcome}`)}</span><span dir="auto" className="text-muted-foreground"> ({display(f.predicted) || '∅'} / {display(f.expected) || '∅'})</span></li>)}</ul>
       {r.extraction.status === 'error' && <p className="mt-1 text-[11px] text-rose-300">{t('aiBench.run.extractionError', { error: r.extraction.error || '' })}</p>}
-      {r.audio.status === 'ok' && <p className="mt-1 text-[11px] text-slate-400">WER {pct(r.audio.wer, 1)} · <span dir="auto">{r.audio.hypothesis}</span></p>}
+      {r.audio.status === 'ok' && <p className="mt-1 text-[11px] text-muted-foreground">WER {pct(r.audio.wer, 1)} · <span dir="auto">{r.audio.hypothesis}</span></p>}
       {r.audio.status === 'error' && <p className="mt-1 text-[11px] text-rose-300">{r.audio.error}</p>}
     </li>)}</ul>
   </section>;
@@ -380,12 +380,12 @@ function Comparison({ a, b }: { a: string; b: string }) {
   if (!cmp) return null;
   const delta = (d: number | null) => d == null ? '—' : `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)} pt`;
   return <section className={panelClass}>
-    <h3 className="flex items-center gap-2 text-sm font-semibold"><GitCompare className="size-4 text-sky-300" />{t('aiBench.compare.title', { a: cmp.a.label || when(cmp.a.createdAt), b: cmp.b.label || when(cmp.b.createdAt) })}</h3>
+    <h3 className="flex items-center gap-2 text-sm font-semibold"><GitCompare className="size-4 text-primary" />{t('aiBench.compare.title', { a: cmp.a.label || when(cmp.a.createdAt), b: cmp.b.label || when(cmp.b.createdAt) })}</h3>
     {!cmp.sameSuite && <p className="mt-1 text-xs text-amber-200">{t('aiBench.compare.otherSuite')}</p>}
-    <table className="mt-3 w-full text-sm"><thead><tr className="text-[10px] uppercase tracking-wider text-slate-500"><th className="text-start">{t('aiBench.metric.group')}</th><th className="text-end">A</th><th className="text-end">B</th><th className="text-end">Δ</th></tr></thead>
-      <tbody>{(['fieldAccuracy', 'exactMatchRate', 'missRate', 'falsePositiveRate'] as const).map(k => <tr key={k} className="border-t border-white/[0.06]"><td className="py-1.5 text-slate-300">{t(`aiBench.compare.${k}`)}</td><td className="text-end tabular-nums">{pct(cmp.overall[k].a, 1) ?? '—'}</td><td className="text-end tabular-nums">{pct(cmp.overall[k].b, 1) ?? '—'}</td><td className="text-end tabular-nums text-slate-100">{delta(cmp.overall[k].delta)}</td></tr>)}
-        {[...cmp.byLanguage.map(r => ({ ...r, label: languageName(t, r.key) })), ...cmp.byCondition.map(r => ({ ...r, label: t(`aiBench.condition.${r.key}`) }))].map(r => <tr key={r.label} className="border-t border-white/[0.06] text-xs"><td className="py-1.5 text-slate-400">{r.label} <span className="text-slate-600">({r.casesA}/{r.casesB})</span></td><td className="text-end tabular-nums">{pct(r.fieldAccuracy.a, 1) ?? '—'}</td><td className="text-end tabular-nums">{pct(r.fieldAccuracy.b, 1) ?? '—'}</td><td className="text-end tabular-nums">{delta(r.fieldAccuracy.delta)}</td></tr>)}
+    <table className="mt-3 w-full text-sm"><thead><tr className="text-[10px] uppercase tracking-wider text-muted-foreground"><th className="text-start">{t('aiBench.metric.group')}</th><th className="text-end">A</th><th className="text-end">B</th><th className="text-end">Δ</th></tr></thead>
+      <tbody>{(['fieldAccuracy', 'exactMatchRate', 'missRate', 'falsePositiveRate'] as const).map(k => <tr key={k} className="border-t border-border"><td className="py-1.5 text-muted-foreground">{t(`aiBench.compare.${k}`)}</td><td className="text-end tabular-nums">{pct(cmp.overall[k].a, 1) ?? '—'}</td><td className="text-end tabular-nums">{pct(cmp.overall[k].b, 1) ?? '—'}</td><td className="text-end tabular-nums text-foreground">{delta(cmp.overall[k].delta)}</td></tr>)}
+        {[...cmp.byLanguage.map(r => ({ ...r, label: languageName(t, r.key) })), ...cmp.byCondition.map(r => ({ ...r, label: t(`aiBench.condition.${r.key}`) }))].map(r => <tr key={r.label} className="border-t border-border text-xs"><td className="py-1.5 text-muted-foreground">{r.label} <span className="text-slate-600">({r.casesA}/{r.casesB})</span></td><td className="text-end tabular-nums">{pct(r.fieldAccuracy.a, 1) ?? '—'}</td><td className="text-end tabular-nums">{pct(r.fieldAccuracy.b, 1) ?? '—'}</td><td className="text-end tabular-nums">{delta(r.fieldAccuracy.delta)}</td></tr>)}
       </tbody></table>
-    {cmp.cases.some(c => c.correctA !== c.correctB) && <ul className="mt-3 space-y-1 text-xs">{cmp.cases.filter(c => c.correctA !== c.correctB).map(c => <li key={c.caseId} className="text-slate-300">{c.title}: {c.correctA} → {c.correctB} / {c.fields}{!c.sameRevision && <span className="text-amber-200"> · {t('aiBench.compare.edited')}</span>}</li>)}</ul>}
+    {cmp.cases.some(c => c.correctA !== c.correctB) && <ul className="mt-3 space-y-1 text-xs">{cmp.cases.filter(c => c.correctA !== c.correctB).map(c => <li key={c.caseId} className="text-muted-foreground">{c.title}: {c.correctA} → {c.correctB} / {c.fields}{!c.sameRevision && <span className="text-amber-200"> · {t('aiBench.compare.edited')}</span>}</li>)}</ul>}
   </section>;
 }

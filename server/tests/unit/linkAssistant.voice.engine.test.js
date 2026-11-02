@@ -28,14 +28,19 @@ describe('link voice instructions', () => {
 
 describe('voice call cost', () => {
   it('prices real token usage (gpt-realtime list prices)', () => {
-    const usage = { modelUsage: [{ type: 'llm_usage', inputAudioTokens: 10000, inputCachedAudioTokens: 4000, outputAudioTokens: 2000, inputTextTokens: 3000, outputTextTokens: 500 }] };
+    const usage = { modelUsage: [{ type: 'llm_usage', provider: 'openai', model: 'gpt-realtime', inputAudioTokens: 10000, inputCachedTokens: 4000, inputCachedAudioTokens: 4000, outputAudioTokens: 2000, inputTextTokens: 3000, outputTextTokens: 500 }] };
     const { amount, estimated } = voiceCallCost(usage, 60);
-    expect(estimated).toBe(false);
+    expect(estimated).toBe(true); // Provider usage priced at list rates is still an estimate.
     expect(amount).toBeCloseTo((6000 * 32 + 4000 * 0.4 + 2000 * 64 + 3000 * 4 + 500 * 16) / 1e6, 6);
   });
   it('falls back to a per-minute estimate so the budget still applies', () => {
     expect(voiceCallCost(null, 120)).toEqual({ amount: 0.24, estimated: true });
     expect(voiceCallCost({ modelUsage: [{ type: 'tts_usage' }] }, 0).amount).toBe(0);
+  });
+  it('prices Gemini link calls by their own model and never guesses missing model identity', () => {
+    const row = { type: 'llm_usage', provider: 'Gemini', model: 'gemini-3.8-live', inputAudioTokens: 10000, outputAudioTokens: 2000, inputTextTokens: 3000, outputTextTokens: 500 };
+    expect(voiceCallCost({ modelUsage: [row] }, 60)).toMatchObject({ amount: 0.0585, source: 'token_usage', estimated: true, unpriced: false });
+    expect(voiceCallCost({ modelUsage: [{ ...row, model: '' }] }, 60)).toMatchObject({ source: 'budget_reservation', calculatedApiCostUsd: null, unpriced: true });
   });
 });
 

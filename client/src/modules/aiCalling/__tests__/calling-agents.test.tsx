@@ -11,7 +11,7 @@ import type { CallingAgent, Campaign, PairedDevice, Question, TelephonyHealth } 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), assign: vi.fn(), launch: vi.fn(), start: vi.fn(), duplicate: vi.fn(), remove: vi.fn(), images: vi.fn(), uploadImage: vi.fn(), removeImage: vi.fn(), presets: vi.fn(), leadList: vi.fn(), facets: vi.fn(), write: true }));
 const connections = vi.hoisted(() => ({ phones: [] as PairedDevice[], health: { configured: true, eligible: true } as Partial<TelephonyHealth> }));
 vi.mock('../services/calling-agent-api', () => ({ callingAgentApi: mocks }));
-vi.mock('../services/ai-calling-api', () => ({ aiCallingApi: { start: mocks.start, listCampaigns: async () => ({ data: [], pagination: { total: 0, pages: 0 } }), telephonyHealth: async () => connections.health, runStatus: async () => ({ blockers: [], waits: [] }), languages: async () => ({ languages: [{ code: 'en', name: 'English' }] }) } }));
+vi.mock('../services/ai-calling-api', () => ({ aiCallingApi: { start: mocks.start, listCampaigns: async () => ({ data: [], pagination: { total: 0, pages: 0 } }), telephonyHealth: async () => connections.health, runStatus: async () => ({ blockers: [], waits: [] }), languages: async () => ({ languages: [{ code: 'en', name: 'English', nativeName: 'English' }, { code: 'ur', name: 'Urdu', nativeName: 'اردو' }] }) } }));
 vi.mock('../hooks/use-paired-phone', () => ({ usePairedDevices: () => ({ data: connections.phones, refetch: vi.fn() }) }));
 vi.mock('../hooks/use-ai-calling-realtime', () => ({ useAiCallingRealtime() {} }));
 vi.mock('@/shared/hooks/use-permissions', () => ({ usePermissions: () => ({ isAdmin: false, hasPermission: () => mocks.write }) }));
@@ -66,13 +66,21 @@ function open(element: React.ReactNode) {
 }
 
 describe('agent-first calling UI', () => {
+  it('opens the requested agent directly and returns to the gallery', async () => {
+    open(<CallingAgentPlatform initialAgentId="agent-1" />);
+    expect(await screen.findByRole('heading', { name: 'Sarah Sales' })).toBeVisible();
+    expect(mocks.get).toHaveBeenCalledWith('agent-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Calling Agents' }));
+    expect(await screen.findByRole('button', { name: 'Open Sarah Sales' })).toBeVisible();
+  });
+
   it('assigns searched and filtered leads during creation and saves them in the creation request', async () => {
     const first = leadSchema.parse(makeLeadDTO({ id: 'chosen-1', name: 'First customer' }));
     const second = leadSchema.parse(makeLeadDTO({ id: 'chosen-2', name: 'No phone customer', phone: null, mobile: null }));
     mocks.leadList.mockResolvedValue({ data: [first, second], pagination: { hasNext: false, nextCursor: null, total: 2 } });
     open(<CallingAgentPlatform />);
     fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
-    fireEvent.change(screen.getByLabelText('Agent name *'), { target: { value: 'Intake' } });
+    fireEvent.change(await screen.findByLabelText('Agent name *'), { target: { value: 'Intake' } });
     fireEvent.mouseDown(screen.getByRole('tab', { name: /4 · Assign leads/ }), { button: 0, ctrlKey: false });
     await screen.findByRole('option', { name: 'Switzerland' });
     fireEvent.change(screen.getByRole('combobox', { name: 'Country' }), { target: { value: 'country:CH' } });
@@ -186,21 +194,38 @@ describe('agent-first calling UI', () => {
     expect(await screen.findByRole('button', { name: 'Open Sarah Sales' })).toBeTruthy();
     expect(screen.queryByText('Paired phones')).toBeNull();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Call History' }), { button: 0, ctrlKey: false });
-    expect(screen.getByText('Production call records')).toBeTruthy();
+    expect(await screen.findByText('Production call records')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open Sarah Sales' })).toBeNull();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Connections' }), { button: 0, ctrlKey: false });
-    expect(screen.getByText('Paired phones')).toBeTruthy();
+    expect(await screen.findByText('Paired phones')).toBeTruthy();
   });
 
   it('creates an independent draft and opens its tabbed workspace without launching or requiring leads', async () => {
     open(<CallingAgentPlatform />);
     fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
-    fireEvent.change(screen.getByLabelText('Agent name *'), { target: { value: 'Follow-up agent' } });
+    fireEvent.change(await screen.findByLabelText('Agent name *'), { target: { value: 'Follow-up agent' } });
     fireEvent.change(screen.getByLabelText('Title / role'), { target: { value: 'Follow-up specialist' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Follow-up agent', availability: 'draft', questionnaire: { questions: [] } })));
     expect(await screen.findByRole('tab', { name: 'Questions' })).toBeTruthy();
     expect(mocks.launch).not.toHaveBeenCalled();
+  });
+
+  it('saves the conversation language from identity settings and shares it with voice settings', async () => {
+    open(<CallingAgentPlatform initialAgentId="agent-1" />);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }), { button: 0, ctrlKey: false });
+    const picker = await screen.findByRole('button', { name: 'Conversation language' });
+    await waitFor(() => expect(picker).toBeEnabled());
+    expect(picker).toHaveTextContent('English');
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('button', { name: /Urdu/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith('agent-1', expect.objectContaining({
+      agentConfig: expect.objectContaining({ language: 'ur', voice: 'coral', objective: 'Qualify interest' }),
+    })));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled());
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Voice & instructions' }), { button: 0, ctrlKey: false });
+    expect(screen.getByRole('button', { name: 'Conversation language' })).toHaveTextContent('Urdu');
   });
 
   it('saves questions through the agent API and protects unsaved settings when switching tabs', async () => {

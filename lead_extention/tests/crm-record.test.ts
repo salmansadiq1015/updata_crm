@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { toExtensionRecord } from '../src/integration/crm-api';
+import { toExtensionRecord, toCrmImportCsv } from '../src/integration/crm-api';
+import { businessCategory, withImportSearchContext } from '../src/shared/business-category';
+import type { SearchRecord } from '../src/shared/types';
 import type { Lead } from '../src/shared/types';
 
 const lead = (overrides: Partial<Lead> = {}): Lead => ({
@@ -20,6 +22,43 @@ const lead = (overrides: Partial<Lead> = {}): Lead => ({
 });
 
 describe('toExtensionRecord — the CRM payload no longer drops rich business data', () => {
+  it.each([null, '', '  ', 'Business', 'establishment', 'point_of_interest'])('falls back from missing/generic category %s to this lead’s selected Gym task', (category) => {
+    const record = toExtensionRecord(lead({ category, categories: [], discoveryCategories: ['Gym'] }));
+    expect(record.category).toBe('Gym');
+    expect(record.discoveryCategories).toEqual(['Gym']);
+  });
+
+  it('preserves actual categories and keeps multi-type campaign provenance per lead', () => {
+    expect(businessCategory(lead({ category: 'Fitness center', discoveryCategories: ['Gym'] }))).toBe('Fitness center');
+    expect(toExtensionRecord(lead({ category: null, categories: [], discoveryCategories: ['Gym'] })).category).toBe('Gym');
+    expect(toExtensionRecord(lead({ category: null, categories: [], discoveryCategories: ['Dentist'] })).category).toBe('Dentist');
+    expect(toExtensionRecord(lead({ category: null, categories: ['Gym'], discoveryCategories: [] })).category).toBe('Gym');
+  });
+
+  it('recovers legacy context from its saved single-type search, without assigning one type to every mixed-campaign lead', () => {
+    const savedSearch = { businessType: 'Gym', location: 'Mohammedia, Morocco' } as SearchRecord;
+    const historic = lead({ category: null, categories: [], discoveryCategories: [], searchLocation: null });
+    const recovered = withImportSearchContext(historic, savedSearch);
+    expect(toExtensionRecord(recovered)).toMatchObject({ category: 'Gym', searchLocation: 'Mohammedia, Morocco' });
+    expect(withImportSearchContext(historic, { ...savedSearch, businessTypes: ['Gym', 'Dentist'] }).discoveryCategories).toEqual([]);
+    expect(withImportSearchContext(historic, { ...savedSearch, businessTypes: ['Gym', 'Dentist'], config: {
+      businessType: 'Gym', businessTypes: [], location: 'Mohammedia', radiusKm: null,
+      maxResults: 100, queryExpansion: false, enableEnrichment: false, maxPagesPerWebsite: 1,
+    } }).discoveryCategories).toEqual([]);
+    expect(withImportSearchContext(historic)).toBe(historic);
+  });
+
+  it('preserves every rich field in the CSV fallback, including escaped commas and quotes', () => {
+    const original = lead({ businessName: 'Gym "A", Studio', category: null, categories: [], discoveryCategories: ['Gym'] });
+    const csv = toCrmImportCsv([original]);
+    // Decode a quoted RFC4180 row independently of the serializer.
+    const cells = csv.split('\r\n')[1].match(/(?:"(?:[^"]|"")*"|[^,]*)(?:,|$)/g)!.slice(0, -1)
+      .map((cell) => cell.replace(/,$/, '')).map((cell) => cell.startsWith('"') ? cell.slice(1, -1).replace(/""/g, '"') : cell);
+    const headers = csv.replace(/^\uFEFF/, '').split('\r\n')[0].split(',');
+    const payload = JSON.parse(cells[headers.indexOf('extensionRecord')]);
+    expect(payload).toEqual(toExtensionRecord(original));
+    expect(payload).toMatchObject({ category: 'Gym', area: 'Johar Town', rating: 4.9, businessName: 'Gym "A", Studio' });
+  });
   it('sends business type, full location, rating distribution, hours, photos and the maps url', () => {
     const record = toExtensionRecord(lead()) as Record<string, unknown>;
     expect(record.category).toBe('Hotel');

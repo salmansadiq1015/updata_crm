@@ -267,7 +267,7 @@ describe('SMS link voice call', () => {
     expect(s.transcript.filter((t) => t.source === 'voice')).toHaveLength(2);
 
     // The worker ends the call with real token usage → cost charged once, conversation finished.
-    const usage = { modelUsage: [{ type: 'llm_usage', inputAudioTokens: 20000, outputAudioTokens: 3000, inputTextTokens: 4000, outputTextTokens: 600 }] };
+    const usage = { modelUsage: [{ type: 'llm_usage', provider: 'openai', model: 'gpt-realtime', inputAudioTokens: 20000, outputAudioTokens: 3000, inputTextTokens: 4000, outputTextTokens: 600 }] };
     const end = { durationSeconds: 95, roomName, cost: { amount: 0, currency: 'USD', breakdown: { usage } } };
     await agent.post('/end', end).expect(200);
     await agent.post('/end', end).expect(200); // replayed: no double charge
@@ -277,6 +277,9 @@ describe('SMS link voice call', () => {
     expect(s.voice.activeUntil).toBeNull();
     expect(s.voice.seconds).toBe(95);
     expect(s.voice.cost).toBeCloseTo((20000 * 32 + 3000 * 64 + 4000 * 4 + 600 * 16) / 1e6, 6);
+    expect(s.voice.costReports).toHaveLength(1);
+    expect(s.voice.costReports[0]).toMatchObject({ source: 'token_usage', unpriced: false, invoiceVerified: false });
+    expect(s.voice.costReports[0].usage[0].model).toBe('gpt-realtime');
     const spend = await LinkSpend.findOne({ campaignId: s.campaignId });
     expect(spend.amount).toBeCloseTo(s.voice.cost, 6);
     const call = await CallRecord.findById(s.callRecordId);

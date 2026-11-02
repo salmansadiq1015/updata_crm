@@ -42,7 +42,11 @@
     "**/*.tsx",
     "**/*.js",
     "**/*.jsx",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next/company-qa/types/**/*.ts",
+    ".next/company-qa/dev/types/**/*.ts",
+    "dist/company-qa/types/**/*.ts",
+    "dist/company-qa/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

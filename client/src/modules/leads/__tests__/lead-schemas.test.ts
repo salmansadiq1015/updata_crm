@@ -5,6 +5,9 @@ import { makeLeadDTO } from './mocks/data';
 const parse = (overrides: Record<string, unknown> = {}) => leadSchema.parse(makeLeadDTO(overrides));
 
 describe('leadSchema — createdBy', () => {
+  it('keeps extension source provenance instead of falling back to manual', () => {
+    expect(parse({ source: 'extension' }).source).toBe('extension');
+  });
   it('keeps the name fields of a populated creator', () => {
     const lead = parse({
       createdBy: { _id: 'u-9', firstName: 'Olivia', lastName: 'Keller', email: 'olivia@example.ch' },

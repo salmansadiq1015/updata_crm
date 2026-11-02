@@ -101,7 +101,7 @@ export type LeadScoringPreview = {
 
 // ── Duplicates ───────────────────────────────────────────────────────────────
 
-export type DuplicateMethod = 'PLACE_ID' | 'PHONE' | 'EMAIL' | 'WEBSITE' | 'NAME_POSTAL' | 'NAME_NEARBY';
+export type DuplicateMethod = 'PLACE_ID' | 'PHONE' | 'EMAIL' | 'WEBSITE' | 'NAME_POSTAL' | 'NAME_NEARBY' | 'BUSINESS_IDENTITY';
 
 export type DuplicateReason = { method: DuplicateMethod | string; value: string | null; confidence: number };
 

@@ -24,7 +24,7 @@ export function CrmSection() {
         <div className="mt-10 grid gap-8 xl:grid-cols-[1.3fr_.7fr] xl:items-stretch">
           <Reveal><LeadsVisual className="h-full min-h-[430px]" /></Reveal>
           <Reveal delay={0.1} className="rounded-[22px] border border-white/[0.08] bg-[#090f1b] p-5 sm:p-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Live pipeline model</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('experience.preview.pipeline')}</p>
             <div className="mt-6 space-y-3">
               {statuses.map((status, index) => (
                 <motion.div key={status} initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.08, duration: 0.4 }} className="relative flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">

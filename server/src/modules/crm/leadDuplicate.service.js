@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Lead from './lead.model.js';
+import { businessIdentityKeys } from './leadIdentity.js';
 import LeadDuplicateCandidate, { pairKeyOf } from './leadDuplicateCandidate.model.js';
 import { normalizeName } from '../businessDiscovery/engine/normalizer.js';
 import queueManager from '../../shared/queue/QueueManager.js';
@@ -22,7 +23,7 @@ import { ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
 export const LEAD_DUPLICATES_QUEUE = 'lead-duplicates';
 
 export const METHOD_CONFIDENCE = Object.freeze({
-  PLACE_ID: 1, PHONE: 0.95, EMAIL: 0.9, WEBSITE: 0.9, NAME_POSTAL: 0.75, NAME_NEARBY: 0.7,
+  PLACE_ID: 1, PHONE: 0.95, EMAIL: 0.9, WEBSITE: 0.9, NAME_POSTAL: 0.75, NAME_NEARBY: 0.7, BUSINESS_IDENTITY: 1,
 });
 const MAX_GROUP = 25;
 const NEARBY_METERS = 150;
@@ -51,6 +52,7 @@ export function combineConfidence(reasons = []) {
 /** The match keys of one lead, each with the Mongo filter that finds its twins. */
 export function matchKeys(lead) {
   const keys = [];
+  for (const identity of businessIdentityKeys(lead)) keys.push({ method: 'BUSINESS_IDENTITY', value: identity, filter: { businessIdentityKeys: identity } });
   const placeId = lead.sourceMetadata?.googlePlaceId;
   if (placeId) keys.push({ method: 'PLACE_ID', value: placeId, filter: { 'sourceMetadata.googlePlaceId': placeId } });
   if (lead.normalizedPhone) keys.push({ method: 'PHONE', value: lead.normalizedPhone, filter: { normalizedPhone: lead.normalizedPhone } });
@@ -161,6 +163,22 @@ class LeadDuplicateService {
         for (let i = 0; i < group.ids.length; i += 1) {
           for (let j = i + 1; j < group.ids.length; j += 1) this._addPair(pairs, group.ids[i], group.ids[j], g.method, value);
         }
+      }
+    }
+    // Legacy records may not own a persisted unique key (e.g. two converted
+    // leads requiring review). Derive identities so scans retain those pairs.
+    const identityGroups = new Map();
+    const identityCursor = Lead.find({}).select('name type source address sourceMetadata providerMeta.mapsUrl notes').lean().cursor();
+    for await (const lead of identityCursor) {
+      for (const identity of businessIdentityKeys(lead)) {
+        if (!identityGroups.has(identity)) identityGroups.set(identity, []);
+        identityGroups.get(identity).push(lead._id);
+      }
+    }
+    for (const [identity, ids] of identityGroups) {
+      if (ids.length > MAX_GROUP) { skippedGroups += 1; continue; }
+      for (let i = 0; i < ids.length; i += 1) {
+        for (let j = i + 1; j < ids.length; j += 1) this._addPair(pairs, ids[i], ids[j], 'BUSINESS_IDENTITY', identity);
       }
     }
     const result = await this._upsertPairs(pairs, now);

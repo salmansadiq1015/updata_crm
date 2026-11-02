@@ -2,12 +2,13 @@
  * Real-time voice for the link page: the instructions the voice agent worker adds
  * to its standing prompt for a link conversation, and the cost of a call.
  *
- * The worker (server/agent-worker) runs the OpenAI Realtime session and drives the
+ * The worker (server/agent-worker) runs a Gemini Live or OpenAI Realtime session and drives the
  * same agent tool API as phone calls, so the questionnaire, validation and status
  * rules stay on the server; this only adds what is specific to the link channel
  * (persona, language, approved FAQ answers, browser context).
  */
 import { VOICE_FALLBACK_COST_PER_MINUTE } from '../linkAssistant.constants.js';
+import { computeCallCost } from '../../../../shared/voiceCost.js';
 
 const SPOKEN_LANGUAGE = {
   en: 'English',
@@ -62,35 +63,29 @@ export const REALTIME_PRICES = Object.freeze({
   inputAudio: 32, inputCachedAudio: 0.4, inputText: 4, inputCachedText: 0.4, outputAudio: 64, outputText: 16,
 });
 
-function prices() {
-  try { return { ...REALTIME_PRICES, ...(JSON.parse(process.env.LINK_VOICE_PRICES || '{}')) }; } catch { return REALTIME_PRICES; }
-}
-
-/**
- * Cost of a call from the worker's usage report (agents-js `session.usage`:
- * { modelUsage: [{ type: 'llm_usage', inputAudioTokens, … }] }). Without usage it
- * falls back to a per-minute estimate so the daily cap still applies.
- * @returns {{ amount: number, estimated: boolean }}
- */
+/** Model-specific token estimates. The amount is used by the existing budget
+ * guard; unknown usage retains an explicitly labelled per-minute reservation. */
 export function voiceCallCost(usage, durationSeconds = 0) {
-  const rows = (usage?.modelUsage || []).filter((u) => u && u.type === 'llm_usage');
-  if (!rows.length) {
-    return { amount: Math.round((Math.max(0, durationSeconds) / 60) * VOICE_FALLBACK_COST_PER_MINUTE * 1e6) / 1e6, estimated: true };
+  const reservation = Math.round((Math.max(0, durationSeconds) / 60) * VOICE_FALLBACK_COST_PER_MINUTE * 1e6) / 1e6;
+  const rows = (usage?.modelUsage || []).filter(u => u && u.type === 'llm_usage');
+  if (!rows.length) return { amount: reservation, estimated: true };
+  let overrides = {};
+  try { overrides = JSON.parse(process.env.AI_CALLING_MODEL_PRICING || '{}'); } catch { /* shared defaults */ }
+  // Legacy unscoped overrides apply only to their original gpt-realtime model.
+  if (process.env.LINK_VOICE_PRICES) {
+    try {
+      const old = JSON.parse(process.env.LINK_VOICE_PRICES);
+      const mapping = { inputAudio: 'audioIn', inputCachedAudio: 'audioCachedIn', outputAudio: 'audioOut', inputText: 'textIn', inputCachedText: 'textCachedIn', outputText: 'textOut' };
+      overrides['gpt-realtime'] = { ...Object.fromEntries(Object.entries(old).filter(([k]) => mapping[k]).map(([k, v]) => [mapping[k], v])), ...overrides['gpt-realtime'] };
+    } catch { /* invalid legacy override cannot replace known prices */ }
   }
-  const p = prices();
-  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  let amount = 0;
-  for (const u of rows) {
-    const cachedAudio = n(u.inputCachedAudioTokens);
-    const cachedText = n(u.inputCachedTextTokens);
-    amount += (Math.max(0, n(u.inputAudioTokens) - cachedAudio) * p.inputAudio
-      + cachedAudio * p.inputCachedAudio
-      + Math.max(0, n(u.inputTextTokens) - cachedText) * p.inputText
-      + cachedText * p.inputCachedText
-      + n(u.outputAudioTokens) * p.outputAudio
-      + n(u.outputTextTokens) * p.outputText) / 1e6;
-  }
-  return { amount: Math.round(amount * 1e6) / 1e6, estimated: false };
+  const priced = computeCallCost({ usage }, { AI_CALLING_MODEL_PRICING: JSON.stringify(overrides) });
+  return {
+    amount: priced.breakdown.unpriced ? Math.max(reservation, priced.amount) : priced.amount,
+    estimated: true, source: priced.breakdown.unpriced ? 'budget_reservation' : 'token_usage',
+    calculatedApiCostUsd: priced.breakdown.unpriced ? null : priced.amount,
+    unpriced: priced.breakdown.unpriced, breakdown: priced.breakdown,
+  };
 }
 
 /** Link outcome for a conversation the engine has ended. */

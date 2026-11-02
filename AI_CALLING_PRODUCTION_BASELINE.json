@@ -1,0 +1,124 @@
+{
+  "source": "read_only_database_record",
+  "retrievedAt": "2026-10-30T15:40:40.398Z",
+  "durationSeconds": 168,
+  "provider": "paired_phone",
+  "createdAt": "2026-10-30T15:13:32.857Z",
+  "cost": {
+    "amount": 0.361578,
+    "currency": "USD",
+    "breakdown": {
+      "usage": {
+        "modelUsage": [
+          {
+            "type": "llm_usage",
+            "provider": "api.openai.com",
+            "model": "gpt-realtime",
+            "inputTokens": 68619,
+            "inputCachedTokens": 36096,
+            "inputAudioTokens": 7190,
+            "inputCachedAudioTokens": 2688,
+            "inputTextTokens": 61429,
+            "inputCachedTextTokens": 33408,
+            "outputTokens": 2048,
+            "outputAudioTokens": 1213,
+            "outputTextTokens": 835,
+            "modelSource": "worker_configuration"
+          }
+        ]
+      },
+      "source": "token_usage",
+      "estimate": true,
+      "pricingVersion": 2,
+      "model": "gpt-realtime",
+      "pricedAs": "gpt-realtime",
+      "unpriced": false,
+      "models": [
+        {
+          "model": "gpt-realtime",
+          "provider": "api.openai.com",
+          "pricedAs": "gpt-realtime",
+          "rates": {
+            "audioIn": 32,
+            "audioCachedIn": 0.4,
+            "audioOut": 64,
+            "textIn": 4,
+            "textCachedIn": 0.4,
+            "textOut": 16
+          },
+          "tokens": {
+            "inputAudio": 7190,
+            "inputCachedAudio": 2688,
+            "inputText": 61429,
+            "inputCachedText": 33408,
+            "outputAudio": 1213,
+            "outputText": 835,
+            "input": 68619,
+            "output": 2048,
+            "total": 70667
+          },
+          "amount": 0.361578,
+          "detail": {
+            "total": 0.361578,
+            "audioIn": 0.145139,
+            "audioOut": 0.077632,
+            "textIn": 0.125447,
+            "textOut": 0.01336
+          },
+          "unpriced": false,
+          "issues": []
+        }
+      ],
+      "invoiceVerified": false,
+      "tokens": {
+        "inputAudio": 7190,
+        "inputCachedAudio": 2688,
+        "inputText": 61429,
+        "inputCachedText": 33408,
+        "outputAudio": 1213,
+        "outputText": 835,
+        "input": 68619,
+        "output": 2048,
+        "total": 70667
+      },
+      "rates": {
+        "audioIn": 32,
+        "audioCachedIn": 0.4,
+        "audioOut": 64,
+        "textIn": 4,
+        "textCachedIn": 0.4,
+        "textOut": 16
+      },
+      "components": {
+        "model": 0.361578,
+        "modelDetail": {
+          "total": 0.361578,
+          "audioIn": 0.145139,
+          "audioOut": 0.077632,
+          "textIn": 0.125447,
+          "textOut": 0.01336
+        },
+        "telephony": 0,
+        "platform": 0
+      },
+      "billedMinutes": 3,
+      "telephonyRatePerMinute": 0,
+      "platformRatePerMinute": 0
+    }
+  },
+  "transcript": {
+    "customerTurns": 10,
+    "assistantTurns": 11,
+    "customerCharacters": 455,
+    "assistantCharacters": 893
+  },
+  "campaignSnapshot": {
+    "questionCount": 8,
+    "questionCharacters": 407,
+    "objectiveCharacters": 295,
+    "customStyleCharacters": 335,
+    "disclosureCharacters": 198,
+    "knowledgeEntryCount": 0
+  },
+  "invoiceVerified": false
+}

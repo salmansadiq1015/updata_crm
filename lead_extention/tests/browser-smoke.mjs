@@ -182,7 +182,7 @@ try {
   assert(campaignUi.selectedText.includes('2 business types selected') && campaignUi.chips.length === 2, 'Multi-select restores ordered business types as removable chips');
   assert(campaignUi.accessible === 'listbox', 'Multi-select exposes accessible listbox semantics');
   assert(campaignUi.coordinateInputs === 0, 'Search brief has no manual latitude/longitude inputs');
-  assert(campaignUi.globalLimit.includes('4 unique businesses total'), 'UI explains the global cross-type maximum before start');
+  assert(campaignUi.globalLimit.includes('4 per type') && campaignUi.globalLimit.includes('8 unique businesses'), 'UI explains the per-type maximum and resulting campaign total before start');
 
   const keyboardSelection = await evaluate(extensionSession, `(async () => {
     document.querySelector('#business-types').click();
@@ -196,6 +196,30 @@ try {
     return [...document.querySelectorAll('.type-chip')].map((item) => item.textContent);
   })()`);
   assert(keyboardSelection.some((value) => value.includes('Dentist')), 'Keyboard search and Enter add a business type without duplicates');
+
+  const selectorLayout = await evaluate(extensionSession, `(async () => {
+    const checkboxes = [...document.querySelectorAll('.multi-options input[type="checkbox"]')];
+    // Focusing a lower option reproduces Chrome's native label-click scrolling.
+    // The hidden checkbox must remain inside the scrolling option row.
+    const checkbox = checkboxes.at(-1);
+    checkbox.focus();
+    checkbox.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const popover = document.querySelector('.multi-popover');
+    const options = document.querySelector('.multi-options');
+    const bounds = popover.getBoundingClientRect();
+    return {
+      scrollTop: popover.scrollTop,
+      optionsScrolled: options.scrollTop > 0,
+      controlsVisible: ['.multi-search', '.multi-actions', '.multi-options'].every((selector) => {
+        const rect = document.querySelector(selector).getBoundingClientRect();
+        return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+      }),
+      selectionToggled: checkbox.checked
+    };
+  })()`);
+  assert(selectorLayout.scrollTop === 0 && selectorLayout.controlsVisible, 'Selecting a lower business type keeps search, actions, and options inside the dropdown');
+  assert(selectorLayout.optionsScrolled && selectorLayout.selectionToggled, 'Business type options scroll and remain selectable without scrolling the popover');
   // Restore the deterministic two-type fixture used by the live queue smoke.
   await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
   await waitFor(extensionSession, 'document.querySelector("#business-types")');
@@ -343,7 +367,7 @@ try {
   assert(campaignRun?.ok && campaignRun.latest?.campaign?.tasks?.length === 2, `Real browser created one persisted two-type campaign (${JSON.stringify(campaignRun?.latest?.status)})`);
   assert(campaignRun.seen.includes('zzzzqzxqv nonexisting industry 98473') && campaignRun.seen.includes('Hotel'), `Empty first type automatically advanced to Hotel (${JSON.stringify(campaignRun.seen)})`);
   assert(campaignRun.latest.campaign.tasks[0].status !== 'running' && campaignRun.latest.campaign.tasks[1].status !== 'pending', 'Per-type terminal state persisted and the next type started automatically');
-  assert(campaignRun.uniqueSnapshots.length >= 1 && campaignRun.latest.unique <= 4, `Incremental results respected the global four-business limit (${JSON.stringify(campaignRun.uniqueSnapshots)})`);
+  assert(campaignRun.uniqueSnapshots.length >= 1 && campaignRun.latest.unique <= 8, `Incremental results respected the per-type four-business limit and eight-business campaign maximum (${JSON.stringify(campaignRun.uniqueSnapshots)})`);
 
   await evaluate(extensionSession, `chrome.storage.local.set({ config: {
     businessType: 'Hotel', businessTypes: ['Hotel', 'Gym'], location: 'Paris, France',

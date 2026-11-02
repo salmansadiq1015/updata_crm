@@ -17,6 +17,7 @@ Thumbs.db
 docs/*
 !docs/PLATFORM-GOVERNANCE.md
 !docs/AI_CALLING_AUDIT.md
+!docs/multi-provider-voice-engine.md
 !docs/AGENT-FIRST-CALLING.md
 !docs/ai-calling/
 docs/ai-calling/*
@@ -32,3 +33,14 @@ client/package-lock.json
 
 # Cache de vitest : régénéré à chaque exécution des tests.
 .vite/
+
+# Graphify: share assistant configuration, keep generated graphs local.
+/graphify-out/
+/.graphify-cache/
+!/.claude/
+/.claude/*
+!/.claude/CLAUDE.md
+!/.claude/settings.json
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/graphify/

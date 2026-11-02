@@ -177,7 +177,7 @@ export function LinkAssistantPanel({ campaignId }: { campaignId: string }) {
                 <button
                   type="button"
                   onClick={() => setOpenSession(s.id)}
-                  className="grid w-full grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2.5 text-left text-sm hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:grid-cols-[1fr_auto_7rem]"
+                  className="grid w-full grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2.5 text-start text-sm hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:grid-cols-[1fr_auto_7rem]"
                 >
                   <span className="min-w-0 truncate font-medium">
                     {s.leadName || 'Unnamed lead'}
@@ -185,7 +185,7 @@ export function LinkAssistantPanel({ campaignId }: { campaignId: string }) {
                     {s.voice?.calls ? <span className="ml-1.5 rounded bg-brand-500/10 px-1 py-px text-[10px] font-semibold uppercase text-brand-600 dark:text-brand-300">{s.voice.live ? 'On call' : 'Voice'}</span> : null}
                   </span>
                   <SessionStatusPill status={s.status} />
-                  <span className="col-span-2 text-xs text-muted-foreground sm:col-span-1 sm:text-right">
+                  <span className="col-span-2 text-xs text-muted-foreground sm:col-span-1 sm:text-end">
                     <span className="sm:hidden">{LANGUAGE_LABEL[s.language] ?? s.language} · {s.turns} msgs · </span>
                     {fmtWhen(s.lastActivityAt)}
                   </span>
@@ -247,7 +247,7 @@ function AnalyticsSection({ query }: { query: { data?: LinkAnalytics; isLoading:
                   <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
                     <span className="block h-full rounded-full bg-brand-500" style={{ width: `${width}%` }} />
                   </span>
-                  <span className="text-right tabular-nums">
+                  <span className="text-end tabular-nums">
                     <b className="font-semibold">{nf.format(value)}</b>
                     {prev !== null ? <span className="ml-1.5 text-xs text-muted-foreground">{fmtPct(pctOf(value, prev))}</span> : null}
                   </span>
@@ -279,21 +279,21 @@ function AnalyticsSection({ query }: { query: { data?: LinkAnalytics; isLoading:
             <table className="w-full min-w-104 text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 text-left font-medium">Question</th>
-                  <th scope="col" className="px-2 py-2 text-right font-medium">Answered</th>
-                  <th scope="col" className="px-2 py-2 text-right font-medium">Unknown</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium" title="Started chats that stopped at this question">Stopped here</th>
+                  <th scope="col" className="px-3 py-2 text-start font-medium">Question</th>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">Answered</th>
+                  <th scope="col" className="px-2 py-2 text-end font-medium">Unknown</th>
+                  <th scope="col" className="px-3 py-2 text-end font-medium" title="Started chats that stopped at this question">Stopped here</th>
                 </tr>
               </thead>
               <tbody>
                 {a.perQuestion.map((q) => (
                   <tr key={q.fieldKey} className="border-t border-border/60">
-                    <th scope="row" className="max-w-56 truncate px-3 py-2 text-left font-normal">{q.label}</th>
-                    <td className="px-2 py-2 text-right tabular-nums">{nf.format(q.answered)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">
+                    <th scope="row" className="max-w-56 truncate px-3 py-2 text-start font-normal">{q.label}</th>
+                    <td className="px-2 py-2 text-end tabular-nums">{nf.format(q.answered)}</td>
+                    <td className="px-2 py-2 text-end tabular-nums">
                       {nf.format(q.unknown)} <span className={`text-xs ${q.unknownRate >= 30 ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}>({q.unknownRate}%)</span>
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${q.dropOff ? 'font-semibold text-amber-700 dark:text-amber-400' : ''}`}>{nf.format(q.dropOff)}</td>
+                    <td className={`px-3 py-2 text-end tabular-nums ${q.dropOff ? 'font-semibold text-amber-700 dark:text-amber-400' : ''}`}>{nf.format(q.dropOff)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -360,7 +360,7 @@ function SessionSheet({ sessionId, onClose }: { sessionId: string | null; onClos
   return (
     <Sheet open={Boolean(sessionId)} onOpenChange={(open: boolean) => { if (!open) onClose(); }}>
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border pr-12">
+        <SheetHeader className="border-b border-border pe-12">
           <SheetTitle className="flex flex-wrap items-center gap-2 text-base font-semibold">
             {data?.leadName || 'Conversation'}
             {data ? <SessionStatusPill status={data.status} /> : null}
@@ -386,7 +386,7 @@ function SessionSheet({ sessionId, onClose }: { sessionId: string | null; onClos
             <button type="button" onClick={() => setReview(true)} className={`${btn} bg-brand-600 font-semibold text-white hover:bg-brand-700`}>Review answers</button>
           ) : null}
           {data && !closed ? (
-            <button type="button" onClick={() => setConfirmRevoke(true)} className={`${btn} ml-auto border border-border text-rose-600 hover:bg-rose-500/10`}>
+            <button type="button" onClick={() => setConfirmRevoke(true)} className={`${btn} ms-auto border border-border text-rose-600 hover:bg-rose-500/10`}>
               <ShieldOff className="h-4 w-4" /> Revoke link
             </button>
           ) : null}
@@ -422,7 +422,7 @@ function SessionBody({ data }: { data: LinkSessionDetail }) {
           {data.answers.map((ans) => (
             <div key={ans.fieldKey} className="grid grid-cols-1 gap-0.5 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:gap-3">
               <dt className="text-muted-foreground">{ans.label}</dt>
-              <dd className="flex flex-wrap items-center gap-1.5 font-medium sm:justify-end sm:text-right" dir="auto">
+              <dd className="flex flex-wrap items-center gap-1.5 font-medium sm:justify-end sm:text-end" dir="auto">
                 {ans.unknown ? <em className="font-normal text-muted-foreground">Lead doesn&apos;t know</em>
                   : ans.value === null || ans.value === undefined ? <span className="font-normal text-muted-foreground">Not answered</span>
                     : <span className="wrap-break-word">{fmtValue(ans.value)}</span>}

@@ -357,12 +357,12 @@ function Modal({ title, onClose, children, footer }: { title: string; onClose: (
 function CopyBlock({ text }: { text: string }) {
   return (
     <div className="group relative">
-      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted px-3 py-2 pr-10 font-mono text-[11px] leading-relaxed">{text}</pre>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted px-3 py-2 pe-10 font-mono text-[11px] leading-relaxed">{text}</pre>
       <button
         type="button"
         aria-label="Copy command"
         onClick={() => { navigator.clipboard?.writeText(text).then(() => showSuccess('Copied')).catch(() => {}); }}
-        className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-background"
+        className="absolute end-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-background"
       >
         <Copy className="h-3.5 w-3.5" />
       </button>

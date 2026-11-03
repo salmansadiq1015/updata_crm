@@ -163,10 +163,10 @@ export function useRemoveRecipients(campaignId: string) {
   });
 }
 
-export function useLeadCallHistory(leadId: string | null, page = 1) {
+export function useLeadCallHistory(leadId: string | null, page = 1, campaignId?: string) {
   return useQuery({
-    queryKey: [...keys.leadHistory(leadId || ''), page],
-    queryFn: () => aiCallingApi.leadHistory(leadId as string, page),
+    queryKey: [...keys.leadHistory(leadId || ''), page, campaignId || 'all'],
+    queryFn: () => aiCallingApi.leadHistory(leadId as string, page, campaignId),
     enabled: Boolean(leadId),
     refetchInterval: 15_000,
   });

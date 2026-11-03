@@ -3,6 +3,8 @@ import { useAuth } from './use-auth';
 export function usePermissions() {
   const { user } = useAuth();
 
+  const adminRole = user?.role?.name === 'Admin' || user?.role === 'Admin';
+
   const rawPermissions = user?.permissions || user?.role?.permissions || [];
 
   // Check if permissions are actually usable (module:action format).
@@ -22,7 +24,7 @@ export function usePermissions() {
   const noPermissionsLoaded = usablePermissions.length === 0 && !!user;
 
   const hasPermission = (perm) => {
-    if (noPermissionsLoaded) return true;
+    if (adminRole || noPermissionsLoaded) return true;
     return usablePermissions.some((p) => {
       if (typeof p === 'string') return p === perm;
       if (p.key) return p.key === perm;
@@ -33,9 +35,9 @@ export function usePermissions() {
 
   const hasAnyPermission = (perms) => perms.some((p) => hasPermission(p));
   const hasAllPermissions = (perms) => perms.every((p) => hasPermission(p));
-  const isAdmin = noPermissionsLoaded
+  const isAdmin = adminRole || (noPermissionsLoaded
     ? (user?.role?.name === 'Admin' || user?.role === 'Admin')
-    : (hasPermission('users:admin') && hasPermission('roles:admin'));
+    : (hasPermission('users:admin') && hasPermission('roles:admin')));
 
   return { permissions: usablePermissions, hasPermission, hasAnyPermission, hasAllPermissions, isAdmin };
 }

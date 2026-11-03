@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { ArrowRight, ArrowUpRight, Bot, FolderKanban, Radar, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Bot, FolderKanban, Radar, Network, Users } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Reveal } from './motion-primitives';
 import { AuthAwareLink } from './auth-aware-link';
@@ -23,7 +23,7 @@ export function CtaSection() {
         <div className="pointer-events-none absolute -bottom-52 end-[-40px] size-[520px] rounded-full bg-cyan-500/12 blur-[130px]" />
         <div className="relative z-10 grid gap-10 lg:grid-cols-[1.02fr_.98fr] lg:items-center xl:gap-16">
           <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200"><Sparkles className="size-3" />{t('landing.cta.eyebrow')}</p>
+            <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200"><Network className="size-3" />{t('landing.cta.eyebrow')}</p>
             <h2 className="mt-5 text-[clamp(2.45rem,4.6vw,4.7rem)] font-semibold leading-[0.96] tracking-[-0.055em] text-white">{t('landing.cta.title1')}<br /><span className="landing-gradient-text">{t('landing.cta.title2')}</span></h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">{t('landing.cta.description')}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

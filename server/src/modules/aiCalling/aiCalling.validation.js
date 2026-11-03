@@ -4,7 +4,7 @@ import {
   CAMPAIGN_STATUSES, QUESTION_TYPES, RULE_ACTIONS, SPEAKING_STYLES, RECIPIENT_STATES,
   QUALIFICATION_RESULTS, ANSWER_VALIDATION, CALL_STATES, DISPOSITIONS,
 } from './aiCalling.constants.js';
-import { canonicalAgentLanguage, isSupportedAgentLanguage } from './aiCalling.languages.js';
+import { AI_AGENT_LANGUAGES, canonicalAgentLanguage, isSupportedAgentLanguage, defaultAgentLanguage } from './aiCalling.languages.js';
 import { isValidTimezone } from './engine/callWindow.js';
 import { qualityTelemetry } from './callingQuality.validation.js';
 
@@ -65,13 +65,29 @@ export const agentConfig = Joi.object({
   agentName: Joi.string().trim().max(120).default('Assistant'),
   organizationName: Joi.string().trim().max(200).allow('').default(''),
   disclosure: Joi.string().trim().max(2000).allow('').default(''),
-  language: agentLanguage.default('en'),
+  language: agentLanguage.default(() => defaultAgentLanguage().code),
+  supportedLanguages: Joi.array().items(agentLanguage.invalid('auto')).unique().max(AI_AGENT_LANGUAGES.length - 1).default([]),
+  languageSwitchSensitivity: Joi.string().valid('low', 'medium', 'high').default('medium'),
+  repetitionDelaySeconds: Joi.number().integer().min(0).max(30).default(3),
+  maxRepetitionAttempts: Joi.number().integer().min(0).max(5).default(3),
+  repetitionStrategy: Joi.string().valid('exact', 'natural', 'simplified', 'contextual', 'progressive').default('progressive'),
+  maxUnansweredQuestions: Joi.number().integer().min(1).max(40).default(3),
+  automaticLanguageDetection: Joi.boolean().default(true),
+  automaticLanguageSwitching: Joi.boolean().default(true),
+  followLeadLanguage: Joi.boolean().default(true),
+  automaticCallTermination: Joi.boolean().default(true),
+  automaticNextLead: Joi.boolean().default(true),
+  trackResponseBehavior: Joi.boolean().default(true),
+  trackEngagement: Joi.boolean().default(true),
+  classifyEngagement: Joi.boolean().default(true),
+  saveBehaviorHistory: Joi.boolean().default(true),
+  conversationAnalytics: Joi.boolean().default(true),
   voice: Joi.string().trim().max(40).default('alloy'),
   speakingStyle: Joi.string().valid(...SPEAKING_STYLES).default('professional'),
   customStyle: Joi.string().trim().max(500).allow('').default(''),
   objective: Joi.string().trim().max(1000).allow('').default(''),
   maxCallSeconds: Joi.number().integer().min(30).max(1800).default(300),
-  silenceTimeoutSeconds: Joi.number().integer().min(2).max(60).default(8),
+  silenceTimeoutSeconds: Joi.number().integer().min(2).max(60).default(10),
   maxClarificationsPerQuestion: Joi.number().integer().min(0).max(5).default(2),
   allowBargeIn: Joi.boolean().default(true),
   recordCall: Joi.boolean().default(false),
@@ -220,7 +236,7 @@ export const simulate = { params: Joi.object({ id: objectId.required() }), body:
   disclose: Joi.boolean().default(false),
 }) };
 export const webTest = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ leadId: objectId.allow(null) }).default({}) };
-export const leadHistory = { params: Joi.object({ leadId: objectId.required() }), query: Joi.object({ page, limit }) };
+export const leadHistory = { params: Joi.object({ leadId: objectId.required() }), query: Joi.object({ page, limit, campaignId: objectId }) };
 export const listCalls = { query: Joi.object({
   page,
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -285,7 +301,7 @@ export const agentRecordAnswers = { params: agentRecordAnswer.params, body: Joi.
 export const agentFieldOnly = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
 }) };
-export const agentNoResponse = { params: agentFieldOnly.params, body: Joi.object({ fieldKey: Joi.string().max(80).required(), requestId: Joi.string().guid().required(), reason: Joi.string().valid('silence', 'unrelated', 'unintelligible').required() }) };
+export const agentNoResponse = { params: agentFieldOnly.params, body: Joi.object({ fieldKey: Joi.string().max(80).required(), requestId: Joi.string().guid().required(), silenceEvent: Joi.object({ id: Joi.string().guid().required(), at: Joi.string().isoDate().required() }), evidence: Joi.string().max(4000).allow(null), reason: Joi.string().valid('silence', 'unrelated', 'unintelligible', 'partial', 'clarification').required() }) };
 export const agentConfirm = { params: Joi.object({ callId: Joi.string().max(120).required() }), body: Joi.object({
   fieldKey: Joi.string().max(80).required(),
   reply: Joi.string().max(1000).allow(null),
@@ -331,3 +347,15 @@ export const agentActivity = { params: agentTranscript.params, body: Joi.object(
 
 // Shared with the SIM SMS agent (same questionnaire / rule shapes).
 export { question as questionSchema, statusRule as statusRuleSchema };
+
+export const agentLanguageEvent = { params: agentFieldOnly.params, body: Joi.object({
+  requestId: Joi.string().guid().required(), language: agentLanguage.invalid('auto').required(), explicit: Joi.boolean().required(),
+  source: Joi.string().valid('asr', 'audio_model').default('audio_model'), turnId: Joi.string().max(120),
+  confidence: Joi.number().min(0).max(1).when('source', { is: 'asr', then: Joi.optional(), otherwise: Joi.required() }), evidence: Joi.string().trim().min(1).max(1000).required(),
+}) };
+export const agentBehaviorEvent = { params: agentFieldOnly.params, body: Joi.object({
+  id: Joi.string().guid().required(), type: Joi.string().valid('question_waiting', 'response_started', 'interruption', 'lead_question', 'information_requested', 'interest_expressed', 'silence').required(),
+  fieldKey: Joi.string().max(80), evidence: Joi.string().max(1000).allow(''), at: Joi.string().isoDate(),
+}) };
+
+export const agentUnknownAnswer = { params: agentFieldOnly.params, body: Joi.object({ fieldKey: Joi.string().max(80).required(), reason: Joi.string().valid('unknown', 'refused').default('unknown'), evidence: Joi.string().max(1000).allow(null) }) };

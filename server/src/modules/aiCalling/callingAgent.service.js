@@ -1,3 +1,5 @@
+import CampaignRecipient from './campaignRecipient.model.js';
+import Lead from '../crm/lead.model.js';
 import crypto from 'node:crypto';
 import { findAvatarPreset } from './agentAvatarPresets.js';
 import sharp from 'sharp';
@@ -60,7 +62,7 @@ class CallingAgentService {
     if (!ids.length) return new Map();
     const totals = Object.fromEntries(['completed', 'answered', 'inProgress', 'failed', 'qualified', 'noAnswer', 'totalCallSeconds'].map(key => [key, { $sum: `$summary.${key}` }]));
     const rows = await CallCampaign.aggregate([
-      { $match: { createdBy: new mongoose.Types.ObjectId(actor), agentId: { $in: ids } } },
+      { $match: { createdBy: new mongoose.Types.ObjectId(actor), agentId: { $in: ids }, isTest: { $ne: true } } },
       { $group: { _id: '$agentId', ...totals, campaigns: { $sum: 1 }, activeCampaigns: { $sum: { $cond: [{ $in: ['$status', ACTIVE] }, 1, 0] } }, lastActiveAt: { $max: '$startedAt' } } },
     ]);
     return new Map(rows.map(row => [String(row._id), row]));
@@ -69,7 +71,7 @@ class CallingAgentService {
   async decorate(agent, actor, knownStats) {
     const [stats, latestCampaign, eligibility, file] = await Promise.all([
       knownStats || this.campaignStats([agent._id], actor),
-      CallCampaign.findOne({ agentId: agent._id, createdBy: actor }).sort({ createdAt: -1 }).lean(),
+      CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true } }).sort({ createdAt: -1 }).lean(),
       calling.previewEligibility(actor, { leadIds: agent.assignedLeadIds.map(String) }),
       agent.avatarFileId ? FileMetadata.findOne({ _id: agent.avatarFileId, ...imageScope(actor) }).lean() : null,
     ]);
@@ -198,6 +200,30 @@ class CallingAgentService {
     if (!removed.deletedCount) throw new ConflictError('A launch is in progress. Try again after it finishes');
     this.log('deleted', actor, id, meta);
     return { deleted: true };
+  }
+
+  /** Snapshot the saved agent for browser tests. No dial job or lead write occurs. */
+  async prepareTest(id, actor) {
+    const agent = await this.owned(id, actor);
+    assertQuestionnaire(agent.questionnaire);
+    const lead = await Lead.findOne({ _id: { $in: agent.assignedLeadIds || [] }, createdBy: actor, isDeleted: { $ne: true } }).select('_id').lean();
+    if (!lead) throw new ValidationError('Assign a lead to this agent to provide browser test context. The test never changes the lead.');
+    const launchKey = `browser-test-${id}-${agent.version}`;
+    let campaign;
+    try {
+      campaign = await CallCampaign.findOneAndUpdate({ createdBy: actor, launchKey }, { $setOnInsert: {
+        name: `${agent.name} · browser test`.slice(0, 160), agentId: agent._id,
+        agentSnapshot: { name: agent.name, title: agent.title, version: agent.version },
+        agentConfig: agent.agentConfig, questionnaire: agent.questionnaire, statusRules: agent.statusRules,
+        isTest: true, status: 'draft', transport: 'cloud_sip',
+        selection: { mode: 'explicit', leadIds: [lead._id], selectedAt: new Date() },
+      } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      campaign = await CallCampaign.findOne({ createdBy: actor, launchKey });
+    }
+    await CampaignRecipient.updateOne({ campaignId: campaign._id, leadId: lead._id }, { $setOnInsert: { createdBy: actor, state: 'draft', eligibility: { eligible: false, reasons: ['browser_test_only'] } } }, { upsert: true });
+    return { ...campaign.toObject(), summary: { ...campaign.toObject().summary, total: 1 } };
   }
 
   async launch(id, input, actor, meta) {

@@ -51,7 +51,7 @@ export class MapsAdapter {
     const coordinates = this.coordinatesFromUrl(href);
     return {
       businessName,
-      category: this.categoryFromElement(card) ?? this.categoryFromLines(lines, businessName),
+      category: this.categoryFromElement(card),
       phone,
       website,
       address,
@@ -78,7 +78,7 @@ export class MapsAdapter {
     const coordinates = this.coordinatesFromUrl(location.href);
     return {
       businessName: title,
-      category: this.categoryFromElement(detailRoot) ?? this.categoryFromLines(lines, title),
+      category: this.categoryFromElement(detailRoot),
       phone: this.phoneFromElement(detailRoot) || labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null,
       website: this.websiteFromElement(detailRoot) ?? labelled.website ?? null,
       address,
@@ -117,7 +117,9 @@ export class MapsAdapter {
     const before = feed.scrollTop;
     const maxTop = Math.max(0, feed.scrollHeight - feed.clientHeight);
     const atBottom = before + feed.clientHeight >= feed.scrollHeight - 8;
-    const target = Math.min(before + Math.max(feed.clientHeight * 0.85, 650), maxTop);
+    // Keep overlapping viewports. A minimum 650px jump skipped entire cards on
+    // short feeds before a virtual list could expose them to COLLECT_VISIBLE.
+    const target = Math.min(before + Math.max(1, Math.min(feed.clientHeight * 0.75, 650)), maxTop);
     if (target > before) {
       feed.scrollTo({ top: target, behavior: 'auto' });
       feed.dispatchEvent(new Event('scroll', { bubbles: true }));
@@ -465,30 +467,8 @@ export class MapsAdapter {
     return value ? value.split('·')[0].trim() || value : null;
   }
 
-  // Fallback when no category element is present (most search-result cards). Pick
-  // the first line that looks like a business CATEGORY, deliberately rejecting the
-  // address, rating, review count, price, open/closed status, phone and website —
-  // the lines that the old "first text line with a letter" heuristic wrongly grabbed
-  // and surfaced in the CRM as the business "type".
-  private categoryFromLines(lines: string[], name: string): string | null {
-    const STATUS = /^(open|closed|opens?|closes?|temporarily|permanently|open 24 hours|24 hours|directions|website|call|share|save|order online|dine-in|dine in|takeaway|take-?out|delivery|curbside|in-store shopping|visit site|sponsored|ad|results|reviews?|rating)\b/i;
-    for (const raw of lines) {
-      const line = raw.replace(/^·\s*/, '').split('·')[0].replace(/\s+/g, ' ').trim();
-      if (!line || line === name) continue;
-      if (line.length < 2 || line.length > 48) continue;
-      if (!/\p{L}/u.test(line)) continue;
-      if ((line.match(/\d/g) || []).length >= 3) continue; // address / phone / postal
-      if (/^\d(?:[.,]\d)?$/.test(line)) continue; // a bare rating
-      if (/\(\s*[\d.,\s]+\s*\)/.test(line)) continue; // a review count "(1,234)"
-      if (/[$€£₹₨]|^\$+$/.test(line)) continue; // price tier
-      if (/\b\d{4,6}\b/.test(line)) continue; // postal code embedded in an address
-      if (/^\+?\d[\d ()\-.]{5,}/.test(line)) continue; // phone number
-      if (STATUS.test(line)) continue;
-      if (this.looksLikeDomain(line)) continue;
-      return line;
-    }
-    return null;
-  }
+  // Unlabelled card lines include names, promotions and service chips. They
+  // cannot establish a category; the saved discovery type supplies the fallback.
 
   private findScrollableResultsContainer(): HTMLElement | null {
     const candidates = [...document.querySelectorAll<HTMLElement>('div')]
@@ -538,7 +518,7 @@ export class MapsAdapter {
       .filter((record): record is RawBusinessRecord => Boolean(record));
     const visibleKeys = records.map(resultKeyForMapRecord);
     const text = feed?.textContent ?? document.body.textContent ?? '';
-    const endConfirmed = /you(?:'|’)?ve reached the end|end of (?:the )?(?:list|results)|no more results|no additional results/i.test(text);
+    const endConfirmed = /you(?:'|’)?ve reached the end|end of (?:the )?(?:list|results)|no more results|no additional results|(?:atteint|arrivé).{0,30}fin de (?:la )?liste|fin des résultats|ende der (?:liste|ergebnisliste)|keine weiteren ergebnisse|(?:llegado|llegaste).{0,30}final de la lista|no hay más resultados|(?:chegou|chegaste).{0,30}fim da lista|não há mais resultados|raggiunto.{0,30}fine dell.elenco|وصلت.{0,20}نهاية القائمة/iu.test(text);
     const scrollTop = feed?.scrollTop ?? 0;
     const scrollHeight = feed?.scrollHeight ?? 0;
     const clientHeight = feed?.clientHeight ?? 0;

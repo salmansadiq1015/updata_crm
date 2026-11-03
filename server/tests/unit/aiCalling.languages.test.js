@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { beforeAll, describe, expect, it, jest } from '@jest/globals';
 import { serve } from '../helpers/serve.js';
+import { ISO_639_1_CODES } from '../../src/modules/aiCalling/iso639-1-codes.js';
 
 /**
  * AI agent languages: the allow-list (single source of truth), Joi validation of
@@ -9,6 +10,13 @@ import { serve } from '../helpers/serve.js';
  * and GET /ai-calling/languages wiring + permission. No DB, no telephony.
  */
 
+// The catalog endpoint does not exercise Redis-backed rate limiting.
+jest.unstable_mockModule('../../src/shared/middleware/rateLimiter.js', () => {
+  const pass = (_req, _res, next) => next();
+  const names = ['globalLimiter', 'authLimiter', 'uploadLimiter', 'enrichLimiter', 'geocodeLimiter', 'agentToolLimiter', 'providerWebhookLimiter', 'gatewayLimiter', 'gatewayPairLimiter', 'linkPageLimiter', 'linkMessageLimiter', 'linkMissLimiter'];
+  const limiters = Object.fromEntries(names.map(name => [name, pass]));
+  return { ...limiters, default: limiters, createLimiter: () => pass };
+});
 jest.unstable_mockModule('../../src/shared/queue/QueueManager.js', () => ({
   default: { addJob: jest.fn(), getQueueStats: jest.fn(async () => ({})) },
 }));
@@ -71,6 +79,50 @@ describe('AI_AGENT_LANGUAGES', () => {
     }
     expect(languages.findAgentLanguage('ar').rtl).toBe(true);
     expect(languages.AI_AGENT_LANGUAGES.length).toBeGreaterThan(60);
+  });
+});
+
+describe('complete conversation language catalog', () => {
+  it('includes every standard two-letter language with native names', () => {
+    expect(ISO_639_1_CODES).toHaveLength(183);
+    for (const code of ISO_639_1_CODES) {
+      const language = languages.findAgentLanguage(code);
+      expect(language).not.toBeNull();
+      expect(language.nativeName.length).toBeGreaterThan(1);
+      expect(validateLanguage(code).error).toBeUndefined();
+    }
+  });
+
+  it('keeps Moroccan Darija distinct from standard Arabic, including aliases', () => {
+    for (const code of ['ar-MA', 'AR-ma', 'ar_MA', 'ary']) {
+      expect(validateLanguage(code).value.agentConfig.language).toBe('ar-MA');
+      expect(languages.resolveAgentLanguage(code)).toMatchObject({ code: 'ar-MA', rtl: true, support: 'limited' });
+    }
+    const text = prompt.buildSystemPrompt({ agentConfig: { language: 'ar-MA' }, lead: { name: 'Casablanca' } });
+    expect(text).toContain('Moroccan Darija');
+    expect(text).toContain('الدارجة المغربية');
+  });
+
+  it('includes regional Arabic and Moroccan Amazigh choices without changing existing quality ratings', () => {
+    for (const code of ['ar-DZ', 'ar-TN', 'ar-EG', 'ar-SA', 'ar-AE', 'ar-LB', 'ar-MR']) {
+      expect(languages.findAgentLanguage(code)).toMatchObject({ code, rtl: true, support: 'limited' });
+    }
+    for (const code of ['zgh', 'tzm', 'rif', 'shi']) expect(validateLanguage(code).error).toBeUndefined();
+    expect(languages.findAgentLanguage('de').support).toBe('full');
+    expect(languages.findAgentLanguage('dv').rtl).toBe(true);
+    expect(languages.findAgentLanguage('yi').rtl).toBe(true);
+  });
+
+  it('allows saving the entire expanded list as permitted conversation languages', () => {
+    const supportedLanguages = languages.AI_AGENT_LANGUAGES.filter(l => l.code !== 'auto').map(l => l.code);
+    expect(validation.agentConfig.validate({ language: 'ar-MA', supportedLanguages }).error).toBeUndefined();
+  });
+
+  it('sorts by English name with automatic detection first', () => {
+    const [auto, ...rest] = languages.AI_AGENT_LANGUAGES;
+    expect(auto.code).toBe('auto');
+    const names = rest.map(l => l.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
   });
 });
 

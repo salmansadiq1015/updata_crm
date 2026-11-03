@@ -5,7 +5,7 @@ const valueText = (value) => Array.isArray(value) ? value.join(', ') : typeof va
 export function buildCallNotes({ campaign, call, answers, disposition, unresolvedRequired = [], agentNotes = null, now = new Date() }) {
   const captured = answers.filter(a => a.rawAnswer || a.normalizedValue != null);
   const blockers = [];
-  if (['no_answer', 'busy', 'voicemail', 'failed', 'needs_review'].includes(disposition)) blockers.push(`Call outcome: ${disposition.replaceAll('_', ' ')}.`);
+  if (['no_answer', 'busy', 'voicemail', 'failed', 'needs_review', 'unresponsive'].includes(disposition)) blockers.push(`Call outcome: ${disposition.replaceAll('_', ' ')}.`);
   if (call.failureMessage) blockers.push(call.failureMessage);
   if (disposition === 'declined') blockers.push('The lead declined to participate.');
   if (disposition === 'do_not_contact') blockers.push('The lead requested no further contact.');

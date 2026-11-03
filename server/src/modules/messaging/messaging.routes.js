@@ -6,6 +6,7 @@ import * as schemas from './messaging.validation.js';
 
 const router = Router();
 
+router.get('/sms-services', authenticate, requirePermission('lead:read'), (req, res, next) => controller.smsServices(req, res, next));
 router.get('/campaigns', authenticate, requirePermission('lead:read'), validate(schemas.listCampaigns), (req, res, next) => controller.listCampaigns(req, res, next));
 router.post('/campaigns', authenticate, requirePermission('crm:write'), validate(schemas.createCampaign), (req, res, next) => controller.createCampaign(req, res, next));
 router.get('/campaigns/:id', authenticate, requirePermission('lead:read'), validate(schemas.campaignId), (req, res, next) => controller.getCampaign(req, res, next));

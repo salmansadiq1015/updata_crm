@@ -21,6 +21,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'leaflet/dist/leaflet.css';
+import './lead-map-markers.css';
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import {
@@ -55,7 +56,7 @@ import type {
   LeadMapViewport,
 } from './lead-map-types';
 import { boundsOf } from './lead-map-types';
-import { LEAD_MARKER_STYLE, leadStatusGlyph } from './lead-map-markers';
+import { leadMarkerHtml } from './lead-map-markers';
 import { LeadMapUnavailable } from './lead-map-states';
 
 type LeafletMapType = 'roadmap' | 'satellite';
@@ -91,35 +92,20 @@ try {
   /* Leaflet not fully initialised — ignore; DivIcons don't need it. */
 }
 
-// ── Status DivIcon (solid pin + glyph; selected/hovered emphasis) ─────────────
+// ── Enamel pins: the pointed tip stays anchored to the exact coordinate. ─────
 function makeMarkerIcon(status: LeadStatus, selected: boolean, hovered: boolean): L.DivIcon {
-  const size = selected ? 38 : hovered ? 32 : 28;
-  const style = LEAD_MARKER_STYLE[status] ?? LEAD_MARKER_STYLE.new;
-  const emphasis = selected
-    ? 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background'
-    : hovered
-      ? 'scale-105 ring-2 ring-primary/50'
-      : '';
-  const html = `<span class="${cn(
-    'flex h-full w-full items-center justify-center rounded-full border-2 shadow-theme-md transition-transform duration-150',
-    style.marker,
-    emphasis,
-  )}">${leadStatusGlyph(status)}</span>`;
   return L.divIcon({
-    html,
-    // Neutralise Leaflet's default white box; `!` → !important beats .leaflet-div-icon.
-    className: '!border-0 !bg-transparent',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
+    html: leadMarkerHtml(status, selected, hovered),
+    className: 'lead-map-marker',
+    iconSize: [44, 58],
+    iconAnchor: [22, 53],
   });
 }
 
 function makeClusterIcon(count: number): L.DivIcon {
-  const size = count < 10 ? 36 : count < 100 ? 44 : 54;
-  const html = `<div class="flex h-full w-full items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground shadow-theme-lg ring-4 ring-background/80" style="font-size:${
-    count < 100 ? 13 : 12
-  }px" aria-label="${count} leads in this cluster">${count}</div>`;
-  return L.divIcon({ html, className: '!border-0 !bg-transparent', iconSize: [size, size] });
+  const size = count < 10 ? 38 : count < 100 ? 46 : 56;
+  const html = `<span class="lead-cluster" aria-label="${count} leads in this cluster">${count}</span>`;
+  return L.divIcon({ html, className: 'lead-map-marker', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
 }
 
 // ── Markers + clustering. Full rebuild ONLY when the point set changes; hover /

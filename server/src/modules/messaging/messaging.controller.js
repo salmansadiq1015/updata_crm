@@ -73,6 +73,7 @@ class MessagingController {
   async getConsent(req, res, next) { try { return res.success({ data: await messagingService.getConsentProfile(req.params.leadId) }); } catch (e) { next(e); } }
   async consent(req, res, next) { try { return res.success({ data: await messagingService.updateConsent(req.params.leadId, req.body, req.user._id, meta(req)), message: 'Consent updated' }); } catch (e) { next(e); } }
   async reinstateConsent(req, res, next) { try { return res.success({ data: await messagingService.reinstateConsent(req.params.leadId, req.body, req.user._id, meta(req)), message: 'Consent reinstated from verified evidence' }); } catch (e) { next(e); } }
+  async smsServices(req, res, next) { try { return res.success({ data: await messagingService.smsServices() }); } catch (e) { next(e); } }
   async health(req, res, next) { try { return res.success({ data: await messagingService.providerHealth() }); } catch (e) { next(e); } }
   async settings(req, res, next) { try { return res.success({ data: await messagingService.updateSettings(req.body, req.user._id, meta(req)), message: 'Messaging settings updated' }); } catch (e) { next(e); } }
 

@@ -22,6 +22,7 @@ const answerSchema = new mongoose.Schema({
   clarifications: { type: Number, default: 0 },
   noResponseCount: { type: Number, default: 0 },
   reason: { type: String, maxlength: 300, default: null },
+  classification: { type: String, enum: ['ANSWERED', 'PARTIALLY_ANSWERED', 'UNCLEAR', 'IRRELEVANT', 'NO_RESPONSE', 'REFUSED', 'NEEDS_CLARIFICATION'], default: null },
   source: { type: String, maxlength: 40, default: 'agent_tool' },
   confidence: { type: Number, default: null },
   reviewStatus: { type: String, enum: ANSWER_REVIEW, default: 'none' },
@@ -94,6 +95,9 @@ const callRecordSchema = new mongoose.Schema({
     }, { _id: false }),
     default: undefined,
   },
+  conversationLanguage: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  behaviorAnalytics: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  terminationReason: { type: String, maxlength: 80, default: null },
   agentSessionId: { type: String, maxlength: 200, default: null },
   // Voice intelligence identity is independent of the SIM/SIP transport provider.
   aiVoice: { type: mongoose.Schema.Types.Mixed, default: undefined },
@@ -183,6 +187,7 @@ const callRecordSchema = new mongoose.Schema({
 }, { timestamps: true, minimize: false });
 
 callRecordSchema.index({ leadId: 1, createdAt: -1 });
+callRecordSchema.index({ createdBy: 1, leadId: 1, campaignId: 1, createdAt: -1 }, { name: 'lead_call_behavior_history' });
 callRecordSchema.index({ campaignId: 1, state: 1 });
 callRecordSchema.index({ recipientId: 1, attemptNumber: 1 }, { unique: true });
 // Reconciliation sweep (every 2 min): unprocessed calls by state/age, and

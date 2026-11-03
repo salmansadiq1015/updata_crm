@@ -8,7 +8,7 @@ import { leadSchema } from '@/modules/leads/schemas/lead-schemas';
 import { makeLeadDTO } from '@/modules/leads/__tests__/mocks/data';
 import type { CallingAgent, Campaign, PairedDevice, Question, TelephonyHealth } from '../types/ai-calling-types';
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), assign: vi.fn(), launch: vi.fn(), start: vi.fn(), duplicate: vi.fn(), remove: vi.fn(), images: vi.fn(), uploadImage: vi.fn(), removeImage: vi.fn(), presets: vi.fn(), leadList: vi.fn(), facets: vi.fn(), write: true }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), assign: vi.fn(), launch: vi.fn(), prepareTest: vi.fn(), start: vi.fn(), duplicate: vi.fn(), remove: vi.fn(), images: vi.fn(), uploadImage: vi.fn(), removeImage: vi.fn(), presets: vi.fn(), leadList: vi.fn(), facets: vi.fn(), write: true }));
 const connections = vi.hoisted(() => ({ phones: [] as PairedDevice[], health: { configured: true, eligible: true } as Partial<TelephonyHealth> }));
 vi.mock('../services/calling-agent-api', () => ({ callingAgentApi: mocks }));
 vi.mock('../services/ai-calling-api', () => ({ aiCallingApi: { start: mocks.start, listCampaigns: async () => ({ data: [], pagination: { total: 0, pages: 0 } }), telephonyHealth: async () => connections.health, runStatus: async () => ({ blockers: [], waits: [] }), languages: async () => ({ languages: [{ code: 'en', name: 'English', nativeName: 'English' }, { code: 'ur', name: 'Urdu', nativeName: 'اردو' }] }) } }));
@@ -23,7 +23,7 @@ vi.mock('../ui/voice-kill-switch', () => ({ VoiceKillSwitch: () => null }));
 vi.mock('../ui/link-kill-switch', () => ({ LinkKillSwitch: () => null }));
 vi.mock('../ui/call-history-panel', () => ({ CallHistoryPanel: () => <p>Production call records</p> }));
 vi.mock('../ui/analytics-panel', () => ({ AnalyticsPanel: () => <p>Actual analytics</p> }));
-vi.mock('../ui/agent-test-studio', () => ({ AgentTestLauncher: () => null, AgentTestStudio: () => null }));
+vi.mock('../ui/agent-test-studio', () => ({ AgentTestLauncher: () => null, AgentTestStudio: () => <div role="dialog" aria-label="Saved agent browser test">Browser voice test</div> }));
 vi.mock('../ui/campaign-wizard', () => ({ CampaignWizard: () => null }));
 
 const { CallingAgentPlatform } = await import('../ui/calling-agent-platform');
@@ -346,5 +346,23 @@ describe('agent-first calling UI', () => {
     expect(screen.getByLabelText('Question 1 text')).toHaveValue('Second question?');
     expect(screen.getByLabelText('Question 2 answer type')).toHaveValue('boolean');
     expect(within(screen.getByLabelText('Question 2 text').closest('.space-y-2')!).getByLabelText('Required')).toBeChecked();
+  });
+});
+
+
+describe('agent header browser testing', () => {
+  it('prepares the saved agent snapshot without launching a calling campaign', async () => {
+    mocks.prepareTest.mockResolvedValue({ _id: 'test-snapshot', agentConfig: agent.agentConfig });
+    open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
+    expect(await screen.findByRole('dialog', { name: 'Saved agent browser test' })).toBeVisible();
+    expect(mocks.prepareTest).toHaveBeenCalledWith(agent._id);
+    expect(mocks.launch).not.toHaveBeenCalled(); expect(mocks.start).not.toHaveBeenCalled();
+  });
+  it('keeps browser testing unavailable to read-only users', async () => {
+    mocks.write = false;
+    open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
+    await screen.findByRole('heading', { name: agent.name });
+    expect(screen.queryByRole('button', { name: 'Test agent' })).toBeNull();
   });
 });

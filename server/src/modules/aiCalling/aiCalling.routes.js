@@ -83,7 +83,7 @@ agentToolRoutes.post('/:callId/disclose', authenticateAgentCall, validate(schema
 agentToolRoutes.post('/:callId/record-answer', authenticateAgentCall, validate(schemas.agentRecordAnswer), (req, res, next) => controller.agentRecordAnswer(req, res, next));
 agentToolRoutes.post('/:callId/record-answers', authenticateAgentCall, validate(schemas.agentRecordAnswers), (req, res, next) => controller.agentRecordAnswers(req, res, next));
 agentToolRoutes.post('/:callId/no-response', authenticateAgentCall, validate(schemas.agentNoResponse), (req, res, next) => controller.agentNoResponse(req, res, next));
-agentToolRoutes.post('/:callId/mark-unknown', authenticateAgentCall, validate(schemas.agentFieldOnly), (req, res, next) => controller.agentMarkUnknown(req, res, next));
+agentToolRoutes.post('/:callId/mark-unknown', authenticateAgentCall, validate(schemas.agentUnknownAnswer), (req, res, next) => controller.agentMarkUnknown(req, res, next));
 agentToolRoutes.post('/:callId/confirm', authenticateAgentCall, validate(schemas.agentConfirm), (req, res, next) => controller.agentConfirm(req, res, next));
 agentToolRoutes.post('/:callId/request-callback', authenticateAgentCall, validate(schemas.agentCallback), (req, res, next) => controller.agentCallback(req, res, next));
 agentToolRoutes.post('/:callId/do-not-contact', authenticateAgentCall, validate(schemas.agentContext), (req, res, next) => controller.agentDoNotContact(req, res, next));
@@ -98,3 +98,6 @@ export const aiCallingWebhookRoutes = Router();
 aiCallingWebhookRoutes.post('/livekit', (req, res, next) => controller.webhook(req, res, next));
 
 export default router;
+
+agentToolRoutes.post('/:callId/language', authenticateAgentCall, validate(schemas.agentLanguageEvent), (req, res, next) => controller.agentLanguage(req, res, next));
+agentToolRoutes.post('/:callId/behavior', authenticateAgentCall, validate(schemas.agentBehaviorEvent), (req, res, next) => controller.agentBehavior(req, res, next));

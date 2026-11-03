@@ -53,6 +53,22 @@ export interface AgentConfig {
   organizationName?: string;
   disclosure?: string;
   language?: string;
+  supportedLanguages?: string[];
+  automaticLanguageDetection?: boolean;
+  automaticLanguageSwitching?: boolean;
+  followLeadLanguage?: boolean;
+  languageSwitchSensitivity?: 'low' | 'medium' | 'high';
+  repetitionDelaySeconds?: number;
+  maxRepetitionAttempts?: number;
+  repetitionStrategy?: 'exact' | 'natural' | 'simplified' | 'contextual' | 'progressive';
+  maxUnansweredQuestions?: number;
+  automaticCallTermination?: boolean;
+  automaticNextLead?: boolean;
+  trackResponseBehavior?: boolean;
+  trackEngagement?: boolean;
+  classifyEngagement?: boolean;
+  saveBehaviorHistory?: boolean;
+  conversationAnalytics?: boolean;
   voice?: string;
   speakingStyle?: 'professional' | 'friendly' | 'concise' | 'formal' | 'custom';
   customStyle?: string;
@@ -254,6 +270,7 @@ export interface SimResult {
 }
 
 export interface CallAnswer {
+  classification?: string | null;
   questionFieldKey: string; label: string; type: string; rawAnswer: string;
   normalizedValue: unknown; validation: string; confirmed: boolean; reviewStatus: string;
 }
@@ -291,7 +308,15 @@ export interface ConversationInsights {
   limitation: string;
 }
 
+export interface CallBehaviorEvent {
+  id: string; at: string; type: string; fieldKey?: string; classification?: string;
+  language?: string; explicit?: boolean; evidence?: string; responseMs?: number; reason?: string;
+}
 export interface CallRecord {
+  conversationLanguage?: { initial: string; current: string; detected?: string | null; switches: Array<{ at: string; from: string; to: string; mode: string }> };
+  behaviorAnalytics?: { totalQuestions: number; questionsAsked: number | null; answered: number; unanswered: number; repeats: number | null; silenceEvents: number | null; clarificationRequests: number | null; incompleteAnswers: number | null; interruptions: number | null; averageResponseMs: number | null; longestResponseMs: number | null; completionPercentage: number; engagement: string | null; languageSwitches: number };
+  conversationState?: { events?: CallBehaviorEvent[] };
+  terminationReason?: string | null;
   aiVoice?: VoiceProviderSession | null;
   gateway?: { takenOverAt?: string | null; audioLostAt?: string | null; endReason?: string | null };
   _id: string;

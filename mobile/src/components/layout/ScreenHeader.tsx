@@ -35,7 +35,7 @@ export function ScreenHeader({
         </AppText>
       ) : null}
       <View className="min-h-12 flex-row items-center gap-2">
-        <AppText variant={large ? 'h1' : 'h2'} numberOfLines={1} className="flex-1">
+        <AppText variant={large ? 'h1' : 'h2'} numberOfLines={2} className="flex-1">
           {title}
         </AppText>
         {right ? <View className="-me-1 flex-row items-center gap-1">{right}</View> : null}

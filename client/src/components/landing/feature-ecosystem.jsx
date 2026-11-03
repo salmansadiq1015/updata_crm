@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Bell, Bot, Boxes, CalendarDays, CarFront, CheckSquare2, ContactRound, FileText,
+  Bell, BookUser, Bot, Boxes, CalendarDays, CarFront, CheckSquare2, ContactRound, FileText,
   Files, FolderKanban, LayoutDashboard, MapPinned, MessageSquare, Radar, Receipt,
   Smartphone, UserPlus, Users,
 } from 'lucide-react';
@@ -15,7 +15,7 @@ const modules = [
   ['dashboard', LayoutDashboard, 'blue'], ['chat', MessageSquare, 'sky'], ['calendar', CalendarDays, 'amber'],
   ['tasks', CheckSquare2, 'cyan'], ['notifications', Bell, 'emerald'], ['ai', Bot, 'sky'],
   ['employees', Users, 'blue'], ['objects', MapPinned, 'amber'], ['customers', ContactRound, 'sky'],
-  ['address', Users, 'cyan'], ['leadgen', Radar, 'blue'], ['leads', UserPlus, 'sky'],
+  ['address', BookUser, 'cyan'], ['leadgen', Radar, 'blue'], ['leads', UserPlus, 'sky'],
   ['quotes', FileText, 'amber'], ['projects', FolderKanban, 'blue'], ['accounting', Receipt, 'emerald'],
   ['fieldops', Smartphone, 'orange'], ['catalog', Boxes, 'cyan'], ['documents', Files, 'blue'], ['vehicles', CarFront, 'amber'],
 ];

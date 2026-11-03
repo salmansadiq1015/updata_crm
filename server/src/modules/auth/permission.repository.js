@@ -18,7 +18,8 @@ class PermissionRepository {
    */
   async findByKeys(keys) {
     const conditions = keys.map((key) => {
-      const [module, action] = key.split(':');
+      const [module, ...parts] = key.split(':');
+      const action = parts.join(':');
       return { module, action };
     });
     return Permission.find({ $or: conditions }).lean();

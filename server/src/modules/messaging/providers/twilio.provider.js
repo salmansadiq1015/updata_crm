@@ -25,6 +25,12 @@ export class TwilioSmsProvider {
     return Boolean(this.accountSid && this.authToken && (this.from || this.messagingServiceSid));
   }
 
+  // Capabilities of this adapter's implemented SMS transport, not the vendor's
+  // entire product catalogue. Neither adapter accepts MMS/RCS payloads.
+  smsCapabilities() {
+    return { media: false, subject: false, deliveryReceipts: Boolean(this.statusCallback), maxBodyLength: 10000 };
+  }
+
   async health() {
     return this._accountHealth(this.configured);
   }

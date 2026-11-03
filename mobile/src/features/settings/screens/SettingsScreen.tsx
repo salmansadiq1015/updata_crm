@@ -197,6 +197,13 @@ export function SettingsScreen() {
             icon={Smartphone}
             iconTone="primary"
             layout="inline"
+            label="SMS campaigns"
+            onPress={() => navigation.navigate('SmsWorkspace')}
+          />
+          <AppListItem
+            icon={Smartphone}
+            iconTone="primary"
+            layout="inline"
             label={t('readiness.title')}
             onPress={() => navigation.navigate('MobileReadiness')}
           />

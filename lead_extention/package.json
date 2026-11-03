@@ -1,6 +1,6 @@
 {
   "name": "lead-finder-extension",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:browser": "node tests/browser-smoke.mjs",
+    "test:maps-browser": "npm run build && node tests/maps-browser-regression.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

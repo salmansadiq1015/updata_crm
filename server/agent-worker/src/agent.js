@@ -1,3 +1,5 @@
+import { createLanguageUpdater } from './sessionLanguage.js';
+import { createBehaviorPublisher } from './behaviorPublisher.js';
 /**
  * Updata CRM — LiveKit Voice Agent worker  (targets @livekit/agents ^1.9).
  *
@@ -83,9 +85,11 @@ export default defineAgent({
     const api = new ToolApi({ apiBase, token, callId });
     const recordProviderAttempt = attempt => api.providerAttempt({ ...attempt, sessionId: ctx.room?.name || meta.roomName || callId });
     const transcripts = createTranscriptPublisher(api, { warn: (message, extra) => warn(message, { callId, ...extra }) });
+    const behaviorEvents = createBehaviorPublisher(api, { warn: (message, extra) => warn(message, { callId, ...extra }) });
     let session = null;
     let ending = false;
     let guard = null;
+    let languageUpload = Promise.resolve();
     const flushTranscripts = async (timeoutMs = 3000) => {
       for (const item of (session?.history?.items || []).slice(-100)) transcripts.add(item);
       await transcripts.flush(timeoutMs);
@@ -107,6 +111,12 @@ export default defineAgent({
       // Stop capture/generation before network uploads and the final usage snapshot.
       const closedUsage = await closeVoiceSession(session, flushTranscripts, e => warn('session close failed', { callId, error: e?.message }));
       await selection?.adapter.terminateSession().catch(() => {});
+      let languageFlushTimer;
+      try { await Promise.race([languageUpload, new Promise(resolve => { languageFlushTimer = setTimeout(resolve, 3000); })]); }
+      finally { clearTimeout(languageFlushTimer); }
+      const pendingBehavior = await behaviorEvents.flush();
+      if (pendingBehavior.remaining) warn('call ended with undelivered behavior events', { callId, remaining: pendingBehavior.remaining });
+      behaviorEvents.stop();
       // SDK usage is a cumulative session snapshot, not another usage event to add.
       const finalUsage = billingUsage(closedUsage || usage, { model: callModel, provider: activeProvider || 'unknown' });
       if (finalUsage) finalUsage.responseTelemetry = { ...responseUsage.snapshot(), configuration: {
@@ -193,6 +203,7 @@ export default defineAgent({
     }
 
     const config = context.agentConfig || {};
+    let currentLanguage = context.conversationLanguage?.current || config.language;
     const baseInstructions = [
       context.systemPrompt,
       `Disclosure to deliver first in the conversation language (translate faithfully; preserve the AI identity, company and consent request): "${context.disclosure}"`,
@@ -206,6 +217,11 @@ export default defineAgent({
     let pendingAction = context.nextAction;
     let pending = actionToInstruction(pendingAction);
     let agent = null;
+    const applyLanguage = createLanguageUpdater({ revision: context.languageRevision || 0, update: async language => {
+      if (ending || currentLanguage === language) return;
+      await agent.updateInstructions(`${baseInstructions}\nAUTHORITATIVE CURRENT CALL LANGUAGE: ${language}. Continue the pending question without restarting.`);
+      currentLanguage = language;
+    } });
     // Tool results carry the next step. Never rewrite the session prefix per answer.
     const nextFrom = async (res) => {
       silenceWatchdog?.cancel();
@@ -222,6 +238,7 @@ export default defineAgent({
     const heard = createHeard();
     const gate = createAnswerGate(heard);
     const transfer = createHumanTransfer({ api, warn: (message, error) => warn(message, { callId, error: error?.message }) });
+    const speechSession = randomUUID();
     const responseRequests = new Map();
     const responseId = (kind, fieldKey, turn) => {
       const key = `${kind}:${fieldKey}:${turn}`;
@@ -257,8 +274,40 @@ export default defineAgent({
       await hangUp();
     };
 
+    const closeSilentCall = async reason => {
+      silenceWatchdog?.stop();
+      const goodbye = session.generateReply({ instructions: `Speak only in ${currentLanguage}. ${reason} Give one brief polite goodbye. Do not ask another question.`, toolChoice: 'none', allowInterruptions: false });
+      let timer;
+      try { await Promise.race([goodbye.waitForPlayout(), new Promise(resolve => { timer = setTimeout(resolve, 12000); })]); }
+      catch (error) { warn('closing speech could not finish', { callId, error: error?.message }); }
+      finally { clearTimeout(timer); }
+      await finish(null, 0);
+    };
+
     // ---- the constrained tool set the model may call (keys become tool names) ----
     const tools = {
+      report_language: llm.tool({
+        description: 'Report language heard in the lead audio or an explicit language request. Use BCP-47 language codes; Moroccan Darija is ar-MA. Use full linguistic phrases, not a borrowed word or name. The CRM decides the current language; continue the same pending question in the returned language.',
+        parameters: z.object({ language: z.string().max(10), explicit: z.boolean(), confidence: z.number().min(0).max(1) }),
+        execute: guarded(async ({ language, explicit, confidence }) => {
+          const evidence = await heard.latest();
+          if (!evidence?.trim()) return `No lead speech evidence available. Continue in ${currentLanguage}.`;
+          const result = await api.language({ language, explicit, confidence, evidence: evidence.slice(0, 1000), turnId: `${speechSession}:${heard.turns()}`, requestId: responseId(explicit ? 'language-explicit' : 'language', language, heard.turns()) });
+          await applyLanguage(result);
+          if (explicit) gate.advance(); // A language request cannot complete the pending question.
+          return `Current language: ${currentLanguage}. Continue the same pending step without restarting: ${pending}`;
+        }),
+      }),
+      record_engagement: llm.tool({
+        description: 'Record observable lead behavior only when explicitly spoken. Supply no personality or emotion judgments.',
+        parameters: z.object({ type: z.enum(['lead_question', 'information_requested', 'interest_expressed']) }),
+        execute: guarded(async ({ type }) => {
+          const evidence = await heard.latest();
+          if (!evidence?.trim()) return 'No speech evidence available.';
+          behaviorEvents.add({ id: responseId(type, '', heard.turns()), type, evidence: evidence.slice(0, 1000) });
+          return `Continue the pending question: ${pending}`;
+        }),
+      }),
       record_answers: llm.tool({
         description: 'When the person explicitly volunteers answers to several configured questions in one reply, save them together. Use only questionnaire field keys and their spoken information. Do not infer missing answers.',
         parameters: z.object({ answers: z.array(z.object({ fieldKey: z.string(), rawAnswer: z.string() })).min(1).max(40) }),
@@ -277,15 +326,15 @@ export default defineAgent({
       }),
       no_response: llm.tool({
         description: 'The person spoke but did not answer the current question: their reply was unrelated or unintelligible. Never save it as a valid answer. The CRM decides whether to repeat or move to the next question.',
-        parameters: z.object({ fieldKey: z.string(), reason: z.enum(['unrelated', 'unintelligible']) }),
+        parameters: z.object({ fieldKey: z.string(), reason: z.enum(['unrelated', 'unintelligible', 'partial', 'clarification']) }),
         execute: gated(async ({ fieldKey, reason }, turn) => {
-          return `No answer recorded. Next: ${await nextFrom(await api.noResponse(fieldKey, reason, responseId('no-response', fieldKey, turn)))}`;
+          return `No answer recorded. Next: ${await nextFrom(await api.noResponse(fieldKey, reason, responseId('no-response', fieldKey, turn), (await heard.latest())?.slice(0, 4000) || null))}`;
         }),
       }),
       mark_answer_unknown: llm.tool({
         description: 'The person explicitly said they do not know, prefer not to share, or want to skip this question. Never use this for unrelated, incomplete or unintelligible replies.',
-        parameters: z.object({ fieldKey: z.string() }),
-        execute: gated(async ({ fieldKey }) => `Marked unknown. Next: ${await nextFrom(await api.markUnknown(fieldKey))}`),
+        parameters: z.object({ fieldKey: z.string(), reason: z.enum(['unknown', 'refused']).default('unknown') }),
+        execute: gated(async ({ fieldKey, reason }) => `Marked unknown. Next: ${await nextFrom(await api.markUnknown(fieldKey, reason, (await heard.latest())?.slice(0, 1000) || null))}`),
       }),
       confirm: llm.tool({
         description: 'The person said yes to your read-back of a critical answer.',
@@ -396,7 +445,7 @@ export default defineAgent({
     session = new voice.AgentSession({
       llm: selection.adapter.livekitModel,
       // Campaign config: silence → "away" after N seconds; barge-in on/off.
-      userAwayTimeout: Math.max(2, Number(config.silenceTimeoutSeconds) || 8),
+      userAwayTimeout: Math.max(2, Number(config.silenceTimeoutSeconds) || 10),
       turnHandling: { interruption: { enabled: config.allowBargeIn !== false } },
     });
 
@@ -409,31 +458,46 @@ export default defineAgent({
     let userSpeaking = false;
     let opened = false;
     let introRepeats = 0;
+    let speechEpoch = 0;
+    const behavior = payload => behaviorEvents.add(payload);
+    let silenceEvent = null;
     silenceWatchdog = createSilenceWatchdog({
-      timeoutMs: Math.max(2, Number(config.silenceTimeoutSeconds) || 8) * 1000,
+      timeoutMs: Math.max(2, Number(config.silenceTimeoutSeconds) || 10) * 1000,
+      repetitionDelayMs: (config.repetitionDelaySeconds ?? 3) * 1000,
+      onDetected: () => { silenceEvent = behavior({ type: 'silence' }); },
       isBusy: () => ending || !opened || userSpeaking || gate.busy() || transfer.holding() || ['initializing', 'thinking', 'speaking'].includes(agentState),
       warn: error => warn('question silence retry failed', { callId, error: error?.message }),
       onSilence: async () => {
+        const silenceEpoch = speechEpoch;
         quality.onSilence();
         if (pendingAction?.type === 'disclose') {
           introRepeats += 1;
-          if (introRepeats > 3) { session.generateReply({ instructions: 'No agreement was received. Say a brief polite goodbye without collecting any information.' }); await finish(null, 3000); return; }
+          if (introRepeats > (config.maxRepetitionAttempts ?? 3)) {
+            if (config.automaticCallTermination !== false) await closeSilentCall('No agreement to participate was received.');
+            return;
+          }
         } else if (['ask', 'clarify', 'confirm'].includes(pendingAction?.type)) {
-          try { await nextFrom(await api.noResponse(pendingAction.question.fieldKey, 'silence')); }
+          try { await nextFrom(await api.noResponse(pendingAction.question.fieldKey, 'silence', randomUUID(), null, silenceEvent)); }
           catch (error) { await nextFrom(await api.context()); throw error; }
         } else if (['finish', 'end'].includes(pendingAction?.type)) { await finish(null, 1000); return; }
-        if (userSpeaking || ['thinking', 'speaking'].includes(agentState)) return;
+        if (ending || speechEpoch !== silenceEpoch || userSpeaking || ['thinking', 'speaking'].includes(agentState)) return;
+        if (pendingAction?.type === 'end') { await closeSilentCall('The configured unanswered-question limit was reached.'); return; }
         gate.reset();
-        session.generateReply({ instructions: `The caller has not provided an answer. Do not assume one. ${pending}` });
+        session.generateReply({ instructions: `Current language: ${currentLanguage}. The caller has not provided an answer. Do not assume one. ${pending}` });
       },
     });
-    session.on(voice.AgentSessionEventTypes.AgentStateChanged, () => {
+    session.on(voice.AgentSessionEventTypes.AgentStateChanged, ev => {
+      if (opened && ev.oldState === 'speaking' && ev.newState === 'listening' && pendingAction?.question) void behavior({ type: 'question_waiting', fieldKey: pendingAction.question.fieldKey });
       if (['thinking', 'speaking', 'initializing'].includes(agentState)) silenceWatchdog.cancel();
       else if (opened) silenceWatchdog.arm();
     });
     session.on(voice.AgentSessionEventTypes.UserStateChanged, ev => {
       userSpeaking = ev.newState === 'speaking';
-      if (userSpeaking) silenceWatchdog.cancel();
+      if (userSpeaking) {
+        speechEpoch += 1; silenceWatchdog.cancel();
+        void behavior({ type: 'response_started' });
+        if (agentState === 'speaking') void behavior({ type: 'interruption' });
+      }
       else if (opened && ev.newState === 'listening') silenceWatchdog.arm();
     });
     session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
@@ -473,7 +537,18 @@ export default defineAgent({
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
       if (ev.newState === 'speaking') { heard.onSpeaking(); void publishActivity('customer'); }
     });
-    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => { if (ev.isFinal) heard.onTranscript(ev.transcript); });
+    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      if (!ev.isFinal) return;
+      heard.onTranscript(ev.transcript);
+      if (!ev.language || config.automaticLanguageDetection === false || !ev.transcript?.trim()) return;
+      const turn = heard.turns();
+      const evidence = ev.transcript.slice(0, 1000);
+      languageUpload = languageUpload.then(async () => {
+        const result = await api.language({ language: ev.language, explicit: false, source: 'asr', evidence,
+          turnId: `${speechSession}:${turn}`, requestId: responseId('language', ev.language, turn) });
+        await applyLanguage(result);
+      }).catch(error => warn('language evidence upload failed', { callId, error: error?.message }));
+    });
     // Publish both sides as speech finishes; never block the voice model on uploads.
     if (context.persistTranscript !== false) {
       session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => transcripts.add(ev?.item));

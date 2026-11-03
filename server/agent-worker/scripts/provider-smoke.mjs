@@ -8,10 +8,14 @@ import { LiveKitVoiceAdapter } from '../src/providers/livekitAdapters.js';
 import { establishProvider } from '../src/providers/providerManager.js';
 import { voiceProviderConfig } from '../../shared/voiceProviderConfig.js';
 import { createResponseUsage } from '../src/responseUsage.js';
+import { buildSystemPrompt } from '../../src/modules/aiCalling/engine/leadContext.js';
+import { resolveAgentLanguage } from '../../src/modules/aiCalling/aiCalling.languages.js';
 import { computeCallCost } from '../../shared/voiceCost.js';
 
 if (!process.argv.includes('--live')) throw new Error('Pass --live to enable billable provider requests');
 const arg = key => process.argv.find(value => value.startsWith(`--${key}=`))?.slice(key.length + 3);
+const requestedLanguage = arg('language');
+if (requestedLanguage && !resolveAgentLanguage(requestedLanguage)) throw new Error('Unsupported language code');
 const requestedProvider = arg('provider') || 'gemini';
 let provider = requestedProvider;
 if (!['gemini', 'openai', 'auto'].includes(provider)) throw new Error('provider must be gemini, openai or auto');
@@ -19,9 +23,9 @@ const envFile = fileURLToPath(new URL('../.env', import.meta.url));
 const env = { ...(fs.existsSync(envFile) ? dotenv.parse(fs.readFileSync(envFile)) : {}), ...process.env };
 const config = voiceProviderConfig({ secondaryModel: provider === 'openai' ? arg('model') || 'gpt-realtime-2.1-mini' : 'gpt-realtime-2.1-mini' }, env);
 let model = provider === 'gemini' ? arg('model') || config.primaryModel : config.secondaryModel;
-const createAdapter = candidate => new LiveKitVoiceAdapter({ ...candidate, config, env, instructions: 'This is an isolated audio transport test. Say only: Ready. Do not call tools.', tools: {}, chatCtx: llm.ChatContext.empty() });
+const createAdapter = candidate => new LiveKitVoiceAdapter({ ...candidate, config, env, instructions: requestedLanguage ? `${buildSystemPrompt({ agentConfig: { language: requestedLanguage } })}\nThis is an isolated opening-language audio test. Give a short greeting in the configured language. Do not call tools.` : 'This is an isolated audio transport test. Say only: Ready. Do not call tools.', tools: {}, chatCtx: llm.ChatContext.empty() });
 let adapter = createAdapter({ provider, model });
-let responses; let attempts = [];
+let responses; let attempts = []; let outputTranscript = '';
 const start = Date.now();
 let outputSamples = 0; let setupMs = null; let status = 'failed'; let errorCode = null;
 initializeLogger({ pretty: false, level: 'fatal' });
@@ -36,7 +40,7 @@ try {
   adapter.receiveAudio(generation => {
     drains.push((async () => {
       for await (const message of generation.messageStream) {
-        const text = (async () => { for await (const _chunk of message.textStream) { /* drain */ } })();
+        const text = (async () => { for await (const chunk of message.textStream) outputTranscript += String(chunk) })();
         for await (const frame of message.audioStream) outputSamples += frame.samplesPerChannel;
         await text;
       }
@@ -58,7 +62,7 @@ try {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   } else {
-    await adapter.sendText('Say Ready now.');
+    await adapter.sendText(requestedLanguage ? 'Open the test call now in the configured conversation language.' : 'Say Ready now.');
   }
   await done; await Promise.all(drains); status = outputSamples ? 'audio_received' : 'no_audio';
 } catch (error) { errorCode = error.code || 'PROVIDER_SMOKE_FAILED'; }
@@ -66,7 +70,7 @@ finally { await adapter.terminateSession().catch(() => {}); dispose(); }
 const recordedResponses = responses?.snapshot().responses || [];
 const usage = { modelUsage: recordedResponses };
 const cost = computeCallCost({ usage }, env);
-const report = { at: new Date().toISOString(), requestedProvider, provider, model, status, errorCode, setupMs, attempts, elapsedMs: Date.now() - start, outputAudioSeconds: outputSamples / 24000,
+const report = { requestedLanguage: requestedLanguage || null, outputTranscript, at: new Date().toISOString(), requestedProvider, provider, model, status, errorCode, setupMs, attempts, elapsedMs: Date.now() - start, outputAudioSeconds: outputSamples / 24000,
   responses: recordedResponses, calculatedApiCostUsd: cost.breakdown.unpriced ? null : cost.amount,
   billingSource: 'provider_usage_at_list_rates', invoiceVerified: false, limitations: ['No LiveKit room, CRM synchronization, SIM audio or human qualification accuracy verified', 'Text-triggered unless --audio supplies an identical recorded fixture'] };
 if (arg('output')) fs.writeFileSync(arg('output'), JSON.stringify(report, null, 2));

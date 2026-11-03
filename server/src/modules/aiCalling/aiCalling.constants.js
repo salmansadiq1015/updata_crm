@@ -51,6 +51,7 @@ export const CALL_STATES = Object.freeze([
 // distinct from CALL_STATES: a "completed" call can still be "needs_review".
 export const DISPOSITIONS = Object.freeze([
   'answered_completed',   // all required questions resolved
+  'unresponsive',         // connected, configured unanswered threshold reached
   'answered_partial',     // connected, some answers captured, not all required
   'no_answer',
   'busy',

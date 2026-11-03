@@ -27,7 +27,7 @@ class DocumentGenerationBatchRepository {
     return DocumentGenerationBatch.findOneAndUpdate(
       { batchId },
       { $set: { status: 'PROCESSING', startedAt: new Date() } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 
@@ -85,7 +85,7 @@ class DocumentGenerationBatchRepository {
           completedAt: new Date(),
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 }

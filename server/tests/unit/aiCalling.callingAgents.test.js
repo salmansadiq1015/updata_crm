@@ -393,3 +393,47 @@ describe('agent campaign execution through the existing calling engine', () => {
     await migration.up();
   });
 });
+
+describe('saved agent browser test snapshots', () => {
+  it('creates one isolated current-version snapshot, preserves the source lead and refuses telephone launch', async () => {
+    const { agent, selected } = await ready();
+    const before = await Lead.findById(selected._id).lean();
+    const response = await request(serve(app)).post(`/ai-calling/agents/${agent._id}/test`).expect(200);
+    const campaign = response.body.data;
+    expect(campaign.isTest).toBe(true); expect(campaign.status).toBe('draft');
+    expect(campaign.agentConfig.language).toBe(agent.agentConfig.language);
+    const again = await service.prepareTest(agent._id, actor);
+    expect(String(again._id)).toBe(campaign._id);
+    expect(await Recipients.countDocuments({ campaignId: campaign._id })).toBe(1);
+    expect(dial).not.toHaveBeenCalled();
+    const sourceAgent = await service.get(agent._id, actor);
+    expect(sourceAgent.latestCampaign).toBeNull(); expect(sourceAgent.metrics.campaigns).toBe(0);
+    expect((await calling.listCampaigns(actor)).data).toHaveLength(0);
+    expect(await Lead.findById(selected._id).lean()).toEqual(before);
+    await expect(calling.startCampaign(campaign._id, actor)).rejects.toThrow('cannot place phone calls');
+    await request(serve(app)).post(`/ai-calling/agents/${agent._id}/test`).set('x-owner', String(outsider)).expect(404);
+    await request(serve(app)).post(`/ai-calling/agents/${agent._id}/test`).set('x-read-only', 'true').expect(403);
+  });
+});
+
+it('progresses from an unresponsive recipient to the next eligible lead once under duplicate results and concurrent ticks', async () => {
+  const input = fullInput();
+  const setup = await ready({ agentConfig: { ...input.agentConfig, maxRepetitionAttempts: 0, maxUnansweredQuestions: 1, automaticNextLead: true }, schedule: { ...input.schedule, maxConcurrency: 1 } });
+  const second = await lead({ mobile: '+41791234568' });
+  const assigned = await service.assign(setup.agent._id, { version: setup.agent.version, leadIds: [String(second._id)], mode: 'add' }, actor);
+  const campaign = await service.launch(assigned._id, launchInput(), actor);
+  await calling.tickCampaign(campaign._id, campaign.tickToken);
+  const firstCall = await Calls.findOne({ campaignId: campaign._id });
+  expect(firstCall).not.toBeNull(); expect(dial).toHaveBeenCalledTimes(1);
+  await calling.agentAnswered(firstCall.internalCallId);
+  await calling.agentDisclose(firstCall.internalCallId);
+  const exhausted = await calling.agentNoResponse(firstCall.internalCallId, { fieldKey: 'interest', reason: 'silence', requestId: crypto.randomUUID() });
+  expect(exhausted.nextAction).toMatchObject({ type: 'end', reason: 'unresponsive' });
+  await Promise.all([calling.agentEndCall(firstCall.internalCallId, {}), calling.agentEndCall(firstCall.internalCallId, {})]);
+  const freshCampaign = await Campaign.findById(campaign._id).lean();
+  await Promise.all([calling.tickCampaign(campaign._id, freshCampaign.tickToken), calling.tickCampaign(campaign._id, freshCampaign.tickToken)]);
+  const calls = await Calls.find({ campaignId: campaign._id }).lean();
+  expect(calls).toHaveLength(2); expect(dial).toHaveBeenCalledTimes(2);
+  expect(new Set(calls.map(c => String(c.leadId))).size).toBe(2);
+  expect((await Recipients.findById(firstCall.recipientId).lean()).state).toBe('completed');
+});

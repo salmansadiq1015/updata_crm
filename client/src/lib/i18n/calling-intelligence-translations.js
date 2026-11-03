@@ -1,3 +1,4 @@
+import { voicePolicyTranslations } from './voice-policy-translations';
 /**
  * Calling intelligence: evidence-linked extraction + review queue, approved business
  * knowledge, and human transfer (aiCalling). Flat keys, all four locales complete.
@@ -1044,3 +1045,5 @@ export const callingIntelligenceTranslations = {
     "callingIntel.agent.mode.none": "بدون معرفة تجارية: لا يذكر الوكيل أي أسعار أو وعود.",
   },
 };
+
+for (const locale of Object.keys(voicePolicyTranslations)) Object.assign(callingIntelligenceTranslations[locale], voicePolicyTranslations[locale]);

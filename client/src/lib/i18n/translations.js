@@ -1,3 +1,4 @@
+import { sidebarSettingsTranslations } from './sidebar-settings-translations';
 import { companyTranslations } from './company-translations';
 import { callingExperienceTranslations } from './calling-experience-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
@@ -1224,6 +1225,7 @@ const baseTranslations = {
     ...leadsWorkflowTranslations.de,
     ...landingTranslations.de,
     ...experienceTranslations.de,
+    ...sidebarSettingsTranslations.de,
     ...companyTranslations.de,
     ...callingExperienceTranslations.de,
     ...smsOpsTranslations.de,
@@ -6273,6 +6275,7 @@ const baseTranslations = {
     ...leadsWorkflowTranslations.en,
     ...landingTranslations.en,
     ...experienceTranslations.en,
+    ...sidebarSettingsTranslations.en,
     ...companyTranslations.en,
     ...callingExperienceTranslations.en,
     ...smsOpsTranslations.en,
@@ -11330,6 +11333,7 @@ const baseTranslations = {
     ...leadsWorkflowTranslations.fr,
     ...landingTranslations.fr,
     ...experienceTranslations.fr,
+    ...sidebarSettingsTranslations.fr,
     ...companyTranslations.fr,
     ...callingExperienceTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
@@ -11480,6 +11484,7 @@ const baseTranslations = {
     ...leadsWorkflowTranslations.ar,
     ...landingTranslations.ar,
     ...experienceTranslations.ar,
+    ...sidebarSettingsTranslations.ar,
     ...companyTranslations.ar,
     ...callingExperienceTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,

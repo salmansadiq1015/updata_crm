@@ -36,5 +36,6 @@ router.patch('/agents/:id', write, validate(schema.updateAgent), handle(req => s
 router.delete('/agents/:id', write, validate(schema.agentId), handle(req => service.remove(req.params.id, req.user._id, meta(req))));
 router.post('/agents/:id/duplicate', write, validate(schema.agentId), handle(req => service.duplicate(req.params.id, req.user._id, meta(req)), { statusCode: 201 }));
 router.put('/agents/:id/leads', write, validate(schema.assignLeads), handle(req => service.assign(req.params.id, req.body, req.user._id, meta(req))));
+router.post('/agents/:id/test', write, validate(schema.agentId), handle(req => service.prepareTest(req.params.id, req.user._id)));
 router.post('/agents/:id/launch', write, validate(schema.launchAgent), handle(req => service.launch(req.params.id, req.body, req.user._id, meta(req)), { statusCode: 202 }));
 export default router;

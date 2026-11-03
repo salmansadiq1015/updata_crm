@@ -21,6 +21,8 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { AppError, NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import { normalizePhone } from '../businessDiscovery/engine/normalizer.js';
+import SimSmsMessage from '../simSms/simSmsMessage.model.js';
+import '../simSms/simSmsCampaign.model.js';
 import { isStopRequest } from '../simSms/engine/smsCopy.js';
 import {
   CHANNELS, OUTBOUND_QUEUE, STATUS_RANK,
@@ -224,6 +226,7 @@ async function eligibilityFor(lead, campaign, template, consentByLeadChannel, su
   if ((campaign.purpose === 'promotional' || campaign.channel === 'whatsapp') && consent?.status !== 'granted') reasons.push('consent_required');
   if (consent?.expiresAt && new Date(consent.expiresAt) <= new Date()) reasons.push('consent_expired');
   const personalization = await renderForLead(campaign, lead, template);
+  if (campaign.channel === 'sms' && !personalization.rendered.bodyText.trim()) reasons.push('empty_message');
   if (personalization.missing.length) reasons.push(`missing_variables:${personalization.missing.join(',')}`);
   if (personalization.unresolved.length) reasons.push(`unresolved_variables:${personalization.unresolved.join(',')}`);
   if (campaign.channel === 'whatsapp' && (!campaign.content.whatsappTemplateName || !campaign.content.whatsappLanguage)) reasons.push('approved_template_required');
@@ -233,7 +236,7 @@ async function eligibilityFor(lead, campaign, template, consentByLeadChannel, su
 
 async function refreshCampaignSummary(campaignId) {
   const objectId = new mongoose.Types.ObjectId(campaignId);
-  const [rows, reasonRows, campaign] = await Promise.all([
+  const [rows, reasonRows, campaign, segmentRows] = await Promise.all([
     MessageRecipient.aggregate([
       { $match: { campaignId: objectId } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -244,11 +247,16 @@ async function refreshCampaignSummary(campaignId) {
       { $group: { _id: '$eligibility.reasons', count: { $sum: 1 } } },
     ]),
     Campaign.findById(campaignId).select('status').lean(),
+    MessageRecipient.aggregate([
+      { $match: { campaignId: objectId, channel: 'sms', 'eligibility.eligible': true } },
+      { $group: { _id: null, segments: { $sum: '$sms.segments' } } },
+    ]),
   ]);
   const counts = Object.fromEntries(rows.map((row) => [row._id, row.count]));
   const reasons = Object.fromEntries(reasonRows.map((row) => [row._id, row.count]));
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
   const summary = {
+    totalSegments: segmentRows[0]?.segments || 0,
     total,
     eligible: total - (counts.ineligible || 0) - (counts.suppressed || 0),
     ineligible: counts.ineligible || 0,
@@ -324,6 +332,16 @@ export function buildCampaignMonitoring(campaign, now = new Date()) {
 
 class MessagingService {
   async createCampaign(input, actor, meta = {}) {
+    const { idempotencyKey, ...request } = input;
+    const requestHash = idempotencyKey ? crypto.createHash('sha256').update(JSON.stringify(request)).digest('hex') : undefined;
+    if (idempotencyKey) {
+      const previous = await Campaign.findOne({ createdBy: actor, idempotencyKey }).lean();
+      if (previous) {
+        if (previous.requestHash !== requestHash) throw new ConflictError('Idempotency key was already used for different campaign content');
+        if (!previous.initializedAt) throw new ConflictError('Campaign creation is still pending; refresh campaign history before retrying');
+        return this.getCampaign(previous._id, actor);
+      }
+    }
     const leadIds = await resolveLeadIds(input.selection);
     if (!leadIds.length) throw new ValidationError('No leads match the selected recipients');
     const providerSettings = await settings();
@@ -345,6 +363,7 @@ class MessagingService {
       whatsappTwilioContentSid: template.whatsapp?.twilioContentSid,
     } : {};
     const content = { ...templateContent, ...input.content };
+    if (input.channel === 'sms' && !String(content.bodyText || '').trim()) throw new ValidationError('SMS message body is required');
     const variables = extractVariables(content.subject, content.bodyHtml, content.bodyText, JSON.stringify(content.whatsappComponents || []));
     const invalidVariables = variables.filter((key) => !ALLOWED_VARIABLES.includes(key));
     if (invalidVariables.length) throw new ValidationError(`Unsupported personalization variables: ${invalidVariables.join(', ')}`);
@@ -352,8 +371,13 @@ class MessagingService {
     const leads = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
       .populate('assignedTo', 'firstName lastName').lean();
     if (leads.length !== leadIds.length) throw new ValidationError('One or more selected leads are unavailable');
+    // Database iteration order is not recipient selection order. Resolve a shared
+    // destination deterministically to the first explicitly selected lead.
+    const selectionOrder = new Map(leadIds.map((id, index) => [String(id), index]));
+    leads.sort((left, right) => selectionOrder.get(String(left._id)) - selectionOrder.get(String(right._id)));
 
     const campaign = await Campaign.create({
+      ...(idempotencyKey ? { idempotencyKey, requestHash } : {}),
       name: input.name, description: input.description || '', channel: input.channel,
       purpose: input.purpose || template?.purpose || 'promotional', templateId: template?._id || null,
       content, routing: input.routing || {},
@@ -361,6 +385,9 @@ class MessagingService {
       status: 'draft', timezone: input.timezone || 'UTC', scheduledAt: input.scheduledAt || null,
       isTest: Boolean(input.isTest),
       createdBy: actor, updatedBy: actor,
+    }).catch((error) => {
+      if (idempotencyKey && error.code === 11000) throw new ConflictError('Campaign creation is already pending; retry with the same key');
+      throw error;
     });
     await campaign.populate('createdBy', 'firstName lastName');
 
@@ -392,11 +419,13 @@ class MessagingService {
         status: result.reasons.length ? (isSuppressed ? 'suppressed' : 'ineligible') : 'draft',
         eligibility: { eligible: result.reasons.length === 0, reasons: result.reasons },
         rendered: result.rendered, createdBy: actor,
+        ...(campaign.channel === 'sms' ? { sms: smsSegments(result.rendered.bodyText) } : {}),
         estimatedCost: this._estimatedCost(campaign, result.rendered, providerSettings),
       });
     }
     await MessageRecipient.insertMany(recipientDocs, { ordered: false });
     await refreshCampaignSummary(campaign._id);
+    await Campaign.updateOne({ _id: campaign._id }, { $set: { initializedAt: new Date() } });
     auditService.logEvent({
       eventType: 'messaging.campaign.created', userId: actor, ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent, result: 'success', module: 'messaging',
@@ -411,10 +440,12 @@ class MessagingService {
     return { ...campaign, monitoring: buildCampaignMonitoring(campaign) };
   }
 
-  async listCampaigns(actor, { page = 1, limit = 25, status, channel, q } = {}) {
+  async listCampaigns(actor, { page = 1, limit = 25, status, channel, q, provider, from, to } = {}) {
     const filter = { createdBy: actor };
     if (status) filter.status = status;
     if (channel) filter.channel = channel;
+    if (provider) filter['routing.smsProvider'] = provider;
+    if (from || to) filter.createdAt = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
     if (q?.trim()) {
       const term = new RegExp(escapeRegex(q.trim()), 'i');
       filter.$or = [{ name: term }, { description: term }];
@@ -496,6 +527,10 @@ class MessagingService {
     const leads = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
       .populate('assignedTo', 'firstName lastName').lean();
     if (leads.length !== leadIds.length) throw new ValidationError('One or more selected leads are unavailable');
+    // Database iteration order is not recipient selection order. Resolve a shared
+    // destination deterministically to the first explicitly selected lead.
+    const selectionOrder = new Map(leadIds.map((id, index) => [String(id), index]));
+    leads.sort((left, right) => selectionOrder.get(String(left._id)) - selectionOrder.get(String(right._id)));
     const leadById = new Map(leads.map((lead) => [String(lead._id), lead]));
     const destinations = leads.map((lead) => destinationFor(lead, campaign.channel));
     if (destinations.some((value) => !value)) throw new ValidationError(`One or more selected leads have no valid ${campaign.channel} destination`);
@@ -632,6 +667,7 @@ class MessagingService {
     const campaign = await Campaign.findOne({ _id: id, createdBy: actor });
     if (!campaign) throw new NotFoundError('MessageCampaign', id);
     if (!['draft', 'paused'].includes(campaign.status)) throw new ConflictError('Only draft or paused campaigns can be started');
+    if (campaign.idempotencyKey && !campaign.initializedAt) throw new ConflictError('Campaign creation is not complete');
     const eligible = await this._eligibleRecipientsBeforeQueue(campaign);
     if (!eligible.length) throw new ConflictError('Campaign has no eligible recipients');
     const runAt = scheduledAt ? new Date(scheduledAt) : campaign.scheduledAt;
@@ -2023,25 +2059,50 @@ class MessagingService {
     if (status && status !== 'received') inboundFilter.normalizedStatus = status;
     if (campaignId) inboundFilter.campaignId = campaignId;
     if (from || to) inboundFilter.occurredAt = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+    // Read the existing SIM evidence in place. Do not copy it into provider
+    // recipients or infer delivery from a phone's sent result.
+    const simFilter = { leadId, createdBy: actor };
+    if ((channel && channel !== 'sms') || (provider && provider !== 'android_sim')) simFilter._id = null;
+    if (campaignId) simFilter.campaignId = campaignId;
+    if (from || to) simFilter.createdAt = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+    if (status === 'delivered') { simFilter.direction = 'outbound'; simFilter.deliveredAt = { $ne: null }; }
+    else if (status === 'sent') { simFilter.direction = 'outbound'; simFilter.status = 'sent'; simFilter.deliveredAt = null; }
+    else if (status) {
+      const sourceStatuses = { queued: ['pending', 'leased'], submitting: ['attempting'], received: ['received'], failed: ['failed'], unknown: ['unknown'], cancelled: ['cancelled'] }[status];
+      if (sourceStatuses) simFilter.status = { $in: sourceStatuses };
+      else simFilter._id = null;
+    }
     const take = page * limit;
-    const [outbound, inbound, outboundTotal, inboundTotal] = await Promise.all([
+    const [outbound, inbound, outboundTotal, inboundTotal, simMessages, simTotal] = await Promise.all([
       MessageRecipient.find(filter).sort({ createdAt: -1 }).limit(take).populate('campaignId', 'name').lean(),
       DeliveryEvent.find(inboundFilter).sort({ occurredAt: -1 }).limit(take).populate('campaignId', 'name').lean(),
       MessageRecipient.countDocuments(filter),
       DeliveryEvent.countDocuments(inboundFilter),
+      SimSmsMessage.find(simFilter).sort({ createdAt: -1 }).limit(take).populate('campaignId', 'name').lean(),
+      SimSmsMessage.countDocuments(simFilter),
     ]);
     const timeline = [
+      ...simMessages.map((item) => ({
+        _id: String(item._id), leadId: item.leadId, campaignId: item.campaignId,
+        source: 'sim_sms', channel: 'sms', provider: 'android_sim',
+        direction: item.direction, createdAt: item.createdAt,
+        status: item.direction === 'inbound' ? 'received' : item.deliveredAt ? 'delivered'
+          : ({ pending: 'queued', leased: 'queued', attempting: 'submitting' }[item.status] || item.status),
+        rendered: { bodyText: item.body }, sms: { encoding: item.encoding, segments: item.segments },
+        sentAt: item.sentAt, deliveredAt: item.deliveredAt, subscriptionId: item.subscriptionId,
+        error: item.failureCode ? { code: item.failureCode, message: item.failureCode } : null,
+      })),
       ...outbound.map((item) => ({ ...item, direction: 'outbound' })),
       ...inbound.map((item) => ({
         ...item, status: 'received', createdAt: item.occurredAt, rendered: { bodyText: item.messagePreview },
       })),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const total = outboundTotal + inboundTotal;
+    const total = outboundTotal + inboundTotal + simTotal;
     const data = timeline.slice((page - 1) * limit, page * limit);
     return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
-  async analytics(actor, { from, to } = {}) {
+  async analytics(actor, { from, to, channel } = {}) {
     const actorId = new mongoose.Types.ObjectId(actor);
     const dateMatch = from || to
       ? { createdAt: { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) } }
@@ -2049,9 +2110,14 @@ class MessagingService {
     const eventDateMatch = from || to
       ? { occurredAt: { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) } }
       : {};
-    const match = { createdBy: actorId, ...dateMatch };
-    const campaignMatch = { createdBy: actorId, ...dateMatch };
+    const match = { createdBy: actorId, ...dateMatch, ...(channel ? { channel } : {}) };
+    const campaignMatch = { ...match };
+
     const submittedStatuses = ['accepted', 'sent', 'delivered', 'read', 'failed', 'undelivered', 'unknown'];
+    const segmentTotals = await MessageRecipient.aggregate([
+      { $match: { ...match, channel: 'sms', provider: { $ne: null }, status: { $in: submittedStatuses }, ...(channel && channel !== 'sms' ? { _id: null } : {}) } },
+      { $group: { _id: null, segments: { $sum: '$sms.segments' } } },
+    ]);
     const now = new Date();
     const consentExpiryHorizon = new Date(now.getTime() + 30 * 86_400_000);
     // Consent has no independent owner because it belongs to a lead. Resolve
@@ -2135,6 +2201,7 @@ class MessagingService {
       bounced: row._id === 'email' ? emailBounced : 0,
     }));
     return {
+      totalSegments: segmentTotals[0]?.segments || 0,
       campaigns, activeCampaigns, totalRecipients, submitted, delivered, read, emailBounced, fallbackCount, inboundReplies,
       deliveryRate: submitted ? delivered / submitted : 0,
       readRate: submitted ? read / submitted : 0,
@@ -2428,6 +2495,27 @@ class MessagingService {
       details: { leadId, channel: input.channel, priorSuppressionReason: suppression.reason, evidenceRecorded: true },
     });
     return consent;
+  }
+
+  // Public sender metadata only. Keep settings, account identifiers and credentials
+  // behind settings:read; campaign authors need only connection and transport facts.
+  async smsServices() {
+    const stored = await settings();
+    return Promise.all([
+      { id: 'textbee', name: 'TextBee', adapter: textBee, enabled: stored.providers.textbeeEnabled },
+      { id: 'twilio', name: 'Twilio', adapter: twilio, enabled: stored.providers.twilioEnabled },
+    ].map(async ({ id, name, adapter, enabled }) => {
+      const health = enabled
+        ? await adapter.health().catch(() => ({ configured: true, eligible: false, reason: 'unreachable' }))
+        : { configured: adapter.configured, eligible: false, reason: 'disabled' };
+      return {
+        id, name, transport: 'sms', enabled: Boolean(enabled),
+        configured: Boolean(health.configured), available: Boolean(enabled && health.eligible),
+        reason: health.reason || null,
+        sender: id === 'twilio' ? (adapter.messagingServiceSid ? null : (adapter.from || null)) : (health.device?.name || null),
+        capabilities: adapter.smsCapabilities(),
+      };
+    }));
   }
 
   async providerHealth() {

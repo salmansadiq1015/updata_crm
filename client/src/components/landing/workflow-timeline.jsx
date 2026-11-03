@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, CheckCircle2, ClipboardCheck, FileText, MapPinned, MessageSquare, Radar, Send, Target } from 'lucide-react';
+import { BarChart3, CheckCircle2, ClipboardCheck, FileText, UserPlus, Wrench, MessageSquare, Radar, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Reveal, SectionIntro } from './motion-primitives';
@@ -8,9 +8,9 @@ import { Reveal, SectionIntro } from './motion-primitives';
 export function WorkflowTimeline() {
   const { t } = useLanguage();
   const stages = [
-    ['discover', MapPinned, 'Lead Generation'], ['capture', Radar, 'CRM'], ['qualify', Target, 'Leads'],
+    ['discover', Radar, 'Lead Generation'], ['capture', UserPlus, 'CRM'], ['qualify', Target, 'Leads'],
     ['communicate', MessageSquare, 'Chat'], ['sell', FileText, 'Quotes & Orders'], ['plan', ClipboardCheck, 'Projects'],
-    ['execute', Send, 'Field Ops'], ['complete', CheckCircle2, 'Tasks'], ['analyze', BarChart3, 'Dashboard'],
+    ['execute', Wrench, 'Field Ops'], ['complete', CheckCircle2, 'Tasks'], ['analyze', BarChart3, 'Dashboard'],
   ];
   return (
     <section className="relative overflow-hidden bg-[#08101d] py-24 sm:py-32">

@@ -1,5 +1,6 @@
 import { verifyToken } from '../utils/crypto.js';
 import User from '../../modules/auth/user.model.js';
+import Permission from '../../modules/auth/permission.model.js';
 import sessionService from '../../modules/auth/session.service.js';
 import auditService from '../../modules/auth/audit.service.js';
 import cacheManager from '../cache/CacheManager.js';
@@ -417,6 +418,10 @@ async function _loadPermissions(user) {
   return cacheManager.getOrSet(
     cacheKey,
     async () => {
+      if (user.role?.name === 'Admin') {
+        const permissions = await Permission.find().lean();
+        return permissions.map((p) => `${p.module}:${p.action}`);
+      }
       // Populate permissions on the role
       const populatedUser = await User.findById(user._id)
         .populate({

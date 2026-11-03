@@ -75,7 +75,7 @@ class SupportTicketRepository {
   }
 
   async update(id, patch) {
-    return SupportTicket.findByIdAndUpdate(id, { $set: patch }, { new: true, runValidators: true })
+    return SupportTicket.findByIdAndUpdate(id, { $set: patch }, { returnDocument: 'after', runValidators: true })
       .populate(POPULATE_FIELDS)
       .lean();
   }
@@ -84,7 +84,7 @@ class SupportTicketRepository {
     return SupportTicket.findByIdAndUpdate(
       id,
       { $set: { isDeleted: true, deletedAt: new Date(), updatedBy: userId } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

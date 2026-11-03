@@ -33,7 +33,7 @@ class DepartmentController {
       const department = await Department.findByIdAndUpdate(
         req.params.id,
         updates,
-        { new: true, runValidators: true },
+        { returnDocument: 'after', runValidators: true },
       );
       if (!department) throw new NotFoundError('Department not found');
       return res.success({ data: department });

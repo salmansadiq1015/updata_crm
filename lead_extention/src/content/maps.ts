@@ -4,7 +4,7 @@ import type { ExtensionMessage } from '../shared/types';
 // Bumped on every content-script change so a freshly injected build TAKES OVER a
 // Google Maps tab that still runs an older copy (a reload leaves the old script
 // running in the page until the tab navigates). The old copy self-silences below.
-const CONTENT_RUNTIME_KEY = '__leadFinderMapsContentV5__';
+const CONTENT_RUNTIME_KEY = '__leadFinderMapsContentV6__';
 const runtimeGlobal = globalThis as typeof globalThis & Record<string, unknown>;
 
 // True only while the extension this script belongs to is still loaded. After the

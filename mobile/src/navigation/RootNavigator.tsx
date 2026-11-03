@@ -38,6 +38,12 @@ import { LeadDetailScreen } from '@/features/leads/screens/LeadDetailScreen';
 import { LeadFormScreen } from '@/features/leads/screens/LeadFormScreen';
 import { useTheme } from '@/theme/ThemeProvider';
 
+import {
+  SmsWorkspaceScreen,
+  SmsCampaignCreateScreen,
+  SmsCampaignDetailScreen,
+} from '@/features/messaging/SmsWorkspaceScreen';
+
 import { linking } from './linking';
 import { MainNavigator } from './MainNavigator';
 import { navigationTheme } from './navigationTheme';
@@ -66,6 +72,21 @@ export function RootNavigator() {
         {status === 'authenticated' ? (
           <Stack.Group>
             <Stack.Screen name="Main" component={MainNavigator} />
+            <Stack.Screen
+              name="SmsWorkspace"
+              component={SmsWorkspaceScreen}
+              options={{ headerShown: true, title: 'SMS campaigns' }}
+            />
+            <Stack.Screen
+              name="SmsCampaignCreate"
+              component={SmsCampaignCreateScreen}
+              options={{ headerShown: true, title: 'New SMS campaign' }}
+            />
+            <Stack.Screen
+              name="SmsCampaignDetail"
+              component={SmsCampaignDetailScreen}
+              options={{ headerShown: true, title: 'SMS campaign' }}
+            />
             <Stack.Screen
               name="LeadDetail"
               component={LeadDetailScreen}

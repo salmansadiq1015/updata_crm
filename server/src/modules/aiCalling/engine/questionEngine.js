@@ -81,22 +81,25 @@ export function eligibleQuestions(questionnaire, answers) {
  * The single next thing the agent should do.
  * @returns {{type:'disclose'|'ask'|'clarify'|'confirm'|'finish'|'end', question?:object, reason?:string}}
  */
-export function nextAction(questionnaire, state, { maxRepeats } = {}) {
+export function nextAction(questionnaire, state, { maxRepeats, maxUnansweredQuestions, automaticCallTermination = true } = {}) {
   if (state.endedReason) return { type: 'end', reason: state.endedReason };
   if (!state.disclosed) return { type: 'disclose' };
 
   const answers = state.answers || {};
   const eligible = eligibleQuestions(questionnaire, answers);
 
+  let consecutiveUnanswered = 0;
   for (const q of eligible) {
     const entry = answers[q.fieldKey];
-    if (isResolved(entry)) continue;
+    if (isResolved(entry)) { consecutiveUnanswered = 0; continue; }
     // An invalid answer with clarifications left → clarify; otherwise move on
     // (required+unresolved is surfaced at finish, never looped forever).
     if (entry && entry.validation === 'invalid') {
       const max = maxRepeats ?? q.maxClarifications ?? 2;
       const failures = (entry.clarifications ?? 0) + (entry.noResponseCount ?? 0);
       if (maxRepeats != null ? failures <= max : failures < max) return { type: 'clarify', question: q, reason: entry.reason || null };
+      consecutiveUnanswered += 1;
+      if (automaticCallTermination && maxUnansweredQuestions && consecutiveUnanswered >= maxUnansweredQuestions) return { type: 'end', reason: 'unresponsive' };
       continue; // give up on this one; it remains unresolved
     }
     return { type: 'ask', question: q };
@@ -125,6 +128,7 @@ export function applyAnswer(rawState, fieldKey, result) {
       ...state.answers,
       [fieldKey]: {
         validation: result.validation,
+        classification: result.classification || (result.validation === 'valid' ? 'ANSWERED' : result.validation === 'unknown' ? 'NO_RESPONSE' : 'UNCLEAR'),
         normalizedValue: result.normalizedValue ?? null,
         rawAnswer: result.rawAnswer ?? prev.rawAnswer ?? '',
         reason: result.reason ?? null,
@@ -186,7 +190,7 @@ export const VOICE_QUESTION_REPEATS = 3;
 export function confirmationMisses(entry = {}) {
   return (entry.noResponseCount || 0) + (entry.confirmRejections || 0);
 }
-export function applyNoResponse(rawState, fieldKey, { requestId, reason, confirming = false }) {
+export function applyNoResponse(rawState, fieldKey, { requestId, reason, evidence = null, confirming = false, maxRepeats = VOICE_QUESTION_REPEATS }) {
   const state = normalizeState(rawState);
   const prev = state.answers[fieldKey] || { clarifications: 0 };
   if (prev.noResponseIds?.includes(requestId)) return state;
@@ -196,7 +200,9 @@ export function applyNoResponse(rawState, fieldKey, { requestId, reason, confirm
     validation: confirming ? prev.validation : 'invalid',
     normalizedValue: confirming ? prev.normalizedValue : null,
     rawAnswer: prev.rawAnswer || '', reason: `no_response:${reason}`,
+    classification: reason === 'silence' ? 'NO_RESPONSE' : reason === 'partial' ? 'PARTIALLY_ANSWERED' : reason === 'clarification' ? 'NEEDS_CLARIFICATION' : reason === 'unrelated' ? 'IRRELEVANT' : 'UNCLEAR',
+    ...(reason === 'partial' && evidence ? { partialAnswer: evidence } : {}),
     noResponseCount, noResponseIds: [...(prev.noResponseIds || []), requestId].slice(-12),
-    ...(confirming && confirmationMisses({ ...prev, noResponseCount }) > VOICE_QUESTION_REPEATS ? { confirmSkipped: true } : {}),
+    ...(confirming && confirmationMisses({ ...prev, noResponseCount }) > maxRepeats ? { confirmSkipped: true } : {}),
   } } };
 }

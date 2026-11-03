@@ -15,7 +15,7 @@ const chatRoomRepository = {
           members: members.map((userId) => ({ userId })),
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
   },
 
@@ -31,7 +31,7 @@ const chatRoomRepository = {
           members: members.map((userId) => ({ userId })),
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
   },
 

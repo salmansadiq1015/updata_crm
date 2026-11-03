@@ -41,6 +41,8 @@ class AiCallingController {
   async webTest(req, res, next) { try { return res.success({ data: await service.startWebTest(req.params.id, req.user._id, req.body || {}), message: 'Browser voice test started' }); } catch (e) { next(e); } }
   async listCalls(req, res, next) { try { return res.success(await service.listCalls(req.user._id, req._validatedQuery || req.query)); } catch (e) { next(e); } }
   async monitorCall(req, res, next) { try { return res.success({ data: await service.monitorCall(req.params.id, req.user._id) }); } catch (e) { next(e); } }
+  async agentLanguage(req, res, next) { try { return res.success({ data: await service.agentLanguage(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
+  async agentBehavior(req, res, next) { try { return res.success({ data: await service.agentBehavior(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async agentNoResponse(req, res, next) { try { return res.success({ data: await service.agentNoResponse(req.agentCall.callId, req.body) }); } catch (e) { next(e); } }
   async getCall(req, res, next) { try { return res.success({ data: await service.getCall(req.params.id, req.user._id) }); } catch (e) { next(e); } }
   async reconcileCall(req, res, next) { try { return res.success({ data: await service.reconcileCall(req.params.id, req.user._id, req.body, meta(req)), message: 'Call outcome resolved' }); } catch (e) { next(e); } }

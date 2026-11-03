@@ -39,6 +39,20 @@ describe('normalization and distance', () => {
     expect(dedupeKey(lead({ placeIdentifier: null, googleMapsUrl: '', businessName: 'Same', address: 'One', phone: '+1' }))).toContain('fields:');
   });
 
+  it('keeps distinct businesses and branches that share a reception phone', () => {
+    const first = lead({ placeIdentifier: null, googleMapsUrl: 'https://www.google.com/maps/place/First' });
+    expect(isSameLead(first, { ...first, googleMapsUrl: 'https://www.google.com/maps/place/Second', businessName: 'Different Software Company' })).toBe(false);
+    expect(isSameLead(first, { ...first, googleMapsUrl: 'https://www.google.com/maps/place/Branch', address: 'Another Street' })).toBe(false);
+    expect(isSameLead(first, { ...first, googleMapsUrl: 'https://www.google.com/maps/place/Distant', latitude: 32 })).toBe(false);
+    expect(isSameLead(first, { ...first, googleMapsUrl: 'https://www.google.com/maps/place/Alias' })).toBe(true);
+  });
+
+  it('saves the selected business type when Maps supplies no category', () => {
+    for (const category of [null, 'No reviews', 'Online appointments', 'N°1']) {
+      expect(makeLead({ businessName: 'Acme', googleMapsUrl: 'https://www.google.com/maps/place/Acme', category }, 'search', null, 'Software companies').category).toBe('Software companies');
+    }
+  });
+
   it('uses a narrow same-name geographic fallback without merging distant businesses', () => {
     const nearby = lead({ placeIdentifier: null, googleMapsUrl: 'https://www.google.com/maps/place/A', address: null, phone: null, latitude: 31.5204, longitude: 74.3587 });
     const sameNearby = lead({ id: '2', placeIdentifier: null, googleMapsUrl: 'https://www.google.com/maps/place/B', address: null, phone: null, latitude: 31.5209, longitude: 74.3588 });

@@ -22,10 +22,14 @@ const lead = (overrides: Partial<Lead> = {}): Lead => ({
 });
 
 describe('toExtensionRecord — the CRM payload no longer drops rich business data', () => {
-  it.each([null, '', '  ', 'Business', 'establishment', 'point_of_interest'])('falls back from missing/generic category %s to this lead’s selected Gym task', (category) => {
+  it.each([null, '', '  ', 'Business', 'establishment', 'point_of_interest', 'No reviews', 'No review', 'Online appointments', 'On-site services', 'N°1', 'Nº 1', '4.8 (23)', 'Aucun avis', 'Keine Bewertungen'])('falls back from missing/generic category %s to this lead’s selected Gym task', (category) => {
     const record = toExtensionRecord(lead({ category, categories: [], discoveryCategories: ['Gym'] }));
     expect(record.category).toBe('Gym');
     expect(record.discoveryCategories).toEqual(['Gym']);
+  });
+
+  it('rejects a business name or slogan captured as the category', () => {
+    expect(toExtensionRecord(lead({ businessName: 'Tech AB', category: 'Tech AB - Smartpartner', categories: [], discoveryCategories: ['Software companies'] })).category).toBe('Software companies');
   });
 
   it('preserves actual categories and keeps multi-type campaign provenance per lead', () => {

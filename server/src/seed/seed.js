@@ -1,4 +1,5 @@
 import { seedCatalog } from './catalog-seed.js';
+import { performance } from 'node:perf_hooks';
 import { seedDoctplTemplates } from './doctplSeed.js';
 import { seedMessagingEmailTemplates } from './messagingEmailTemplateSeed.js';
 import { seedOperations } from './operations-seed.js';
@@ -71,6 +72,29 @@ const accountingPermissionDefinitions = ACCOUNTING_PERMISSION_KEYS.map((key) => 
 });
 
 export const PERMISSION_DEFINITIONS = [
+  // Page and operational capabilities exposed by current clients and routes.
+  { module: 'catalog', action: 'igh:manage', description: 'Catalog igh manage' },
+  { module: 'catalog', action: 'manage', description: 'Catalog manage' },
+  { module: 'catalog', action: 'pricing', description: 'Catalog pricing' },
+  { module: 'notifications', action: 'admin', description: 'Notifications admin' },
+  { module: 'qop', action: 'read', description: 'Qop read' },
+  { module: 'qop', action: 'write', description: 'Qop write' },
+  { module: 'qop', action: 'delete', description: 'Qop delete' },
+  { module: 'roles', action: 'write', description: 'Roles write' },
+  { module: 'roles', action: 'delete', description: 'Roles delete' },
+  { module: 'sessions', action: 'read', description: 'Sessions read' },
+  { module: 'sessions', action: 'admin', description: 'Sessions admin' },
+  { module: 'system', action: 'admin', description: 'System admin' },
+  { module: 'system', action: 'read', description: 'System read' },
+  { module: 'system', action: 'cache:manage', description: 'System cache manage' },
+  { module: 'system', action: 'config:view', description: 'System config view' },
+  { module: 'system', action: 'events:manage', description: 'System events manage' },
+  { module: 'system', action: 'events:view', description: 'System events view' },
+  { module: 'system', action: 'jobs:manage', description: 'System jobs manage' },
+  { module: 'system', action: 'jobs:view', description: 'System jobs view' },
+  { module: 'users', action: 'delete', description: 'Users delete' },
+  { module: 'quotation', action: 'view-prices', description: 'Quotation view prices' },
+
   // Users
   { module: 'users', action: 'read', description: 'View user profiles' },
   { module: 'users', action: 'write', description: 'Create and update users' },
@@ -573,17 +597,16 @@ async function seedStarterObject() {
 }
 
 export async function seedDatabase() {
+  const startedAt = performance.now();
   try {
     // 1. Upsert all permissions — runs on every startup so new entries reach existing DBs
-    await Promise.all(
-      PERMISSION_DEFINITIONS.map((def) =>
-        Permission.findOneAndUpdate(
-          { module: def.module, action: def.action },
-          { $setOnInsert: def },
-          { upsert: true, returnDocument: 'after' },
-        ),
-      ),
-    );
+    await Permission.bulkWrite(PERMISSION_DEFINITIONS.map((def) => ({
+      updateOne: {
+        filter: { module: def.module, action: def.action },
+        update: { $setOnInsert: def },
+        upsert: true,
+      },
+    })), { ordered: false });
 
     // Build lookup map: 'module:action' → ObjectId
     const allPermissions = await Permission.find();
@@ -629,6 +652,9 @@ export async function seedDatabase() {
     // 3. Invalidate permission caches so stale [] entries don't block updated roles
     try {
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:permissions:*`);
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:role:*`);
+      await cacheManager.del('auth:roles:all');
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:user:*`);
       logger.info('Permission caches invalidated', { module: 'seed' });
     } catch {
       // Non-fatal: Redis may not be ready yet during very early startup
@@ -717,7 +743,7 @@ export async function seedDatabase() {
             scopeQop: dept.scopeQop, scopeTasks: dept.scopeTasks,
           },
         },
-        { upsert: true, new: false },
+        { upsert: true, returnDocument: 'before' },
       );
       // Backfill presentation/scope on departments created before these fields
       // existed (only when missing, so admin edits are preserved).
@@ -743,7 +769,7 @@ export async function seedDatabase() {
     // 8. Seed a starter object with Objektinformationen (only when sites empty)
     await seedStarterObject();
 
-    logger.info('Database seeding complete', { module: 'seed' });
+    logger.info('Database seeding complete', { module: 'seed', duration: Math.round(performance.now() - startedAt) });
   } catch (err) {
     logger.error('Database seeding failed', {
       module: 'seed',

@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { SidebarSettings } from './sidebar-settings';
 import {
   ArrowRight,
   LockKeyhole,
@@ -16,7 +18,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useSettingsHubController } from '../hooks/use-settings-hub-controller';
 import {
@@ -277,14 +279,24 @@ function SettingsResults({ controller }) {
 
 export function SettingsHubPage() {
   const controller = useSettingsHubController();
+  const { hasPermission } = usePermissions();
 
   return (
     <div className="min-h-full bg-[linear-gradient(180deg,hsl(var(--muted)/0.45),transparent_360px)]">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-6 px-6 py-6">
         <Hero controller={controller} />
         <StatCards controller={controller} />
-        <Toolbar controller={controller} />
-        <SettingsResults controller={controller} />
+        <Tabs defaultValue="general" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="general">{controller.t('sidebarSettings.general')}</TabsTrigger>
+            {hasPermission('settings:admin') && <TabsTrigger value="sidebar">{controller.t('sidebarSettings.tab')}</TabsTrigger>}
+          </TabsList>
+          <TabsContent value="general" className="space-y-6">
+            <Toolbar controller={controller} />
+            <SettingsResults controller={controller} />
+          </TabsContent>
+          {hasPermission('settings:admin') && <TabsContent value="sidebar"><SidebarSettings /></TabsContent>}
+        </Tabs>
       </div>
     </div>
   );

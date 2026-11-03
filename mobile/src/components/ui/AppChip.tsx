@@ -32,7 +32,7 @@ export function AppChip({ label, selected, onPress, icon, className }: AppChipPr
         onPressOut={press.onPressOut}
         hitSlop={{ top: 6, bottom: 6 }}
         className={cn(
-          'h-9 flex-row items-center justify-center gap-1.5 rounded-full border px-3.5',
+          'min-h-12 flex-row items-center justify-center gap-1.5 rounded-full border px-3.5',
           selected ? 'border-primary bg-primary' : 'border-border bg-card active:bg-muted',
           className,
         )}
@@ -47,7 +47,7 @@ export function AppChip({ label, selected, onPress, icon, className }: AppChipPr
         ) : null}
         <AppText
           variant="label"
-          numberOfLines={1}
+          numberOfLines={2}
           className={selected ? 'text-primary-foreground' : 'text-foreground'}
         >
           {label}

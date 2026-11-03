@@ -59,3 +59,10 @@ export function leadStatusGlyph(status: LeadStatus): string {
       return `<svg ${common} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
   }
 }
+
+/** Artwork lives inside Leaflet's positioned wrapper, so animation never moves coordinates. */
+export function leadMarkerHtml(status: LeadStatus, selected = false, hovered = false): string {
+  const safeStatus = Object.hasOwn(LEAD_MARKER_STYLE, status) ? status : 'new';
+  const state = selected ? ' lead-pin--selected' : hovered ? ' lead-pin--hovered' : '';
+  return `<span class="lead-pin${state}" data-status="${safeStatus}"><span class="lead-pin__ground"></span><span class="lead-pin__body"><span class="lead-pin__face"><span class="lead-pin__glyph">${leadStatusGlyph(safeStatus)}</span></span></span></span>`;
+}

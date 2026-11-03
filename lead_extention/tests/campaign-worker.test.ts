@@ -38,6 +38,8 @@ let handleMessage: (message: ExtensionMessage, sender: object, reply: (value: Re
 let tab: { id: number; url: string; status: string };
 let supplied: Record<string, number>;
 let overlapping = 0;
+let endConfirmed: boolean;
+let collectOverride: (() => RawBusinessRecord[]) | null;
 const updateListeners = new Set<(id: number, info: { status: string }) => void>();
 
 beforeEach(async () => {
@@ -45,6 +47,8 @@ beforeEach(async () => {
   data.searches.clear(); data.leads.clear(); data.progress.length = 0; updateListeners.clear();
   supplied = { Gym: 25, 'Beauty Salon': 25 };
   overlapping = 0;
+  collectOverride = null;
+  endConfirmed = true;
   tab = { id: 1, url: 'https://www.google.com/maps/search/Gym+near+Mohammedia', status: 'complete' };
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn() });
   const context = () => ({
@@ -74,10 +78,11 @@ beforeEach(async () => {
       sendMessage: async (_id: number, message: { type: string }) => {
         if (message.type === 'GET_MAPS_CONTEXT') return { context: context() };
         if (message.type === 'COLLECT_VISIBLE') {
+          if (collectOverride) return { records: collectOverride(), context: context() };
           const type = context().query.startsWith('Beauty Salon') ? 'Beauty Salon' : 'Gym';
           return { records: [...(type === 'Beauty Salon' ? records('Gym', overlapping) : []), ...records(type, supplied[type])], context: context() };
         }
-        return scroll;
+        return { ...scroll, endConfirmed };
       },
       remove: vi.fn(async () => undefined),
     },
@@ -106,6 +111,23 @@ function savedSearch(id: string): SearchRecord {
 }
 
 describe('actual background worker campaign orchestration', () => {
+  it('waits through a temporarily stalled bottom and fills the selected software-company count', async () => {
+    let polls = 0;
+    collectOverride = () => records('Software', ++polls < 12 ? 2 : 25).map((record, index) => ({
+      ...record, placeIdentifier: null, phone: '+212 522 000000',
+      category: ['No reviews', 'Online appointments', 'N°1', null][index % 4],
+      reviewCount: index % 2 === 0 ? null : 5,
+    }));
+    endConfirmed = false;
+    await send({ type: 'START_DISCOVERY', config: { ...config, businessType: 'Software companies', businessTypes: ['Software companies'] } });
+    const result = await finish();
+    expect(polls).toBeGreaterThanOrEqual(12);
+    expect(result.unique).toBe(10);
+    expect(data.leads.size).toBe(10);
+    expect([...data.leads.values()].every((lead) => lead.category === 'Software companies')).toBe(true);
+    expect([...data.leads.values()].some((lead) => lead.reviewCount === null)).toBe(true);
+  });
+
   it('skips cross-type duplicates and still fills both ten-business quotas without duplicate records', async () => {
     overlapping = 5;
     await send({ type: 'START_DISCOVERY', config });

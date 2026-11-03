@@ -53,9 +53,33 @@ export function createRedisClient(logger, options = {}) {
 
 export function getRedisClient(logger) {
   if (!sharedClient) {
-    sharedClient = createRedisClient(logger);
+    // HTTP requests and startup must settle when Redis is unavailable.
+    // BullMQ uses separate connections and retains its unlimited retry policy.
+    sharedClient = createRedisClient(logger, {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 5000,
+      commandTimeout: 3000,
+    });
   }
   return sharedClient;
+}
+
+export function waitForRedisReady(client, timeoutMS = 5000) {
+  if (client.status === 'ready') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const finish = (error) => {
+      clearTimeout(timer);
+      client.removeListener('ready', onReady);
+      client.removeListener('error', onError);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onReady = () => finish();
+    const onError = (error) => finish(error);
+    const timer = setTimeout(() => finish(new Error('Redis readiness timed out')), timeoutMS);
+    client.once('ready', onReady);
+    client.once('error', onError);
+  });
 }
 
 export async function disconnectRedis(logger) {

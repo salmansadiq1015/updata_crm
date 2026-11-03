@@ -145,7 +145,7 @@ class FieldTicketRepository {
 
     if (Object.keys(update).length === 0) return this.findById(id);
 
-    return FieldTicket.findByIdAndUpdate(id, update, { new: true, runValidators: true })
+    return FieldTicket.findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .populate(POPULATE_FIELDS)
       .select('-__v')
       .lean();

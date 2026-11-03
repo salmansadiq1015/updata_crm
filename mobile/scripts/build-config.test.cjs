@@ -92,3 +92,29 @@ test('shared (client APK) build: SEND_SMS and its result receiver only, nothing 
   const again = evaluate('shared', shared.manifest).manifest.manifest.application[0];
   assert.equal(again.receiver.length, 1);
 });
+
+test('incremental shared -> private prebuild clears stale blocked SMS permission markers', () => {
+  const initial = {
+    manifest: {
+      'uses-permission': [
+        { $: { 'android:name': 'android.permission.RECEIVE_SMS', 'tools:node': 'remove' } },
+        { $: { 'android:name': 'android.permission.SEND_SMS', 'tools:node': 'remove' } },
+        { $: { 'android:name': 'android.permission.READ_SMS', 'tools:node': 'remove' } },
+      ],
+      application: [{ $: { 'android:name': '.MainApplication' } }],
+    },
+  };
+  const privateBuild = evaluate('private', initial);
+  const permissions = privateBuild.manifest.manifest['uses-permission'];
+  assert.equal(permissions[0].$['tools:node'], undefined);
+  assert.equal(permissions[1].$['tools:node'], undefined);
+  assert.equal(permissions[2].$['tools:node'], 'remove');
+  assert(
+    privateBuild.manifest.manifest.application[0].receiver.some((item) =>
+      item.$['android:name'].endsWith('.SmsInboundReceiver'),
+    ),
+  );
+  const shared = evaluate('shared', initial);
+  assert.equal(shared.manifest.manifest['uses-permission'][0].$['tools:node'], 'remove');
+  assert.equal(shared.manifest.manifest['uses-permission'][1].$['tools:node'], undefined);
+});

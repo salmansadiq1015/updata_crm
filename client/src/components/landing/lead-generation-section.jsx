@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Check, MapPin, Radar, Search, Sparkles, Upload } from 'lucide-react';
+import { ArrowRight, Check, MapPin, Radar, Search, ScanSearch, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { LeadGenerationVisual } from './landing-visuals';
@@ -9,7 +9,7 @@ import { Reveal, SectionIntro } from './motion-primitives';
 export function LeadGenerationSection() {
   const { t } = useLanguage();
   const stages = [
-    ['location', MapPin], ['area', Radar], ['type', Search], ['analyze', Sparkles],
+    ['location', MapPin], ['area', Radar], ['type', Search], ['analyze', ScanSearch],
     ['discover', Radar], ['review', Check], ['dedupe', Check], ['import', Upload],
   ];
 

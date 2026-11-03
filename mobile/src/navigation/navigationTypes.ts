@@ -39,6 +39,9 @@ export type RootStackParamList = {
   };
   // SIM call queue (not deep-linkable): the user calls chosen leads one by one.
   CallQueue: undefined;
+  SmsWorkspace: undefined;
+  SmsCampaignCreate: undefined;
+  SmsCampaignDetail: { campaignId: string; canEdit?: boolean };
   SmsCompose: { leadId: string; operationId?: string; destinationField?: 'phone' | 'mobile' };
   CommunicationQueue: undefined;
   // AI agent (not deep-linkable: a campaign starts only from an explicit selection in the app).

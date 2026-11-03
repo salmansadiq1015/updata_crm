@@ -28,6 +28,8 @@ const whatsappComponent = Joi.object({
 }).unknown(false);
 
 const content = Joi.object({
+  attachments: Joi.forbidden(), media: Joi.forbidden(), mediaUrls: Joi.forbidden(),
+  language: Joi.string().trim().max(35).default('auto'),
   subject: Joi.string().max(500).allow('').default(''),
   bodyHtml: Joi.string().max(200000).allow('').default(''),
   bodyText: Joi.string().max(10000).allow('').default(''),
@@ -57,6 +59,8 @@ const explicitSelection = Joi.object({
 });
 
 export const createCampaign = { body: Joi.object({
+  attachments: Joi.forbidden(), media: Joi.forbidden(), mediaUrls: Joi.forbidden(),
+  idempotencyKey: Joi.string().trim().min(16).max(100),
   name: Joi.string().trim().max(160).required(), description: Joi.string().trim().max(1000).allow('').default(''),
   channel: Joi.string().valid(...CHANNELS).required(), purpose: Joi.string().valid(...MESSAGE_PURPOSES).default('promotional'),
   templateId: objectId.allow(null), content,
@@ -88,6 +92,8 @@ export const reconcileRecipient = { params: Joi.object({ id: objectId.required()
 export const listCampaigns = { query: Joi.object({
   page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid(...CHANNELS),
   q: Joi.string().trim().max(160).allow(''),
+  provider: Joi.string().valid('textbee', 'twilio'),
+  from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')),
 }) };
 export const listRecipients = { params: Joi.object({ id: objectId.required() }), query: Joi.object({ page, limit: Joi.number().integer().min(1).max(200).default(50), status: Joi.string().valid(...MESSAGE_STATUSES) }) };
 export const recipientId = { params: Joi.object({ id: objectId.required(), recipientId: objectId.required() }) };
@@ -103,12 +109,12 @@ export const verifyCampaignConsent = {
   }),
 };
 export const leadHistory = { params: Joi.object({ leadId: objectId.required() }), query: Joi.object({
-  page, limit, channel: Joi.string().valid(...CHANNELS), provider: Joi.string().valid(...PROVIDERS),
+  page, limit, channel: Joi.string().valid(...CHANNELS), provider: Joi.string().valid(...PROVIDERS, 'android_sim'),
   status: Joi.string().valid(...MESSAGE_STATUSES, 'received'), campaignId: objectId,
   from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')),
 }) };
 export const leadConsent = { params: Joi.object({ leadId: objectId.required() }) };
-export const analytics = { query: Joi.object({ from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')) }) };
+export const analytics = { query: Joi.object({ channel: Joi.string().valid(...CHANNELS), from: Joi.date().iso(), to: Joi.date().iso().min(Joi.ref('from')) }) };
 export const listTemplates = { query: Joi.object({ channel: Joi.string().valid(...CHANNELS), includeArchived: Joi.boolean().default(false) }) };
 
 const templateBody = Joi.object({

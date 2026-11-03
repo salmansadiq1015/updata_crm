@@ -113,14 +113,20 @@ function buildTerms() {
 
 export async function seedAiVocabulary() {
   const terms = buildTerms();
-  let created = 0;
-  for (const term of terms) {
-    const exists = await CustomVocabulary.findOne({ term: term.term, language: term.language, isDeleted: false });
-    if (!exists) {
-      await CustomVocabulary.create(term);
-      created += 1;
-    }
-  }
+  // Some source lists overlap (for example Siemens). Deduplicate before an
+  // unordered bulk upsert so a fresh database cannot insert the same key twice.
+  const uniqueTerms = [...new Map(terms.map((term) => [`${term.language}:${term.term}`, term])).values()];
+  const now = new Date();
+  const result = await CustomVocabulary.bulkWrite(uniqueTerms.map((term) => ({
+    updateOne: {
+      filter: { term: term.term, language: term.language, isDeleted: false },
+      update: { $setOnInsert: { ...term, createdAt: now, updatedAt: now } },
+      upsert: true,
+      // Existing vocabulary, including administrator edits, stays untouched.
+      timestamps: false,
+    },
+  })), { ordered: false });
+  const created = result.upsertedCount;
   logger.info(`AI vocabulary seed: ${created} new terms (${terms.length} total defined)`, { module: 'seed' });
   return { created, total: terms.length };
 }

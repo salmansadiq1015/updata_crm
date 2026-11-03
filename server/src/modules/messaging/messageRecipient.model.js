@@ -19,6 +19,12 @@ const recipientSchema = new mongoose.Schema({
     bodyText: { type: String, maxlength: 10000, default: '' },
     whatsappComponents: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
+  sms: {
+    encoding: { type: String, enum: ['GSM-7', 'UCS-2', null], default: null },
+    characters: { type: Number, default: null },
+    units: { type: Number, default: null },
+    segments: { type: Number, default: null },
+  },
   provider: { type: String, enum: [...PROVIDERS, null], default: null, index: true },
   providerMessageId: { type: String, default: null, index: true },
   // Set when a worker crosses the durable provider-submission boundary. A

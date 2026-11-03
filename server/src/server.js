@@ -3,32 +3,14 @@ import Sentry from './config/sentry.js';
 import { execFileSync } from 'child_process';
 import http from 'http';
 import net from 'net';
-import { initializeSocketServer } from './shared/socket/socketServer.js';
-import { createApp } from './app.js';
+import { performance } from 'node:perf_hooks';
 import config from './config/index.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
-import { getRedisClient, disconnectRedis } from './config/redis.js';
+import { getRedisClient, disconnectRedis, waitForRedisReady } from './config/redis.js';
 import cacheManager from './shared/cache/CacheManager.js';
 import queueManager from './shared/queue/QueueManager.js';
 import eventBus from './shared/events/EventBus.js';
 import EVENT_TYPES from './shared/events/eventTypes.js';
-import { registerJobs } from './jobs/index.js';
-import { registerAuthEvents } from './modules/auth/auth.events.js';
-import { registerCrmEvents } from './modules/crm/crm.events.js';
-import { registerPmEvents } from './modules/pm/pm.events.js';
-import { registerDeployEvents } from './modules/deploy/deploy.events.js';
-import { registerMobileEvents } from './modules/mobile/mobile.events.js';
-import { registerQopEvents } from './modules/qop/qop.events.js';
-import { registerDoctplEvents } from './modules/doctpl/doctpl.events.js';
-import { registerCatalogEvents } from './modules/catalog/catalog.events.js';
-import { registerAccountingEvents } from './modules/accounting/accounting.events.js';
-import { registerTasksEvents } from './modules/tasks/tasks.events.js';
-import { registerMeetingEvents } from './modules/meetings/meeting.events.js';
-import { registerNotificationsEvents } from './modules/notifications/notifications.events.js';
-import { registerIntegrationsEvents } from './modules/integrations/integrations.events.js';
-import { registerAiEvents } from './modules/ai/ai.events.js';
-import { registerAgentHandoffs } from './modules/ai/governance/agentHandoffs.js';
-import { registerDiscoverySocket } from './modules/businessDiscovery/discovery.events.js';
 import { seedDatabase } from './seed/seed.js';
 import logger from './shared/logger/index.js';
 
@@ -38,7 +20,7 @@ import logger from './shared/logger/index.js';
  * Startup sequence:
  * 1. Connect MongoDB
  * 2. Connect Redis → initialize L2 cache
- * 3. Create Express app
+ * 3. Sync seed data, then load the application and its event handlers
  * 4. Register background jobs
  * 5. Start HTTP server
  * 6. Publish system.started event
@@ -108,6 +90,11 @@ function handleServerError(err) {
 }
 
 async function start() {
+  const startedAt = performance.now();
+  const logPhase = (phase) => logger.info('Startup phase complete', {
+    module: 'server', action: 'startup', phase,
+    duration: Math.round(performance.now() - startedAt),
+  });
   try {
     // Fail before database/cache/job initialization if another API instance is
     // already bound to the configured port.
@@ -115,18 +102,13 @@ async function start() {
 
     // 1. Connect MongoDB
     await connectDatabase(logger);
+    logPhase('database');
 
     // 2. Connect Redis + init L2 cache
     let redisClient;
     try {
       redisClient = getRedisClient(logger);
-      // Wait for Redis to be ready
-      await new Promise((resolve, reject) => {
-        if (redisClient.status === 'ready') return resolve();
-        redisClient.once('ready', resolve);
-        redisClient.once('error', reject);
-        setTimeout(() => resolve(), 5000); // Don't block startup if Redis is slow
-      });
+      await waitForRedisReady(redisClient);
       cacheManager.initL2(redisClient);
 
       // In development, flush stale rate-limit counters so a server restart
@@ -151,8 +133,9 @@ async function start() {
         error: { message: err.message },
       });
     }
+    logPhase('redis');
 
-    // 2.5. Seed database (idempotent — only runs on first boot)
+    // 2.5. Sync seed definitions on every boot, preserving existing data.
     try {
       await seedDatabase();
     } catch (err) {
@@ -162,23 +145,14 @@ async function start() {
         error: { message: err.message },
       });
     }
+    logPhase('seed');
 
-    // 2.6. Register event handlers
-    registerAuthEvents();
-    registerCrmEvents();
-    registerPmEvents();
-    registerDeployEvents();
-    registerMobileEvents();
-    registerQopEvents();
-    registerDoctplEvents();
-    registerCatalogEvents();
-    registerAccountingEvents();
-    registerTasksEvents();
-    registerMeetingEvents();
-    registerNotificationsEvents();
-    registerIntegrationsEvents();
-    registerAiEvents();
-    registerAgentHandoffs();
+    // Load the full application after seeding. Importing every route first
+    // registers hundreds of models whose automatic index checks saturate the
+    // database pool before the bootstrap queries can run.
+    const { createApp, registerJobs, initializeSocketServer, registerDiscoverySocket, registerEventHandlers } = await import('./runtime.js');
+    registerEventHandlers();
+    logPhase('application');
 
     // 3. Create Express app
     const app = createApp();
@@ -208,6 +182,7 @@ async function start() {
         action: 'startup',
         port: config.server.port,
         env: config.env,
+        duration: Math.round(performance.now() - startedAt),
       });
 
       // 6. Publish startup event

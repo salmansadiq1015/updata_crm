@@ -1,14 +1,21 @@
 import { normalizeBusinessType } from './businessTypeLabel.js';
 
-const meaningfulType = (value) => {
+const meaningfulType = (value, name) => {
   const type = normalizeBusinessType(value);
-  return type && !/^(business|establishment|point[ _]of[ _]interest)$/i.test(type) ? type : null;
+  if (!type || /^(business|establishment|point[ _]of[ _]interest|other|unknown|n\/a)$/i.test(type)) return null;
+  if (/\b(reviews?|ratings?|stars?|avis|bewertungen|reseñas?|recensioni|avaliações|appointments?|services? on.?site)\b|مراجعات|تقييمات/i.test(type)
+    || /^(?:on.?site services?|online (?:appointments?|estimates?)|open|closed|opens?|closes?|directions|website|sponsored)\b/i.test(type)
+    || /^(?:n[°ºo.]\s*\d|#?\d[\d., ()]*)$/i.test(type)
+    || !/\p{L}/u.test(type)) return null;
+  if (name && type.toLocaleLowerCase().startsWith(name.trim().toLocaleLowerCase())) return null;
+  return type;
 };
 
 export function extensionBusinessType(record = {}) {
-  return [record.category, ...(Array.isArray(record.categories) ? record.categories : []),
-    ...(Array.isArray(record.discoveryCategories) ? record.discoveryCategories : [])]
-    .map(meaningfulType).find(Boolean) ?? null;
+  return [record.category, ...(Array.isArray(record.categories) ? record.categories : [])]
+    .map((value) => meaningfulType(value, record.businessName)).find(Boolean)
+    ?? (Array.isArray(record.discoveryCategories) ? record.discoveryCategories : [])
+      .map(normalizeBusinessType).find(Boolean) ?? null;
 }
 
 /** Signatures written by the old extension importers, not by general imports. */

@@ -36,7 +36,7 @@ class AccountingEntityRepository {
   }
 
   async updateById(id, data) {
-    return AccountingEntity.findByIdAndUpdate(id, data, { new: true, runValidators: true })
+    return AccountingEntity.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
       .populate({ path: 'parentId', select: 'entityCode name type status' })
       .lean();
   }

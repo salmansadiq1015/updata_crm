@@ -22,10 +22,23 @@ describe('messaging personalization', () => {
     expect(output.unresolved).toEqual(['unknownThing']);
   });
 
+  it.each([
+    ['', 'GSM-7', 0, 0],
+    ['^'.repeat(80), 'GSM-7', 160, 1],
+    ['€'.repeat(81), 'GSM-7', 162, 2],
+    ['`'.repeat(71), 'UCS-2', 71, 2],
+    ['🙂'.repeat(35), 'UCS-2', 70, 1],
+    ['🙂'.repeat(36), 'UCS-2', 72, 2],
+    ['مرحبا', 'UCS-2', 5, 1],
+    ['ÄÖÑÜà', 'GSM-7', 5, 1],
+  ])('counts encoding units for %s', (text, encoding, units, segments) => {
+    expect(smsSegments(text)).toMatchObject({ encoding, units, segments });
+  });
+
   it('extracts variables, escapes HTML, and estimates SMS segments', () => {
     expect(extractVariables('Hi {{firstName}}', '{{city}}')).toEqual(['firstName', 'city']);
     expect(escapeHtml('<a & b>')).toBe('&lt;a &amp; b&gt;');
     expect(smsSegments('a'.repeat(161)).segments).toBe(2);
-    expect(smsSegments('🙂'.repeat(71))).toMatchObject({ unicode: true, segments: 2 });
+    expect(smsSegments('🙂'.repeat(71))).toMatchObject({ unicode: true, units: 142, segments: 3 });
   });
 });

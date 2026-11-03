@@ -1,0 +1,52 @@
+{
+  "tests": [
+    {
+      "at": "2026-11-03T14:20:53.956Z",
+      "requestedLanguage": "ar",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "status": "audio_received",
+      "outputTranscript": "مرحباً، أنا مساعد ذكي تعتمد على الذكاء الاصطناعي. هل توافق على متابعة هذا الاختبار في اللغة المطلوبة؟",
+      "setupMs": 1377,
+      "outputAudioSeconds": 8.45,
+      "calculatedApiCostUsd": 0.004245
+    },
+    {
+      "at": "2026-11-03T14:20:54.076Z",
+      "requestedLanguage": "en",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "status": "audio_received",
+      "outputTranscript": "Hello, I’m an AI assistant calling. To continue, please share your first answer to the script question.",
+      "setupMs": 1297,
+      "outputAudioSeconds": 6.7,
+      "calculatedApiCostUsd": 0.003377
+    },
+    {
+      "at": "2026-11-03T14:20:53.884Z",
+      "requestedLanguage": "fr",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "status": "audio_received",
+      "outputTranscript": "Bonjour ! Je suis une intelligence artificielle et je vous appelle pour cette simulation. Êtes-vous d’accord pour participer et répondre aux questions de qualification ?",
+      "setupMs": 1333,
+      "outputAudioSeconds": 10,
+      "calculatedApiCostUsd": 0.004709
+    },
+    {
+      "at": "2026-11-03T14:20:55.943Z",
+      "requestedLanguage": "ar-MA",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "status": "audio_received",
+      "outputTranscript": "سلام، أنا AI مساعد الصوت ديالك. هاد المكالمة آزمينة ديال اختبار اللغة، وغايتسألوك على الأسئلة اللي مشروطة باش نكملو. إذا وافقت تبقى معانا، نتابع السؤال الجاي.",
+      "setupMs": 1524,
+      "outputAudioSeconds": 14.25,
+      "calculatedApiCostUsd": 0.006628
+    }
+  ],
+  "limitations": [
+    "Isolated native output audio, triggered by text; no phone dial or CRM writes.",
+    "Does not validate ASR, native-speaker pronunciation, automatic switching, or full LiveKit call flow."
+  ]
+}

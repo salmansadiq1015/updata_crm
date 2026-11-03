@@ -1,3 +1,4 @@
+import { LeadSmsHistory } from '@/features/messaging/LeadSmsHistory';
 import {
   Bot,
   Building2,
@@ -320,6 +321,12 @@ function LeadDetail({
         ) : null}
       </AppListGroup>
 
+      <LeadSmsHistory
+        key={lead.id}
+        leadId={lead.id}
+        onCampaign={(campaignId) => navigation.navigate('SmsCampaignDetail', { campaignId })}
+        onSimCampaign={(campaignId) => navigation.navigate('SimSmsCampaignDetail', { campaignId })}
+      />
       <QualificationSummary leadId={lead.id} />
       <LeadLinkSessions leadId={lead.id} />
 

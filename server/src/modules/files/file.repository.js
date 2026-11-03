@@ -104,7 +104,7 @@ class FileRepository {
     return FileMetadata.findByIdAndUpdate(
       id,
       data,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

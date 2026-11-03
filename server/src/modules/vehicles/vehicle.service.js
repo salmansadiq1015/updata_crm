@@ -52,7 +52,7 @@ class VehicleService {
     const vehicle = await Vehicle.findByIdAndUpdate(
       id,
       { ...data, updatedBy: userId },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     if (!vehicle) throw new NotFoundError('Vehicle', id);
     audit('vehicle.updated', userId, id, meta, { changedFields: Object.keys(data) });
@@ -70,7 +70,7 @@ class VehicleService {
     const vehicle = await Vehicle.findByIdAndUpdate(
       id,
       { currentDriverId: driverId || null, updatedBy: userId },
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!vehicle) throw new NotFoundError('Vehicle', id);
     audit('vehicle.driver_changed', userId, id, meta, { driverId: driverId || null });

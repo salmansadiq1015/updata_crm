@@ -14,41 +14,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { navSectionDefs } from '@/layout/navigation';
 
-// Top-level sidebar modules (id = group key or leaf href — must match sidebar.jsx).
-// `permission` mirrors the sidebar gating: without it the role never sees the module.
-const MODULE_CATALOG = [
-  { id: '/dashboard', label: 'Dashboard', permission: null },
-  { id: '/settings/users', label: 'Mitarbeiterverwaltung', permission: 'users:read' },
-  { id: 'crm', label: 'CRM', permission: 'crm:read' },
-  { id: '/projects', label: 'Projekte', permission: 'projects:read' },
-  { id: 'scheduling', label: 'Einsatzplanung', permission: 'scheduling:read' },
-  { id: 'sales', label: 'Offerten & Aufträge', permission: 'quotations:read' },
-  { id: 'finance', label: 'Buchhaltung', permission: 'accounting:read' },
-  { id: 'catalog', label: 'Katalog', permission: 'catalog:read' },
-  { id: '/documents', label: 'Dokumente', permission: 'documents:read' },
-  { id: '/vehicles', label: 'Fahrzeuge', permission: 'vehicles:read' },
-  { id: '/tasks', label: 'Aufgaben', permission: 'tasks:read' },
-  { id: '/notifications', label: 'Benachrichtigungen', permission: 'notifications:feed' },
-  { id: '/ai', label: 'KI-Assistent', permission: null },
-  { id: '/field-ops/orders', label: 'Einsätze', permission: 'mobile:read' },
-  { id: '/field-ops/reports', label: 'Arbeitsberichte', permission: 'mobile:read' },
-  { id: '/field-ops/time', label: 'Zeiterfassung', permission: 'time-tracking:read' },
-  { id: '/field-ops/chat', label: 'Global-Chat', permission: 'mobile:read' },
-];
-
-const START_PAGES = [
-  { value: '/dashboard', label: 'Dashboard', permission: null },
-  { value: '/tasks', label: 'Aufgaben', permission: 'tasks:read' },
-  { value: '/projects', label: 'Projekte', permission: 'projects:read' },
-  { value: '/crm/sites', label: 'Objekte', permission: 'crm:read' },
-  { value: '/crm/customers', label: 'Kunden', permission: 'crm:read' },
-  { value: '/scheduling/calendar', label: 'Einsatzplanung', permission: 'scheduling:read' },
-  { value: '/quotes', label: 'Offerten & Aufträge', permission: 'quotations:read' },
-  { value: '/documents', label: 'Dokumente', permission: 'documents:read' },
-  { value: '/vehicles', label: 'Fahrzeuge', permission: 'vehicles:read' },
-  { value: '/field-ops/orders', label: 'Einsätze', permission: 'mobile:read' },
-];
+// Use the same IDs, translated labels and permissions as the live sidebar.
+const MODULE_CATALOG = [...new Map(navSectionDefs.flatMap((section) =>
+  section.items.flatMap((item) => [item, ...(item.children || [])]),
+).map((item) => [item.key || item.href, {
+  id: item.key || item.href,
+  labelKey: item.labelKey,
+  permission: item.permission,
+  href: item.href,
+}])).values()];
+const START_PAGES = MODULE_CATALOG.filter((item) => item.href);
 
 const orderedCatalog = (sidebarOrder) => {
   if (!sidebarOrder?.length) return MODULE_CATALOG.map((m) => m.id);
@@ -108,7 +85,7 @@ export function RoleUiConfigEditor({ role }) {
     return keys;
   }, [role?.permissions]);
   const roleCan = (permission) => !permission || rolePermKeys.size === 0 || rolePermKeys.has(permission);
-  const startPageInvalid = !roleCan(START_PAGES.find((p) => p.value === startPage)?.permission);
+  const startPageInvalid = !roleCan(START_PAGES.find((p) => p.href === startPage)?.permission);
 
   const buildConfig = () => ({
     startPage,
@@ -174,9 +151,9 @@ export function RoleUiConfigEditor({ role }) {
                 {START_PAGES.map((p) => {
                   const allowed = roleCan(p.permission);
                   return (
-                    <SelectItem key={p.value} value={p.value} disabled={!allowed} textValue={p.label}>
+                    <SelectItem key={p.href} value={p.href} disabled={!allowed} textValue={t(p.labelKey)}>
                       <span className={cn('flex items-center gap-2', !allowed && 'text-muted-foreground')}>
-                        {p.label}
+                        {t(p.labelKey)}
                         {!allowed && (
                           <span className="text-[10px]">
                             — {t('roles.missingPermission', 'fehlende Berechtigung')} ({p.permission})
@@ -288,7 +265,7 @@ export function RoleUiConfigEditor({ role }) {
               >
                 <span className="w-5 text-center text-[11px] tabular-nums text-muted-foreground">{idx + 1}</span>
                 <span className={cn('min-w-0 flex-1 truncate text-sm', isHidden && 'line-through')}>
-                  {mod.label}
+                  {t(mod.labelKey)}
                   {!roleCan(mod.permission) && (
                     <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" title={mod.permission}>
                       {t('roles.noPermissionBadge', 'keine Berechtigung')}

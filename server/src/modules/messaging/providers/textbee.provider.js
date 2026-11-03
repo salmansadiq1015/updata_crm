@@ -24,6 +24,12 @@ export class TextBeeSmsProvider {
 
   get configured() { return Boolean(this.apiKey); }
 
+  // Capabilities of this adapter's implemented SMS transport, not the vendor's
+  // entire product catalogue. Neither adapter accepts MMS/RCS payloads.
+  smsCapabilities() {
+    return { media: false, subject: false, deliveryReceipts: Boolean(this.webhookSecret), maxBodyLength: 10000 };
+  }
+
   async health() {
     if (!this.configured) return { configured: false, reachable: false, eligible: false, reason: 'not_configured' };
     try {

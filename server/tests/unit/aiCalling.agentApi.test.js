@@ -479,3 +479,98 @@ describe('agent tool API over HTTP', () => {
     await request(serve(app)).get(`/agent/${a.internalCallId}/context?agentToken=${tokenForA}`).expect(401);
   });
 });
+
+describe('multilingual conversation policy and event persistence', () => {
+  const post = (callId, token, path, body) => request(serve(app)).post(`/agent/${callId}/${path}`).set('Authorization', `Bearer ${token}`).send(body);
+  it('persists explicit and automatic language switches without changing another call or campaign defaults', async () => {
+    const a = await setupCall(); const b = await setupCall();
+    const call = await CallRecord.findOne({ internalCallId: a.internalCallId });
+    const other = await CallRecord.findOne({ internalCallId: b.internalCallId });
+    await CallCampaign.updateMany({ _id: { $in: [call.campaignId, other.campaignId] } }, { $set: { 'agentConfig.language': 'ar', 'agentConfig.supportedLanguages': ['ar', 'en', 'fr'] } });
+    const token = issueAgentToken(a.internalCallId);
+    const first = { requestId: randomUUID(), language: 'fr', explicit: true, confidence: 0.99, evidence: 'Can you speak French?', turnId: 'a:1' };
+    const changed = await post(a.internalCallId, token, 'language', first).expect(200);
+    expect(changed.body.data.language).toBe('fr');
+    await post(a.internalCallId, token, 'language', first).expect(200);
+    const stored = await CallRecord.findById(call._id).lean();
+    expect(stored.conversationLanguage.initial).toBe('ar');
+    expect(stored.conversationLanguage.switches).toHaveLength(1);
+    expect(stored.conversationState.events.filter(e => e.type === 'language_switch')).toHaveLength(1);
+    expect((await CallCampaign.findById(call.campaignId).lean()).agentConfig.language).toBe('ar');
+    expect((await service.getCallContext(b.internalCallId)).conversationLanguage.current).toBe('ar');
+    // Sustained ASR language evidence is sufficient without inventing provider confidence.
+    for (const turnId of ['a:2', 'a:3']) await post(a.internalCallId, token, 'language', {
+      requestId: randomUUID(), language: 'en', source: 'asr', explicit: false, turnId,
+      evidence: 'I would like to continue this conversation in English please',
+    }).expect(200);
+    expect((await CallRecord.findById(call._id).lean()).conversationLanguage.current).toBe('en');
+    await post(b.internalCallId, token, 'language', { ...first, requestId: randomUUID() }).expect(403);
+    await post(b.internalCallId, token, 'behavior', { id: randomUUID(), type: 'response_started' }).expect(403);
+  });
+
+  it('deduplicates VAD behavior events and persists measured response timing under the correct lead', async () => {
+    const { internalCallId, lead } = await setupCall(); const token = issueAgentToken(internalCallId);
+    await post(internalCallId, token, 'disclose', {}).expect(200);
+    const at = Date.now();
+    await post(internalCallId, token, 'behavior', { id: randomUUID(), type: 'question_waiting', at: new Date(at - 4200).toISOString() }).expect(200);
+    const response = { id: randomUUID(), type: 'response_started', at: new Date(at).toISOString() };
+    await post(internalCallId, token, 'behavior', response).expect(200);
+    await post(internalCallId, token, 'behavior', response).expect(200);
+    await post(internalCallId, token, 'record-answer', { fieldKey: 'active', rawAnswer: 'yes' }).expect(200);
+    const stored = await CallRecord.findOne({ internalCallId }).lean();
+    expect(String(stored.leadId)).toBe(String(lead._id));
+    expect(stored.behaviorAnalytics.averageResponseMs).toBe(4200);
+    expect(stored.behaviorAnalytics.answered).toBe(1);
+    expect(stored.behaviorAnalytics.engagement).toBe('HIGH_ENGAGEMENT');
+    expect(stored.conversationState.events.filter(e => e.type === 'response_started')).toHaveLength(1);
+    expect(stored.conversationState.events.some(e => e.classification === 'ANSWERED')).toBe(true);
+    await expect(service.getCall(String(stored._id), new mongoose.Types.ObjectId())).rejects.toThrow();
+  });
+
+  it('honors configurable retries and threshold, finalizes once, releases the recipient and prevents redial of an unresponsive lead', async () => {
+    const { internalCallId } = await setupCall(); const token = issueAgentToken(internalCallId);
+    const call = await CallRecord.findOne({ internalCallId });
+    await CallCampaign.updateOne({ _id: call.campaignId }, { $set: {
+      status: 'running', 'agentConfig.maxRepetitionAttempts': 1, 'agentConfig.maxUnansweredQuestions': 2,
+      'agentConfig.automaticNextLead': false,
+      'questionnaire.questions': ['one', 'two', 'three'].map((fieldKey, order) => ({ fieldKey, label: fieldKey, text: fieldKey, type: 'boolean', order })),
+    } });
+    await CampaignRecipient.updateOne({ _id: call.recipientId }, { $set: { state: 'in_progress', lastCallId: call._id, attemptCount: 1 } });
+    await post(internalCallId, token, 'answered', {}).expect(200);
+    await post(internalCallId, token, 'disclose', {}).expect(200);
+    for (const fieldKey of ['one', 'two']) {
+      const body = { fieldKey, reason: 'silence', requestId: randomUUID() };
+      const retry = await post(internalCallId, token, 'no-response', body).expect(200);
+      expect(retry.body.data.nextAction.question.fieldKey).toBe(fieldKey);
+      await post(internalCallId, token, 'no-response', body).expect(200);
+      const exhausted = await post(internalCallId, token, 'no-response', { ...body, requestId: randomUUID() }).expect(200);
+      if (fieldKey === 'two') expect(exhausted.body.data.nextAction).toMatchObject({ type: 'end', reason: 'unresponsive' });
+    }
+    await post(internalCallId, token, 'end', {}).expect(200);
+    await post(internalCallId, token, 'end', {}).expect(200);
+    const stored = await CallRecord.findOne({ internalCallId }).lean();
+    expect(stored.disposition).toBe('unresponsive'); expect(stored.terminationReason).toBe('unresponsive');
+    expect(stored.behaviorAnalytics.unanswered).toBe(2); expect(stored.behaviorAnalytics.repeats).toBe(2);
+    expect(stored.behaviorAnalytics.silenceEvents).toBe(4); expect(stored.behaviorAnalytics.engagement).toBe('UNRESPONSIVE');
+    expect(stored.answers.every(a => a.normalizedValue == null)).toBe(true);
+    const recipient = await CampaignRecipient.findById(call.recipientId).lean();
+    expect(recipient.state).toBe('completed'); expect(recipient.leaseUntil).toBeNull();
+    expect((await CallCampaign.findById(call.campaignId).lean()).status).toBe('paused');
+    expect(await CallRecord.countDocuments({ internalCallId })).toBe(1);
+  });
+});
+
+
+it('records a detected silence once even when its delayed retry arrives first, and preserves explicit refusals', async () => {
+  const { internalCallId } = await setupCall();
+  const post = (path, body) => request(serve(app)).post(`/agent/${internalCallId}/${path}`).set('Authorization', `Bearer ${issueAgentToken(internalCallId)}`).send(body);
+  await post('disclose', {}).expect(200);
+  const silenceEvent = { id: randomUUID(), at: new Date().toISOString() };
+  await post('no-response', { fieldKey: 'active', requestId: randomUUID(), reason: 'silence', silenceEvent }).expect(200);
+  await post('behavior', { ...silenceEvent, type: 'silence' }).expect(200);
+  expect((await CallRecord.findOne({ internalCallId }).lean()).behaviorAnalytics.silenceEvents).toBe(1);
+  await post('mark-unknown', { fieldKey: 'active', reason: 'refused', evidence: 'I prefer not to answer that.' }).expect(200);
+  const stored = await CallRecord.findOne({ internalCallId }).lean();
+  expect(stored.conversationState.answers.active.classification).toBe('REFUSED');
+  expect(stored.conversationState.events.some(e => e.classification === 'REFUSED' && e.evidence === 'I prefer not to answer that.')).toBe(true);
+});

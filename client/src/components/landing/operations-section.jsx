@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown, ArrowRight, CheckCircle2, FileText, FolderKanban, ListChecks, ReceiptText, UserPlus } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileText, FolderKanban, ListChecks, ReceiptText, UserPlus } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { OperationsVisual } from './landing-visuals';
 import { Reveal, SectionIntro } from './motion-primitives';
@@ -28,7 +28,7 @@ export function OperationsSection() {
               </ol>
             </Reveal>
           </div>
-          <Reveal delay={0.1} className="relative"><OperationsVisual className="min-h-[440px]" /><div className="absolute -bottom-5 start-1/2 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-400/20 bg-[#08130f] px-4 py-2 text-[10px] font-semibold text-emerald-300 shadow-2xl md:flex"><ArrowDown className="size-3" />{t('landing.operations.completion')}</div></Reveal>
+          <Reveal delay={0.1} className="relative"><OperationsVisual className="min-h-[440px]" /><div className="absolute -bottom-5 start-1/2 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-400/20 bg-[#08130f] px-4 py-2 text-[10px] font-semibold text-emerald-300 shadow-2xl md:flex"><CheckCircle2 className="size-3" />{t('landing.operations.completion')}</div></Reveal>
         </div>
       </div>
     </section>

@@ -1,6 +1,6 @@
 # Lead Finder — local-first Maps discovery + CRM
 
-This is the existing MV3 React/TypeScript extension, hardened for Google Maps SPA navigation and connected to the application's authenticated CRM. Version 0.6.3 applies the selected maximum independently to each business type.
+This is the existing MV3 React/TypeScript extension, hardened for Google Maps SPA navigation and connected to the application's authenticated CRM. Version 0.6.4 fixes business-category extraction and missing results while preserving the maximum per selected business type.
 
 ## Build
 
@@ -13,6 +13,37 @@ npm run package
 ```
 
 Install `dist/` through `chrome://extensions` → Developer mode → Load unpacked, or use `lead-finder-extension.zip`. Open Google Maps, sign in with the existing CRM account, and start from a visible Maps search.
+
+### 0.6.4 category fallback and complete result collection
+
+Only explicitly labeled Maps category elements establish a scraped category.
+Arbitrary card text such as “No reviews”, “Online appointments”, “N°1”, business
+names and promotional text no longer becomes a business type. Missing categories
+use the business type saved for that lead's discovery task. Existing local records
+also receive this fallback when displayed, exported or imported; the current form
+selection never overwrites the original search context.
+
+Scrolling uses overlapping viewports, including short result panels. A temporary
+scroll bottom no longer completes discovery: Maps must confirm the end and settle
+without new records. Distinct businesses sharing a phone remain separate. Leads
+without reviews or contact details remain eligible and count toward the selected
+maximum. Real duplicates and out-of-radius records do not consume new-lead slots.
+Google may expose fewer businesses than requested; safety limits and transport
+failures still stop a run with its saved results and an error rather than claiming
+that the selected count was reached.
+
+Deploy the matching backend and run `npm run migrate` from `server/` to apply
+`041_extension_business_type_repair.js`. It repairs invalid stored types only for
+proven extension imports with saved discovery types. Records without recoverable
+selection history cannot be assigned a type automatically. Re-import also repairs
+invalid types using the lead's saved selection. Reload extension version 0.6.4
+and refresh existing Maps tabs before starting a new extraction.
+
+Verification: `npm test`, `npm run typecheck`, and `npm run test:maps-browser`.
+The browser test runs the release content script in an isolated Chrome profile
+against a recycled 50-card feed, checks every card is collected, rejects metadata
+as categories, preserves explicit categories, and checks localized end markers.
+It requires a local Chrome installation; set `CHROME_PATH` when needed.
 
 ### 0.6.3 results per business type
 

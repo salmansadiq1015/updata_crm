@@ -146,6 +146,13 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
           />
           <ActionTile
             icon={MessageSquare}
+            tone="primary"
+            title="SMS campaigns"
+            hint="Providers, personalized messages and delivery history"
+            onPress={() => navigation.navigate('SmsWorkspace')}
+          />
+          <ActionTile
+            icon={MessageSquare}
             tone="info"
             title={t('smsQueue.tile')}
             hint={t('smsQueue.tileHint')}

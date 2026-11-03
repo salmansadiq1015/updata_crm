@@ -230,7 +230,7 @@ class CIService {
         },
         $inc: { version: 1 },
       },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
 
     if (updated) {
@@ -259,7 +259,7 @@ class CIService {
         },
         $inc: { version: 1 },
       },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
 
     if (updated) {

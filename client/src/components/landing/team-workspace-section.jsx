@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, CalendarDays, CheckSquare2, MessageSquare, UserRound, Users } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare2, FileCheck2, Flag, MessageSquare, UserRound, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,7 @@ import { Reveal, SectionIntro } from './motion-primitives';
 export function TeamWorkspaceSection() {
   const { t } = useLanguage();
   const modules = [['people', Users, 'blue'], ['chat', MessageSquare, 'sky'], ['calendar', CalendarDays, 'amber'], ['notifications', Bell, 'emerald']];
-  const activity = [['09:12', 'a1', CheckSquare2], ['09:18', 'a2', UserRound], ['09:27', 'a3', CheckSquare2], ['09:41', 'a4', CheckSquare2]];
+  const activity = [['09:12', 'a1', CheckSquare2], ['09:18', 'a2', UserRound], ['09:27', 'a3', FileCheck2], ['09:41', 'a4', Flag]];
 
   return (
     <section className="relative overflow-hidden bg-[#08101d] py-24 sm:py-32">

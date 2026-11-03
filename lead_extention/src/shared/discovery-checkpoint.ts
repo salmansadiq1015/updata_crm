@@ -106,6 +106,6 @@ export function shouldCompleteResultState(input: {
 }): boolean {
   return input.newlyProcessed === 0
     && !input.scrollChanged
-    && (input.atEnd || input.endConfirmed)
+    && input.endConfirmed
     && input.stableRounds >= REQUIRED_STABLE_END_ROUNDS;
 }

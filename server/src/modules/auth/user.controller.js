@@ -256,7 +256,7 @@ class UserController {
       const updated = await User.findByIdAndUpdate(
         req.user._id,
         { $set: updates },
-        { new: true, select: 'preferences' },
+        { returnDocument: 'after', select: 'preferences' },
       ).lean();
       // Invalidate the cached /me so a reload returns the updated preferences.
       await cacheManager.del(`auth:user:${req.user._id}`);

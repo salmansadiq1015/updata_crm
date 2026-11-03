@@ -18,6 +18,9 @@ docs/*
 !docs/PLATFORM-GOVERNANCE.md
 !docs/AI_CALLING_AUDIT.md
 !docs/multi-provider-voice-engine.md
+!docs/ai-calling-conversation-upgrade.md
+!docs/sms-mobile-audit-and-upgrade.md
+!docs/ai-calling-language-smoke.json
 !docs/AGENT-FIRST-CALLING.md
 !docs/ai-calling/
 docs/ai-calling/*

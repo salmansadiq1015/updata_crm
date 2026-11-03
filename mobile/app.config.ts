@@ -63,6 +63,20 @@ const PKG = 'expo.modules.updatatelephony';
 const withSmsComponents: ConfigPlugin = (config) =>
   withAndroidManifest(config, (mod) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
+    // Incremental prebuild can retain tools:node=remove from a stricter profile.
+    // Re-enable only permissions explicitly authorized by the selected profile.
+    const allowed = new Set<string>(
+      PRIVATE_BUILD
+        ? [...SMS_PERMISSIONS, ...AGENT_SERVICE_PERMISSIONS]
+        : SEND_ONLY_BUILD
+          ? ['android.permission.SEND_SMS']
+          : [],
+    );
+    for (const permission of mod.modResults.manifest['uses-permission'] ?? []) {
+      if (allowed.has(permission.$['android:name']) && permission.$['tools:node'] === 'remove') {
+        delete permission.$['tools:node'];
+      }
+    }
     if (!PRIVATE_BUILD) {
       app.receiver = (app.receiver ?? []).filter(
         (item) => ![`${PKG}.SmsResultReceiver`, `${PKG}.SmsInboundReceiver`].includes(item.$['android:name']),
@@ -120,7 +134,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       name: VARIANT[env.appEnv].name,
       slug: 'updata-mobile',
       scheme: 'updata',
-      version: '0.1.7',
+      version: '0.1.8',
       orientation: 'portrait',
       icon: './assets/icon.png',
       // Follows the device; the user can override it in Settings (light / dark / system).
@@ -129,7 +143,7 @@ export default ({ config }: ConfigContext): ExpoConfig =>
       android: {
         // Each environment installs side by side, so a dev build never overwrites production.
         package: `ai.updata.crm${VARIANT[env.appEnv].idSuffix}`,
-        versionCode: 8,
+        versionCode: 9,
         adaptiveIcon: {
           foregroundImage: './assets/android-icon-foreground.png',
           backgroundColor: BRAND_NAVY,

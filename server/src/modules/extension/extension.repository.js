@@ -16,7 +16,7 @@ class ExtensionRepository {
     return ExtensionConnection.findOneAndUpdate(
       { createdBy, instanceId },
       { $set: { createdBy, instanceId, ...fields } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     ).lean();
   }
 
@@ -58,7 +58,7 @@ class ExtensionRepository {
     return ExtensionConnection.findByIdAndUpdate(
       id,
       { $set: { lastSeenAt: new Date(), ...fields } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 
@@ -66,7 +66,7 @@ class ExtensionRepository {
     return ExtensionConnection.findByIdAndUpdate(
       id,
       { $set: { status, ...extra } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 }

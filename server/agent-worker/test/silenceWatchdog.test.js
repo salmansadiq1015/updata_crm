@@ -22,3 +22,17 @@ test('stopping during an in-flight request cannot rearm the timer or overlap ano
   watch.arm(); await delay(20); watch.arm(); await delay(15); assert.equal(count, 1);
   watch.stop(); complete(); await delay(20); assert.equal(count, 1);
 });
+
+test('caller speech cancels the repetition delay after silence has been detected', async () => {
+  let count = 0;
+  const watch = createSilenceWatchdog({ timeoutMs: 20, repetitionDelayMs: 80, isBusy: () => false, onSilence: () => { count++; } });
+  watch.arm(); await delay(45); assert.equal(count, 0);
+  watch.cancel(); await delay(90); assert.equal(count, 0); watch.stop();
+});
+
+test('retry respects both the silence threshold and the following delay', async () => {
+  let count = 0;
+  const watch = createSilenceWatchdog({ timeoutMs: 20, repetitionDelayMs: 30, isBusy: () => false, onSilence: () => { count++; watch.stop(); } });
+  watch.arm(); await delay(30); assert.equal(count, 0);
+  await delay(70); assert.equal(count, 1);
+});

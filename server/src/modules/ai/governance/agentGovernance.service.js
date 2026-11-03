@@ -88,7 +88,7 @@ class AgentGovernanceService {
       doc = await AgentGovernance.findOneAndUpdate(
         { singleton: 'GLOBAL' },
         { $setOnInsert: { emergencyStop: false } },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
     }
     return doc;
@@ -285,7 +285,7 @@ class AgentGovernanceService {
     const agent = await AgentRegistry.findOneAndUpdate(
       { key: String(key).toUpperCase() },
       { $set: update },
-      { new: true },
+      { returnDocument: 'after' },
     );
     this.invalidate();
     if (agent) {
@@ -312,7 +312,7 @@ class AgentGovernanceService {
           emergencyStopBy: active ? userId : null,
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
     this.invalidate();
     await auditService.logEvent({

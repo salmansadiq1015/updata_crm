@@ -19,7 +19,7 @@ class AccountMappingRepository {
         $setOnInsert: { createdBy },
       },
       {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         runValidators: true,
         session: options.session,

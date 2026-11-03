@@ -1,4 +1,4 @@
-import { withImportSearchContext } from '../shared/business-category';
+import { businessCategory, withImportSearchContext } from '../shared/business-category';
 import {
   DEFAULT_MAX_AREA_TILES,
   DEFAULT_REQUEST_DELAY_MS,
@@ -1157,7 +1157,7 @@ function applyRawDetailToLead(lead: Lead, detail: RawBusinessRecord): Lead {
   const phone = cleanPhone(detail.phone) ?? lead.phone;
   return {
     ...lead,
-    category: lead.category || detail.category?.trim() || null,
+    category: businessCategory(detail) || businessCategory(lead),
     phone,
     internationalPhone: phone && phone.startsWith('+') ? phone : lead.internationalPhone,
     website: lead.website || detail.website?.trim() || null,

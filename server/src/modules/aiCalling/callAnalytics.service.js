@@ -18,7 +18,7 @@ import { costDiagnostics } from './engine/costDiagnostics.js';
  */
 
 const TEST_PROVIDERS = new Set(['livekit_web', 'web_link_preview']);
-const REACHED = new Set(['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact']);
+const REACHED = new Set(['unresponsive', 'answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact']);
 const MAX_CALLS = 5000;
 const CALL_LIST_LIMIT = 300;
 const round = (v, d = 6) => Number((v || 0).toFixed(d));

@@ -41,7 +41,7 @@ class ExtensionImportService {
         $set: set,
         $setOnInsert: { startedAt: now, status: EXTENSION_IMPORT_STATUS.RUNNING },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
 
     // A run completes on its final batch, or once every expected row is in.

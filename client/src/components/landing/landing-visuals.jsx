@@ -25,7 +25,7 @@ import {
   Receipt,
   Search,
   Send,
-  Sparkles,
+  ScanSearch,
   Users,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -253,7 +253,7 @@ export function LeadGenerationVisual({ className, framed = true, compact = false
           <label className="block"><span className="text-[7px] font-semibold uppercase tracking-[0.12em] text-slate-600">{t('landing.leadgen.typeLabel')}</span><span className="mt-1 flex h-8 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 focus-within:border-blue-400/40"><Building2 className="size-3 shrink-0 text-slate-500" /><select value={category} onChange={(event) => { setCategory(event.target.value); setKeyword(''); invalidateResults(); }} className="min-w-0 flex-1 appearance-none bg-transparent text-[8px] text-slate-200 outline-none" aria-label={t('landing.leadgen.typeLabel')}><option className="bg-[#0b1120]" value="restaurants">{t('landing.leadgen.typeRestaurants')}</option><option className="bg-[#0b1120]" value="hotels">{t('landing.leadgen.typeHotels')}</option><option className="bg-[#0b1120]" value="retail">{t('landing.leadgen.typeRetail')}</option><option className="bg-[#0b1120]" value="services">{t('landing.leadgen.typeServices')}</option></select></span></label>
           <label className="block"><span className="text-[7px] font-semibold uppercase tracking-[0.12em] text-slate-600">{t('landing.leadgen.keywordLabel')}</span><span className="mt-1 flex h-8 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 focus-within:border-blue-400/40"><Search className="size-3 shrink-0 text-slate-500" /><input value={keyword} onChange={(event) => { setKeyword(event.target.value); invalidateResults(); }} placeholder={t('landing.leadgen.keywordPlaceholder')} className="min-w-0 flex-1 bg-transparent text-[8px] text-slate-200 outline-none placeholder:text-slate-600" aria-label={t('landing.leadgen.keywordLabel')} /></span></label>
         </div>
-        <button type="submit" disabled={isAnalyzing || !location.trim()} className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-blue-500 text-[8px] font-semibold text-white shadow-[0_8px_30px_rgba(59,130,246,.25)] transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-55">{isAnalyzing ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}{isAnalyzing ? t('landing.leadgen.scanning') : t('landing.leadgen.analyzeAction')}</button>
+        <button type="submit" disabled={isAnalyzing || !location.trim()} className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-blue-500 text-[8px] font-semibold text-white shadow-[0_8px_30px_rgba(59,130,246,.25)] transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-55">{isAnalyzing ? <LoaderCircle className="size-3 animate-spin" /> : <ScanSearch className="size-3" />}{isAnalyzing ? t('landing.leadgen.scanning') : t('landing.leadgen.analyzeAction')}</button>
       </form>
       <div className="relative min-w-0 overflow-hidden bg-[#0d1725]">
         <MapCanvas location={location} radius={radius} center={mapCenter} onSelectArea={selectArea} isAnalyzing={isAnalyzing} t={t} />
@@ -405,7 +405,7 @@ export function AiVisual({ className, framed = true }) {
   const { t } = useLanguage();
   const content = (
     <div className="p-3 sm:p-4">
-      <div className="flex items-center gap-2 border-b border-white/[0.07] pb-3"><span className="grid size-8 place-items-center rounded-lg bg-blue-500/12 text-blue-300"><Sparkles className="size-4" /></span><div><p className="text-[10px] font-semibold text-white">{t('landing.ai.assistant')}</p><p className="text-[7px] text-cyan-300">● {t('landing.hero.signal.ai')}</p></div></div>
+      <div className="flex items-center gap-2 border-b border-white/[0.07] pb-3"><span className="grid size-8 place-items-center rounded-lg bg-blue-500/12 text-blue-300"><Bot className="size-4" /></span><div><p className="text-[10px] font-semibold text-white">{t('landing.ai.assistant')}</p><p className="text-[7px] text-cyan-300">● {t('landing.hero.signal.ai')}</p></div></div>
       <div className="mt-4 space-y-3">
         <div className="ms-auto max-w-[82%] rounded-2xl rounded-ee-md bg-blue-500 px-3 py-2.5 text-[8px] leading-4 text-white">{t('landing.ai.prompt')}</div>
         <div className="max-w-[90%] rounded-2xl rounded-es-md border border-white/[0.07] bg-white/[0.035] p-3">

@@ -66,6 +66,8 @@ export const leadsApi = {
         // The web trims and caps search at the server's 100-character limit.
         q: filters.q?.trim().slice(0, 100) || undefined,
         status: filters.status,
+        country: filters.country,
+        city: filters.city,
         source: filters.source,
         type: filters.type,
         assignedTo: filters.assignedTo,

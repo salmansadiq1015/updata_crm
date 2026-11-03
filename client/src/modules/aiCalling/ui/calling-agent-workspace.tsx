@@ -1,13 +1,16 @@
 'use client';
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Coins, Loader2, PhoneCall, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Coins, Loader2, Mic, PhoneCall, Save } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { callingAgentApi } from '../services/calling-agent-api';
+import { useIntelT } from '../hooks/use-intel-t';
 import { showSuccess } from '@/lib/toast';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import type { Lead, LeadStatus } from '@/modules/leads/types/lead-types';
 import { useAgentCallAnalytics, useAgentMutations, useCallingAgent } from '../hooks/use-calling-agents';
 import { AgentCallAnalytics, estimateMoney } from './agent-call-analytics';
 import { ScriptExperiments } from './script-experiments';
-import { useCampaignMutations, useCampaigns, usePreviewEligibility } from '../hooks/use-ai-calling';
+import { useCampaignMutations, useCampaigns, usePreviewEligibility, useTelephonyHealth } from '../hooks/use-ai-calling';
 import type { CallingAgent, CallingAgentInput } from '../types/ai-calling-types';
 import { AgentIdentityFields, AgentQuestionTabs } from './calling-agent-editor';
 import { AgentExecutionFields, AgentVoiceFields } from './agent-settings-fields';
@@ -20,11 +23,24 @@ import { AgentAvatar, AgentMetric, AgentTabs, panelClass, primaryClass, readable
 import { AgentIntelligenceSettings } from './agent-intelligence-settings';
 import { CallingAgentWorkspaceSkeleton } from './calling-agent-workspace-skeleton';
 
+const AgentTestStudio = dynamic(() => import('./agent-test-studio').then(m => m.AgentTestStudio));
+
 const toInput = (agent: CallingAgent): CallingAgentInput => ({ name: agent.name, title: agent.title, description: agent.description, avatarFileId: agent.avatarFileId, avatarPresetId: agent.avatarPresetId, availability: agent.availability,
   agentConfig: agent.agentConfig, questionnaire: agent.questionnaire, statusRules: agent.statusRules, schedule: agent.schedule, transport: agent.transport, pairedDeviceId: agent.pairedDeviceId });
 
 export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initialTab = 'overview' }: { id: string; initialTab?: string; onBack: () => void; onLaunch: (agent: CallingAgent) => void; onCampaign: (id: string) => void }) {
   const query = useCallingAgent(id);
+  const t = useIntelT();
+  const health = useTelephonyHealth();
+  const [testCampaign, setTestCampaign] = useState<import('../types/ai-calling-types').Campaign | null>(null);
+  const [preparingTest, setPreparingTest] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const testAgent = async () => {
+    setPreparingTest(true); setTestError(null);
+    try { setTestCampaign(await callingAgentApi.prepareTest(id)); }
+    catch (error) { setTestError(readableError(error)); }
+    finally { setPreparingTest(false); }
+  };
   const [tab, setTab] = useState(initialTab);
   const [dirty, setDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
@@ -36,8 +52,10 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
   if (!agent) return <div className={panelClass}><div role="alert" className="space-y-3"><p>Agent could not be loaded.</p><button className={secondaryClass} onClick={() => query.refetch()}>Try again</button><button className={secondaryClass} onClick={onBack}>Back to agents</button></div></div>;
   return <div className="space-y-5">
     <button className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => { if (dirty) setPendingTab('back'); else onBack(); }}><ArrowLeft className="h-3.5 w-3.5" />Back to Calling Agents</button>
-    <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-3xl border border-sky-400/15 bg-card p-5 shadow-2xl shadow-blue-950/40 sm:p-6"><span aria-hidden className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-cyan-400/10 blur-3xl" /><span aria-hidden className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-blue-600/15 blur-3xl" /><div className="relative flex min-w-0 items-center gap-4"><AgentAvatar name={agent.name} url={agent.avatarUrl} large /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">{agent.name}</h1><StatusPill status={agent.availability} /></div><p className="mt-1 text-sm font-medium text-primary/85">{agent.title || 'Calling agent'}</p><p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{agent.description}</p></div></div><div className="relative w-full sm:w-auto"><AgentWorkspaceStart agent={agent} canManage={canManage} dirty={dirty} onLaunch={onLaunch} onCampaign={onCampaign} onHistory={() => setTab('history')} /></div></header>
+    <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-3xl border border-sky-400/15 bg-card p-5 shadow-2xl shadow-blue-950/40 sm:p-6"><span aria-hidden className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-cyan-400/10 blur-3xl" /><span aria-hidden className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-blue-600/15 blur-3xl" /><div className="relative flex min-w-0 items-center gap-4"><AgentAvatar name={agent.name} url={agent.avatarUrl} large /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">{agent.name}</h1><StatusPill status={agent.availability} /></div><p className="mt-1 text-sm font-medium text-primary/85">{agent.title || 'Calling agent'}</p><p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{agent.description}</p></div></div><div className="relative flex w-full flex-wrap items-start gap-3 sm:w-auto">{canManage && <button type="button" className={secondaryClass} disabled={dirty || preparingTest} onClick={() => void testAgent()}>{preparingTest ? <Loader2 className="size-4 animate-spin" /> : <Mic className="size-4" />}{t('voicePolicy.testAgent', 'Test agent')}</button>}<AgentWorkspaceStart agent={agent} canManage={canManage} dirty={dirty} onLaunch={onLaunch} onCampaign={onCampaign} onHistory={() => setTab('history')} /></div></header>
     {pendingTab && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-400/25 p-3 text-xs text-amber-200"><span className="flex-1">You have unsaved changes. Stay to save them, or discard them before leaving.</span><button className={secondaryClass} onClick={() => setPendingTab(null)}>Keep editing</button><button className={secondaryClass} onClick={() => { setDirty(false); if (pendingTab === 'back') onBack(); else setTab(pendingTab); setPendingTab(null); }}>Discard changes</button></div>}
+    {testError && <p role="alert" className="text-sm text-rose-500">{testError}</p>}
+    {testCampaign && <AgentTestStudio campaigns={[testCampaign]} telephony={health.data} onClose={() => setTestCampaign(null)} onCreateCampaign={() => { setTestCampaign(null); setTab('leads'); }} />}
     <AgentTabs label="Agent workspace" value={tab} onChange={changeTab} items={[{ value: 'overview', label: 'Overview' }, { value: 'questions', label: 'Questions' }, { value: 'leads', label: 'Leads' }, { value: 'settings', label: 'Settings' }, { value: 'analytics', label: 'Call Analytics' }, { value: 'intelligence', label: 'Knowledge & Transfer' }, { value: 'experiments', label: 'Experiments' }, { value: 'history', label: 'Campaign History' }]}>
       {tab === 'overview' && <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><AgentMetric label="Assigned leads" value={agent.assignedLeadIds.length} /><AgentMetric label="Eligible leads" value={agent.eligibility.eligible} /><AgentMetric label="Completed" value={agent.metrics.completed} /><AgentMetric label="Calls in progress" value={agent.metrics.inProgress} /></div>

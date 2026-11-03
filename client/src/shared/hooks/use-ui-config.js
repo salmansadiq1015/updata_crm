@@ -33,18 +33,23 @@ export function useUiConfig() {
   }, [user, preview]);
 }
 
-/** Sort + filter top-level sidebar items per the role config. Permission gating stays upstream. */
+/** Sort + filter sidebar items and submenu pages. Permission gating stays upstream. */
 export function applySidebarConfig(items, { sidebarOrder, hiddenModules }) {
   const idOf = (item) => item.key || item.href;
   let visible = items;
   if (hiddenModules?.length) {
     visible = visible.filter((item) => !hiddenModules.includes(idOf(item)));
   }
+  visible = visible.flatMap((item) => {
+    if (!item.children) return [item];
+    const children = applySidebarConfig(item.children, { sidebarOrder, hiddenModules });
+    return children.length ? [{ ...item, children }] : [];
+  });
   if (sidebarOrder?.length) {
     const rank = new Map(sidebarOrder.map((id, i) => [id, i]));
     visible = [...visible].sort((a, b) => {
-      const ra = rank.has(idOf(a)) ? rank.get(idOf(a)) : 1000 + items.indexOf(a);
-      const rb = rank.has(idOf(b)) ? rank.get(idOf(b)) : 1000 + items.indexOf(b);
+      const ra = rank.has(idOf(a)) ? rank.get(idOf(a)) : 1000;
+      const rb = rank.has(idOf(b)) ? rank.get(idOf(b)) : 1000;
       return ra - rb;
     });
   }

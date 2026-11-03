@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { useOptionalLanguage } from '@/lib/i18n/language-context';
+import { voicePolicyTranslations } from '@/lib/i18n/voice-policy-translations';
 import { callingExperienceTranslations } from '@/lib/i18n/calling-experience-translations';
 
 const defaultLabels: Record<string, string> = callingExperienceTranslations.en;
@@ -37,6 +38,7 @@ const STYLES: Record<string, string> = {
 export function StatusPill({ status }: { status: string }) {
   const language = useOptionalLanguage();
   if (!status) return null;
+  if (status === 'unresponsive') return <span className={cn('inline-flex shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400')}>{language?.t('voicePolicy.unresponsive') || voicePolicyTranslations.en['voicePolicy.unresponsive']}</span>;
   return (
     <span className={cn('inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold leading-5 capitalize', STYLES[status] || 'bg-muted text-muted-foreground')}>
       {STYLES[status] ? (language?.t(`callingExperience.status.${status}`) || defaultLabels[`callingExperience.status.${status}`]) : status.replace(/_/g, ' ')}

@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 import { CAMPAIGN_STATUSES, CHANNELS, MESSAGE_PURPOSES } from './messaging.constants.js';
 
 const campaignSchema = new mongoose.Schema({
+  idempotencyKey: { type: String, maxlength: 100 },
+  requestHash: { type: String, maxlength: 64 },
+  initializedAt: { type: Date, default: null },
   name: { type: String, required: true, trim: true, maxlength: 160 },
   description: { type: String, trim: true, maxlength: 1000, default: '' },
   channel: { type: String, enum: CHANNELS, required: true, index: true },
@@ -9,6 +12,7 @@ const campaignSchema = new mongoose.Schema({
   status: { type: String, enum: CAMPAIGN_STATUSES, default: 'draft', index: true },
   templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'MessageTemplate', default: null },
   content: {
+    language: { type: String, maxlength: 35, default: 'auto' },
     subject: { type: String, maxlength: 500, default: '' },
     bodyHtml: { type: String, maxlength: 200000, default: '' },
     bodyText: { type: String, maxlength: 10000, default: '' },
@@ -29,6 +33,7 @@ const campaignSchema = new mongoose.Schema({
     selectedAt: { type: Date, required: true },
   },
   summary: {
+    totalSegments: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
     eligible: { type: Number, default: 0 },
     ineligible: { type: Number, default: 0 },
@@ -60,6 +65,7 @@ const campaignSchema = new mongoose.Schema({
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 
+campaignSchema.index({ createdBy: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } }, name: 'campaign_creation_idempotency' });
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
 campaignSchema.index({ createdBy: 1, channel: 1, createdAt: -1 });
 campaignSchema.index({ createdBy: 1, status: 1, createdAt: -1 });

@@ -14,7 +14,7 @@ class AppointmentRepository {
         $setOnInsert: { assignmentId },
       },
       {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,

@@ -146,6 +146,10 @@ describe('continuous discovery regression coverage', () => {
     expect(state.uniqueCount).toBe(25);
   });
 
+  it('keeps waiting at a temporary bottom until Maps confirms the end', () => {
+    expect(shouldCompleteResultState({ newlyProcessed: 0, scrollChanged: false, atEnd: true, endConfirmed: false, stableRounds: 50 })).toBe(false);
+  });
+
   it('terminates a recycled virtual list after settled no-progress rounds', () => {
     expect(shouldCompleteResultState({ newlyProcessed: 0, scrollChanged: false, atEnd: true, endConfirmed: true, stableRounds: REQUIRED_STABLE_END_ROUNDS })).toBe(true);
     expect(shouldCompleteResultState({ newlyProcessed: 1, scrollChanged: false, atEnd: true, endConfirmed: true, stableRounds: REQUIRED_STABLE_END_ROUNDS })).toBe(false);

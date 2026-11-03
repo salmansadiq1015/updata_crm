@@ -896,7 +896,7 @@ class LeadImportExportService {
     }
 
     const businessType = extensionBusinessType(record);
-    if (businessType && !extensionBusinessType({ category: current.sourceMetadata?.businessType })) {
+    if (businessType && !extensionBusinessType({ category: current.sourceMetadata?.businessType, businessName: current.name })) {
       set['sourceMetadata.businessType'] = businessType;
     }
     if (current.address || address.area || address.city || address.country) {

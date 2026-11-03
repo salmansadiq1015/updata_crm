@@ -2,7 +2,7 @@ const VARIABLE_PATTERN = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g;
 
 export const ALLOWED_VARIABLES = Object.freeze([
   'firstName', 'lastName', 'fullName', 'businessName', 'email', 'phone', 'city',
-  'country', 'category', 'rating', 'assignedUserName', 'companyName', 'senderName',
+  'country', 'category', 'rating', 'assignedUserName', 'companyName', 'senderName', 'link',
 ]);
 
 export function escapeHtml(value) {
@@ -56,18 +56,23 @@ export function renderPersonalized(value, variables, { html = false, fallbacks =
     if (!raw && required.includes(key)) missing.add(key);
     return html ? escapeHtml(raw) : String(raw);
   });
-  for (const match of rendered.matchAll(VARIABLE_PATTERN)) unresolved.add(match[1]);
+  // Malformed or unsupported tokens must never pass through to a recipient.
+  for (const match of rendered.matchAll(/\{\{([^{}]*)\}\}/g)) unresolved.add(match[1].trim() || 'empty');
   return { value: rendered, missing: [...missing], unresolved: [...unresolved] };
 }
 
 export function smsSegments(text) {
   const value = String(text || '');
-  // GSM-7 contains ASCII plus this extension/non-ASCII set. Control characters
-  // are harmless; everything else requires UCS-2 segment sizing.
-  const gsmNonAscii = new Set([...`€£¥èéùìòÇØøÅåΔΦΓΛΩΠΨΣΘΞÆæßÉ`]);
-  const unicode = [...value].some((char) => (char.codePointAt(0) || 0) > 127 && !gsmNonAscii.has(char));
+  const basic = new Set([...('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?' +
+    '¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà')]);
+  const extension = new Set([...'\f^{}\\[~]|€']);
+  const chars = [...value];
+  const unicode = chars.some((char) => !basic.has(char) && !extension.has(char));
+  const units = unicode ? value.length : chars.reduce((sum, char) => sum + (extension.has(char) ? 2 : 1), 0);
   const single = unicode ? 70 : 160;
   const multipart = unicode ? 67 : 153;
-  const characters = [...value].length;
-  return { characters, segments: characters <= single ? 1 : Math.ceil(characters / multipart), unicode };
+  const segments = units === 0 ? 0 : units <= single ? 1 : Math.ceil(units / multipart);
+  return { characters: chars.length, units, segments, unicode,
+    encoding: unicode ? 'UCS-2' : 'GSM-7',
+    remainingInSegment: (segments <= 1 ? single : segments * multipart) - units };
 }

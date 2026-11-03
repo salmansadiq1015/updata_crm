@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { PhoneCall, Loader2, Clock, CheckCircle2, AlertTriangle, ShieldCheck, PhoneOff, ArrowRight } from 'lucide-react';
-import { useCallConsent, useLeadCallHistory } from '../hooks/use-ai-calling';
+import { useCallConsent, useLeadCallHistory, useCampaigns } from '../hooks/use-ai-calling';
+import { useIntelT } from '../hooks/use-intel-t';
 import type { CallRecord, LeadTransition } from '../types/ai-calling-types';
 
 const CONSENT_LABEL: Record<string, string> = {
@@ -17,8 +18,11 @@ import { CallNotes } from './call-notes';
  * "AI Calls" tab: <LeadCallsTab leadId={lead._id} />.
  */
 export function LeadCallsTab({ leadId, view = 'calls' }: { leadId: string; view?: 'calls' | 'responses' | 'consent' }) {
+  const t = useIntelT();
+  const [campaignId, setCampaignId] = useState('');
+  const campaigns = useCampaigns({ limit: 100 });
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, refetch } = useLeadCallHistory(view === 'consent' ? null : leadId, page);
+  const { data, isLoading, isError, refetch } = useLeadCallHistory(view === 'consent' ? null : leadId, page, campaignId || undefined);
   const consent = useCallConsent(view === 'consent' ? leadId : null);
   const [reviewCallId, setReviewCallId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState('');
@@ -33,6 +37,7 @@ export function LeadCallsTab({ leadId, view = 'calls' }: { leadId: string; view?
 
   return (
     <div className="min-w-0 space-y-3">
+      {view !== 'consent' && <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold">{t('voicePolicy.callIntelligence', 'Call intelligence')}</h3><select aria-label={t('voicePolicy.campaignFilter', 'Filter by campaign')} className="max-w-full rounded-lg border border-border bg-background px-3 py-2 text-xs" value={campaignId} onChange={e => { setCampaignId(e.target.value); setPage(1); }}><option value="">{t('voicePolicy.allCampaigns', 'All campaigns')}</option>{(campaigns.data?.data || []).map(c => <option value={c._id} key={c._id}>{c.name}</option>)}</select></div>}
       {view === 'consent' && <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 basis-64 gap-2">
@@ -131,7 +136,7 @@ export function LeadCallsTab({ leadId, view = 'calls' }: { leadId: string; view?
             {call.reviewRequired ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600"><AlertTriangle className="size-3 shrink-0" aria-hidden="true" /> Needs review</span> : null}
           </div>
 
-          {view === 'calls' && <CallNotes call={call} />}
+          {view === 'calls' && <><CallNotes call={call} />{call.behaviorAnalytics && <p className="mt-2 text-xs text-muted-foreground">{call.conversationLanguage?.current} · {t(`voicePolicy.${call.behaviorAnalytics.engagement}`, call.behaviorAnalytics.engagement?.replaceAll('_', ' ') || '—')} · {call.behaviorAnalytics.answered}/{call.behaviorAnalytics.totalQuestions}</p>}</>}
           {view === 'responses' && call.answers?.length ? (
             <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
               {call.answers.map((a) => (

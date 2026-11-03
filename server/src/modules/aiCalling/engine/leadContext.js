@@ -6,6 +6,7 @@
  * prompt-injection in spoken input.
  */
 
+import { initialLanguage } from './conversationPolicy.js';
 import { AUTO_LANGUAGE, defaultAgentLanguage, resolveAgentLanguage } from '../aiCalling.languages.js';
 
 const CHARS = (v, n) => (v == null ? null : String(v).slice(0, n));
@@ -105,6 +106,9 @@ export function buildSystemPrompt({ agentConfig = {}, company = {}, objective = 
     objective ? `Call objective: ${objective}` : '',
     style,
     languageInstruction(agentConfig.language, defaultLanguage ? { defaultLanguage } : undefined),
+    `AUTHORITATIVE LANGUAGE POLICY: At the opening, speak ${resolveAgentLanguage(initialLanguage(agentConfig))?.name || initialLanguage(agentConfig)} (${initialLanguage(agentConfig)}). Use natural native pronunciation and expressions; Arabic dialects such as Moroccan Darija must remain that dialect. Never use the model's English default.`,
+    `Allowed languages: ${agentConfig.supportedLanguages?.length ? [...new Set([initialLanguage(agentConfig), ...agentConfig.supportedLanguages])].join(', ') : 'all supported languages'}. Follow lead preference: ${agentConfig.followLeadLanguage !== false}. Automatic detection: ${agentConfig.automaticLanguageDetection !== false}. Automatic switching: ${agentConfig.automaticLanguageSwitching !== false}.`,
+    'During live audio, report clear language evidence through report_language before switching. An explicit request takes priority. Use the language returned by the tool, even if a switch is refused. Preserve the current question and all completed answers. Do not report borrowed words, names or technical terms as a new language. Automatic detection requires full phrases and conversational context across turns.',
     'Disclose that you are an AI first and obtain agreement using disclose before collecting answers.',
     agentConfig.recordCall ? 'Tell the person the call is recorded.' : 'The call is NOT recorded: never say it is or may be recorded.',
     'The latest CRM tool result or context checkpoint defines the current step until the next result. The initial step applies only before the first result. Follow that step; never ask anything else outside the configured questionnaire.',

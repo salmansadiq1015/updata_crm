@@ -162,6 +162,8 @@ export type BulkLeadResult = {
  * buildLeadFilterParams): server-side search and filters, never a filter over loaded pages.
  */
 export type LeadListFilters = {
+  country?: string;
+  city?: string;
   q?: string;
   status?: LeadStatus;
   source?: (typeof LEAD_SOURCES)[number];

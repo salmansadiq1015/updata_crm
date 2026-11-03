@@ -724,6 +724,13 @@ describe('extension import provenance and lossless upload fallback', () => {
     expect(mockCreate.mock.calls[1][0].sourceMetadata.businessType).toBe('Fitness center');
   });
 
+  it.each(['No reviews', 'Online appointments', 'On-site services', 'N°1'])('replaces scraped metadata %s with the selected type during import', async (category) => {
+    setupCreate();
+    const result = await service.importExtensionLeads([record({ category, discoveryCategories: ['Software companies'] })], 'user-1');
+    expect(result).toMatchObject({ created: 1, failed: 0 });
+    expect(mockCreate.mock.calls[0][0].sourceMetadata.businessType).toBe('Software companies');
+  });
+
   it('uses exactly the structured mapping for CSV uploads and preserves per-row identities', async () => {
     setupCreate();
     const input = record({ businessName: 'Gym "A", Studio', rating: 4.8, reviewCount: 20 });

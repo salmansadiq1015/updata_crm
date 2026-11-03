@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 
 function getSettingsSidebarItem() {
-  const source = readFileSync(resolve(process.cwd(), 'src/layout/sidebar.jsx'), 'utf8');
+  const source = readFileSync(resolve(process.cwd(), 'src/layout/navigation.js'), 'utf8');
   const match = source.match(/\{ type: 'leaf', labelKey: 'sidebar\.settings'[^}]+}/s);
   return match?.[0] || '';
 }

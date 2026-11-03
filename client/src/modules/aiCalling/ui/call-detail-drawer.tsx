@@ -7,6 +7,8 @@ import { useCall } from '../hooks/use-ai-calling';
 import { StatusPill } from './status-pill';
 import { CallAudioMonitor } from './call-audio-monitor';
 import { TranscriptWithIntelligence } from './call-intelligence-panel';
+import { CallBehaviorTimeline } from './call-behavior-timeline';
+import { useIntelT } from '../hooks/use-intel-t';
 import { CallNotes } from './call-notes';
 import { CallAnswerChecklist, ConversationInsightsPanel } from './conversation-insights';
 
@@ -22,6 +24,7 @@ const END_REASON: Record<string, string> = {
 };
 
 export function CallDetailDrawer({ callId, onClose }: { callId: string; onClose: () => void }) {
+  const t = useIntelT();
   const query = useCall(callId);
   const call = query.data;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -58,11 +61,12 @@ export function CallDetailDrawer({ callId, onClose }: { callId: string; onClose:
         {!live && endDetail && <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Why the call ended: </span>{endDetail}</p>}
         <CallAudioMonitor callId={callId} live={live && ['initiating', 'ringing', 'in_progress'].includes(call.state) && !call.gateway?.takenOverAt && !call.gateway?.audioLostAt} />
         <Tabs.Root defaultValue="conversation" className="space-y-4">
-          <Tabs.List aria-label="Call detail sections" className="grid grid-cols-5 gap-1 rounded-xl bg-muted/50 p-1">{([['conversation', 'Transcript', MessageSquareText], ['answers', 'Answers', ClipboardList], ['insights', 'Insights', Lightbulb], ['details', 'Details', Clock3], ['notes', 'Notes', StickyNote]] as const).map(([value, label, Icon]) => <Tabs.Trigger key={String(value)} value={String(value)} className="flex min-w-0 items-center justify-center gap-1 rounded-lg px-0.5 py-2 text-[11px] sm:px-2 sm:text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Icon className="hidden size-3.5 sm:block" />{String(label)}</Tabs.Trigger>)}</Tabs.List>
+          <Tabs.List aria-label="Call detail sections" className="grid grid-cols-3 gap-1 sm:grid-cols-6 rounded-xl bg-muted/50 p-1">{([['conversation', 'Transcript', MessageSquareText], ['answers', 'Answers', ClipboardList], ['insights', 'Insights', Lightbulb], ['details', 'Details', Clock3], ['behavior', t('voicePolicy.callIntelligence', 'Call intelligence'), Lightbulb], ['notes', 'Notes', StickyNote]] as const).map(([value, label, Icon]) => <Tabs.Trigger key={String(value)} value={String(value)} className="flex min-w-0 items-center justify-center gap-1 rounded-lg px-0.5 py-2 text-[11px] sm:px-2 sm:text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Icon className="hidden size-3.5 sm:block" />{String(label)}</Tabs.Trigger>)}</Tabs.List>
           <Tabs.Content value="conversation" className="space-y-3 outline-none">{live && call.callContext?.currentQuestion && <div className="rounded-lg border border-primary/15 bg-primary/5 p-3 text-xs"><p className="font-semibold text-primary">Current question</p><p className="mt-1 leading-relaxed">{call.callContext.currentQuestion}</p></div>}<TranscriptWithIntelligence call={call} live={live} agentName={agentName} leadName={lead?.name || 'Lead'} scrollContainerRef={scrollContainerRef} /><p className="text-[10px] text-muted-foreground">{call.transcript?.length || 0} spoken turns · AI-generated transcription may contain errors.</p></Tabs.Content>
           <Tabs.Content value="answers" className="outline-none"><CallAnswerChecklist call={call} /></Tabs.Content>
           <Tabs.Content value="insights" className="outline-none"><ConversationInsightsPanel call={call} /></Tabs.Content>
           <Tabs.Content value="details" className="space-y-4 outline-none"><dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">{[['Lead', lead?.name || '—'], ['Phone', lead?.mobile || lead?.phone || '—'], ['Email', lead?.email || '—'], ['Lead status', lead?.status || '—'], ['Agent', agentName], ['Connection', call.provider === 'paired_phone' ? 'Paired phone · SIM' : call.provider || '—'], ['Attempt', String(call.attemptNumber)], ['Started', start ? new Date(start).toLocaleString() : '—'], ['Answered', call.answeredAt ? new Date(call.answeredAt).toLocaleString() : 'Not answered yet'], ['Ended', call.endedAt ? new Date(call.endedAt).toLocaleString() : 'In progress'], ['Call ID', call.internalCallId], ['Qualification', call.qualification || 'Not determined yet']].map(([label, value]) => <div key={label} className="rounded-lg border border-border p-3"><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>{lead?._id && <a href={`/leads?detail=${encodeURIComponent(lead._id)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary">Open lead details<ExternalLink className="size-3" /></a>}{call.callContext?.objective && <div className="rounded-xl border border-border p-3"><h3 className="text-xs font-semibold">Call objective</h3><p className="mt-2 whitespace-pre-wrap text-sm">{call.callContext.objective}</p></div>}<div className="space-y-2"><h3 className="text-xs font-semibold">Questions for this call</h3>{call.callContext?.questions.map((question, index) => <div key={question.fieldKey} className="rounded-lg border border-border p-3 text-xs"><p className="font-medium">{index + 1}. {question.label}{question.required ? ' · Required' : ''}</p><p className="mt-1 text-muted-foreground">{question.text}</p></div>)}</div></Tabs.Content>
+          <Tabs.Content value="behavior" className="outline-none"><CallBehaviorTimeline call={call} /></Tabs.Content>
           <Tabs.Content value="notes" className="outline-none"><CallNotes call={call} /></Tabs.Content>
         </Tabs.Root>
       </div>}

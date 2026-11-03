@@ -5,12 +5,15 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 import { useAgentLanguages } from '../hooks/use-ai-calling';
 import type { AgentLanguage } from '../types/ai-calling-types';
 
-/** Case/diacritic-insensitive match on code, English name and native name. */
+/** Match each search word across code, English name and native name. */
 export function filterAgentLanguages(languages: AgentLanguage[], query: string): AgentLanguage[] {
-  const fold = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  const q = fold(query.trim());
-  if (!q) return languages;
-  return languages.filter((l) => [l.code, l.name, l.nativeName].some((v) => fold(v).includes(q)));
+  const fold = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[-_(),—·]/g, ' ');
+  const words = fold(query.trim()).split(/\s+/).filter(Boolean);
+  if (!words.length) return languages;
+  return languages.filter((l) => {
+    const searchable = fold(`${l.code} ${l.name} ${l.nativeName}`);
+    return words.every((word) => searchable.includes(word));
+  });
 }
 
 const label = (l: AgentLanguage) => (l.nativeName && l.nativeName !== l.name ? `${l.nativeName} — ${l.name}` : l.name);
@@ -61,7 +64,7 @@ export function LanguageSelect({ value, onChange, className }: { value: string; 
         <p className="mt-1 text-[11px] text-amber-600">Limited support: speech recognition quality for this language is not documented and may be lower.</p>
       ) : null}
       {open ? (
-        <div className="absolute z-20 mt-1 w-72 max-w-[90vw] rounded-lg border border-border bg-card shadow-theme-lg">
+        <div className="absolute z-20 mt-1 w-full min-w-72 max-w-[90vw] rounded-lg border border-border bg-card shadow-theme-lg">
           <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input

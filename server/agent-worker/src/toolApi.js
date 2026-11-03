@@ -37,6 +37,8 @@ export class ToolApi {
     return json.data ?? json;
   }
 
+  language(payload) { return this._postEvent('/language', payload); }
+  behavior(payload) { return this._postEvent('/behavior', payload); }
   answered() { return this._post('/answered'); }
   providerAttempt(attempt) { return this._postEvent('/voice-provider', attempt); }
   disclose() { return this._post('/disclose'); }
@@ -48,10 +50,10 @@ export class ToolApi {
       return this._post(path, body); // A lost acknowledgement must not consume two retries.
     }
   }
-  noResponse(fieldKey, reason, requestId = randomUUID()) {
-    return this._postEvent('/no-response', { fieldKey, reason, requestId });
+  noResponse(fieldKey, reason, requestId = randomUUID(), evidence = null, silenceEvent = null) {
+    return this._postEvent('/no-response', { fieldKey, reason, requestId, ...(evidence ? { evidence } : {}), ...(silenceEvent ? { silenceEvent: { id: silenceEvent.id, at: silenceEvent.at } } : {}) });
   }
-  markUnknown(fieldKey) { return this._post('/mark-unknown', { fieldKey }); }
+  markUnknown(fieldKey, reason = 'unknown', evidence = null) { return this._post('/mark-unknown', { fieldKey, reason, evidence }); }
   confirm(fieldKey, reply = null, requestId = randomUUID()) { return this._postEvent('/confirm', { fieldKey, reply, requestId }); }
   requestCallback(when, note, human = false) { return this._post('/request-callback', { when, note, human }); }
   doNotContact() { return this._post('/do-not-contact'); }
@@ -110,7 +112,7 @@ export function actionToInstruction(action) {
       return `Ask this question naturally in the current conversation language (translate or rephrase, keep the meaning): "${action.question.text}". ` +
         `Check that their reply directly supplies the information requested. If they give an unrelated, incomplete or unintelligible response, call no_response instead of saving it as an answer. A greeting, acknowledgement, question echo or random statement is not an answer. When they answer, call record_answer with fieldKey="${action.question.fieldKey}" and their answer.${answerFormat(action.question)}`;
     case 'clarify':
-      return `No usable answer was recorded for "${action.question.text}"${action.reason ? ` (reason: ${action.reason})` : ''}. Explain briefly what information is needed and ask this same question politely. Do not change its meaning or claim an answer was given. Ask ONE brief clarifying question, then WAIT for a new reply. If it is still unrelated, incomplete or unintelligible, call no_response; only call record_answer with fieldKey="${action.question.fieldKey}" when they supply the requested information. Use mark_answer_unknown only for an explicit request to skip or statement that they do not know.${answerFormat(action.question)}`;
+      return `Use only this repetition style: ${action.repetitionStrategy || 'progressive'}, attempt ${action.attempt || 1}. ${action.repetitionStrategy === 'exact' ? 'Repeat the original question exactly in the current language without adding explanations.' : action.repetitionStrategy === 'natural' ? 'Ask the same question in different natural wording.' : action.repetitionStrategy === 'simplified' ? 'Ask the same question in fewer, simpler words.' : action.repetitionStrategy === 'contextual' ? 'Briefly explain what information the same question requires.' : 'First retry: rephrase. Second: simplify. Later: one final contextual clarification.'} For partial answers ask ONLY for missing information. ` + `No usable answer was recorded for "${action.question.text}"${action.reason ? ` (reason: ${action.reason})` : ''}. Ask this same question using the selected repetition style above. Do not change its meaning or claim an answer was given. Ask ONE brief clarifying question, then WAIT for a new reply. If it is still unrelated, incomplete or unintelligible, call no_response; only call record_answer with fieldKey="${action.question.fieldKey}" when they supply the requested information. Use mark_answer_unknown only for an explicit request to skip or statement that they do not know.${answerFormat(action.question)}`;
     case 'confirm':
       return `Read back their answer to confirm it is correct. If they say yes, call confirm with fieldKey="${action.question.fieldKey}"; ` +
         'if they correct it, call record_answer with the corrected value.';

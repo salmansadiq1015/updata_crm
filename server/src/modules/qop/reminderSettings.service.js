@@ -61,7 +61,7 @@ class ReminderSettingsService {
     const settings = await ReminderSettings.findOneAndUpdate(
       { key: SETTINGS_KEY },
       { $setOnInsert: { key: SETTINGS_KEY, ...defaults } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     ).lean();
     return normalizeSettings(settings);
   }
@@ -79,7 +79,7 @@ class ReminderSettingsService {
     const settings = await ReminderSettings.findOneAndUpdate(
       { key: SETTINGS_KEY },
       { $set: update, $setOnInsert: { key: SETTINGS_KEY } },
-      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true },
     ).lean();
 
     logger.info('QOP reminder settings updated', {

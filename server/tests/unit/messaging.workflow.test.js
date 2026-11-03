@@ -16,6 +16,7 @@ jest.unstable_mockModule('../../src/shared/queue/QueueManager.js', () => ({
 }));
 jest.unstable_mockModule('../../src/modules/auth/audit.service.js', () => ({ default: { logEvent } }));
 
+let SimSmsMessage;
 let mongod;
 let service;
 let refreshCampaignSummary;
@@ -66,6 +67,7 @@ beforeAll(async () => {
   ({ default: service, refreshCampaignSummary, buildCampaignMonitoring } = await import('../../src/modules/messaging/messaging.service.js'));
   Campaign = (await import('../../src/modules/messaging/campaign.model.js')).default;
   MessageRecipient = (await import('../../src/modules/messaging/messageRecipient.model.js')).default;
+  SimSmsMessage = (await import('../../src/modules/simSms/simSmsMessage.model.js')).default;
   ProviderAttempt = (await import('../../src/modules/messaging/providerAttempt.model.js')).default;
   DeliveryEvent = (await import('../../src/modules/messaging/deliveryEvent.model.js')).default;
   MessageTemplate = (await import('../../src/modules/messaging/messageTemplate.model.js')).default;
@@ -96,7 +98,7 @@ beforeEach(async () => {
   addJobs.mockClear();
   logEvent.mockReset();
   await Promise.all([
-    Campaign.deleteMany({}), MessageRecipient.deleteMany({}),
+    Campaign.deleteMany({}), MessageRecipient.deleteMany({}), SimSmsMessage.deleteMany({}),
     ProviderAttempt.deleteMany({}), DeliveryEvent.deleteMany({}),
     Lead.deleteMany({}), Consent.deleteMany({}), Suppression.deleteMany({}), MessageTemplate.deleteMany({}),
     ProviderSettings.deleteMany({}),
@@ -106,6 +108,124 @@ beforeEach(async () => {
 });
 
 describe('messaging campaign operations', () => {
+  it('replays an initialized campaign creation without duplicate recipients and rejects key reuse', async () => {
+    await Campaign.init();
+    const lead = await Lead.create({ leadNumber: 'SMS-IDEMP-1', name: 'Ada Test', type: 'private', mobile: '+41791234567', createdBy: actor });
+    const input = {
+      idempotencyKey: 'mobile-creation-test-0001',
+      name: 'Mobile campaign', channel: 'sms', purpose: 'support',
+      content: { bodyText: 'Hello {{firstName}} ^ € 🙂', fallbackValues: {} },
+      selection: { mode: 'explicit', leadIds: [String(lead._id)] },
+      routing: { smsProvider: 'textbee', allowFallback: false },
+    };
+    const first = await service.createCampaign(input, actor);
+    const replay = await service.createCampaign(input, actor);
+    expect(String(replay._id)).toBe(String(first._id));
+    expect(await Campaign.countDocuments({ createdBy: actor })).toBe(1);
+    expect(await MessageRecipient.countDocuments({ campaignId: first._id })).toBe(1);
+    const message = await MessageRecipient.findOne({ campaignId: first._id }).lean();
+    expect(message.rendered.bodyText).toBe('Hello Ada ^ € 🙂');
+    expect(message.sms).toMatchObject({ encoding: 'UCS-2', segments: 1 });
+    expect(first.status).toBe('draft');
+    expect(addJob).not.toHaveBeenCalled();
+    await expect(service.createCampaign({ ...input, name: 'Changed payload' }, actor)).rejects.toThrow(/different campaign content/);
+    const other = await service.createCampaign(input, new mongoose.Types.ObjectId());
+    expect(String(other._id)).not.toBe(String(first._id));
+  });
+
+  it('blocks an incomplete idempotent draft from starting', async () => {
+    const item = await campaign({ status: 'draft', idempotencyKey: 'incomplete-mobile-draft', initializedAt: null });
+    await recipient(item._id, { status: 'draft' });
+    await expect(service.startCampaign(item._id, actor)).rejects.toThrow(/not complete/);
+    expect(addJob).not.toHaveBeenCalled();
+  });
+
+  it('exposes only enabled provider capability and connection metadata to campaign authors', async () => {
+    await ProviderSettings.create({ key: 'global', updatedBy: actor, providers: { textbeeEnabled: true, twilioEnabled: false } });
+    jest.spyOn(textBee, 'health').mockResolvedValue({ configured: true, eligible: true, device: { name: 'Office SIM' } });
+    const services = await service.smsServices();
+    expect(services.find((item) => item.id === 'textbee')).toMatchObject({ available: true, sender: 'Office SIM', capabilities: { media: false, subject: false } });
+    expect(services.find((item) => item.id === 'twilio')).toMatchObject({ available: false, reason: 'disabled' });
+    expect(services.every((item) => !('apiKey' in item) && !('settings' in item))).toBe(true);
+  });
+
+  it('uses the same personalized campaign evidence for creation, queue, delivery and lead history', async () => {
+    const leads = await Lead.create([
+      { leadNumber: 'SMS-FLOW-1', name: 'Ada Test', mobile: '+41791234567', createdBy: actor },
+      { leadNumber: 'SMS-FLOW-2', name: 'Duplicate Test', mobile: '+41791234567', createdBy: actor },
+      { leadNumber: 'SMS-FLOW-3', name: 'Missing Number', createdBy: actor },
+      { leadNumber: 'SMS-FLOW-4', name: 'Opted Out', mobile: '+41791234568', createdBy: actor },
+    ]);
+    await Consent.create(leads.map((lead, index) => ({ leadId: lead._id, channel: 'sms', status: index === 3 ? 'revoked' : 'granted', evidence: 'Consented test fixture', createdBy: actor, updatedBy: actor })));
+    const draft = await service.createCampaign({
+      idempotencyKey: 'mobile-website-evidence-flow', name: 'Shared SMS history', channel: 'sms', purpose: 'promotional',
+      content: { bodyText: 'Hello {{firstName}} https://example.com', fallbackValues: {} },
+      selection: { mode: 'explicit', leadIds: leads.map((lead) => String(lead._id)) },
+      routing: { smsProvider: 'textbee', allowFallback: false },
+    }, actor);
+    expect(addJob).not.toHaveBeenCalled();
+    expect(draft.summary).toMatchObject({ total: 4, eligible: 1, duplicate: 1, missingContact: 1, optedOut: 1, totalSegments: 1 });
+    await service.startCampaign(draft._id, actor);
+    expect(addJob).toHaveBeenCalledTimes(1);
+    const message = await MessageRecipient.findOne({ campaignId: draft._id, status: 'queued' });
+    jest.spyOn(service, '_sendSms').mockResolvedValue({ provider: 'textbee', providerMessageId: 'shared-evidence-batch', outcome: 'accepted' });
+    await service.dispatchRecipient(message._id);
+    expect((await MessageRecipient.findById(message._id)).status).toBe('accepted');
+    expect((await MessageRecipient.findById(message._id)).deliveredAt).toBeNull();
+    await service.applyProviderEvent({ provider: 'textbee', providerMessageId: 'shared-evidence-batch', status: 'delivered', eventKey: 'shared-evidence-receipt' });
+    const history = await service.historyForLead(message.leadId, actor, { channel: 'sms' });
+    expect(history.data[0]).toMatchObject({ status: 'delivered', rendered: { bodyText: 'Hello Ada https://example.com' } });
+    expect(history.data[0].deliveredAt).toBeTruthy();
+    expect((await service.getCampaign(draft._id, actor)).summary.delivered).toBe(1);
+    const report = await service.analytics(actor, { channel: 'sms' });
+    expect(report).toMatchObject({ campaigns: 1, submitted: 1, delivered: 1, totalSegments: 1 });
+    expect((await service.historyForLead(message.leadId, new mongoose.Types.ObjectId(), { channel: 'sms' })).data).toEqual([]);
+  });
+
+  it('merges existing SIM evidence without duplicating records or inferring delivery', async () => {
+    const sim = await SimSmsMessage.create({
+      conversationId: new mongoose.Types.ObjectId(), campaignId: new mongoose.Types.ObjectId(),
+      leadId, createdBy: actor, direction: 'outbound', kind: 'opening',
+      body: 'SIM personalized message', status: 'sent', sentAt: new Date(), subscriptionId: 2,
+    });
+    const first = await service.historyForLead(leadId, actor, { channel: 'sms', provider: 'android_sim' });
+    expect(first.data).toHaveLength(1);
+    expect(first.data[0]).toMatchObject({ source: 'sim_sms', status: 'sent', rendered: { bodyText: 'SIM personalized message' }, subscriptionId: 2 });
+    expect(first.data[0].deliveredAt).toBeNull();
+    expect((await service.historyForLead(leadId, actor, { status: 'delivered' })).data).toEqual([]);
+    await SimSmsMessage.updateOne({ _id: sim._id }, { $set: { deliveredAt: new Date() } });
+    expect((await service.historyForLead(leadId, actor, { status: 'delivered' })).data[0].status).toBe('delivered');
+    expect((await service.historyForLead(leadId, new mongoose.Types.ObjectId())).data).toEqual([]);
+    expect(await MessageRecipient.countDocuments()).toBe(0);
+  });
+
+  it('backfills legacy segment evidence and campaign estimates idempotently', async () => {
+    const item = await campaign({ status: 'draft' });
+    const message = await recipient(item._id, { status: 'draft', rendered: { bodyText: '^'.repeat(81) } });
+    const migration = await import('../../src/migrations/042_messaging_campaign_idempotency.js');
+    await migration.up();
+    await migration.up();
+    expect((await MessageRecipient.findById(message._id)).sms).toMatchObject({ encoding: 'GSM-7', units: 162, segments: 2 });
+    expect((await Campaign.findById(item._id)).summary.totalSegments).toBe(2);
+  });
+
+  it('rejects unsupported attachments even when global validation strips unknown fields', () => {
+    const input = { name: 'SMS', channel: 'sms', content: { bodyText: 'Hello', attachments: [{ url: 'https://example.com/photo.jpg' }] }, selection: { mode: 'explicit', leadIds: [String(leadId)] } };
+    expect(messagingSchemas.createCampaign.body.validate(input, { stripUnknown: true }).error).toBeTruthy();
+    delete input.content.attachments;
+    input.mediaUrls = ['https://example.com/photo.jpg'];
+    expect(messagingSchemas.createCampaign.body.validate(input, { stripUnknown: true }).error).toBeTruthy();
+  });
+
+  it('excludes an SMS that becomes empty after personalization', async () => {
+    const lead = await Lead.create({ leadNumber: 'EMPTY-SMS', name: 'No Email', mobile: '+41791234567', createdBy: actor });
+    const draft = await service.createCampaign({ name: 'Empty personalized text', channel: 'sms', purpose: 'support', content: { bodyText: '{{email}}' }, selection: { mode: 'explicit', leadIds: [String(lead._id)] } }, actor);
+    const message = await MessageRecipient.findOne({ campaignId: draft._id }).lean();
+    expect(message.eligibility).toMatchObject({ eligible: false, reasons: ['empty_message'] });
+    await expect(service.startCampaign(draft._id, actor)).rejects.toThrow(/no eligible/);
+    expect(addJob).not.toHaveBeenCalled();
+  });
+
   it('reserves WhatsApp approval metadata for the Meta synchronization path', async () => {
     await expect(service.createTemplate({
       name: 'Manual approved claim', channel: 'whatsapp', purpose: 'promotional',

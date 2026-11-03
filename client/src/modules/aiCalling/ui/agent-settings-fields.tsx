@@ -1,12 +1,15 @@
 'use client';
 import type { AgentConfig, CallingAgentInput, Schedule } from '../types/ai-calling-types';
 import { usePairedDevices } from '../hooks/use-paired-phone';
+import { useIntelT } from '../hooks/use-intel-t';
+import { useAgentLanguages } from '../hooks/use-ai-calling';
+import { ConversationPolicyFields } from './conversation-policy-fields';
 import { LanguageSelect } from './language-select';
 import { AgentField, inputClass, panelClass } from './calling-agent-primitives';
 
 export const defaultAgentInput = (): CallingAgentInput => ({
   name: '', title: '', description: '', availability: 'draft', avatarFileId: null,
-  agentConfig: { agentName: '', organizationName: '', objective: '', disclosure: 'Hi, this is an AI assistant calling on behalf of {company}. Do you have a moment to answer a few questions?', language: 'en', voice: 'alloy', speakingStyle: 'professional', maxCallSeconds: 300, silenceTimeoutSeconds: 8, maxClarificationsPerQuestion: 3, allowBargeIn: true, recordCall: false, shareLeadNotes: false },
+  agentConfig: { agentName: '', organizationName: '', objective: '', disclosure: 'Hi, this is an AI assistant calling on behalf of {company}. Do you have a moment to answer a few questions?', voice: 'alloy', speakingStyle: 'professional', maxCallSeconds: 300, silenceTimeoutSeconds: 10, maxClarificationsPerQuestion: 3, allowBargeIn: true, recordCall: false, shareLeadNotes: false },
   questionnaire: { questions: [] }, statusRules: [], transport: 'cloud_sip', pairedDeviceId: null,
   schedule: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', callWindow: { start: '09:00', end: '18:00' }, daysOfWeek: [1, 2, 3, 4, 5], maxAttemptsPerLead: 2, minMinutesBetweenAttempts: 60, retryDelayMinutes: 120, maxConcurrency: 1, maxCallsPerDay: 200, maxCampaignSpend: 0 },
 });
@@ -19,10 +22,8 @@ export function AgentVoiceFields({ value, onChange }: { value: Partial<AgentConf
     {value.speakingStyle === 'custom' && <AgentField label="Custom speaking instructions"><textarea className={inputClass} maxLength={500} rows={3} value={value.customStyle || ''} onChange={e => patch({ customStyle: e.target.value })} /></AgentField>}
     <AgentField label="Call objective and instructions"><textarea className={inputClass} rows={3} maxLength={1000} value={value.objective || ''} onChange={e => patch({ objective: e.target.value })} /></AgentField>
     <AgentField label="AI disclosure" hint="Spoken before collecting answers. {company} is replaced with the company name."><textarea className={inputClass} rows={3} maxLength={2000} value={value.disclosure || ''} onChange={e => patch({ disclosure: e.target.value })} /></AgentField>
-    <div className="grid gap-4 sm:grid-cols-3">{([
-      ['maxCallSeconds', 'Max call duration (seconds)', 30, 1800], ['silenceTimeoutSeconds', 'Silence timeout (seconds)', 2, 60], ['maxClarificationsPerQuestion', 'Question repeats (voice)' , 0, 5],
-    ] as const).map(([key, label, min, max]) => <AgentField key={key} label={label}><input type="number" disabled={key === 'maxClarificationsPerQuestion'} className={inputClass} min={min} max={max} value={key === 'maxClarificationsPerQuestion' ? 3 : value[key] ?? min} onChange={e => patch({ [key]: Number(e.target.value) })} /></AgentField>)}</div>
-    <p className="text-xs text-muted-foreground">Voice questions repeat up to three times if no usable answer is received, then the agent moves on. Missing answers remain flagged for review.</p>
+    <AgentField label="Max call duration (seconds)"><input type="number" className={inputClass} min={30} max={1800} value={value.maxCallSeconds ?? 300} onChange={e => patch({ maxCallSeconds: Number(e.target.value) })} /></AgentField>
+    <ConversationPolicyFields value={value} onChange={onChange} />
     <div className="flex flex-wrap gap-5 text-xs text-muted-foreground">{([
       ['allowBargeIn', 'Allow interruptions'], ['recordCall', 'Call recording · unavailable on this connection'], ['shareLeadNotes', 'Include CRM notes in call context'],
     ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={Boolean(value[key])} disabled={key === 'recordCall' && !value.recordCall} onChange={e => patch({ [key]: e.target.checked })} />{label}</label>)}</div>
@@ -30,8 +31,10 @@ export function AgentVoiceFields({ value, onChange }: { value: Partial<AgentConf
 }
 
 export function AgentLanguageField({ value, onChange }: { value?: string; onChange: (language: string) => void }) {
-  return <AgentField label="Conversation language" hint="English by default. The agent starts in this language, translates the disclosure and questions, and automatically follows the lead when they speak or request another language.">
-    <LanguageSelect className={inputClass} value={value || 'en'} onChange={onChange} />
+  const t = useIntelT();
+  const languages = useAgentLanguages();
+  return <AgentField label={t('voicePolicy.defaultLanguage', 'Default conversation language')} hint={t('voicePolicy.languageHint', 'The agent opens in this language. Switching follows the saved policy for each call.')} >
+    <LanguageSelect className={inputClass} value={value || languages.data?.defaultLanguage || 'auto'} onChange={onChange} />
   </AgentField>;
 }
 

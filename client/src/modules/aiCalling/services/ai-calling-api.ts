@@ -95,9 +95,9 @@ export const aiCallingApi = {
   async reconcileCall(id: string, payload: { resolution: ReconcileResolution; qualification?: string | null; note?: string }): Promise<CallRecord> {
     return unwrap<CallRecord>(await apiClient.post(ENDPOINTS.AI_CALLING.CALL_RECONCILE(id), payload));
   },
-  async leadHistory(leadId: string, page = 1) {
+  async leadHistory(leadId: string, page = 1, campaignId?: string) {
     const [history, transitions] = await Promise.all([
-      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { page, limit: 25 } }),
+      apiClient.get(ENDPOINTS.AI_CALLING.LEAD_HISTORY(leadId), { params: { page, limit: 25, ...(campaignId ? { campaignId } : {}) } }),
       apiClient.get(ENDPOINTS.AI_CALLING.LEAD_TRANSITIONS(leadId)),
     ]);
     return { ...paged<CallRecord>(history), transitions: unwrap<LeadTransition[]>(transitions) ?? [] };

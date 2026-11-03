@@ -25,14 +25,14 @@ class QuotationTemplateRepository {
   }
 
   async update(id, data) {
-    return QuotationTemplate.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();
+    return QuotationTemplate.findByIdAndUpdate(id, { $set: data }, { returnDocument: 'after', runValidators: true }).lean();
   }
 
   async softDelete(id, userId) {
     return QuotationTemplate.findByIdAndUpdate(
       id,
       { $set: { isDeleted: true, deletedAt: new Date(), updatedBy: userId } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

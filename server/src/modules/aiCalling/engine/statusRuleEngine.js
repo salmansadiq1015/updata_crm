@@ -76,6 +76,8 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
     return verdict('unqualified', 'mark_not_interested', 'disposition:declined', false, control);
   }
 
+  if (disposition === 'unresponsive') return verdict('review', 'request_review', 'unanswered_threshold', true, control);
+
   // 2. Uncertain data never qualifies — it goes to a human (Rule G).
   if (hasUnresolvedRequired) {
     return verdict('review', 'request_review', 'required_answers_incomplete', true, control);

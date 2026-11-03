@@ -240,12 +240,21 @@ export const COMMANDS = COMMAND_DEFINITIONS.flatMap((definition) =>
 export async function seedAiCommands() {
   let created = 0;
   let updated = 0;
+  const existing = await VoiceCommand.find({
+    isDeleted: false,
+    $or: COMMANDS.map(({ intent, language }) => ({ intent, language })),
+  }).lean();
+  const byKey = new Map(existing.map((cmd) => [`${cmd.language}:${cmd.intent}`, cmd]));
+  const writes = [];
 
   for (const cmd of COMMANDS) {
-    const exists = await VoiceCommand.findOne({ intent: cmd.intent, language: cmd.language, isDeleted: false });
+    const exists = byKey.get(`${cmd.language}:${cmd.intent}`);
     if (!exists) {
-      await VoiceCommand.create({ ...cmd, isActive: true });
-      created += 1;
+      writes.push({ updateOne: {
+        filter: { intent: cmd.intent, language: cmd.language, isDeleted: false },
+        update: { $setOnInsert: { ...cmd, isActive: true } },
+        upsert: true,
+      } });
       continue;
     }
 
@@ -258,9 +267,9 @@ export async function seedAiCommands() {
     );
 
     if (changed) {
-      await VoiceCommand.updateOne(
-        { _id: exists._id },
-        {
+      writes.push({ updateOne: {
+        filter: { _id: exists._id },
+        update: {
           $set: {
             phrases: cmd.phrases,
             actionType: cmd.actionType,
@@ -270,9 +279,14 @@ export async function seedAiCommands() {
             isActive: true,
           },
         },
-      );
+      } });
       updated += 1;
     }
+  }
+
+  if (writes.length) {
+    const result = await VoiceCommand.bulkWrite(writes, { ordered: false });
+    created = result.upsertedCount;
   }
 
   logger.info(`AI voice commands seed: ${created} new, ${updated} updated (${COMMANDS.length} defined)`, { module: 'seed' });

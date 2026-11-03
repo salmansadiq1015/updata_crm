@@ -1,6 +1,7 @@
 import type { Lead, RawBusinessRecord } from './types';
 import { cleanPhone, haversineDistanceMeters, normalizePhone, normalizeText, normalizeUrl, nowIso, parseCoordinates } from './utils';
 import { normalizeMapsPlaceUrl, websiteDomain } from './discovery-checkpoint';
+import { businessCategory } from './business-category';
 
 export function makeLead(raw: RawBusinessRecord, searchId: string, searchLocation?: string | null, discoveryCategory?: string): Lead {
   const timestamp = nowIso();
@@ -17,7 +18,7 @@ export function makeLead(raw: RawBusinessRecord, searchId: string, searchLocatio
     googleMapsUrl: raw.googleMapsUrl,
     placeIdentifier: raw.placeIdentifier || null,
     businessName: raw.businessName.trim(),
-    category: raw.category?.trim() || null,
+    category: businessCategory({ ...raw, discoveryCategories: discoveryCategory ? [discoveryCategory] : [] }),
     categories: [...new Set((raw.categories ?? []).map((item) => item.trim()).filter(Boolean))],
     phone,
     internationalPhone: phone && phone.startsWith('+') ? phone : null,
@@ -78,9 +79,17 @@ export function isSameLead(a: Pick<Lead, 'placeIdentifier' | 'googleMapsUrl' | '
   if (aUrl && bUrl && aUrl === bUrl) return true;
   const aPhone = normalizePhone(a.phone);
   const bPhone = normalizePhone(b.phone);
-  if (aPhone && bPhone && aPhone === bPhone) return true;
   const sameName = normalizeText(a.businessName) === normalizeText(b.businessName);
   const sameAddress = Boolean(normalizeText(a.address)) && normalizeText(a.address) === normalizeText(b.address);
+  // A reception/agency number can belong to several distinct businesses or
+  // branches. Phone equality alone must never discard a different listing.
+  if (aPhone && bPhone && aPhone === bPhone && sameName) {
+    if (a.address && b.address && !sameAddress) return false;
+    if (a.latitude !== null && a.longitude !== null && b.latitude !== null && b.longitude !== null) {
+      return haversineDistanceMeters({ latitude: a.latitude, longitude: a.longitude }, { latitude: b.latitude, longitude: b.longitude }) <= 250;
+    }
+    return true;
+  }
   if (sameName && sameAddress) return true;
   const aDomain = websiteDomain(a.website);
   const bDomain = websiteDomain(b.website);
@@ -114,6 +123,11 @@ export function mergeLead(existing: Lead, incoming: Lead): Lead {
   }
   merged.categories = [...new Set([...merged.categories, ...incoming.categories])];
   merged.discoveryCategories = [...new Set([...(merged.discoveryCategories ?? []), ...(incoming.discoveryCategories ?? [])])];
+  // A later real category can replace an earlier selected-type fallback.
+  if ((existing.discoveryCategories ?? []).includes(existing.category ?? '')
+    && incoming.category && !(incoming.discoveryCategories ?? []).includes(incoming.category)) {
+    merged.category = incoming.category;
+  }
   merged.openingHours = [...new Set([...merged.openingHours, ...incoming.openingHours])];
   merged.photos = [...new Set([...(merged.photos ?? []), ...(incoming.photos ?? [])])];
   merged.updatedAt = nowIso();

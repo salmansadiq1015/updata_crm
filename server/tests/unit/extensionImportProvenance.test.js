@@ -32,6 +32,20 @@ beforeEach(async () => { await Lead.deleteMany({}); });
 afterAll(async () => { await mongoose.disconnect(); await mongo?.stop(); });
 
 describe('persisted extension provenance, idempotency and historical repair', () => {
+  it('repairs polluted business types using saved discovery types and is idempotent', async () => {
+    const repair = await import('../../src/migrations/041_extension_business_type_repair.js');
+    const bad = await create({ sourceMetadata: { businessType: 'No reviews', discoveryBusinessTypes: ['Software companies'] } });
+    const real = await create({ sourceMetadata: { businessType: 'Software company', discoveryBusinessTypes: ['Software companies'] } });
+    const unknown = await create({ sourceMetadata: { businessType: 'No reviews' } });
+    await repair.up();
+    expect((await Lead.findById(bad._id).lean()).sourceMetadata.businessType).toBe('Software companies');
+    expect((await Lead.findById(real._id).lean()).sourceMetadata.businessType).toBe('Software company');
+    expect((await Lead.findById(unknown._id).lean()).sourceMetadata.businessType).toBe('No reviews');
+    const repaired = await Lead.findById(bad._id).lean();
+    await repair.up();
+    expect(await Lead.findById(bad._id).lean()).toEqual(repaired);
+  });
+
   it('finds extension place IDs through both duplicate lookup paths', async () => {
     const lead = await create({ sourceMetadata: { importMethod: 'extension', googlePlaceId: 'gym-place' } });
     const duplicates = await repository.findDuplicates({ googlePlaceId: 'gym-place' });

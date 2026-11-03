@@ -1,3 +1,5 @@
+import { ADDITIONAL_AGENT_LANGUAGES } from './aiCalling.languageCatalog.js';
+
 /**
  * AI agent languages — the single source of truth for which conversation
  * languages a campaign's AI agent (`agentConfig.language`) may use.
@@ -23,6 +25,7 @@ export const AI_AGENT_LANGUAGES = Object.freeze([
   L('af', 'Afrikaans', 'Afrikaans'),
   L('am', 'Amharic', 'አማርኛ', 'limited'),
   L('ar', 'Arabic', 'العربية', 'full', true),
+  L('ar-MA', 'Arabic (Morocco, Moroccan Darija)', 'العربية المغربية — الدارجة المغربية', 'limited', true),
   L('hy', 'Armenian', 'Հայերեն'),
   L('az', 'Azerbaijani', 'Azərbaycan dili'),
   L('be', 'Belarusian', 'Беларуская'),
@@ -93,14 +96,17 @@ export const AI_AGENT_LANGUAGES = Object.freeze([
   L('ur', 'Urdu', 'اردو', 'full', true),
   L('vi', 'Vietnamese', 'Tiếng Việt'),
   L('cy', 'Welsh', 'Cymraeg'),
-]);
+  ...ADDITIONAL_AGENT_LANGUAGES.map(([code, name, nativeName, rtl = false]) => L(code, name, nativeName, 'limited', rtl)),
+].sort((a, b) => a.code === AUTO_LANGUAGE ? -1 : b.code === AUTO_LANGUAGE ? 1 : a.name.localeCompare(b.name, 'en')));
 
 const BY_LOWER_CODE = new Map(AI_AGENT_LANGUAGES.map((lang) => [lang.code.toLowerCase(), lang]));
 
-/** Exact (case-insensitive) lookup; null when the code is not in the list. */
+/** Case-insensitive lookup with locale separators and the Moroccan Arabic ISO alias. */
 export function findAgentLanguage(code) {
   if (typeof code !== 'string') return null;
-  return BY_LOWER_CODE.get(code.trim().toLowerCase()) || null;
+  const normalized = code.trim().replaceAll('_', '-').toLowerCase();
+  // ISO 639-3 'ary' identifies Moroccan Arabic; store the existing ar-MA code.
+  return BY_LOWER_CODE.get(normalized === 'ary' ? 'ar-ma' : normalized) || null;
 }
 
 /**

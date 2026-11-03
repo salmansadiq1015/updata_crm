@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { AudioLines, Check, CircleUserRound, MessageSquareText, PhoneCall, Sparkles } from 'lucide-react';
+import { FileAudio, Check, CircleUserRound, MessageSquareText, PhoneCall, Bot } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Reveal, SectionIntro, DemoLabel } from './motion-primitives';
 import { AuthAwareLink } from './auth-aware-link';
@@ -17,7 +17,7 @@ export function AICallingSection() {
           <div>
             <SectionIntro eyebrow={t('experience.calling.eyebrow')} title={t('experience.calling.title')} description={t('experience.calling.description')} />
             <div className="mt-9 space-y-6">
-              {[[CircleUserRound, 'agents'], [AudioLines, 'context'], [MessageSquareText, 'follow']].map(([Icon, key]) => (
+              {[[CircleUserRound, 'agents'], [FileAudio, 'context'], [MessageSquareText, 'follow']].map(([Icon, key]) => (
                 <Reveal key={key} className="flex gap-4">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-blue-200/10 bg-blue-200/5 text-blue-200"><Icon aria-hidden="true" className="size-4" /></span>
                   <div><h3 className="text-sm font-semibold text-slate-100">{t(`experience.calling.${key}`)}</h3><p className="mt-1.5 max-w-lg text-sm leading-6 text-slate-400">{t(`experience.calling.${key}Body`)}</p></div>
@@ -34,7 +34,7 @@ export function AICallingSection() {
                 <DemoLabel className="absolute start-4 top-4 text-slate-300">{t('experience.preview')}</DemoLabel>
               </div>
               <div className="relative -mt-8 flex items-center gap-3">
-                <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-blue-200/15 bg-[#142444] text-blue-200"><Sparkles aria-hidden="true" className="size-5" /></span>
+                <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-blue-200/15 bg-[#142444] text-blue-200"><Bot aria-hidden="true" className="size-5" /></span>
                 <div><h3 className="text-sm font-semibold text-white">{t('experience.agent.name')}</h3><p className="mt-1 text-xs text-slate-400">{t('experience.agent.role')}</p></div>
               </div>
               <div className="mt-6 rounded-2xl border border-white/[.07] bg-white/[.025] px-4 py-5">

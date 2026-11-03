@@ -29,6 +29,7 @@ export const callingAgentApi = {
   async assign(id: string, leadIds: string[], version: number, mode?: 'replace' | 'add') { return unwrap<CallingAgent>(await api.put(`${root}/agents/${id}/leads`, { leadIds, version, ...(mode ? { mode } : {}) })); },
   async duplicate(id: string) { return unwrap<CallingAgent>(await api.post(`${root}/agents/${id}/duplicate`)); },
   async remove(id: string) { return unwrap<{ deleted: boolean }>(await api.delete(`${root}/agents/${id}`)); },
+  async prepareTest(id: string) { return unwrap<Campaign>(await api.post(`${root}/agents/${id}/test`)); },
   async launch(id: string, input: AgentLaunchInput) { return unwrap<Campaign>(await api.post(`${root}/agents/${id}/launch`, input)); },
   async callAnalytics(id: string, params: { from?: string; to?: string } = {}) { return unwrap<AgentCallAnalytics>(await api.get(`${root}/agents/${id}/call-analytics`, { params })); },
   async callAnalyticsCsv(id: string, params: { from?: string; to?: string } = {}): Promise<Blob> {

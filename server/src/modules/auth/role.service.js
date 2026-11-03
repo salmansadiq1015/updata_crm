@@ -83,6 +83,12 @@ class RoleService {
       }
     }
 
+    // The Admin role always retains every permission, including newly added ones.
+    if (existing.name === 'Admin') {
+      data.name = 'Admin';
+      data.permissions = (await permissionRepository.findAll()).map((permission) => permission._id);
+    }
+
     // Mark system role as customized if modifying
     if (existing.isSystem) {
       data.isCustomized = true;

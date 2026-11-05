@@ -167,4 +167,3 @@ local; the shared investigation policy lives in [AGENTS.md](AGENTS.md).
   when docs and code disagree, trust the code.
 
 
-

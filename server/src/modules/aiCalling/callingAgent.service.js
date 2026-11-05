@@ -13,15 +13,18 @@ import audit from '../auth/audit.service.js';
 import calling, { assertQuestionnaire } from './aiCalling.service.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import { nextWindowClose } from './engine/callWindow.js';
+import { applyAgentTemplate } from './engine/agentTypes.js';
 
 export function agentReadiness(agent) {
   const missing = [];
   if (!agent.name?.trim()) missing.push('Agent name');
   if (!agent.agentConfig?.organizationName?.trim()) missing.push('Company name');
-  if (!agent.agentConfig?.objective?.trim()) missing.push('Call objective');
+  // An incoming-only receptionist talks freely: no campaign objective or questionnaire needed.
+  const outbound = agent.usage !== 'inbound';
+  if (outbound && !agent.agentConfig?.objective?.trim()) missing.push('Call objective');
   if (!agent.agentConfig?.disclosure?.trim()) missing.push('AI disclosure');
   if (agent.agentConfig?.recordCall) missing.push('Call recording is unavailable: a recording capture integration is not configured');
-  try { assertQuestionnaire(agent.questionnaire); } catch (e) { missing.push(e.message); }
+  if (outbound) { try { assertQuestionnaire(agent.questionnaire); } catch (e) { missing.push(e.message); } }
   if (agent.transport === 'paired_phone' && !agent.pairedDeviceId) missing.push('Paired phone');
   return { ready: missing.length === 0, missing };
 }
@@ -71,7 +74,7 @@ class CallingAgentService {
   async decorate(agent, actor, knownStats) {
     const [stats, latestCampaign, eligibility, file] = await Promise.all([
       knownStats || this.campaignStats([agent._id], actor),
-      CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true } }).sort({ createdAt: -1 }).lean(),
+      CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true }, kind: { $ne: 'follow_up' } }).sort({ createdAt: -1 }).lean(),
       calling.previewEligibility(actor, { leadIds: agent.assignedLeadIds.map(String) }),
       agent.avatarFileId ? FileMetadata.findOne({ _id: agent.avatarFileId, ...imageScope(actor) }).lean() : null,
     ]);
@@ -85,9 +88,12 @@ class CallingAgentService {
 
   async get(id, actor) { return this.decorate(await this.owned(id, actor), actor); }
 
-  async list(actor, { page = 1, limit = 24, search, availability, readiness, campaignStatus, sort = 'updated' } = {}) {
+  async list(actor, { page = 1, limit = 24, search, availability, readiness, campaignStatus, usage, sort = 'updated' } = {}) {
     const filter = { createdBy: actor };
     if (availability) filter.availability = availability;
+    // Legacy agents have no usage field: they are outbound agents.
+    if (usage === 'inbound') filter.usage = { $in: ['inbound', 'both'] };
+    if (usage === 'outbound') filter.usage = { $nin: ['inbound'] };
     if (search) {
       const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [{ name: new RegExp(escaped, 'i') }, { title: new RegExp(escaped, 'i') }];
@@ -141,7 +147,9 @@ class CallingAgentService {
       const preview = await calling.previewEligibility(actor, { leadIds: assignedLeadIds });
       if (preview.unavailable) throw new ValidationError('Some selected leads are unavailable. Reload the lead selection');
     }
-    const data = { ...input, assignedLeadIds, agentConfig: { ...input.agentConfig, agentName: input.name }, createdBy: actor, updatedBy: actor };
+    // A new agent starts from its type's template; anything the admin wrote is kept as is.
+    const templated = applyAgentTemplate(input);
+    const data = { ...templated, assignedLeadIds, agentConfig: { ...templated.agentConfig, agentName: input.name }, createdBy: actor, updatedBy: actor };
     const readiness = agentReadiness(data);
     if (input.availability === 'active' && !readiness.ready) throw new ValidationError(`Complete the agent configuration before activating it: ${readiness.missing.join(', ')}`);
     const doc = await CallingAgent.create(data);
@@ -187,8 +195,10 @@ class CallingAgentService {
 
   async duplicate(id, actor, meta) {
     const old = await this.owned(id, actor);
-    const { name, title, description, avatarFileId, avatarPresetId, agentConfig, questionnaire, statusRules, schedule, transport, pairedDeviceId } = old;
-    return this.create({ name: `${name.slice(0, 110)} (copy)`, title, description, avatarFileId, avatarPresetId, agentConfig, questionnaire, statusRules, schedule, transport, pairedDeviceId, availability: 'draft' }, actor, meta);
+    const { name, title, description, avatarFileId, avatarPresetId, agentConfig, questionnaire, statusRules, schedule, transport, pairedDeviceId, inbound, usage, agentType, followUp } = old;
+    // A copy never inherits live automation: follow-up calling starts switched off.
+    const copyFollowUp = followUp ? { ...followUp, enabled: false, autoCall: false, routes: {} } : undefined;
+    return this.create({ name: `${name.slice(0, 110)} (copy)`, title, description, avatarFileId, avatarPresetId, agentConfig, questionnaire, statusRules, schedule, transport, pairedDeviceId, inbound, usage, agentType, followUp: copyFollowUp, availability: 'draft' }, actor, meta);
   }
 
   async remove(id, actor, meta) {
@@ -227,7 +237,8 @@ class CallingAgentService {
   }
 
   async launch(id, input, actor, meta) {
-    await this.owned(id, actor);
+    const owned = await this.owned(id, actor);
+    if (owned.usage === 'inbound') throw new ValidationError('This agent only answers incoming calls. Set its usage to "Outbound and incoming" to run campaigns with it.');
     const fingerprint = requestHash(input);
     const existingFilter = { agentId: id, createdBy: actor, launchKey: input.idempotencyKey };
     const existing = await CallCampaign.findOne(existingFilter).lean();
@@ -242,7 +253,9 @@ class CallingAgentService {
       const previous = await CallCampaign.findOne(existingFilter).lean();
       if (previous && previous.launchRequestHash !== fingerprint) throw new ConflictError('This launch key belongs to a different request');
       if (previous && previous.status !== 'draft') return calling.getCampaign(previous._id, actor);
-      if (await CallCampaign.exists({ agentId: id, createdBy: actor, $or: [{ status: { $in: ACTIVE } }, { 'summary.inProgress': { $gt: 0 } }] })) throw new ConflictError('This agent already has an active campaign or an unfinished call. Open it to manage the queue and let its active calls finish');
+      // Follow-up calls (kind 'follow_up') run alongside campaigns; the lead-level lock in
+      // _dispatchCall keeps them from ever calling a lead the campaign is calling.
+      if (await CallCampaign.exists({ agentId: id, createdBy: actor, kind: { $ne: 'follow_up' }, $or: [{ status: { $in: ACTIVE } }, { 'summary.inProgress': { $gt: 0 } }] })) throw new ConflictError('This agent already has an active campaign or an unfinished call. Open it to manage the queue and let its active calls finish');
       // The launch dialog can choose the phone for this run without rewriting
       // the saved agent. Retries keep the already allocated campaign's route.
       const transport = previous?.transport || input.transport || agent.transport || 'cloud_sip';

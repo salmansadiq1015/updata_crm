@@ -1,4 +1,6 @@
 'use client';
+import { getAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
+import { currencyDigits } from '@/shared/data/currencies';
 
 import { useState } from 'react';
 import { AlertTriangle, Send, Search } from 'lucide-react';
@@ -18,8 +20,8 @@ import { useArReceivables, useArSummary, useArOverdue } from '@/modules/accounti
 import { useArMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { cursorPageLabel } from '@/modules/accounting/utils/accounting-ui';
 
-const fmt = (n, currency = 'CHF') =>
-  new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0);
+const fmt = (n, currency = getAccountingCurrency()) =>
+  new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: currencyDigits(currency), maximumFractionDigits: currencyDigits(currency) }).format(n ?? 0);
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 

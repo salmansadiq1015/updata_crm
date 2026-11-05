@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 const publicPaths = ['/login', '/reset-password', '/forgot-password', '/activate'];
 // Only these document routes are public. Prefix matches must not expose a
 // private route such as /security-admin or a future nested management screen.
-const companyPaths = new Set(['/about', '/contact', '/support', '/privacy', '/terms', '/security']);
+const companyPaths = new Set(['/about', '/contact', '/support', '/privacy', '/terms', '/security', '/calling-engine']);
 
 const EMBED_PARENT_ORIGINS = [
   'https://appnity.ch',

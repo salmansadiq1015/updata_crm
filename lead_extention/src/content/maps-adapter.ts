@@ -460,11 +460,19 @@ export class MapsAdapter {
   }
 
   private categoryFromElement(root: Element): string | null {
-    const node = root.querySelector<HTMLElement>('.DkEaL, button[jsaction*="category"], [data-item-id="category"]');
-    const value = node?.textContent?.replace(/\s+/g, ' ').trim() || null;
-    // Place pages render "Hotel · 3-star hotel · $$" in one node; the category is
-    // the first segment.
-    return value ? value.split('·')[0].trim() || value : null;
+    // Explicit category controls win. Generic .DkEaL nodes can also label
+    // Maps actions (notably "Add a label"), so validate every candidate and
+    // continue past actions instead of accepting the first matching element.
+    const candidates = new Set([
+      ...root.querySelectorAll<HTMLElement>('button[jsaction*="category"], [data-item-id="category"]'),
+      ...root.querySelectorAll<HTMLElement>('.DkEaL'),
+    ]);
+    for (const node of candidates) {
+      const value = node.textContent?.split('·')[0]?.replace(/\s+/g, ' ').trim();
+      const category = value && !/^(?:\+\s*)?(?:add (?:a )?label|edit (?:a )?label|your labels?|suggest an edit|write (?:a )?review|claim this business|ajouter un libell[eé]|ajouter une [eé]tiquette|modifier le libell[eé]|label hinzuf[uü]gen|etikett hinzuf[uü]gen|(?:a[nñ]adir|agregar) (?:una )?etiqueta)[.!…]*$/iu.test(value.replace(/[_-]+/g, ' ')) ? value : null;
+      if (category) return category;
+    }
+    return null;
   }
 
   // Unlabelled card lines include names, promotions and service chips. They

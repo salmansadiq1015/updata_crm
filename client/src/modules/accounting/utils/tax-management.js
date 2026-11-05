@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 import {
   DEFAULT_ACCOUNTING_CURRENCY,
   TAX_DIRECTIONS,
@@ -36,14 +37,14 @@ export function defaultTaxFilters() {
   return {
     startDate: `${now.getFullYear()}-01-01`,
     endDate: now.toISOString().slice(0, 10),
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
   };
 }
 
 export function defaultTaxCalculationForm() {
   return {
     direction: 'INPUT',
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
     documentDate: todayInput(),
     lineTotal: '1000',
     vatRate: '8.1',

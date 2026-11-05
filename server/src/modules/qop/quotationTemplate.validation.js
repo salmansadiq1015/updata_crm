@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
@@ -20,7 +21,7 @@ export const createTemplateSchema = {
     description: Joi.string().max(1000).allow(''),
     category: Joi.string().max(100).allow(''),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     introduction: Joi.string().max(5000).allow(''),
     notes: Joi.string().max(5000).allow(''),
     paymentTerms: Joi.string().max(1000).allow(''),
@@ -38,7 +39,7 @@ export const updateTemplateSchema = {
     description: Joi.string().max(1000).allow(''),
     category: Joi.string().max(100).allow(''),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     introduction: Joi.string().max(5000).allow(''),
     notes: Joi.string().max(5000).allow(''),
     paymentTerms: Joi.string().max(1000).allow(''),

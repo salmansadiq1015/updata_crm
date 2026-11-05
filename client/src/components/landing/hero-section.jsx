@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { DashboardVisual } from './landing-visuals';
 import { AuthAwareLink } from './auth-aware-link';
+import { HeroParticles } from './hero-particles';
 
 export function HeroSection() {
   const { t } = useLanguage();
@@ -12,6 +13,7 @@ export function HeroSection() {
     <section id="product" className="relative isolate overflow-hidden px-4 pb-16 pt-32 sm:px-6 sm:pb-24 sm:pt-40 lg:px-10">
       <div aria-hidden="true" className="landing-grid-mask pointer-events-none absolute inset-0 -z-10 opacity-25" />
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[700px] bg-[radial-gradient(ellipse_at_50%_25%,rgba(47,82,184,.23),transparent_65%)]" />
+      <HeroParticles />
       <div className="mx-auto max-w-[1280px]">
         <div className="mx-auto max-w-4xl text-center">
           <motion.h1 initial={false} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55, delay: .06 }} className="text-[clamp(2.5rem,5.4vw,4.7rem)] font-medium leading-[1.09] tracking-[-.05em] text-white">

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQueryState } from 'nuqs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
@@ -54,6 +55,18 @@ export function UsersTable() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
+  const [requestedAction, setRequestedAction] = useQueryState('action');
+  const { hasPermission } = usePermissions();
+  const canCreateUser = hasPermission('users:write');
+
+  useEffect(() => {
+    if (requestedAction !== 'create') return;
+    if (canCreateUser) {
+      setEditUser(null);
+      setFormOpen(true);
+    }
+    void setRequestedAction(null, { history: 'replace' });
+  }, [requestedAction, canCreateUser, setRequestedAction]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [targetUser, setTargetUser] = useState(null);
   const [rowSelection, setRowSelection] = useState({});

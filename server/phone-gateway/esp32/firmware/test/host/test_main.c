@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../main/callowner.h"
 #include "../../main/dialauth.h"
 #include "../../main/devstate.h"
 #include "../../main/hostwatchdog.h"
@@ -238,6 +239,83 @@ static void test_devstate(void)
     CHECK(devstate_derive(&s) == DS_FAULT);
 }
 
+static void test_callowner(void)
+{
+    callowner_t o = {0};
+    // A ringing call nobody answered, and a call a person picked up, are never host-owned.
+    callowner_on_indicators(&o, 0, 1);
+    CHECK(!o.owned);
+    CHECK(!callowner_watchdog_should_end(&o, true, 0, 1, true));
+    callowner_on_indicators(&o, 1, 0);
+    CHECK(!callowner_watchdog_should_end(&o, true, 1, 0, true));
+    callowner_on_indicators(&o, 0, 0);
+
+    // Outbound: DIAL owns the call before the phone reports it, through to the end.
+    callowner_claim(&o, false);
+    callowner_on_indicators(&o, 0, 0);  // indicator noise before setup must not release it
+    CHECK(o.owned && !o.live);
+    callowner_on_indicators(&o, 0, 2);
+    CHECK(o.owned && o.live);
+    callowner_on_indicators(&o, 1, 0);
+    CHECK(callowner_watchdog_should_end(&o, true, 1, 0, true));
+    CHECK(!callowner_watchdog_should_end(&o, true, 1, 0, false));  // host still talking
+    CHECK(!callowner_watchdog_should_end(&o, false, 1, 0, true));  // session already closed
+    callowner_on_indicators(&o, 0, 0);
+    CHECK(!o.owned && !o.live);
+    // ...so the next ring, left for a person, survives a dead host.
+    callowner_on_indicators(&o, 0, 1);
+    CHECK(!callowner_watchdog_should_end(&o, true, 0, 1, true));
+
+    // A DIAL the phone never started does not own a later incoming ring.
+    callowner_claim(&o, false);
+    callowner_on_indicators(&o, 0, 1);
+    CHECK(!o.owned);
+
+    // Inbound: ANSWER owns the ringing call; it stays owned while it becomes active.
+    callowner_claim(&o, true);
+    CHECK(callowner_watchdog_should_end(&o, true, 0, 1, true));
+    callowner_on_indicators(&o, 1, 1);  // +CIEV call=1 before callsetup=0
+    callowner_on_indicators(&o, 1, 0);
+    CHECK(callowner_watchdog_should_end(&o, true, 1, 0, true));
+    callowner_release(&o);  // audio handed to the handset (takeover)
+    CHECK(!callowner_watchdog_should_end(&o, true, 1, 0, true));
+
+    // Call waiting behind an owned call: the owned call stays owned; once it ends, the waiting call
+    // ringing on its own belongs to a person (never rejected by the watchdog).
+    callowner_claim(&o, true);
+    callowner_on_indicators(&o, 1, 0);
+    callowner_on_indicators(&o, 1, 1);  // +CCWA: second call waiting
+    CHECK(callowner_watchdog_should_end(&o, true, 1, 1, true));
+    callowner_on_indicators(&o, 0, 1);  // the owned call ended; the waiting call rings alone
+    CHECK(!o.owned);
+    CHECK(!callowner_watchdog_should_end(&o, true, 0, 1, true));
+    // Same after an outbound call.
+    callowner_claim(&o, false);
+    callowner_on_indicators(&o, 0, 2);
+    callowner_on_indicators(&o, 1, 0);
+    callowner_on_indicators(&o, 1, 1);
+    CHECK(o.owned);
+    callowner_on_indicators(&o, 0, 1);
+    CHECK(!o.owned);
+    // ANSWER pending: ring indicators repeated before call=1 do not release it.
+    callowner_claim(&o, true);
+    callowner_on_indicators(&o, 0, 1);
+    CHECK(o.owned && o.answering);
+    callowner_on_indicators(&o, 1, 0);
+    CHECK(o.owned && !o.answering);
+    callowner_release(&o);
+
+    // ANSWER policy.
+    CHECK(answer_check(4, 7, true, 0, 1, false) == R_OK);
+    CHECK(answer_check(3, 7, true, 0, 1, false) == R_BAD_ARG);
+    CHECK(answer_check(4, 0, true, 0, 1, false) == R_BAD_ARG);
+    CHECK(answer_check(4, 7, false, 0, 1, false) == R_BAD_STATE);  // no service level connection
+    CHECK(answer_check(4, 7, true, 0, 0, false) == R_BAD_STATE);  // nothing ringing
+    CHECK(answer_check(4, 7, true, 0, 2, false) == R_BAD_STATE);  // outgoing, not incoming
+    CHECK(answer_check(4, 7, true, 1, 1, false) == R_BAD_STATE);  // call waiting: left to the phone
+    CHECK(answer_check(4, 7, true, 0, 1, true) == R_BAD_STATE);  // a dial is in flight
+}
+
 int main(void)
 {
     CHECK(!hostwatchdog_expired(1000, 1001, 5000)); // RX updated after the TX clock snapshot
@@ -247,6 +325,7 @@ int main(void)
     CHECK(!hostwatchdog_expired(100, UINT32_MAX - 100, 5000)); // real timer wrap
     CHECK(hostwatchdog_expired(6000, UINT32_MAX - 100, 5000));
     test_devstate();
+    test_callowner();
     test_crc_and_vectors();
     test_decoder_resync();
     test_decoder_rejects_oversize();

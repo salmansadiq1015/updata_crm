@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
-import { ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ClipboardList, RefreshCw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTaskAnalyticsPreference } from '../hooks/use-task-analytics-preference';
 import { TaskMetricTiles, type TaskMetricFilter } from './task-metric-tiles';
+import { TaskTimeReport } from './task-time-report';
 import { TaskDashboardPage } from './task-dashboard-page';
 import { TaskBulkActionBar } from './task-bulk-action-bar';
 import {
@@ -40,7 +43,6 @@ import { TaskQuickAdd } from './task-quick-add';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
-// eslint-disable-next-line import/no-unresolved
 import { useUiConfig } from '@/shared/hooks/use-ui-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
@@ -52,6 +54,7 @@ type TaskWorkspaceProps = {
 export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const { t } = useLanguage();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const viewState = useTaskWorkspaceViewState();
   const {
     activeView,
@@ -69,24 +72,30 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const setActiveView = useTaskWorkspaceStore((state) => state.setActiveView);
   const setSidebarCollapsed = useTaskWorkspaceStore((state) => state.setSidebarCollapsed);
   const setSelectedTaskId = useTaskWorkspaceStore((state) => state.setSelectedTaskId);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const collapse = () => { if (media.matches) setSidebarCollapsed(true); };
+    collapse();
+    media.addEventListener('change', collapse);
+    return () => media.removeEventListener('change', collapse);
+  }, [setSidebarCollapsed]);
   const setSearch = useTaskWorkspaceStore((state) => state.setSearch);
   const setStatus = useTaskWorkspaceStore((state) => state.setStatus);
   const [analyticsOpen, setAnalyticsOpen] = useTaskAnalyticsPreference();
+  const [timeReportOpen, setTimeReportOpen] = useState(false);
 
   // Which tile is driving the list. Derived rather than stored, so the tiles
   // stay in step when the filters are changed from the command bar.
-  const metricFilter: TaskMetricFilter = savedView === 'overdue'
-    ? 'overdue'
-    : status === 'OPEN'
-      ? 'open'
-      : status === 'COMPLETED'
-        ? 'completedThisWeek'
-        : null;
+  const metricFilter: TaskMetricFilter = savedView === 'overdue' ? 'overdue'
+    : savedView === 'active' ? 'open'
+      : savedView === 'completedThisWeek' ? 'completedThisWeek' : null;
 
   const applyMetricFilter = (filter: TaskMetricFilter) => {
-    if (filter === null) { setSavedView('none'); setStatus('ALL'); return; }
-    if (filter === 'overdue') { setStatus('ALL'); setSavedView('overdue'); return; }
-    setStatus(filter === 'open' ? 'OPEN' : 'COMPLETED');
+    clearFilters();
+    if (!filter) return;
+    setAssigneeFilter('ME');
+    setSavedView(filter === 'open' ? 'active' : filter);
+    if (listId) router.push('/tasks');
   };
   const setPriority = useTaskWorkspaceStore((state) => state.setPriority);
   const setAssigneeFilter = useTaskWorkspaceStore((state) => state.setAssigneeFilter);
@@ -184,11 +193,13 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     ...(priority !== 'ALL' ? { priority } : {}),
     ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
     ...(department !== 'ALL' ? { departmentId: department } : {}),
+    ...(savedView === 'active' ? { active: true } : {}),
+    ...(savedView === 'completedThisWeek' ? { completedThisWeek: true } : {}),
     ...(savedView === 'dueToday' ? { dueToday: true } : {}),
     ...(savedView === 'overdue' ? { overdue: true } : {}),
     ...(savedView === 'pool' ? { inPool: true } : {}),
-    hasParent: false,
-  }), [debouncedSearch, department, listId, priority, resolvedAssigneeId, savedView, status]);
+    ...(metricFilter ? {} : { hasParent: false }),
+  }), [debouncedSearch, department, listId, priority, resolvedAssigneeId, savedView, status, metricFilter]);
 
   const taskPageSize = activeView === 'calendar' || activeView === 'timeline'
     ? Math.max(pageSize, 100)
@@ -197,6 +208,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const listsQuery = useTaskListsV2();
   useBreadcrumbLabel(listId, (listsQuery.data ?? []).find((l) => l.id === listId)?.name);
   const tasksQuery = useTaskWindow(taskParams);
+  useEffect(() => { setRowSelection({}); }, [taskParams, setRowSelection]);
 
   // Compute standalone lists (not in any folder, not archived)
   const standaloneLists = useMemo(() => {
@@ -211,11 +223,11 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   useTaskRealtime();
 
   const patchTask = (id: string, patch: TaskPatch) => mutations.patchTask.mutate({ id, patch });
-  const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || assigneeFilter !== 'ALL' || savedView !== 'none');
+  const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || assigneeFilter !== 'ALL' || savedView !== 'none' || department !== 'ALL');
 
   const content = (() => {
     if (tasksQuery.isLoading) return activeView === 'board' ? <TaskBoardSkeleton /> : <TaskListSkeleton />;
-    if (tasksQuery.isError) {
+    if (tasksQuery.isError && !tasksQuery.data) {
       return <TaskEmptyState type={typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'error'} onRetry={() => tasksQuery.refetch()} />;
     }
     if (tasks.length === 0) return <TaskEmptyState type={hasFilters ? 'filtered' : 'empty'} onReset={clearFilters} />;
@@ -256,7 +268,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   })();
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground">
+    <div data-testid="task-workspace" className="flex h-full min-h-0 bg-background text-foreground">
       <TaskSidebar
         folders={foldersQuery.data?.folders ?? []}
         standaloneLists={standaloneLists}
@@ -266,7 +278,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         collapsedFolderIds={sidebarState.collapsedFolderIds}
         onCollapseChange={setSidebarCollapsed}
         onToggleFolder={toggleFolderCollapsed}
-        onSelectList={(nextListId) => router.push(nextListId ? `/tasks/${nextListId}` : '/tasks')}
+        onSelectList={(nextListId) => { clearFilters(); setRowSelection({}); router.push(nextListId ? `/tasks/${nextListId}` : '/tasks'); }}
         onSelectSavedView={setSavedView}
         onCreateFolder={() => setDlg({ kind: 'createFolder' })}
         onCreateList={(folderId) => setDlg({ kind: 'createList', folderId: folderId ?? null })}
@@ -276,7 +288,20 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         onFolderColorChange={(folderId, color) => updateFolder.mutate({ id: folderId, patch: { color } })}
       />
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary"><ClipboardList className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-tight">{(listsQuery.data ?? []).find((list) => list.id === listId)?.name ?? t('tasks.title', 'Tasks')}</h1>
+              <p className="hidden text-xs text-muted-foreground sm:block">{t('tasks.workspaceSubtitle', 'Plan, prioritize, and move work forward.')}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" disabled={tasksQuery.isFetching} onClick={() => void queryClient.invalidateQueries({ queryKey: ['tasks'] })}>
+            <RefreshCw className={cn('h-3.5 w-3.5', tasksQuery.isFetching && 'animate-spin')} />
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </header>
         <TaskCommandBar
           activeView={activeView}
           search={search}
@@ -286,6 +311,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           users={usersQuery.data ?? []}
           currentUserId={currentUserId}
           isStale={tasksQuery.isStale}
+          hasError={tasksQuery.isError}
           isFetching={tasksQuery.isFetching}
           onViewChange={setActiveView}
           onSearchChange={setSearch}
@@ -294,17 +320,24 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           onAssigneeFilterChange={setAssigneeFilter}
           department={department}
           onDepartmentChange={setDepartment}
-          onCreateTask={(title) => mutations.createTask.mutate(title)}
+          onCreateTask={(title) => mutations.createTask.mutateAsync(title)}
           pageSize={pageSize}
           onPageSizeChange={setPageSize}
         />
         {/* The former dashboard, merged in: the status tiles head the list and
             filter it, the analysis blocks fold away. */}
-        <div className="space-y-3 border-t border-border p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="space-y-3 bg-muted/15 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
+            <h2 className="font-semibold text-foreground">{t('tasks.personalOverview', 'Your workload')}</h2>
+            <span>{t('tasks.personalScope', 'Personal totals across all lists')}</span>
+          </div>
           <TaskMetricTiles active={metricFilter} onSelect={applyMetricFilter} />
 
           <button
             type="button"
+            aria-expanded={analyticsOpen}
+            aria-controls="task-workspace-analysis"
             onClick={() => setAnalyticsOpen(!analyticsOpen)}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -314,21 +347,34 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
               : t('tasks.dashboard.showAnalysis', 'Analyse anzeigen')}
           </button>
 
-          {analyticsOpen && <TaskDashboardPage embedded />}
+          {analyticsOpen && <div id="task-workspace-analysis"><TaskDashboardPage embedded /></div>}
+          <div><button type="button" aria-expanded={timeReportOpen} aria-controls="task-workspace-time-report" onClick={() => setTimeReportOpen(value => !value)} className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"><ChevronDown className={cn('h-3.5 w-3.5 transition-transform', timeReportOpen && 'rotate-180')} />{t('tasks.time.report', 'Task time report')}</button></div>
+          {timeReportOpen && <div id="task-workspace-time-report"><TaskTimeReport /></div>}
         </div>
 
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <div className="h-full overflow-hidden border-t border-border bg-card">
+        <main aria-label={t('tasks.title', 'Tasks')} className="min-h-80 px-4 pb-4 sm:px-5 sm:pb-5">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-theme-sm">
+            <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+              <span className="text-xs font-medium text-muted-foreground" aria-live="polite">{t('tasks.loadedCount', '{count} tasks loaded', { count: tasks.length })}{tasksQuery.hasNextPage ? '+' : ''}</span>
+              {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />{t('tasks.clearFilters', 'Clear filters')}</Button>}
+            </div>
+            {tasksQuery.isError && tasksQuery.data && <div role="status" className="flex items-center justify-between gap-3 border-b border-warning/20 bg-warning/5 px-4 py-3 text-xs text-muted-foreground">
+              {t('tasks.cachedWarning', 'Showing saved tasks. Refresh to try loading the latest changes.')}
+              <Button size="sm" variant="outline" onClick={() => void tasksQuery.refetch()} disabled={tasksQuery.isFetching}>{t('common.retry', 'Retry')}</Button>
+            </div>}
+            <div className="h-[max(24rem,55vh)] min-h-80">
             {content}
+            </div>
           </div>
         </main>
+        </div>
         {/* Microsoft-To-Do-style capture row: always available in the list
             view, including when the list is empty. */}
         {activeView === 'list' && (
           <div className="shrink-0 border-t border-border bg-card px-3 py-2">
             <TaskQuickAdd
               asRow
-              onCreate={(title) => mutations.createTask.mutate(title)}
+              onCreate={(title) => mutations.createTask.mutateAsync(title)}
               label={t('tasks.addTaskRow', 'Aufgabe hinzufügen')}
             />
           </div>

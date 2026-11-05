@@ -84,6 +84,8 @@ export type TaskFilters = {
   departmentId?: string;
   projectId?: string;
   orderId?: string;
+  active?: boolean;
+  completedThisWeek?: boolean;
   dueToday?: boolean;
   overdue?: boolean;
   inPool?: boolean;

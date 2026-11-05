@@ -206,10 +206,7 @@ describe('accounting mutation hooks', () => {
       { bankAccountId: 'bank-1' },
       expect.objectContaining({ client: expect.any(QueryClient) }),
     );
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'bank-transactions'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'bank-accounts'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'cash-balances'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'cash-forecast'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting'] });
     expect(toastSuccess).toHaveBeenCalledWith('Bank retrieval completed');
   });
 

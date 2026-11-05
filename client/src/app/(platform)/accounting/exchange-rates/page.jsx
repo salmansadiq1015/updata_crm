@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingFilters } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { Calculator, Edit3, Globe2, Plus, RefreshCw, Save, Scale } from 'lucide-react';
@@ -137,7 +138,7 @@ function ExchangeRateEditor({ open, form, pending, de, onChange, onClose, onSubm
 export default function ExchangeRatesPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const [filters, setFilters] = useState(defaultExchangeRateFilters());
+  const [filters, setFilters] = useAccountingFilters(defaultExchangeRateFilters(), 'baseCurrency');
   const [editorOpen, setEditorOpen] = useState(false);
   const [rateForm, setRateForm] = useState(defaultExchangeRateForm());
   const [conversionForm, setConversionForm] = useState(defaultConversionForm());
@@ -232,7 +233,7 @@ export default function ExchangeRatesPage() {
       <section className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[10rem_10rem_10rem_10rem_auto] md:items-end">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">{de ? 'Basis' : 'Base'}</Label>
-          <CurrencySelect value={filters.baseCurrency} onValueChange={(value) => setFilter('baseCurrency', value)} includeAll />
+          <CurrencySelect value={filters.baseCurrency} onValueChange={(value) => setFilter('baseCurrency', value)} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">{de ? 'Ziel' : 'Quote'}</Label>

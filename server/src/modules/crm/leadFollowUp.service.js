@@ -3,6 +3,7 @@ import LeadFollowUp, { FOLLOW_UP_OPEN_STATUSES } from './leadFollowUp.model.js';
 import Lead from './lead.model.js';
 import ContactLogEntry from './contactLog.model.js';
 import LeadCommunication from './leadCommunication.model.js';
+import MessageRecipient from '../messaging/messageRecipient.model.js';
 import { checkContactSuppression } from './leadContactSuppression.js';
 import { isValidTimezone, startOfNextZonedDay } from './leadWorkflowTime.js';
 import auditService from '../auth/audit.service.js';
@@ -12,6 +13,7 @@ import {
 } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import { currentLeadAccessFilter } from '../../shared/security/requestAccessContext.js';
+import { automationView } from '../aiCalling/engine/followUpView.js';
 
 // Governance (team-scoped lead access, {} in company mode / outside a governed request).
 const leadAccessMatch = () => { const f = currentLeadAccessFilter(); return Object.keys(f).length ? { $and: [f] } : {}; };
@@ -79,6 +81,7 @@ class LeadFollowUpService {
           sourceKey, leadId, ownerId, createdBy, dueAt: due, nextDueAt: due,
           timezone: isValidTimezone(timezone) ? timezone : null,
           channel, note: note ? String(note).slice(0, 2000) : null, status: 'open', source,
+          taskType: ({ email: 'EMAIL', phone: 'PHONE_CALL', sms: 'SMS', in_person: 'MEETING' })[channel] || 'CUSTOM_TASK',
           actions: [{ action: 'created', at: now, by: createdBy, details: { sourceType: source.type } }],
         },
       },
@@ -89,7 +92,7 @@ class LeadFollowUpService {
   }
 
   /** Manual follow-up from the inbox or the lead drawer. */
-  async create({ leadId, ownerId = null, dueAt, timezone = null, channel = null, note = null }, viewer, meta = {}) {
+  async create({ leadId, ownerId = null, dueAt, timezone = null, channel = null, note = null, taskType = null, priority = 'NORMAL', reminderMinutes = null }, viewer, meta = {}) {
     const lead = await Lead.findById(leadId).select('_id name').lean();
     if (!lead) throw new NotFoundError('Lead', leadId);
     const owner = ownerId ? String(ownerId) : String(viewer.id);
@@ -99,6 +102,7 @@ class LeadFollowUpService {
     const doc = await LeadFollowUp.create({
       leadId, ownerId: owner, createdBy: viewer.id, dueAt: due, nextDueAt: due,
       timezone: isValidTimezone(timezone) ? timezone : null, channel, note,
+      taskType, priority, reminderMinutes,
       status: 'open', source: { type: 'manual' },
       actions: [{ action: 'created', at: now, by: viewer.id, details: { sourceType: 'manual' } }],
     });
@@ -175,18 +179,24 @@ class LeadFollowUpService {
   }
 
   /**
-   * AI call that ended with a callback request. The agent records the requested
-   * time as free text; only an unambiguous ISO timestamp is used as the due
-   * time, otherwise the follow-up is due now with the lead's words attached.
+   * AI call that ended with a callback request (or a qualified verdict). The agent records
+   * the requested time as an ISO instant or the lead's words; `resolved`
+   * (aiCalling/engine/callbackTime.js) turns words like "in 10 minutes" or "tomorrow
+   * morning" into a due time in the lead's timezone. Approximate times keep the lead's
+   * words on the follow-up so a person can see exactly what was said.
    */
-  async fromAiCall({ call, lead, campaign, outcome }) {
-    if (outcome?.action !== 'schedule_callback' || !call?._id || !lead?._id) return null;
+  async fromAiCall({ call, lead, campaign, outcome, resolved = null }) {
+    const qualified = outcome?.action === 'mark_qualified' && outcome.qualification === 'qualified' && !outcome.requiresReview;
+    if ((!qualified && outcome?.action !== 'schedule_callback') || !call?._id || !lead?._id) return null;
     const text = typeof outcome.callback?.requestedAt === 'string' ? outcome.callback.requestedAt.trim() : null;
-    const parsed = text && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(text) ? new Date(text) : null;
-    const valid = parsed && !Number.isNaN(parsed.getTime());
-    const dueAt = valid ? parsed : (call.endedAt || new Date());
-    const note = [
-      valid ? null : `Callback requested during an AI call${text ? ` (requested time, as stated: "${text.slice(0, 200)}")` : ' — no time was given'}.`,
+    const iso = text && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(text) ? new Date(text) : null;
+    const validIso = iso && !Number.isNaN(iso.getTime());
+    const useResolved = !qualified && resolved?.at && !Number.isNaN(new Date(resolved.at).getTime());
+    const dueAt = useResolved ? new Date(resolved.at) : validIso ? iso : (call.endedAt || new Date());
+    const exact = validIso || (useResolved && !resolved.approximate);
+    const note = qualified ? 'Qualified by the configured call rules. Review the call answers and send an introductory email.' : [
+      exact ? null : `Callback requested during an AI call${text ? ` (requested time, as stated: "${text.slice(0, 200)}")` : ' — no time was given'}.`,
+      useResolved && resolved.approximate ? `Planned for ${dueAt.toISOString()} (${resolved.timezone}); confirm the exact time with the lead.` : null,
       outcome.callback?.note ? String(outcome.callback.note).slice(0, 500) : null,
     ].filter(Boolean).join(' ');
     return this.upsertFromSource({
@@ -194,11 +204,24 @@ class LeadFollowUpService {
       leadId: lead._id,
       ownerId: lead.assignedTo || campaign.createdBy,
       dueAt,
-      channel: 'phone',
+      timezone: useResolved ? resolved.timezone : null,
+      channel: qualified ? 'email' : 'phone',
       note: note || null,
-      source: { type: 'ai_call', callRecordId: call._id, requestedTimeText: valid ? null : (text ? text.slice(0, 300) : null) },
+      source: { type: 'ai_call', callRecordId: call._id, campaignId: campaign._id, callingAgentId: campaign.agentId || null,
+        qualification: outcome.qualification, recommendedAction: qualified ? 'INTRODUCTION_EMAIL' : 'SCHEDULE_CALLBACK',
+        requestedTimeText: exact ? null : (text ? text.slice(0, 300) : null) },
       createdBy: null,
     });
+  }
+
+  /** Stop automatic outreach tasks after a later negative verdict; retain every record and action. */
+  async closeAutomaticForLead(leadId, callId, ownerId) {
+    const now = new Date();
+    const result = await LeadFollowUp.updateMany({ leadId, createdBy: null, 'source.type': 'ai_call', status: { $in: FOLLOW_UP_OPEN_STATUSES } }, {
+      $set: { status: 'cancelled', cancelledAt: now, closedAt: now, cancelReason: 'Lead no longer eligible for automatic follow-up' },
+      $push: { actions: { action: 'cancelled', at: now, by: null, details: { callId: String(callId), reason: 'negative_call_outcome' } } },
+    });
+    if (result.modifiedCount) emit(String(ownerId), { type: 'cancelled', leadId: String(leadId) });
   }
 
   // ---------------------------------------------------------------- inbox
@@ -238,6 +261,28 @@ class LeadFollowUpService {
     }
   }
 
+  /** Management view: who works the follow-up (AI agent / person) and AI call states. */
+  _managementMatch(management) {
+    switch (management) {
+      case 'ai': return { 'automation.mode': 'ai' };
+      case 'human': return { 'automation.mode': { $ne: 'ai' } };
+      case 'ai_scheduled': return { 'automation.mode': 'ai', 'automation.state': { $in: ['scheduled', 'queued', 'retry_scheduled'] } };
+      case 'ai_active': return { 'automation.mode': 'ai', 'automation.state': { $in: ['queued', 'calling', 'retry_scheduled'] } };
+      case 'ai_completed': return { 'automation.state': 'completed' };
+      case 'ai_failed': return { 'automation.state': { $in: ['failed', 'no_answer', 'busy'] } };
+      case 'attention': return { $or: [{ 'automation.state': { $in: ['requires_human', 'failed', 'paused'] } }, { priority: 'CRITICAL' }] };
+      default: return {};
+    }
+  }
+
+  /** Agent identity + live call state for AI-managed rows (after pagination). */
+  _automationLookups() {
+    return [
+      { $lookup: { from: 'callingagents', localField: 'automation.agentId', foreignField: '_id', pipeline: [{ $project: { name: 1, title: 1, agentType: 1, avatarPresetId: 1, availability: 1 } }], as: 'aiAgent' } },
+      { $lookup: { from: 'callrecords', localField: 'automation.callRecordId', foreignField: '_id', pipeline: [{ $project: { state: 1, disposition: 1, qualification: 1, durationSeconds: 1, answeredAt: 1, endedAt: 1, 'callNotes.summary': 1 } }], as: 'aiCall' } },
+    ];
+  }
+
   _pipelineHead(match) {
     return [
       { $match: match },
@@ -247,7 +292,7 @@ class LeadFollowUpService {
           let: { leadId: '$leadId' },
           pipeline: [
             { $match: { $expr: { $eq: ['$_id', '$$leadId'] }, isDeleted: { $ne: true }, ...leadAccessMatch() } },
-            { $project: { _id: 1, name: 1, leadNumber: 1, status: 1, assignedTo: 1, phone: 1, mobile: 1, email: 1 } },
+            { $project: { _id: 1, name: 1, leadNumber: 1, status: 1, assignedTo: 1, phone: 1, mobile: 1, email: 1, latestCall: 1, pipelineStage: 1, lastContactedAt: 1, lastContactChannel: 1 } },
           ],
           as: 'lead',
         },
@@ -261,7 +306,7 @@ class LeadFollowUpService {
    * open buckets sort by next due time ascending, `done` by close time descending.
    */
   async list({
-    scope = 'mine', bucket = 'open', cursor = null, limit = 25, tz = 'UTC', leadId = null, ownerId = null, q = '', channel = null,
+    scope = 'mine', bucket = 'open', cursor = null, limit = 25, tz = 'UTC', leadId = null, ownerId = null, q = '', channel = null, qualification = null, order = null, management = null, agentId = null,
   }, viewer, now = new Date()) {
     const zone = isValidTimezone(tz) ? tz : 'UTC';
     const endOfToday = startOfNextZonedDay(now, zone);
@@ -270,9 +315,13 @@ class LeadFollowUpService {
       ...this._bucketMatch(bucket, now, endOfToday),
       ...(leadId ? { leadId: oid(leadId) } : {}),
       ...(channel ? { channel } : {}),
+      ...(agentId ? { 'automation.agentId': oid(agentId) } : {}),
     };
-    const desc = bucket === 'done';
-    const sortField = desc ? 'closedAt' : 'nextDueAt';
+    const managed = this._managementMatch(management);
+    if (managed.$or) match.$and = [...(match.$and || []), { $or: managed.$or }];
+    else Object.assign(match, managed);
+    const desc = order ? order === 'desc' : bucket === 'done';
+    const sortField = bucket === 'done' ? 'closedAt' : 'nextDueAt';
     const c = decodeCursor(cursor);
     if (c) {
       const op = desc ? '$lt' : '$gt';
@@ -284,10 +333,12 @@ class LeadFollowUpService {
     const search = q.trim() ? new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
     const rows = await LeadFollowUp.aggregate([
       ...this._pipelineHead(match),
-      ...(search ? [{ $match: { $or: [{ 'lead.name': search }, { 'lead.leadNumber': search }, { note: search }] } }] : []),
+      ...(qualification ? [{ $match: { 'lead.latestCall.qualificationStatus': qualification } }] : []),
+      ...(search ? [{ $match: { $or: [{ 'lead.name': search }, { 'lead.leadNumber': search }, { 'lead.phone': search }, { 'lead.mobile': search }, { 'lead.email': search }, { note: search }] } }] : []),
       { $sort: { [sortField]: dir, _id: dir } },
       { $limit: limit + 1 },
       { $lookup: { from: 'users', localField: 'ownerId', foreignField: '_id', pipeline: [{ $project: USER_FIELDS }], as: 'owner' } },
+      ...this._automationLookups(),
     ]);
     const hasNext = rows.length > limit;
     const page = rows.slice(0, limit);
@@ -304,25 +355,61 @@ class LeadFollowUpService {
     const zone = isValidTimezone(tz) ? tz : 'UTC';
     const endOfToday = startOfNextZonedDay(now, zone);
     const base = await this._scopeMatch(scope, viewer);
-    const [row] = await LeadFollowUp.aggregate([
+    const [result] = await LeadFollowUp.aggregate([
       ...this._pipelineHead(base),
+      { $facet: {
+      buckets: [
       {
         $group: {
           _id: null,
+          pending: { $sum: { $cond: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, 1, 0] } },
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'done'] }, 1, 0] } },
           overdue: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $lt: ['$nextDueAt', now] }] }, 1, 0] } },
           today: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', now] }, { $lt: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
           upcoming: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
           done: { $sum: { $cond: [{ $in: ['$status', ['done', 'cancelled']] }, 1, 0] } },
+          aiManaged: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }] }, 1, 0] } },
+          aiScheduled: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $in: ['$automation.state', ['scheduled', 'queued', 'retry_scheduled']] }] }, 1, 0] } },
+          aiInProgress: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $eq: ['$automation.state', 'calling'] }] }, 1, 0] } },
+          aiCompleted: { $sum: { $cond: [{ $eq: ['$automation.state', 'completed'] }, 1, 0] } },
+          aiFailed: { $sum: { $cond: [{ $in: ['$automation.state', ['failed', 'no_answer', 'busy']] }, 1, 0] } },
+          attention: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $in: ['$automation.state', ['requires_human', 'failed', 'paused']] }] }, 1, 0] } },
         },
       },
+      ],
+      leads: [
+        { $group: { _id: '$leadId', qualified: { $max: { $cond: [{ $eq: ['$lead.latestCall.qualificationStatus', 'QUALIFIED'] }, 1, 0] } } } },
+        { $group: { _id: null, totalLeads: { $sum: 1 }, qualifiedLeads: { $sum: '$qualified' } } },
+      ],
+      emails: [
+        { $group: { _id: '$leadId' } },
+        { $lookup: { from: MessageRecipient.collection.name, localField: '_id', foreignField: 'leadId',
+          pipeline: [{ $match: { channel: 'email' } }, { $group: { _id: null,
+            sent: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$sentAt', null] }, null] }, 1, 0] } },
+            delivered: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$deliveredAt', null] }, null] }, 1, 0] } },
+            failed: { $sum: { $cond: [{ $in: ['$status', ['failed', 'undelivered']] }, 1, 0] } },
+          } }], as: 'messages' } },
+        { $unwind: '$messages' },
+        { $group: { _id: null, sent: { $sum: '$messages.sent' }, delivered: { $sum: '$messages.delivered' }, failed: { $sum: '$messages.failed' } } },
+      ],
+      } },
     ]);
-    return { overdue: row?.overdue ?? 0, today: row?.today ?? 0, upcoming: row?.upcoming ?? 0, done: row?.done ?? 0, timezone: zone };
+    const row = result?.buckets?.[0];
+    const leads = result?.leads?.[0];
+    const emails = result?.emails?.[0];
+    return { overdue: row?.overdue ?? 0, today: row?.today ?? 0, upcoming: row?.upcoming ?? 0, done: row?.done ?? 0,
+      pending: row?.pending ?? 0, completed: row?.completed ?? 0,
+      aiManaged: row?.aiManaged ?? 0, aiScheduled: row?.aiScheduled ?? 0, aiInProgress: row?.aiInProgress ?? 0,
+      aiCompleted: row?.aiCompleted ?? 0, aiFailed: row?.aiFailed ?? 0, attention: row?.attention ?? 0,
+      totalLeads: leads?.totalLeads ?? 0, qualifiedLeads: leads?.qualifiedLeads ?? 0,
+      emailsSent: emails?.sent ?? 0, emailsDelivered: emails?.delivered ?? 0, emailsFailed: emails?.failed ?? 0, timezone: zone };
   }
 
   async getById(id, viewer, now = new Date()) {
     const rows = await LeadFollowUp.aggregate([
       ...this._pipelineHead({ _id: oid(id) }),
       { $lookup: { from: 'users', localField: 'ownerId', foreignField: '_id', pipeline: [{ $project: USER_FIELDS }], as: 'owner' } },
+      ...this._automationLookups(),
     ]);
     if (!rows.length) throw new NotFoundError('FollowUp', id);
     const [item] = await this._serializeMany(rows, now, startOfNextZonedDay(now, 'UTC'));
@@ -344,7 +431,10 @@ class LeadFollowUpService {
       out.push({
         id: String(r._id),
         leadId: String(r.leadId),
-        lead: { id: String(r.lead._id), name: r.lead.name, leadNumber: r.lead.leadNumber ?? null, status: r.lead.status },
+        lead: { id: String(r.lead._id), name: r.lead.name, leadNumber: r.lead.leadNumber ?? null, status: r.lead.status,
+          email: r.lead.email ?? null, phone: r.lead.mobile || r.lead.phone || null,
+          lastContactedAt: iso(r.lead.lastContactedAt), lastContactChannel: r.lead.lastContactChannel ?? null,
+          latestCall: r.lead.latestCall ?? null, pipelineStage: r.lead.pipelineStage ?? 'LEAD' },
         owner: { id: String(r.ownerId), name: name(r.owner?.[0]) },
         createdBy: r.createdBy ? String(r.createdBy) : null,
         dueAt: iso(r.dueAt),
@@ -352,6 +442,7 @@ class LeadFollowUpService {
         timezone: r.timezone ?? null,
         channel: r.channel ?? null,
         note: r.note ?? null,
+        taskType: r.taskType ?? null, priority: r.priority ?? 'NORMAL', reminderMinutes: r.reminderMinutes ?? null,
         status: r.status,
         bucket: !open ? 'done' : due < now ? 'overdue' : due < endOfToday ? 'today' : 'upcoming',
         snoozedUntil: iso(r.snoozedUntil),
@@ -365,10 +456,18 @@ class LeadFollowUpService {
           type: r.source?.type ?? 'manual',
           communicationId: r.source?.communicationId ? String(r.source.communicationId) : null,
           callRecordId: r.source?.callRecordId ? String(r.source.callRecordId) : null,
+          campaignId: r.source?.campaignId ? String(r.source.campaignId) : null,
+          callingAgentId: r.source?.callingAgentId ? String(r.source.callingAgentId) : null,
+          qualification: r.source?.qualification ?? null,
+          recommendedAction: r.source?.recommendedAction ?? null,
           contactLogId: r.source?.contactLogId ? String(r.source.contactLogId) : null,
           requestedTimeText: r.source?.requestedTimeText ?? null,
         },
         suppression,
+        automation: r.automation?.mode === 'ai' || r.automation?.state ? {
+          ...automationView(r.automation, r.aiCall?.[0] || null),
+          agent: r.aiAgent?.[0] ? { id: String(r.aiAgent[0]._id), name: r.aiAgent[0].name, title: r.aiAgent[0].title || null, agentType: r.aiAgent[0].agentType || 'custom', avatarPresetId: r.aiAgent[0].avatarPresetId || null, availability: r.aiAgent[0].availability } : null,
+        } : null,
         createdAt: iso(r.createdAt),
       });
     }
@@ -403,6 +502,7 @@ class LeadFollowUpService {
     const { fu } = await this._loadForAction(id, viewer);
     const now = new Date();
     await this._transition(fu, { status: 'done', completedAt: now, completedBy: viewer.id, completionNote: note, closedAt: now }, 'completed', viewer);
+    await this._stopAutomation(fu._id, 'done', viewer.id);
     this._audit('lead.follow_up_completed', viewer.id, meta, { followUpId: String(fu._id), leadId: String(fu.leadId) });
     emit(String(fu.ownerId), { type: 'completed', followUpId: String(fu._id) });
     return this.getById(fu._id, viewer);
@@ -422,6 +522,7 @@ class LeadFollowUpService {
     const { fu } = await this._loadForAction(id, viewer);
     const now = new Date();
     await this._transition(fu, { status: 'cancelled', cancelledAt: now, cancelledBy: viewer.id, cancelReason: reason, closedAt: now }, 'cancelled', viewer, { reason });
+    await this._stopAutomation(fu._id, 'cancelled', viewer.id);
     this._audit('lead.follow_up_cancelled', viewer.id, meta, { followUpId: String(fu._id), leadId: String(fu.leadId), reason });
     emit(String(fu.ownerId), { type: 'cancelled', followUpId: String(fu._id) });
     return this.getById(fu._id, viewer);
@@ -455,6 +556,14 @@ class LeadFollowUpService {
       throw err;
     }
     return { allowed: true, ...result, checkedBy: String(viewer.id) };
+  }
+
+  /** An AI-managed follow-up closed by a person: cancel its pending call (never blocks the close). */
+  async _stopAutomation(followUpId, status, by) {
+    try {
+      const { default: followUpCalling } = await import('../aiCalling/followUpCalling.service.js');
+      await followUpCalling.onFollowUpClosed(followUpId, { status, by });
+    } catch (e) { logger.warn('stopping AI follow-up automation failed', { module: 'crm', followUpId: String(followUpId), error: e.message }); }
   }
 
   async _assertActiveUser(userId) {
@@ -507,6 +616,7 @@ class LeadFollowUpService {
       { $sort: { nextDueAt: 1, _id: 1 } },
       { $limit: FOLLOW_UP_LIMIT },
       { $lookup: { from: ContactLogEntry.collection.name, localField: 'source.contactLogId', foreignField: '_id', pipeline: [{ $project: { subject: 1 } }], as: 'log' } },
+      ...this._automationLookups(),
     ]);
 
     const logMatch = { isDeleted: false, leadId: { $ne: null }, followUpAt: { $gte: start, $lte: end } };
@@ -545,6 +655,15 @@ class LeadFollowUpService {
         channel: r.channel || 'other',
         subject: r.log?.[0]?.subject ?? null,
         note: excerpt(r.note),
+        ...(r.lead.latestCall ? { latestCall: r.lead.latestCall, pipelineStage: r.lead.pipelineStage ?? 'LEAD' } : {}),
+        // Additive, AI follow-ups only (ordinary rows keep the exact legacy shape; older app
+        // builds strip unknown keys): the follow-up id + AI follow-up state for the app's controls.
+        ...(r.automation?.mode === 'ai' || r.automation?.state ? { followUpId: String(r._id), automation: {
+          mode: r.automation.mode || 'human', state: r.automation.state || null, reason: r.automation.reason || null,
+          agentId: r.automation.agentId ? String(r.automation.agentId) : null, agentName: r.aiAgent?.[0]?.name ?? null,
+          attempts: r.automation.attempts || 0, lastError: r.automation.lastError || null,
+          callState: r.aiCall?.[0]?.state ?? null, summary: r.aiCall?.[0]?.callNotes?.summary ? excerpt(r.aiCall[0].callNotes.summary, 300) : null,
+        } } : {}),
       })),
       ...logs.map((row) => ({
         contactLogId: String(row._id),

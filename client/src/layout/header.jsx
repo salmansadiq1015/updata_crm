@@ -51,10 +51,10 @@ export function Header({ showAiAssistant = true }) {
         {showAiAssistant && (
           <Suspense
             fallback={
-              <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
+              <div className="ms-2 me-3 h-10 w-10 rounded-full shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
             }
           >
-            <AiAssistantButton variant="header" className="ml-2" />
+            <AiAssistantButton variant="header" className="ms-2" />
           </Suspense>
         )}
       </div>

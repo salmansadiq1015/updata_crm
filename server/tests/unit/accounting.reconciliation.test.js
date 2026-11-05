@@ -10,6 +10,7 @@ async function loadReconciliationService({
   apInvoiceUpdate = { matchedCount: 1 },
   learnedCandidate = null,
   openInvoices = [],
+  categoryRules = [],
 } = {}) {
   jest.resetModules();
 
@@ -83,6 +84,8 @@ async function loadReconciliationService({
   const eventBus = { publish: jest.fn() };
   const auditService = { logEvent: jest.fn() };
 
+  jest.unstable_mockModule('../../src/modules/accounting/bankAccount.repository.js', () => ({ default: { findById: jest.fn(async () => ({ categoryRules })) } }));
+  jest.unstable_mockModule('../../src/modules/accounting/account.repository.js', () => ({ default: { findById: jest.fn(async () => ({ isActive: true })) } }));
   jest.unstable_mockModule('mongoose', () => ({
     default: { startSession: jest.fn(async () => session) },
   }));
@@ -586,5 +589,31 @@ describe('auto reconciliation integrity', () => {
       44,
       expect.objectContaining({ session: expect.any(Object) }),
     );
+  });
+});
+
+describe('bank categorization integrity', () => {
+  const transaction = { _id: 'fee-1', amount: -12.5, currency: 'EUR', transactionDate: new Date('2026-11-01'), bookingText: 'Monthly fee', reconciliationStatus: 'UNMATCHED' };
+  test('creates the journal and category in one session with original currency and booking date', async () => {
+    const { service, bankTransactionRepository, journalEntryService, session } = await loadReconciliationService({ transaction, transactionUpdate: { modifiedCount: 1 } });
+    await service.categorize('fee-1', 'fees-account', 'user-1');
+    expect(bankTransactionRepository.markReconciledIfUnmatched).toHaveBeenCalledWith('fee-1', 'CATEGORIZED', { matchedAccountId: 'fees-account' }, { session });
+    expect(journalEntryService.createFromEvent).toHaveBeenCalledWith('CATEGORIZATION', 'fee-1', 'fees-account', 'bank-clearing-account', 12.5, 'Categorized: Monthly fee', 'user-1', { session, currency: 'EUR', entryDate: transaction.transactionDate });
+    expect(session.endSession).toHaveBeenCalled();
+  });
+  test('rejects racing category claims before posting a journal', async () => {
+    const { service, journalEntryService, session } = await loadReconciliationService({ transaction, transactionUpdate: { modifiedCount: 0 } });
+    await expect(service.categorize('fee-1', 'fees', 'user')).rejects.toThrow('already matched');
+    expect(journalEntryService.createFromEvent).not.toHaveBeenCalled();
+    expect(session.endSession).toHaveBeenCalled();
+  });
+  test('propagates posting failure out of the transaction instead of reporting success', async () => {
+    const { service, journalEntryService } = await loadReconciliationService({ transaction, transactionUpdate: { modifiedCount: 1 } });
+    journalEntryService.createFromEvent.mockRejectedValueOnce(new Error('Fiscal period closed'));
+    await expect(service.categorize('fee-1', 'fees', 'user')).rejects.toThrow('Fiscal period closed');
+  });
+  test('automatic rules categorize unmatched non-invoice transactions', async () => {
+    const { service } = await loadReconciliationService({ transaction, unmatched: [transaction], transactionUpdate: { modifiedCount: 1 }, categoryRules: [{ keyword: 'monthly fee', direction: 'OUT', accountId: 'fees' }] });
+    expect(await service.runAutoReconciliation('bank')).toEqual({ matchedCount: 0, unmatchedCount: 0, categorizedCount: 1 });
   });
 });

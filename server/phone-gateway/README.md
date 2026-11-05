@@ -89,6 +89,89 @@ sending DIAL. Deploy the updated voice worker with this gateway. A startup
 failure, closed room, or missing readiness signal refuses the call before dialing;
 room disconnect codes are also logged with the call phase.
 
+## Incoming calls
+
+Gateway 0.5.0 with firmware 0.1.4 lets the AI answer calls to the paired phone.
+The CRM decides per call (incoming-call settings and rules); the gateway only
+reports the ring and carries out the decision.
+
+1. While no outbound call or setup action runs, the phone starts ringing
+   (`callsetup=1`, `call=0`). The gateway waits up to ~1.2 s for the caller
+   number (CLIP; withheld numbers are sent as `''`) and posts
+   `POST /paired-phone/gateway/inbound/ring` with a fresh `sessionId`. Transient
+   failures are retried with the same `sessionId` (the CRM de-duplicates on it)
+   while the phone still rings. If the CRM cannot be reached nothing happens:
+   the phone keeps ringing for the person. No outbound call is claimed from the
+   first ring until the phone is idle again.
+2. `answer_ai`: the gateway joins the voice room as `sip-<callId>`, sets
+   `sip.callStatus=ringing`, waits for the worker's `updata.agent_ready`, then
+   waits until `answerAfterMs` after the first ring. If the phone is still ringing
+   and nobody picked up, it reports `answering`, sends ANSWER, and on the phone's
+   active state reports `answered` and sets `sip.callStatus=active`. From there
+   the call runs like an outbound AI call: audio bridge, audio recovery, stats,
+   `maxCallSeconds`, hang-up and takeover.
+3. The AI never answers when the agent is not ready before `ringTimeoutSeconds`
+   (`agent_unavailable {agent_not_ready}`), the ring stops first
+   (`agent_unavailable {ring_stopped}` then `ended {not_answered}`), or a person
+   picks up on the handset first (`answered_elsewhere`; the gateway leaves the
+   room and hands the audio back to the handset). These calls stay tracked as
+   human calls until the phone is idle.
+4. `let_ring` / `ignore`: tracked only. Answered on the handset →
+   `answered_elsewhere`; caller gives up → `ended {not_answered}`; answered then
+   hung up → `ended {remote_hangup}`.
+
+Owner commands arrive with the heartbeat (`inbound: true`) and are repeated until
+`command_done` reaches the CRM; each runs once. **Reject** (ringing) sends HANGUP
+(AT+CHUP) → `command_done {reject}` → `ended {rejected}`. **Let AI answer** on a
+call left ringing fetches `/inbound/calls/:id/answer-job` and answers as soon as
+the agent is ready. **Takeover** and **Hang up** behave as for outbound calls.
+A lost ESP32/USB or Bluetooth link reports `outcome_unknown`. Events go through
+the durable outbox to `/inbound/calls/:callId/events` (`in_…` call IDs); live
+stats are best-effort.
+
+Limits: one call per phone (there is one Bluetooth audio link). HFP exposes no
+SIM slot, so `simSlot` is reported as `null`.
+
+**Call waiting.** A second call while the gateway runs a call (outbound or
+incoming) is never answered, but it is not lost either. The gateway waits
+briefly for its number (+CCWA) and reports it with `waiting: true` (same retry
+rules, own `sessionId`); the CRM records it for a person (`let_ring`) and the
+gateway reports `ringing`. Then:
+
+- the waiting caller gives up, or every call ends → `ended {not_answered}` (the
+  CRM records a call missed while the phone was busy);
+- the first call ends while the waiting call keeps ringing → the waiting session
+  is handed to the normal ring path, which reports the **same** `sessionId` with
+  `waiting: false`; the CRM re-decides that session and may let the AI answer it.
+
+HFP's held-call indicator is not tracked, so a waiting call the person accepts by
+swapping calls on the handset is reported as `not_answered`. When the gateway
+hangs up its own call (AT+CHUP) while another call waits, the phone decides which
+call ends; check this on the target phone.
+
+**Firmware.** Answering needs ESP32 firmware 0.1.4 or newer (flash it as a
+separate, backed-up hardware step). Older firmware does not advertise the ANSWER
+capability or replies `unknown_type`: the gateway then reports
+`agent_unavailable {firmware_no_answer}` instead of answering, logs
+`firmware_cannot_answer` at connect, and the call stays with the person.
+
+Firmware 0.1.4 also changes the host-lost watchdog: it ends only calls the host
+dialed or answered. A ringing call left for a person, a call a person answered
+on the handset, and a call handed to the handset (takeover) are never rejected or
+hung up when the gateway stops or crashes.
+
+USB protocol v1 additions (firmware 0.1.4; protocol stays 1.0, older hosts are
+unaffected):
+
+| Item | Change |
+|---|---|
+| `0x26 ANSWER` (H→D) | `callRef u32` (nonzero). OK only with an open session, HFP service level connection, `callsetup == 1`, `call == 0` and no dial in flight; sends ATA and marks the call host-owned. `bad_arg` for a zero/short callRef, `bad_state` otherwise (including call waiting). Older firmware: `unknown_type`. |
+| HELLO_ACK capabilities | bit 6 (`0x40`) = ANSWER supported (sent to the CRM as heartbeat `board.canAnswer`). |
+| `0x84 EVENT` 9 `call_waiting` (D→H) | `number…` (ASCII, may be empty), from HFP +CCWA: a second call while one is up. |
+| `0x83 STATE` | optional byte 22 (flags): bit 0 = current call is host-owned. Absent on older firmware. |
+| Host ownership | set by an accepted DIAL or ANSWER; released when the phone reports the call idle, the phone refuses the dial, HFP drops, the phone shows a ring with no call up (`call=0`, `callsetup=1`) that is not the call being answered (a new ring after an unstarted DIAL, or a waiting call left ringing after the owned call ended), or AUDIO_DISCONNECT hands the call to the handset. |
+| Watchdog | `CONFIG_UPDATA_HOST_TIMEOUT_MS` ends a call (and reports `host_lost_hangup` to the next session) only while it is host-owned. |
+
 ## Reconnect after restarting the CRM
 
 Gateway 0.4.4 retries a temporarily unavailable CRM and resumes its heartbeat
@@ -135,3 +218,23 @@ dist/updata-phone-gateway.tgz. Deploy that artifact alongside the CRM server for
 the authenticated download button. It contains allowlisted gateway source and
 locked dependencies; credentials, environment files, backups and flash images
 are excluded. No database migration is needed for the additive setup fields.
+
+## Board keeps restarting (`BOARD_BOOT_LOOP`)
+
+The gateway reports `BOARD_BOOT_LOOP` when the ESP32 stops answering and its ROM boot banner
+repeats at 115200 baud. This was seen once on 2026-11-04 after a USB power cut with firmware 0.1.4
+(`rst:0x3 (SW_RESET)` about 8 times per second). Rewriting the settings partition from a backup
+stopped it. Neither the firmware image nor the saved settings reproduced it later. The cause was
+transient, most likely Bluetooth activity during early boot, and is not proven.
+
+1. Unplug the board for 10 seconds, then plug it back in. Check that the gateway log shows
+   `board_connected`.
+2. If it still restarts, stop the gateway and keep a copy of the current flash first:
+   `esptool.py -p <port> -b 921600 --after no_reset read_flash 0 0x400000 flash-now.bin`
+3. Write back only the settings partition (NVS, 24 KB at `0x9000`) from your newest backup that
+   booted fine. It holds the dial key and the phone pairing, so nothing needs re-provisioning:
+   `dd if=<backup>.bin of=nvs.bin bs=4096 skip=9 count=6`
+   `esptool.py -p <port> -b 460800 --after hard_reset write_flash 0x9000 nvs.bin`
+4. Start the gateway again. Every board start is now logged as `board_boot` with its reset reason.
+   Crashes, watchdog resets and brownouts also appear in the CRM as a device error
+   (`BOARD_RESET_<REASON>`).

@@ -37,12 +37,12 @@ export function TaskMetricTiles({
 
   if (query.isLoading) {
     return (
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
       </div>
     );
   }
-  if (query.isError) return null;
+  if (query.isError && !query.data) return null;
 
   const tiles = [
     {
@@ -72,7 +72,7 @@ export function TaskMetricTiles({
     {
       key: null,
       title: t('tasks.dashboard.dueDateCoverage', 'Fälligkeits-Abdeckung'),
-      value: `${analytics.dueDateCoverage}%`,
+      value: query.data?.sampleUnavailable ? "—" : `${analytics.dueDateCoverage}%`,
       detail: t('tasks.dashboard.visibleActive', '{count} aktive erfasst', { count: analytics.totalVisibleActive }),
       icon: TimerReset,
       accent: 'sky' as const,
@@ -80,7 +80,7 @@ export function TaskMetricTiles({
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
       {tiles.map((tile) => {
         const theme = ACCENTS[tile.accent];
         const clickable = tile.key !== null;
@@ -96,7 +96,7 @@ export function TaskMetricTiles({
             disabled={!clickable}
             aria-pressed={clickable ? isActive : undefined}
             className={cn(
-              'group relative overflow-hidden rounded-xl border bg-card p-4 text-left shadow-theme-sm transition-all duration-200',
+              'group relative overflow-hidden rounded-xl border bg-card p-3 text-left sm:p-4 shadow-theme-sm transition-all duration-200',
               theme.border,
               clickable && 'hover:-translate-y-0.5 hover:shadow-theme-md',
               !clickable && 'cursor-default',
@@ -105,18 +105,18 @@ export function TaskMetricTiles({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase text-muted-foreground">{tile.title}</p>
-                <p className={cn('mt-2 text-3xl font-semibold leading-none tabular-nums tracking-tight', theme.text)}>
+                <p className="text-[10px] font-medium uppercase leading-4 text-muted-foreground sm:text-xs">{tile.title}</p>
+                <p className={cn('mt-2 text-2xl font-semibold sm:text-3xl leading-none tabular-nums tracking-tight', theme.text)}>
                   {tile.value}
                 </p>
-                <p className="mt-2 truncate text-xs text-muted-foreground">{tile.detail}</p>
+                <p className="mt-2 hidden min-h-8 text-xs leading-4 text-muted-foreground sm:block">{tile.detail}</p>
               </div>
               <div className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-transform duration-200',
+                'hidden h-8 w-8 shrink-0 sm:flex items-center justify-center rounded-xl border transition-transform duration-200',
                 clickable && 'group-hover:scale-105',
                 theme.surface, theme.border,
               )}>
-                <Icon className={cn('h-5 w-5', theme.text)} />
+                <Icon className={cn('h-4 w-4', theme.text)} />
               </div>
             </div>
           </button>

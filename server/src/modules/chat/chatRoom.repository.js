@@ -1,5 +1,6 @@
 import ChatRoom from './chatRoom.model.js';
 import '../crm/customer.model.js';
+import '../crm/lead.model.js';
 
 const chatRoomRepository = {
   async findOrCreateTaskRoom(taskId, createdByUserId, memberIds = [], name = null) {
@@ -59,7 +60,8 @@ const chatRoomRepository = {
       .populate('projectId', 'projectNumber name customerName customerId status projectType')
       .populate('orderId', 'orderNumber title customerName customerId projectId status')
       .populate('customerId', 'customerNumber name city type')
-      .sort({ lastMessageAt: -1 })
+      .populate({ path: 'leadIds', select: 'name leadNumber status type', match: { isDeleted: { $ne: true } } })
+      .sort({ lastMessageAt: -1, updatedAt: -1, _id: -1 })
       .lean();
   },
 
@@ -69,6 +71,7 @@ const chatRoomRepository = {
       .populate('projectId', 'projectNumber name customerName customerId status projectType')
       .populate('orderId', 'orderNumber title customerName customerId projectId status')
       .populate('customerId', 'customerNumber name city type')
+      .populate({ path: 'leadIds', select: 'name leadNumber status type', match: { isDeleted: { $ne: true } } })
       .lean();
   },
 
@@ -106,6 +109,7 @@ const chatRoomRepository = {
       .populate('projectId', 'projectNumber name customerName customerId status projectType')
       .populate('orderId', 'orderNumber title customerName customerId projectId status')
       .populate('customerId', 'customerNumber name city type')
+      .populate({ path: 'leadIds', select: 'name leadNumber status type', match: { isDeleted: { $ne: true } } })
       .lean();
   },
 

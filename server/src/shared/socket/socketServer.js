@@ -258,18 +258,31 @@ export function initializeSocketServer(httpServer) {
     });
 
     // ─── Chat Events (preserved from existing) ───────────
-    socket.on('join chat', (room) => {
-      socket.join(room);
+    socket.on('join chat', async (context) => {
+      try {
+        const { authorizeChatSocket } = await import('../../modules/chat/chatSocketAccess.js');
+        if (typeof context === 'string') {
+          // Legacy clients may only subscribe to actual chats, never arbitrary
+          // personal or service namespaces such as user:* or room:*.
+          await authorizeChatSocket(socket.userId, context);
+          await socket.join(context);
+        } else if (context?.projectId) {
+          const User = await getUserModel();
+          const member = await User.findOne({ _id: socket.userId, isDeleted: false, status: 'active' }).populate('role', 'name').lean();
+          if (!member) return;
+          const { default: service } = await import('../../modules/chat/chatRoom.service.js');
+          const room = await service.getOrCreateProjectRoom(context.projectId, member);
+          await socket.join(`room:${room._id}`);
+        }
+      } catch { /* Unauthorized subscriptions are never joined. */ }
     });
 
     socket.on('NewMessageAdded', (data) => {
       try {
         const { chatId } = data || {};
-        if (chatId) {
+        if (typeof chatId === 'string' && socket.rooms.has(chatId)) {
           io.to(chatId).emit('fetchMessages', data);
           io.to(chatId).emit('newMessageSummary', data);
-        } else {
-          io.emit('fetchMessages', data);
         }
       } catch (err) {
         logger.error('Error emitting NewMessageAdded', { module: 'socket', error: err.message });
@@ -277,11 +290,11 @@ export function initializeSocketServer(httpServer) {
     });
 
     socket.on('typing', (room) => {
-      socket.in(room).emit('typing');
+      if (typeof room === 'string' && socket.rooms.has(room)) socket.in(room).emit('typing');
     });
 
     socket.on('stop typing', (room) => {
-      socket.in(room).emit('stop typing');
+      if (typeof room === 'string' && socket.rooms.has(room)) socket.in(room).emit('stop typing');
     });
 
     socket.on('notification', (notification) => {
@@ -289,57 +302,55 @@ export function initializeSocketServer(httpServer) {
     });
 
     socket.on('messageReaction', ({ chatId, reaction }) => {
-      if (chatId && reaction) {
+      if (typeof chatId === 'string' && socket.rooms.has(chatId) && reaction) {
         io.to(chatId).emit('messageReaction', { chatId, reaction });
       }
     });
 
-    socket.on('markRead', ({ chatId, userId: readUserId }) => {
-      if (chatId) {
-        io.to(chatId).emit('messagesRead', { chatId, userId: readUserId });
+    socket.on('markRead', ({ chatId, userId: _readUserId }) => {
+      if (typeof chatId === 'string' && socket.rooms.has(chatId)) {
+        io.to(chatId).emit('messagesRead', { chatId, userId: socket.userId });
       }
     });
 
     socket.on('messageEdited', ({ chatId, messageId, message }) => {
-      if (chatId && messageId) {
+      if (typeof chatId === 'string' && socket.rooms.has(chatId) && messageId) {
         io.to(chatId).emit('messageEdited', { chatId, messageId, message });
       }
     });
 
     socket.on('messageDeleted', ({ chatId, messageId }) => {
-      if (chatId && messageId) {
+      if (typeof chatId === 'string' && socket.rooms.has(chatId) && messageId) {
         io.to(chatId).emit('messageDeleted', { chatId, messageId });
       }
     });
 
     socket.on('messageUpdated', ({ chatId, messageId, message }) => {
-      if (chatId && messageId) {
+      if (typeof chatId === 'string' && socket.rooms.has(chatId) && messageId) {
         io.to(chatId).emit('messageUpdated', { chatId, messageId, message });
       }
     });
 
     // ─── Room-based Chat Events ──────────────────────────
-    socket.on('join room', ({ roomId }) => {
-      if (roomId) socket.join(`room:${roomId}`);
-    });
-
-    socket.on('chat:typing', ({ roomId, userName }) => {
-      if (roomId) {
-        socket.to(`room:${roomId}`).emit('chat:typing', {
-          roomId,
-          userId: socket.userId,
-          userName: userName || 'Unknown',
-        });
+    socket.on('join room', async ({ roomId } = {}, acknowledge) => {
+      try {
+        const { authorizeChatSocket } = await import('../../modules/chat/chatSocketAccess.js');
+        const member = await authorizeChatSocket(socket.userId, roomId);
+        await socket.join(`room:${roomId}`);
+        socket.data.chatName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+        if (typeof acknowledge === 'function') acknowledge({ ok: true });
+      } catch {
+        if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Chat access denied' });
       }
     });
-
-    socket.on('chat:stop typing', ({ roomId }) => {
-      if (roomId) {
-        socket.to(`room:${roomId}`).emit('chat:stop typing', {
-          roomId,
-          userId: socket.userId || socket.user?._id,
-        });
-      }
+    socket.on('leave room', ({ roomId } = {}) => {
+      if (roomId) socket.leave(`room:${roomId}`);
+    });
+    socket.on('chat:typing', ({ roomId } = {}) => {
+      if (roomId && socket.rooms.has(`room:${roomId}`)) socket.to(`room:${roomId}`).emit('chat:typing', { roomId, userId: socket.userId, userName: socket.data.chatName || 'Member' });
+    });
+    socket.on('chat:stop typing', ({ roomId } = {}) => {
+      if (roomId && socket.rooms.has(`room:${roomId}`)) socket.to(`room:${roomId}`).emit('chat:stop typing', { roomId, userId: socket.userId });
     });
 
     // ─── Disconnect ──────────────────────────────────────

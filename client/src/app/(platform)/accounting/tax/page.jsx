@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingFilters } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { Calculator, FileText, Percent, Plus, Save } from 'lucide-react';
@@ -139,7 +140,7 @@ function TaxCodeDialog({ open, form, pending, de, onChange, onClose, onSubmit })
 export default function TaxManagementPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const [filters, setFilters] = useState(defaultTaxFilters());
+  const [filters, setFilters] = useAccountingFilters(defaultTaxFilters());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [taxCodeForm, setTaxCodeForm] = useState(defaultTaxCodeForm());
   const [calcForm, setCalcForm] = useState(defaultTaxCalculationForm());

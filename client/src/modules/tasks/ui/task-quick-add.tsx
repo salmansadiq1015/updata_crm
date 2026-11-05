@@ -9,7 +9,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 
 type TaskQuickAddProps = {
   /** Called with the trimmed title. The field stays open and focused after. */
-  onCreate: (title: string) => void;
+  onCreate: (title: string) => void | Promise<unknown>;
   /** Trigger label, e.g. "Hinzufügen" / "Aufgabe hinzufügen". */
   label: string;
   placeholder?: string;
@@ -39,6 +39,8 @@ export function TaskQuickAdd({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -49,20 +51,28 @@ export function TaskQuickAdd({
     setTitle('');
   };
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = title.trim();
-    if (!trimmed) return; // no more phantom "New task" entries
-    onCreate(trimmed);
-    setTitle('');
-    // Chained capture: the field keeps focus for the next title.
-    inputRef.current?.focus();
+    if (!trimmed || submittingRef.current) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await onCreate(trimmed);
+      setTitle('');
+    } catch {
+      // The mutation reports the error; preserve the draft so it can be retried.
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+      inputRef.current?.focus();
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      submit();
-    } else if (event.key === 'Escape') {
+      void submit();
+    } else if (event.key === 'Escape' && !submittingRef.current) {
       event.preventDefault();
       close();
     }
@@ -94,6 +104,9 @@ export function TaskQuickAdd({
         ref={inputRef}
         type="text"
         value={title}
+        readOnly={isSubmitting}
+        aria-busy={isSubmitting}
+        maxLength={500}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
         onKeyDown={onKeyDown}
         onBlur={() => { if (!title.trim()) close(); }}

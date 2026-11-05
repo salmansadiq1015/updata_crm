@@ -107,7 +107,7 @@ function AiPanelEntitiesForm({ session, transcript, onConfirm, onCancel, isConfi
         </Button>
         <Button
           size="sm"
-          className="flex-1 bg-gradient-to-r from-brand-600 to-brand-red text-white shadow-[0_12px_32px_rgba(208,10,25,0.18)]"
+          className="flex-1 bg-primary-gradient text-primary-foreground shadow-[0_12px_32px_rgba(14,165,233,0.18)]"
           onClick={() => onConfirm({ corrections, transcriptText, originalTranscript: transcript.text })}
           disabled={!hasTranscript || !isReady || isConfirming}
         >

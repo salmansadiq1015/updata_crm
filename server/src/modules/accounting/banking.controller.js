@@ -3,6 +3,13 @@ import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
 class BankingController {
+  async analytics(req, res, next) {
+    try {
+      const data = await bankingService.analytics(req._validatedQuery || req.query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async createAccount(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -62,7 +62,7 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
   if (disposition === 'do_not_contact') {
     return verdict('do_not_contact', 'mark_do_not_contact', 'disposition:do_not_contact', false, control);
   }
-  if (['no_answer', 'busy', 'voicemail', 'failed'].includes(disposition)) {
+  if (['no_answer', 'busy', 'voicemail', 'failed', 'cancelled'].includes(disposition)) {
     // Not a business verdict — the queue/retry logic owns these outcomes.
     return verdict('none', 'none', `disposition:${disposition}`, false, control);
   }
@@ -77,6 +77,9 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
   }
 
   if (disposition === 'unresponsive') return verdict('review', 'request_review', 'unanswered_threshold', true, control);
+  if (['answered_partial', 'needs_review', 'interrupted'].includes(disposition)) {
+    return verdict('review', 'request_review', `disposition:${disposition}`, true, control);
+  }
 
   // 2. Uncertain data never qualifies — it goes to a human (Rule G).
   if (hasUnresolvedRequired) {
@@ -95,7 +98,14 @@ export function evaluateOutcome({ statusRules = [], answers = {}, disposition, h
     }
   }
 
-  // 5. Default: the lead was reached and spoke — record contact, nothing more.
+  // Complete, validated answers that fail explicitly configured qualification
+  // criteria are a negative verdict. Without qualification criteria we can only
+  // record contact; completing a questionnaire alone never implies eligibility.
+  if (disposition === 'answered_completed' && statusRules.some((rule) => rule.action === 'mark_qualified')) {
+    return verdict('unqualified', 'mark_unqualified', 'qualification_criteria_not_met', false, control);
+  }
+
+  // Default: the lead was reached and spoke — record contact, nothing more.
   return verdict('none', 'mark_contacted', 'default:contacted', false, control);
 }
 

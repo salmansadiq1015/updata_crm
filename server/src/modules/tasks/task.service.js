@@ -527,11 +527,13 @@ class TaskService {
 
     // Soft delete the task
     await taskRepository.softDelete(id);
+    await this._stopTaskTimers([id], 'TASK_DELETED');
 
     // Soft delete all subtasks
     const subtasks = await taskRepository.findByParentId(id);
     for (const subtask of subtasks) {
       await taskRepository.softDelete(subtask._id);
+      await this._stopTaskTimers([subtask._id], 'TASK_DELETED');
       await this._invalidateTaskCache(subtask._id);
     }
 
@@ -605,6 +607,8 @@ class TaskService {
     if (!updated) {
       throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
     }
+
+    if (status === 'COMPLETED' || status === 'CANCELLED') await this._stopTaskTimers([id]);
 
     if (status === 'COMPLETED' && meta.completeSubtasks === true) {
       await this._completeSubtaskTree(id, userId, updateData.completedAt);
@@ -694,6 +698,7 @@ class TaskService {
       poolHelperId: null,
     });
 
+    await this._stopTaskTimers([id]);
     if (completeSubtasks) await this._completeSubtaskTree(id, userId, now);
 
     await this._invalidateTaskCache(id);
@@ -875,6 +880,9 @@ class TaskService {
       }
     }
 
+    if (action === 'delete') await this._stopTaskTimers(taskIds, 'TASK_DELETED');
+    if (action === 'updateStatus' && ['COMPLETED', 'CANCELLED'].includes(data.status)) await this._stopTaskTimers(taskIds);
+
     // Invalidate caches for all affected tasks
     for (const taskId of taskIds) {
       await this._invalidateTaskCache(taskId);
@@ -920,6 +928,8 @@ class TaskService {
     }
 
     const result = await taskRepository.batchPatch(normalizedUpdates);
+    const closedTaskIds = result.tasks.filter(task => ['COMPLETED', 'CANCELLED'].includes(task.status)).map(task => task._id);
+    if (closedTaskIds.length) await this._stopTaskTimers(closedTaskIds);
     if (result.modifiedCount !== normalizedUpdates.length) {
       throw new AppError('One or more tasks were modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
     }
@@ -1132,6 +1142,7 @@ class TaskService {
           completedBy: userId,
           updatedBy: userId,
         });
+        await this._stopTaskTimers([subtask._id]);
         await this._invalidateTaskCache(subtask._id);
       }
       await this._completeSubtaskTree(subtask._id, userId, completedAt);
@@ -1162,6 +1173,11 @@ class TaskService {
     } catch {
       return 0;
     }
+  }
+
+  async _stopTaskTimers(taskIds, reason = 'TASK_CLOSED') {
+    const { default: taskTimeService } = await import('./taskTime.service.js');
+    await taskTimeService.stopForTasks(taskIds, reason);
   }
 
   async _countAttachments(taskId) {

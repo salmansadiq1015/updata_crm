@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingFilters } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, LockKeyhole, Plus, Save, Trash2 } from 'lucide-react';
@@ -154,7 +155,7 @@ function BudgetDialog({ open, form, accounts, pending, de, onChange, onLineChang
 export default function BudgetsPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const [filters, setFilters] = useState(defaultBudgetFilters());
+  const [filters, setFilters] = useAccountingFilters(defaultBudgetFilters());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(defaultBudgetForm());
   const [selectedBudgetId, setSelectedBudgetId] = useState(null);

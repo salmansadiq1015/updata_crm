@@ -125,11 +125,11 @@ describe('continuous discovery regression coverage', () => {
     const source = records(1_000);
     const ids = source.map((record) => resultKeyForRecord(record));
     const crmBatches = splitIntoBatches(ids, CRM_BATCH_SIZE);
-    expect(crmBatches).toHaveLength(40);
+    expect(crmBatches).toHaveLength(2);
     expect(crmBatches.flat()).toEqual(ids);
-    const processedBeforeRestart = new Set(crmBatches.slice(0, 17).flat());
+    const processedBeforeRestart = new Set(crmBatches.slice(0, 1).flat());
     const pendingAfterRestart = ids.filter((id) => !processedBeforeRestart.has(id));
-    expect(pendingAfterRestart).toHaveLength(575);
+    expect(pendingAfterRestart).toHaveLength(500);
     expect(splitIntoBatches(pendingAfterRestart, CRM_BATCH_SIZE).flat()).toEqual(pendingAfterRestart);
 
     const leads = source.map((record) => makeLead(record, 'search-1'));

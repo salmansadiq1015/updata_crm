@@ -1,3 +1,4 @@
+import { registerMailboxJobs } from './mailbox.job.js';
 import queueManager from '../shared/queue/QueueManager.js';
 import { FileCleanupWorker } from './fileCleanup.job.js';
 import { HealthCheckWorker } from './healthCheck.job.js';
@@ -50,6 +51,7 @@ import { OutboundMessagingRecoveryWorker } from './outboundMessagingRecovery.job
 import { OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE } from '../modules/messaging/messaging.constants.js';
 import { OutboundCallingWorker } from './outboundCalling.job.js';
 import { registerAiCallReconciliationJob } from './aiCallReconciliation.job.js';
+import { registerInboundCallSweepJob } from './inboundCallSweep.job.js';
 import { registerCallingQualityJobs } from './callingQuality.job.js';
 import { registerCallIntelligenceJob } from './callIntelligence.job.js';
 import { registerLinkAssistantSweepJob } from './linkAssistantSweep.job.js';
@@ -57,6 +59,7 @@ import { registerSimSmsSweepJob } from './simSmsSweep.job.js';
 import { registerSmsOpsSweepJob } from './smsOpsSweep.job.js';
 import { registerSimCallSweepJob } from './simCallSweep.job.js';
 import { registerLeadSlaSweepJob } from './leadSlaSweep.job.js';
+import { registerFollowUpCallingJob } from './followUpCalling.job.js';
 import { registerLeadQualityJobs } from './leadQuality.job.js';
 import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
 import { registerAiAgentJob } from './aiAgent.job.js';
@@ -70,6 +73,7 @@ import logger from '../shared/logger/index.js';
  * Called during server bootstrap.
  */
 export function registerJobs() {
+  registerMailboxJobs(queueManager);
   // File cleanup — removes soft-deleted files from S3 after retention period
   const fileCleanup = new FileCleanupWorker();
   queueManager.registerQueue('file-cleanup', fileCleanup.getHandler(), {
@@ -419,6 +423,10 @@ export function registerJobs() {
     },
   });
 
+  queueManager.addScheduledJob('bank-statement-import', 'periodic-bank-statement-import', {}, '*/15 * * * *').catch((err) => {
+    logger.warn('Failed to schedule bank statement import', { module: 'jobs', error: { message: err.message } });
+  });
+
   // Auto-reconciliation — matches bank transactions to invoices every 30 minutes
   const autoReconciliation = new AutoReconciliationWorker();
   queueManager.registerQueue('auto-reconciliation', autoReconciliation.getHandler(), {
@@ -719,6 +727,7 @@ export function registerJobs() {
 
   // AI call reconciliation — recover calls stuck after a crash / lost webhook.
   registerAiCallReconciliationJob(queueManager);
+  registerInboundCallSweepJob(queueManager);
   registerCallingQualityJobs(queueManager); // benchmarks + experiment guardrails
   registerCallIntelligenceJob(queueManager);
   registerLinkAssistantSweepJob(queueManager);
@@ -729,6 +738,8 @@ export function registerJobs() {
   registerSimCallSweepJob(queueManager);
   // Lead workflow — first-response SLA breaches/escalation + overdue follow-ups.
   registerLeadSlaSweepJob(queueManager);
+  // AI follow-up calling — launches due AI follow-up calls (persisted, restart-safe).
+  registerFollowUpCallingJob(queueManager);
   // Lead quality — event-driven/bulk scoring, duplicate detection, merge recovery.
   registerLeadQualityJobs(queueManager);
 
@@ -741,7 +752,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', DISCOVERY_QUEUE_NAME, 'lead-import', 'lead-enrichment', OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE, OUTBOUND_CALL_QUEUE, 'ai-call-reconciliation', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', DISCOVERY_QUEUE_NAME, 'lead-import', 'lead-enrichment', OUTBOUND_QUEUE, OUTBOUND_RECOVERY_QUEUE, OUTBOUND_CALL_QUEUE, 'ai-call-reconciliation', 'ai-follow-up-calling', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

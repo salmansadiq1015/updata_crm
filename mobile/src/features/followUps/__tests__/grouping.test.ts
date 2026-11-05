@@ -3,6 +3,8 @@ import { formatFollowUpTime, groupFollowUps } from '../utils/grouping';
 
 const item = (id: string, at: Date | string): FollowUp => ({
   contactLogId: id,
+  followUpId: null,
+  automation: null,
   leadId: `lead-${id}`,
   leadNumber: null,
   leadName: `Lead ${id}`,

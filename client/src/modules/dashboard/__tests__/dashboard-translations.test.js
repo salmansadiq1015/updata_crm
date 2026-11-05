@@ -13,6 +13,8 @@ const dashboardRoot = path.resolve(process.cwd(), 'src/modules/dashboard');
 
 const sourceFiles = [
   'components/premium-dashboard.jsx',
+  'components/dashboard-intelligence.jsx',
+  'components/dashboard-workspaces.jsx',
   'components/dashboard-chart-panels.jsx',
   'components/dashboard-primitives.jsx',
   'data/dashboard-config.js',
@@ -28,7 +30,7 @@ function collectStaticDashboardKeys() {
     let match = keyPattern.exec(text);
 
     while (match) {
-      if (match[1].startsWith('dashboard.')) keys.add(match[1]);
+      if (match[1].startsWith('dashboard.') && !match[1].includes('${')) keys.add(match[1]);
       match = keyPattern.exec(text);
     }
   }
@@ -77,7 +79,7 @@ describe('dashboard translations', () => {
 
     for (const locale of locales) {
       for (const key of Object.keys(translations[locale])) {
-        if (key.startsWith('dashboard.analytics.')) unionKeys.add(key);
+        if (key.startsWith('dashboard.analytics.') || key.startsWith('dashboard.intelligence.')) unionKeys.add(key);
       }
     }
 

@@ -11,8 +11,8 @@ export default function FieldOpsChatPage() {
 
   return (
     <div className="h-full">
-      <ChatShell sidebar={<ChatSidebar activeRoomId={chatId} />}>
-        {chatId ? <ChatPanel roomId={chatId} /> : <ChatEmpty />}
+      <ChatShell activeRoomId={chatId} sidebar={<ChatSidebar activeRoomId={chatId} />}>
+        {chatId ? <ChatPanel key={chatId} roomId={chatId} /> : <ChatEmpty />}
       </ChatShell>
     </div>
   );

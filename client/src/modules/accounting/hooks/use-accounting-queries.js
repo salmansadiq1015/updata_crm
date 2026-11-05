@@ -1,3 +1,4 @@
+import { useAccountingCurrency } from '../state/accounting-currency';
 import { useQuery } from '@tanstack/react-query';
 import {
   accountingEntityService, accountingSearchService, chartService, dashboardService, journalService, apService, arService, bankService, accDocService,
@@ -282,6 +283,8 @@ export function useAccountOverview(id, params = {}) {
 
 // ── Journal ───────────────────────────────────────────────────
 export function useJournalEntries(params = {}, options = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'journal', params],
     queryFn: () => journalService.list(params),
@@ -301,6 +304,8 @@ export function useJournalEntry(id) {
 
 // ── AP ────────────────────────────────────────────────────────
 export function useApInvoices(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'ap-invoices', params],
     queryFn: () => apService.list(params),
@@ -318,17 +323,19 @@ export function useApInvoice(id) {
 }
 
 export function useApSummary() {
+  const { currency } = useAccountingCurrency();
   return useQuery({
-    queryKey: ['accounting', 'ap-summary'],
-    queryFn: () => apService.summary(),
+    queryKey: ['accounting', 'ap-summary', currency],
+    queryFn: () => apService.summary({ currency }),
     select: (r) => r.data,
   });
 }
 
 export function useApAging() {
+  const { currency } = useAccountingCurrency();
   return useQuery({
-    queryKey: ['accounting', 'ap-aging'],
-    queryFn: () => apService.aging(),
+    queryKey: ['accounting', 'ap-aging', currency],
+    queryFn: () => apService.aging({ currency }),
     select: (r) => r.data,
   });
 }
@@ -343,6 +350,8 @@ export function useApOpenPayables() {
 
 // ── AR ────────────────────────────────────────────────────────
 export function useArReceivables(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'ar-receivables', params],
     queryFn: () => arService.receivables(params),
@@ -351,17 +360,19 @@ export function useArReceivables(params = {}) {
 }
 
 export function useArSummary() {
+  const { currency } = useAccountingCurrency();
   return useQuery({
-    queryKey: ['accounting', 'ar-summary'],
-    queryFn: () => arService.summary(),
+    queryKey: ['accounting', 'ar-summary', currency],
+    queryFn: () => arService.summary({ currency }),
     select: (r) => r.data,
   });
 }
 
 export function useArAging() {
+  const { currency } = useAccountingCurrency();
   return useQuery({
-    queryKey: ['accounting', 'ar-aging'],
-    queryFn: () => arService.aging(),
+    queryKey: ['accounting', 'ar-aging', currency],
+    queryFn: () => arService.aging({ currency }),
     select: (r) => r.data,
   });
 }
@@ -401,6 +412,8 @@ export function useBankAccounts(params = {}) {
 }
 
 export function useBankTransactions(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'bank-transactions', params],
     queryFn: () => bankService.transactions(params),
@@ -427,6 +440,8 @@ export function useCashForecast(params = {}) {
 
 // â”€â”€ Reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useReconciliationUnmatched(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'reconciliation-unmatched', params],
     queryFn: () => reconciliationService.unmatched(params),
@@ -435,6 +450,8 @@ export function useReconciliationUnmatched(params = {}) {
 }
 
 export function useReconciliationReport(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'reconciliation-report', params],
     queryFn: () => reconciliationService.report(params),
@@ -453,6 +470,8 @@ export function useReconciliationSuggestions(txId) {
 
 // â”€â”€ Open Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useOpenItems(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'open-items', params],
     queryFn: () => openItemsService.list(params),
@@ -461,6 +480,8 @@ export function useOpenItems(params = {}) {
 }
 
 export function useOpenItemsAging(params = {}) {
+  const { currency } = useAccountingCurrency();
+  params = { currency, ...params };
   return useQuery({
     queryKey: ['accounting', 'open-items-aging', params],
     queryFn: () => openItemsService.aging(params),
@@ -564,5 +585,14 @@ export function useAccountingEntity(id) {
     queryFn: () => accountingEntityService.getById(id),
     enabled: !!id,
     select: (r) => r.data,
+  });
+}
+
+export function useBankAnalytics(params) {
+  return useQuery({
+    queryKey: ['accounting', 'bank-analytics', params],
+    queryFn: () => bankService.analytics(params),
+    select: (r) => r.data,
+    staleTime: 30_000,
   });
 }

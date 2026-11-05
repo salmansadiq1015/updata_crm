@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Coins, Loader2, Mic, PhoneCall, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Coins, Loader2, Mic, PhoneCall, PhoneIncoming, Save } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { callingAgentApi } from '../services/calling-agent-api';
 import { useIntelT } from '../hooks/use-intel-t';
@@ -21,12 +21,19 @@ import { CampaignCallingStatus } from './campaign-run-status';
 import { StatusPill } from './status-pill';
 import { AgentAvatar, AgentMetric, AgentTabs, panelClass, primaryClass, readableError, secondaryClass } from './calling-agent-primitives';
 import { AgentIntelligenceSettings } from './agent-intelligence-settings';
+import { AgentFollowUpAutomation } from './agent-follow-up-automation';
 import { CallingAgentWorkspaceSkeleton } from './calling-agent-workspace-skeleton';
+import { AgentInboundFields } from '@/modules/inboundCalls/ui/agent-inbound-fields';
+import { inboundPayload } from '@/modules/inboundCalls/inbound-domain';
+const IncomingAgentTestDialog = dynamic(() => import('@/modules/inboundCalls/ui/incoming-agent-test-dialog').then((m) => m.IncomingAgentTestDialog), { ssr: false });
 
 const AgentTestStudio = dynamic(() => import('./agent-test-studio').then(m => m.AgentTestStudio));
 
+// Campaign-only sections: an incoming-only receptionist has no questionnaire, leads or campaigns.
+const INBOUND_ONLY_HIDDEN = new Set(['questions', 'leads', 'followup', 'experiments', 'history']);
+
 const toInput = (agent: CallingAgent): CallingAgentInput => ({ name: agent.name, title: agent.title, description: agent.description, avatarFileId: agent.avatarFileId, avatarPresetId: agent.avatarPresetId, availability: agent.availability,
-  agentConfig: agent.agentConfig, questionnaire: agent.questionnaire, statusRules: agent.statusRules, schedule: agent.schedule, transport: agent.transport, pairedDeviceId: agent.pairedDeviceId });
+  agentConfig: agent.agentConfig, questionnaire: agent.questionnaire, statusRules: agent.statusRules, schedule: agent.schedule, transport: agent.transport, pairedDeviceId: agent.pairedDeviceId, agentType: agent.agentType || 'custom', ...(agent.inbound ? { inbound: agent.inbound } : {}), ...(agent.usage ? { usage: agent.usage } : {}) });
 
 export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initialTab = 'overview' }: { id: string; initialTab?: string; onBack: () => void; onLaunch: (agent: CallingAgent) => void; onCampaign: (id: string) => void }) {
   const query = useCallingAgent(id);
@@ -35,7 +42,10 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
   const [testCampaign, setTestCampaign] = useState<import('../types/ai-calling-types').Campaign | null>(null);
   const [preparingTest, setPreparingTest] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  const [incomingTest, setIncomingTest] = useState(false);
   const testAgent = async () => {
+    // Incoming-only agents are tested as a caller (receptionist mode); a campaign test needs questions.
+    if (query.data?.usage === 'inbound') { setTestError(null); setIncomingTest(true); return; }
     setPreparingTest(true); setTestError(null);
     try { setTestCampaign(await callingAgentApi.prepareTest(id)); }
     catch (error) { setTestError(readableError(error)); }
@@ -55,8 +65,9 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
     <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-3xl border border-sky-400/15 bg-card p-5 shadow-2xl shadow-blue-950/40 sm:p-6"><span aria-hidden className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-cyan-400/10 blur-3xl" /><span aria-hidden className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-blue-600/15 blur-3xl" /><div className="relative flex min-w-0 items-center gap-4"><AgentAvatar name={agent.name} url={agent.avatarUrl} large /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">{agent.name}</h1><StatusPill status={agent.availability} /></div><p className="mt-1 text-sm font-medium text-primary/85">{agent.title || 'Calling agent'}</p><p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{agent.description}</p></div></div><div className="relative flex w-full flex-wrap items-start gap-3 sm:w-auto">{canManage && <button type="button" className={secondaryClass} disabled={dirty || preparingTest} onClick={() => void testAgent()}>{preparingTest ? <Loader2 className="size-4 animate-spin" /> : <Mic className="size-4" />}{t('voicePolicy.testAgent', 'Test agent')}</button>}<AgentWorkspaceStart agent={agent} canManage={canManage} dirty={dirty} onLaunch={onLaunch} onCampaign={onCampaign} onHistory={() => setTab('history')} /></div></header>
     {pendingTab && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-400/25 p-3 text-xs text-amber-200"><span className="flex-1">You have unsaved changes. Stay to save them, or discard them before leaving.</span><button className={secondaryClass} onClick={() => setPendingTab(null)}>Keep editing</button><button className={secondaryClass} onClick={() => { setDirty(false); if (pendingTab === 'back') onBack(); else setTab(pendingTab); setPendingTab(null); }}>Discard changes</button></div>}
     {testError && <p role="alert" className="text-sm text-rose-500">{testError}</p>}
+    {incomingTest && query.data && <IncomingAgentTestDialog agentId={id} agentName={query.data.name} onClose={() => setIncomingTest(false)} />}
     {testCampaign && <AgentTestStudio campaigns={[testCampaign]} telephony={health.data} onClose={() => setTestCampaign(null)} onCreateCampaign={() => { setTestCampaign(null); setTab('leads'); }} />}
-    <AgentTabs label="Agent workspace" value={tab} onChange={changeTab} items={[{ value: 'overview', label: 'Overview' }, { value: 'questions', label: 'Questions' }, { value: 'leads', label: 'Leads' }, { value: 'settings', label: 'Settings' }, { value: 'analytics', label: 'Call Analytics' }, { value: 'intelligence', label: 'Knowledge & Transfer' }, { value: 'experiments', label: 'Experiments' }, { value: 'history', label: 'Campaign History' }]}>
+    <AgentTabs label="Agent workspace" value={tab} onChange={changeTab} items={[{ value: 'overview', label: 'Overview' }, { value: 'questions', label: 'Questions' }, { value: 'leads', label: 'Leads' }, { value: 'followup', label: t('aiFollowUp.tab', 'Follow-up Automation') }, { value: 'settings', label: 'Settings' }, { value: 'analytics', label: 'Call Analytics' }, { value: 'intelligence', label: 'Knowledge & Transfer' }, { value: 'experiments', label: 'Experiments' }, { value: 'history', label: 'Campaign History' }].filter(item => agent.usage !== 'inbound' || !INBOUND_ONLY_HIDDEN.has(item.value))}>
       {tab === 'overview' && <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><AgentMetric label="Assigned leads" value={agent.assignedLeadIds.length} /><AgentMetric label="Eligible leads" value={agent.eligibility.eligible} /><AgentMetric label="Completed" value={agent.metrics.completed} /><AgentMetric label="Calls in progress" value={agent.metrics.inProgress} /></div>
         <div className="grid gap-5 lg:grid-cols-2"><section className={panelClass}><div className="mb-4 flex items-center gap-2"><CheckCircle2 className={`h-4 w-4 ${agent.readiness.ready ? 'text-emerald-400' : 'text-amber-400'}`} /><h2 className="text-sm font-semibold">Configuration readiness</h2></div><p className="text-sm text-muted-foreground">{agent.readiness.ready ? 'Voice, questions and calling settings are configured.' : `Complete: ${agent.readiness.missing.join(', ')}`}</p><button className={`${secondaryClass} mt-4`} onClick={() => setTab(agent.readiness.ready ? 'leads' : 'settings')}>{agent.readiness.ready ? 'Manage assigned leads' : 'Continue setup'}<ArrowRight className="h-3.5 w-3.5" /></button></section>
@@ -67,7 +78,8 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
       </>}
       {(tab === 'questions' || tab === 'settings') && <AgentConfiguration key={tab} agent={agent} section={tab} canManage={canManage} onDirty={setDirty} />}
       {tab === 'leads' && <AgentLeads agent={agent} canManage={canManage} onDirty={setDirty} />}
-      {tab === 'analytics' && <AgentCallAnalytics agentId={id} />}
+      {tab === 'followup' && <AgentFollowUpAutomation agent={agent} canManage={canManage} onDirty={setDirty} />}
+      {tab === 'analytics' && (agent.usage === 'inbound' || agent.usage === 'both' ? <AgentAnalyticsBySource agentId={id} usage={agent.usage} /> : <AgentCallAnalytics agentId={id} />)}
       {tab === 'intelligence' && <AgentIntelligenceSettings key={agent.version} agent={agent} canManage={canManage} />}
       {tab === 'experiments' && <ScriptExperiments agentId={id} />}
       {tab === 'history' && <AgentCampaignHistory agentId={id} onCampaign={onCampaign} />}
@@ -75,6 +87,18 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
   </div>;
 }
 
+
+/** Receptionist agents: incoming-call costs; agents used both ways get an Outbound / Incoming switch. */
+function AgentAnalyticsBySource({ agentId, usage }: { agentId: string; usage: 'inbound' | 'both' }) {
+  const t = useIntelT();
+  const [view, setView] = useState<'outbound' | 'inbound'>(usage === 'both' ? 'outbound' : 'inbound');
+  return <div className="space-y-4">
+    {usage === 'both' && <div role="radiogroup" aria-label={t('inbound.costs.directionLabel', 'Calls to analyse')} className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+      {(['outbound', 'inbound'] as const).map(v => <button key={v} type="button" role="radio" aria-checked={view === v} onClick={() => setView(v)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${view === v ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-foreground shadow-md shadow-blue-950/40' : 'text-muted-foreground hover:text-foreground'}`}>{v === 'outbound' ? t('inbound.costs.directionOutbound', 'Outbound') : t('inbound.costs.directionInbound', 'Incoming')}</button>)}
+    </div>}
+    {view === 'inbound' ? <AgentCallAnalytics key="inbound" source={{ kind: 'inbound', agentId }} /> : <AgentCallAnalytics key="outbound" agentId={agentId} />}
+  </div>;
+}
 
 function AgentSpendSummary({ agentId, onOpen }: { agentId: string; onOpen: () => void }) {
   const { data, isError } = useAgentCallAnalytics(agentId);
@@ -117,10 +141,14 @@ function AgentWorkspaceStart({ agent, canManage, dirty, onLaunch, onCampaign, on
   agent: CallingAgent; canManage: boolean; dirty: boolean;
   onLaunch: (agent: CallingAgent) => void; onCampaign: (id: string) => void; onHistory: () => void;
 }) {
+  const t = useIntelT();
   const { start } = useCampaignMutations();
   const [error, setError] = useState<string | null>(null);
   const latest = agent.latestCampaign;
   const existing = latest && ['draft', 'paused', 'scheduled', 'queued', 'running'].includes(latest.status) ? latest : null;
+  if (agent.usage === 'inbound') {
+    return <div className="flex w-full shrink-0 flex-col items-start gap-2 sm:w-auto sm:max-w-xs sm:items-end"><a href="/incoming-calls?tab=agents" className={secondaryClass}><PhoneIncoming className="size-4" aria-hidden="true" />{t('inbound.usage.manageIncoming', 'Answers incoming calls')}</a><p className="text-xs text-muted-foreground sm:text-end">{t('inbound.usage.inboundOnlyHint', 'This agent only answers incoming calls. Set it to “Outbound and incoming” to run campaigns.')}</p></div>;
+  }
   const alreadyCalling = existing?.status === 'running' && existing.runMode === 'immediate'
     && !['calling_hours', 'recipient_quiet_hours'].includes(existing.waitReason || '');
   const historyOnly = !existing && agent.metrics.activeCampaigns > 0;
@@ -150,25 +178,27 @@ function AgentWorkspaceStart({ agent, canManage, dirty, onLaunch, onCampaign, on
 }
 
 function AgentConfiguration({ agent, section, canManage, onDirty }: { agent: CallingAgent; section: 'questions' | 'settings'; canManage: boolean; onDirty: (dirty: boolean) => void }) {
+  const t = useIntelT();
   const [draft, setDraft] = useState(() => toInput(agent));
   const [base, setBase] = useState(() => JSON.stringify(toInput(agent)));
   const [version, setVersion] = useState(agent.version);
   const [avatarUrl, setAvatarUrl] = useState(agent.avatarUrl);
-  const [subtab, setSubtab] = useState('identity');
+  const [subtab, setSubtab] = useState(agent.usage === 'inbound' ? 'inbound' : 'identity');
   const [error, setError] = useState<string | null>(null);
   const { update } = useAgentMutations();
   const change = (next: CallingAgentInput) => { setDraft(next); onDirty(JSON.stringify(next) !== base); };
   const save = async () => { setError(null); try {
-    const saved = await update.mutateAsync({ id: agent._id, version, ...draft, agentConfig: { ...draft.agentConfig, agentName: draft.name } });
+    const saved = await update.mutateAsync({ id: agent._id, version, ...draft, agentConfig: { ...draft.agentConfig, agentName: draft.name }, ...(draft.inbound ? { inbound: inboundPayload(draft.inbound) as CallingAgentInput['inbound'] } : {}) });
     setDraft(toInput(saved)); setBase(JSON.stringify(toInput(saved))); setVersion(saved.version); onDirty(false); showSuccess('Agent configuration saved');
   } catch (e) { setError(readableError(e)); } };
   return <div className="space-y-5">
     {agent.version !== version && <p role="alert" className="text-sm text-amber-300">This agent changed since you opened the editor. Reopen this tab to load the latest version before saving.</p>}
     <fieldset disabled={!canManage || update.isPending} className="min-w-0 space-y-5 disabled:opacity-60">
-      {section === 'questions' ? <AgentQuestionTabs value={draft} onChange={change} /> : <AgentTabs label="Agent settings" value={subtab} onChange={setSubtab} items={[{ value: 'identity', label: 'Identity & avatar' }, { value: 'voice', label: 'Voice & instructions' }, { value: 'behavior', label: 'Calling behavior' }]}>
+      {section === 'questions' ? <AgentQuestionTabs value={draft} onChange={change} /> : <AgentTabs label="Agent settings" value={subtab} onChange={setSubtab} items={[{ value: 'identity', label: 'Identity & avatar' }, { value: 'voice', label: 'Voice & instructions' }, { value: 'behavior', label: 'Calling behavior' }, { value: 'inbound', label: t('inbound.agent.tab', 'Incoming calls') }]}>
         {subtab === 'identity' && <div className={panelClass}><AgentIdentityFields value={draft} onChange={change} avatarUrl={avatarUrl} onAvatarChange={setAvatarUrl} /><label className="mt-5 block text-xs font-medium text-muted-foreground">Agent availability<select aria-label="Agent availability" className="mt-2 w-full rounded-lg border border-border bg-card p-2.5 text-sm" value={draft.availability} onChange={e => change({ ...draft, availability: e.target.value as CallingAgentInput['availability'] })}>{['draft', 'active', 'paused', 'archived'].map(value => <option value={value} key={value}>{value}</option>)}</select></label><p className="mt-2 text-xs text-muted-foreground">Availability controls future launches. Manage running campaigns separately.</p></div>}
         {subtab === 'voice' && <div className={panelClass}><AgentVoiceFields value={draft.agentConfig || {}} onChange={agentConfig => change({ ...draft, agentConfig })} /></div>}
         {subtab === 'behavior' && <AgentExecutionFields value={draft} onChange={change} />}
+        {subtab === 'inbound' && <div className={panelClass}><AgentInboundFields value={draft.inbound} onChange={inbound => change({ ...draft, inbound })} /></div>}
       </AgentTabs>}
     </fieldset>
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}

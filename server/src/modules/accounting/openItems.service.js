@@ -183,7 +183,7 @@ class OpenItemsService {
   async getOpenItems(params = {}) {
     const {
       cursor, limit = 25, sortBy = 'dueDate', sortOrder = 'asc',
-      entityType = 'ALL', customerId, supplierId, agingBucket, q,
+      entityType = 'ALL', currency, customerId, supplierId, agingBucket, q,
     } = params;
 
     const safeLimit = normalizeLimit(limit);
@@ -215,6 +215,7 @@ class OpenItemsService {
           ...agingFilter,
           ...cursorFilter,
         };
+        if (currency) arFilter.currency = currency;
         if (customerId) arFilter.customerId = customerId;
         arFilter = applySearchFilter(arFilter, q, ['customerName', 'invoiceNumber', 'title', 'description']);
 
@@ -245,6 +246,7 @@ class OpenItemsService {
           ...agingFilter,
           ...cursorFilter,
         };
+        if (currency) apFilter.currency = currency;
         if (supplierId) apFilter.supplierId = supplierId;
         apFilter = applySearchFilter(apFilter, q, ['supplierName', 'apInvoiceNumber', 'supplierInvoiceNumber', 'projectReference', 'orderReference']);
 
@@ -283,14 +285,14 @@ class OpenItemsService {
    * Get aging buckets for AR and/or AP.
    */
   async getAging(params = {}) {
-    const { entityType = 'ALL' } = params;
+    const { entityType = 'ALL', currency } = params;
     const now = new Date();
     const result = { ar: null, ap: null };
 
     if (entityType === 'ALL' || entityType === 'AR') {
       try {
         const Invoice = (await import('../qop/invoice.model.js')).default;
-        const rows = await Invoice.aggregate(this._agingPipeline(OPEN_AR_STATUSES, '$amountDue', now));
+        const rows = await Invoice.aggregate(this._agingPipeline(OPEN_AR_STATUSES, '$amountDue', now, currency));
         result.ar = normalizeBucketTotals(rows);
       } catch {
         logger.warn('QOP Invoice model not available for AR aging', {
@@ -303,7 +305,7 @@ class OpenItemsService {
     if (entityType === 'ALL' || entityType === 'AP') {
       try {
         const ApInvoice = (await import('./apInvoice.model.js')).default;
-        const rows = await ApInvoice.aggregate(this._agingPipeline(OPEN_AP_STATUSES, '$outstandingAmount', now));
+        const rows = await ApInvoice.aggregate(this._agingPipeline(OPEN_AP_STATUSES, '$outstandingAmount', now, currency));
         result.ap = normalizeBucketTotals(rows);
       } catch {
         logger.warn('AP Invoice model not available for AP aging', {
@@ -316,12 +318,13 @@ class OpenItemsService {
     return result;
   }
 
-  _agingPipeline(statuses, amountField, now) {
+  _agingPipeline(statuses, amountField, now, currency) {
     return [
       {
         $match: {
           isDeleted: false,
           status: { $in: statuses },
+          ...(currency && { currency }),
         },
       },
       {

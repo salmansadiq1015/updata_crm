@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 
 export const AP_STATUSES = ['RECORDED', 'APPROVED', 'PAID', 'PARTIALLY_PAID', 'DISPUTED', 'CANCELLED'];
@@ -101,7 +102,7 @@ const apInvoiceSchema = new mongoose.Schema(
     outstandingAmount: { type: Number, default: 0 },
     currency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     status: {

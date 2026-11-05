@@ -93,6 +93,24 @@ export async function openSerialDevice({ path, ackTimeoutMs = 2500, bootWaitMs =
   throw lastErr;
 }
 
+/**
+ * Boot-loop check for a board that stops answering HELLO: listen at the ESP32 ROM's boot speed
+ * (115200) without touching DTR/RTS, and count the ROM boot banners. A healthy board prints none
+ * (it is running at 921600); a restarting board prints one per restart.
+ */
+export async function countBootBanners({ path, listenMs = 2000 }) {
+  const { SerialPort } = await import('serialport');
+  const port = new SerialPort({ path, baudRate: 115200, autoOpen: false, hupcl: false });
+  await new Promise((resolve, reject) => port.open((err) => (err ? reject(err) : resolve())));
+  let buf = Buffer.alloc(0);
+  port.on('data', (b) => { if (buf.length < 65536) buf = Buffer.concat([buf, b]); });
+  await new Promise((r) => { setTimeout(r, listenMs); });
+  await new Promise((r) => port.close(() => r()));
+  const text = buf.toString('latin1');
+  const reasons = [...new Set(text.match(/rst:0x[0-9a-f]+ \([A-Z_]+\)/g) || [])];
+  return { banners: (text.match(/ets [A-Z][a-z]{2} \d{1,2} \d{4}/g) || []).length, reasons };
+}
+
 export async function closeSerialDevice({ device, port }) {
   device.close();
   if (port?.isOpen) await new Promise((resolve) => port.close(() => resolve()));

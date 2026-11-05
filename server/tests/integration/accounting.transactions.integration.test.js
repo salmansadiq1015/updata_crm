@@ -483,3 +483,65 @@ describe('accounting Mongo transaction integrity', () => {
     expect(journal.amount).toBe(40);
   });
 });
+
+describe('banking analytics and categorization', () => {
+  async function bankFee() {
+    return BankTransaction.create({ bankAccountId: ids.bankAccount, transactionDate: new Date('2026-05-12'), valueDate: new Date('2026-05-12'), amount: -12.5, currency: 'EUR', bookingText: 'Monthly bank fee', reconciliationStatus: 'UNMATCHED' });
+  }
+  test('concurrent categorization creates exactly one journal', async () => {
+    const { writeOffExpense } = await createRequiredMappings();
+    const tx = await bankFee();
+    const outcomes = await Promise.allSettled([
+      reconciliationService.categorize(tx._id, writeOffExpense._id, ids.user),
+      reconciliationService.categorize(tx._id, writeOffExpense._id, ids.user),
+    ]);
+    expect(outcomes.filter(o => o.status === 'fulfilled')).toHaveLength(1);
+    const journals = await JournalEntry.find({ referenceType: 'CATEGORIZATION', referenceId: tx._id }).lean();
+    expect(journals).toHaveLength(1);
+    expect(journals[0]).toMatchObject({ currency: 'EUR', amount: 12.5, entryDate: new Date('2026-05-12') });
+    expect((await BankTransaction.findById(tx._id)).reconciliationStatus).toBe('CATEGORIZED');
+  });
+  test('missing bank ledger mapping rolls back categorization', async () => {
+    const destination = await createAccount({ numberPrefix: '6900', name: 'Fees', type: 'EXPENSE' });
+    const tx = await bankFee();
+    await expect(reconciliationService.categorize(tx._id, destination._id, ids.user)).rejects.toThrow();
+    expect((await BankTransaction.findById(tx._id)).reconciliationStatus).toBe('UNMATCHED');
+    expect(await JournalEntry.countDocuments({ referenceId: tx._id })).toBe(0);
+  });
+  test('analytics aggregate all matching transactions with currency, account and date isolation', async () => {
+    const repository = (await import('../../src/modules/accounting/bankTransaction.repository.js')).default;
+    await bankFee();
+    await BankTransaction.create([
+      { bankAccountId: ids.bankAccount, transactionDate: new Date('2026-05-12'), valueDate: new Date('2026-05-12'), amount: 100, currency: 'EUR', reconciliationStatus: 'AUTO_MATCHED' },
+      { bankAccountId: ids.bankAccount, transactionDate: new Date('2026-05-12'), valueDate: new Date('2026-05-12'), amount: 5000, currency: 'CHF' },
+      { bankAccountId: new mongoose.Types.ObjectId(), transactionDate: new Date('2026-05-12'), valueDate: new Date('2026-05-12'), amount: 9000, currency: 'EUR' },
+      { bankAccountId: ids.bankAccount, transactionDate: new Date('2026-05-13'), valueDate: new Date('2026-05-13'), amount: 7000, currency: 'EUR' },
+    ]);
+    const data = await repository.analytics({ bankAccountId: String(ids.bankAccount), currency: 'EUR', dateFrom: '2026-05-12T00:00:00Z', dateTo: '2026-05-12T23:59:59.999Z' });
+    expect(data.totals).toMatchObject({ count: 2, inflows: 100, outflows: 12.5, net: 87.5, unmatched: 1 });
+    expect(data.daily).toEqual([{ date: '2026-05-12', count: 2, inflows: 100, outflows: 12.5, net: 87.5 }]);
+  });
+});
+
+describe('global currency accounting integrity', () => {
+  test('ledger reports retain three-decimal currency values', async () => {
+    const revenue = await createAccount({ numberPrefix: '3200', name: 'KWD revenue', type: 'REVENUE' });
+    const bank = await createAccount({ numberPrefix: '1020', name: 'KWD bank', type: 'ASSET' });
+    await JournalEntry.create({ entryNumber: 99001, entryDate: new Date('2026-05-12'), description: 'Dinar income', debitAccountId: bank._id, creditAccountId: revenue._id, amount: 1.234, currency: 'KWD', referenceType: 'MANUAL' });
+    const reports = (await import('../../src/modules/accounting/reports.service.js')).default;
+    const result = await reports.getProfitLoss({ currency: 'KWD', startDate: '2026-05-01', endDate: '2026-05-31' });
+    expect(result.currency).toBe('KWD');
+    expect(result.revenue).toBe(1.234);
+    const csv = await reports.exportProfitLossCsv({ currency: 'KWD', startDate: '2026-05-01', endDate: '2026-05-31' });
+    expect(csv).toContain('1.234');
+    expect((await reports.getProfitLoss({ currency: 'USD', startDate: '2026-05-01', endDate: '2026-05-31' })).revenue).toBe(0);
+  });
+  test('manual reconciliation refuses to allocate USD to a CHF invoice', async () => {
+    await createRequiredMappings();
+    const invoice = await createOpenInvoice(100);
+    const tx = await BankTransaction.create({ bankAccountId: ids.bankAccount, transactionDate: new Date('2026-05-12'), valueDate: new Date('2026-05-12'), amount: 100, currency: 'USD', reconciliationStatus: 'UNMATCHED' });
+    await expect(reconciliationService.manualMatch(tx._id, invoice._id, ids.user)).rejects.toThrow('currencies must match');
+    expect((await BankTransaction.findById(tx._id)).reconciliationStatus).toBe('UNMATCHED');
+    expect(await JournalEntry.countDocuments({ referenceId: tx._id })).toBe(0);
+  });
+});

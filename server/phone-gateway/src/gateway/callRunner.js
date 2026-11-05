@@ -11,12 +11,15 @@
  *   ESP32/USB or Bluetooth lost, or a hang-up the phone never confirms → outcome_unknown (never redialed)
  * Takeover: the ESP32 releases the audio link (the phone's own earpiece takes over), the gateway
  * leaves the room (the agent stops), and keeps watching the call until it ends.
+ *
+ * Incoming calls reuse everything after "the phone reports the call active" (audio bridge, audio
+ * watch, remote-hang-up confirmation, stats, max duration, owner commands): see inboundRunner.js.
  */
 
 import { callStateOf } from '../esp32/callScript.js';
 import { levelDbfs, playbackGain } from '../esp32/pcm.js';
 
-const DEFAULTS = Object.freeze({
+export const DEFAULTS = Object.freeze({
   audioWaitMs: 4_000, // then ask the phone for the audio link ourselves
   audioFailMs: 12_000, // no audio link at all after answer → hang up
   audioGraceMs: 8_000, // allow a bounded SCO recovery before ending an active call
@@ -97,13 +100,8 @@ export class CallRunner {
       await this.leg.close();
       return this.finish('not_dialed');
     }
-    this.on(this.device, 'state', (s) => this.onState(s));
-    this.on(this.device, 'audio', ({ pcm }) => this.onPhoneAudio(pcm));
-    this.on(this.device, 'lost', (reason) => this.unknown(`ESP32 link lost: ${reason}`));
-    this.on(this.leg, 'agentAudio', (pcm) => this.onAgentAudio(pcm));
-    this.on(this.leg, 'closed', reason => this.onRoomClosed(reason));
-    this.on(this.leg, 'agentLeft', () => this.onAgentLeft());
-    this.on(this.leg, 'error', (err) => this.log('livekit_error', { error: String(err?.message || err) }));
+    this.attachDevice();
+    this.attachLeg();
 
     try {
       await this.device.dial({ callRef: job.callRef, counter: job.counter, number: job.number, mac: Buffer.from(job.mac, 'hex') });
@@ -124,6 +122,19 @@ export class CallRunner {
     return this.done;
   }
 
+  attachDevice() {
+    this.on(this.device, 'state', (s) => this.onState(s));
+    this.on(this.device, 'audio', ({ pcm }) => this.onPhoneAudio(pcm));
+    this.on(this.device, 'lost', (reason) => this.unknown(`ESP32 link lost: ${reason}`));
+  }
+
+  attachLeg() {
+    this.on(this.leg, 'agentAudio', (pcm) => this.onAgentAudio(pcm));
+    this.on(this.leg, 'closed', reason => this.onRoomClosed(reason));
+    this.on(this.leg, 'agentLeft', () => this.onAgentLeft());
+    this.on(this.leg, 'error', (err) => this.log('livekit_error', { error: String(err?.message || err) }));
+  }
+
   // ---- phone side ---------------------------------------------------------------------------
 
   onState(s) {
@@ -132,7 +143,7 @@ export class CallRunner {
       this.unknown(`Bluetooth hands-free link dropped (${s.hfp}) during the call`);
       return;
     }
-    const cs = callStateOf(s);
+    const cs = this.ownCallState(s);
     this.lastCallState = cs;
     if (cs !== 'idle') this.cancel('remoteHangup');
     if (cs === 'dialing' || cs === 'alerting') this.sawSetup = true;
@@ -141,22 +152,34 @@ export class CallRunner {
       this.emit('ringing');
       this.leg.setCallStatus('ringing').catch(() => {});
     }
-    if ((this.phase === 'dialing' || this.phase === 'ringing') && cs === 'active') {
-      this.phase = 'active';
-      this.answeredAt = this.now();
-      this.cancel('ring');
-      this.emit('answered');
-      this.leg.setCallStatus('active').catch(() => {});
-      this.timer('mediaFail', this.o.audioFailMs, () => {
-        if (this.phase === 'active' && !this.receivedPhoneAudio) {
-          this.emit('audio_lost', { detail: 'no decoded phone audio after answer' });
-          this.hangup('audio_failed');
-        }
-      });
-      if (s.audio !== 'on') this.armAudioWatch();
-    }
+    if ((this.phase === 'dialing' || this.phase === 'ringing') && cs === 'active') this.markActive(s);
     this.onAudioState(s);
     if (cs === 'idle') this.onIdle();
+  }
+
+  /**
+   * This call's state. Once it was answered it is the phone's active call: call=0 with
+   * callsetup=1 means it ended and a waiting call now rings on its own (a different call).
+   */
+  ownCallState(s) {
+    const cs = callStateOf(s);
+    return cs === 'incoming' && this.answeredAt !== null ? 'idle' : cs;
+  }
+
+  /** The phone reports the call answered: the agent may speak; watch audio from here on. */
+  markActive(s) {
+    this.phase = 'active';
+    this.answeredAt = this.now();
+    this.cancel('ring');
+    this.emit('answered');
+    this.leg.setCallStatus('active').catch(() => {});
+    this.timer('mediaFail', this.o.audioFailMs, () => {
+      if (this.phase === 'active' && !this.receivedPhoneAudio) {
+        this.emit('audio_lost', { detail: 'no decoded phone audio after answer' });
+        this.hangup('audio_failed');
+      }
+    });
+    if (s.audio !== 'on') this.armAudioWatch();
   }
 
   onAudioState(s) {
@@ -290,6 +313,11 @@ export class CallRunner {
     }
   }
 
+  /** The gateway is stopping: end the call it owns (an inbound runner overrides this). */
+  shutdown() {
+    return this.command('hangup');
+  }
+
   async hangup(reason) {
     if (this.phase === 'done' || this.phase === 'hanging_up') return;
     this.phase = 'hanging_up';
@@ -299,11 +327,11 @@ export class CallRunner {
     this.cancel('audioRecover');
     this.cancel('audioGrace');
     this.device.clearPlayback();
-    this.leg.setCallStatus('hangup').catch(() => {});
+    if (this.leg) this.leg.setCallStatus('hangup').catch(() => {});
     const ack = await this.device.hangup(this.job.callRef).catch((err) => ({ result: err.code }));
     this.log('hangup_sent', { reason, result: ack.result });
     // bad_state = the phone already has no call: that is the confirmation.
-    if (ack.result === 'bad_state' || callStateOf(this.device.state || {}) === 'idle') {
+    if (ack.result === 'bad_state' || this.ownCallState(this.device.state || {}) === 'idle') {
       this.end(reason);
       return;
     }
@@ -337,7 +365,7 @@ export class CallRunner {
       downUnderruns: st.downUnderruns ?? 0,
       downOverruns: st.downOverruns ?? 0,
       firstAiAudioMs: this.firstAiAudioMs,
-      agentConnected: Boolean(this.leg.agentConnected),
+      agentConnected: Boolean(this.leg?.agentConnected),
     };
     const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null && v !== undefined));
     // Live monitoring only: best-effort, not through the durable outbox.

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import ChatMessage from '../mobile/chatMessage.model.js';
 import chatRoomRepository from './chatRoom.repository.js';
 import ChatRoom from './chatRoom.model.js';
@@ -43,21 +44,19 @@ const chatRoomService = {
     return chatRoomRepository.findOrCreateDmRoom(userIdA, userIdB);
   },
 
-  async listRoomsForUser(userId) {
-    const rooms = await chatRoomRepository.findRoomsForUser(userId);
-    // Enrich each room with unreadCount
-    const enriched = await Promise.all(
-      rooms.map(async (room) => {
-        const unreadCount = await ChatMessage.countDocuments({
-          roomId: room._id,
-          senderId: { $ne: userId },
-          'readBy.userId': { $ne: userId },
-          isDeleted: false,
-        });
-        return { ...room, unreadCount };
-      })
-    );
-    return enriched;
+  async listRoomsForUser(user) {
+    const userId = userIdOf(user);
+    const allRooms = await chatRoomRepository.findRoomsForUser(userId);
+    const hasLeadRooms = allRooms.some(room => room.roomType === 'LEAD' || room.leadIds?.length);
+    const canReadLeads = hasLeadRooms && await chatAccessService.canReadLeads(user);
+    const rooms = allRooms.filter(room => !(room.roomType === 'LEAD' || room.leadIds?.length) || canReadLeads);
+    if (!rooms.length) return [];
+    const unread = await ChatMessage.aggregate([
+      { $match: { roomId: { $in: rooms.map(room => room._id) }, senderId: { $ne: new mongoose.Types.ObjectId(userId) }, 'readBy.userId': { $ne: new mongoose.Types.ObjectId(userId) }, isDeleted: false } },
+      { $group: { _id: '$roomId', count: { $sum: 1 } } },
+    ]);
+    const counts = new Map(unread.map(item => [String(item._id), item.count]));
+    return rooms.map(room => ({ ...room, unreadCount: counts.get(String(room._id)) || 0 }));
   },
 
   async getRoomById(roomId) {
@@ -68,7 +67,7 @@ const chatRoomService = {
 
   async assertMembership(roomId, user) {
     const room = await chatRoomRepository.findById(roomId);
-    if (!room) throw new NotFoundError('Chat room');
+    if (!room || room.isActive === false) throw new NotFoundError('Chat room');
     const userId = userIdOf(user);
     const isLinkedProjectRoom = room.roomType === 'PROJECT' || room.roomType === 'ORDER';
     const participantIds = await chatAccessService.assertLinkedRoomAccess(room, user);
@@ -150,14 +149,19 @@ const chatRoomService = {
       err.status = 404;
       throw err;
     }
+    if (!room.members.some(member => String(member.userId?._id || member.userId) === String(userId))) throw new AuthorizationError('You are not a member of this chat room');
     await chatRoomRepository.removeMember(roomId, userId);
+    if (room.roomType === 'LEAD') await ChatRoom.updateOne({ _id: roomId }, { $unset: { leadChatKey: 1 }, $inc: { __v: 1 } });
+    global.io?.in(`user:${userId}`).socketsLeave(`room:${roomId}`);
   },
 
   async deleteRoom(roomId, userId) {
     const room = await chatRoomRepository.findById(roomId);
     if (!room) throw new NotFoundError('Chat room');
+    if (!room.members.some(member => String(member.userId?._id || member.userId) === String(userId))) throw new AuthorizationError('You are not a member of this chat room');
     if (room.roomType === 'DM') {
       await chatRoomRepository.removeMember(roomId, userId);
+      global.io?.in(`user:${userId}`).socketsLeave(`room:${roomId}`);
     } else {
       const isAdmin = room.admins?.some(a => String(a._id ?? a) === String(userId));
       if (!isAdmin) throw new AuthorizationError('Only admins can delete this group');
@@ -173,6 +177,7 @@ const chatRoomService = {
       err.status = 404;
       throw err;
     }
+    if (room.roomType !== 'GROUP') throw new AuthorizationError('Join codes are only available for group conversations');
     const isAdmin = room.admins?.some(a => String(a._id || a) === String(requesterId));
     if (!isAdmin) {
       const err = new Error('Only admins can refresh the join code');

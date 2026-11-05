@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, MessagesSquare, UserPlus } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, MessagesSquare, UserPlus, CheckCheck, Link2, RefreshCw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -18,16 +19,17 @@ import { useWorkspaceUsers } from '../hooks/use-workspace-users';
 import { useTaskSubtasks, useCreateSubtask, usePatchSubtask } from '../hooks/use-task-subtasks';
 import { useTaskNotes, useCreateNote, useDeleteNote } from '../hooks/use-task-notes';
 import { useTaskAttachments, useUploadAttachment, useDeleteAttachment } from '../hooks/use-task-attachments';
+import { TaskTimePanel } from './task-time-panel';
 import { TaskSubtasksPanel } from './task-subtasks-panel';
 import { TaskChatPanel } from './task-chat-panel';
 import { TaskFileViewer } from './task-file-viewer';
+import { TaskEmptyState } from './task-empty-state';
 import { TaskInlineField } from './task-inline-field';
 import { TaskRemindersPanel } from './task-reminders-panel';
 import { TaskContextSelector } from './task-context-selector';
 import { TaskCompletionDialog } from './task-completion-dialog';
 import { TaskChatDialog } from '../components/task-chat-dialog';
 import { taskService } from '../services/task-service';
-// eslint-disable-next-line import/no-unresolved
 import { TASK_SOURCE_META } from '../constants/task-source-meta';
 import { AssigneeSelector } from './assignee-selector';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -60,7 +62,7 @@ const STATUS_ICON = {
 
 const toDateValue = (iso: string | null | undefined) => iso ? iso.slice(0, 10) : '';
 const formatDate = (iso: string | null | undefined, fallback = 'Not set') => {
-  if (!iso) return fallback;
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return fallback;
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso));
 };
 
@@ -109,14 +111,13 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   });
   useBreadcrumbLabel(taskId, task?.title);
   const users = usersQuery.data ?? [];
+  const backPath = listId === 'all' ? '/tasks' : `/tasks/${listId}`;
 
   // Description local edit state
   const [descEditMode, setDescEditMode] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [dueText, setDueText] = useState('');
   const [completionPrompt, setCompletionPrompt] = useState<{ patch: TaskPatch; count: number } | null>(null);
-  const startInputRef = useRef<HTMLInputElement>(null);
-  const dueInputRef = useRef<HTMLInputElement>(null);
 
   // Patch the main task
   const patchMutation = useMutation({
@@ -125,6 +126,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      qc.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['task-time'] });
     },
     onError: (error, variables) => {
       const incompleteCount = getIncompleteSubtaskCount(error);
@@ -137,7 +140,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   });
 
   const patch = (p: TaskPatch) => {
-    if (!task) return;
+    if (!task || patchMutation.isPending) return;
     patchMutation.mutate({ id: task.id, patch: { ...p, expectedVersion: task.version } });
   };
 
@@ -149,6 +152,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      qc.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['task-time'] });
     },
     onError: () => toast.error(t('tasks.updateFailed')),
   });
@@ -166,6 +171,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      qc.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['task-time'] });
       toast.success(t('tasks.claimed', 'Aufgabe übernommen'));
     },
     onError: () => toast.error(t('tasks.updateFailed')),
@@ -182,6 +189,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
       qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      qc.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['task-time'] });
       toast.success(t('tasks.pooledHelped', 'Sie unterstützen diese Aufgabe'));
     },
     onError: () => toast.error(t('tasks.updateFailed')),
@@ -211,17 +220,31 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const deleteReminder = useDeleteTaskReminder(taskId);
   const snoozeReminder = useSnoozeTaskReminder(taskId);
 
-  const handleDuplicate = async () => {
-    if (!task) return;
-    const dup = await taskApi.duplicate(task.id);
-    toast.success(t('tasks.duplicated'));
-    router.push(`/tasks/${listId}/${dup.id}`);
+  const duplicateMutation = useMutation({
+    mutationFn: () => taskApi.duplicate(taskId),
+    onSuccess: (dup) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success(t('tasks.duplicated'));
+      router.push(`/tasks/${dup.listId ?? 'all'}/${dup.id}`);
+    },
+    onError: () => toast.error(t('tasks.updateFailed')),
+  });
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success(t('tasks.linkCopied', 'Task link copied'));
+    } catch {
+      toast.error(t('tasks.copyLinkFailed', 'Could not copy the task link'));
+    }
   };
 
   // Description save
   const saveDesc = () => {
-    patch({ description: descDraft });
-    setDescEditMode(false);
+    if (!task) return;
+    patchMutation.mutate({ id: task.id, patch: { description: descDraft, expectedVersion: task.version } }, {
+      onSuccess: () => setDescEditMode(false),
+    });
   };
 
   const applyDueText = () => {
@@ -242,11 +265,15 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     );
   }
 
+  if (taskQuery.isError && !task && !(isRecord(taskQuery.error) && taskQuery.error.statusCode === 404)) {
+    return <TaskEmptyState type="error" onRetry={() => void taskQuery.refetch()} />;
+  }
+
   if (!task) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <p className="text-muted-foreground">{t('tasks.notFound')}</p>
-        <Button variant="outline" onClick={() => router.push(`/tasks/${listId}`)}>
+        <Button variant="outline" onClick={() => router.push(backPath)}>
           <ArrowLeft className="mr-2 h-4 w-4" /> {t('tasks.backToList')}
         </Button>
       </div>
@@ -254,27 +281,27 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div data-testid="task-detail" className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       {/* ── Header ── */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-6 py-3">
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-3 sm:px-6">
         <Button
           variant="ghost"
           size="sm"
           className="gap-1.5 text-muted-foreground"
-          onClick={() => router.push(`/tasks/${listId}`)}
+          onClick={() => router.push(backPath)}
         >
           <ArrowLeft className="h-4 w-4" />
           {t('common.back')}
         </Button>
         <div className="h-4 w-px bg-border" />
-        <nav className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <nav className="hidden min-w-0 items-center gap-1.5 text-xs text-muted-foreground xl:flex">
           <span>{t('tasks.title')}</span>
           <span>/</span>
           <span className="truncate max-w-32">{t('tasks.list')}</span>
           <span>/</span>
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -324,25 +351,46 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             {task.locked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
             {task.locked ? t('tasks.unlock', 'Entsperren') : t('tasks.lock', 'Sperren')}
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleDuplicate}>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={copyLink} aria-label={t('tasks.copyLink', 'Copy task link')} title={t('tasks.copyLink', 'Copy task link')}><Link2 className="h-3.5 w-3.5" /></Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => duplicateMutation.mutate()} disabled={duplicateMutation.isPending}>
             <Copy className="h-3.5 w-3.5" />
             {t('common.duplicate')}
           </Button>
         </div>
       </header>
 
+      {taskQuery.isError && task && <div role="status" className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/20 bg-warning/5 px-5 py-2 text-xs">
+        {t('tasks.cachedWarning', 'Showing saved tasks. Refresh to try loading the latest changes.')}
+        <Button variant="ghost" size="sm" onClick={() => void taskQuery.refetch()} disabled={taskQuery.isFetching}><RefreshCw className="h-3.5 w-3.5" />{t('common.retry', 'Retry')}</Button>
+      </div>}
       {/* ── Body ── */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Left — main content */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7 scrollbar-thin">
+        <div className="min-w-0 shrink-0 px-4 py-5 scrollbar-thin sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:py-7">
           {/* Title */}
-          <div className="mb-6">
+          <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-theme-sm sm:p-6">
+            <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-primary/70 via-sky-400/40 to-transparent" />
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', taskStatusClass[task.status])}>
+                {getTaskStatusLabel(t, task.status)}
+              </span>
+              {task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && <Button size="sm" variant="outline" disabled={patchMutation.isPending} onClick={() => patch({ status: 'COMPLETED' })}>
+                <CheckCheck className="h-4 w-4" />{t('tasks.markComplete', 'Mark complete')}
+              </Button>}
+            </div>
+            <h1>
             <TaskInlineField
               value={task.title}
               ariaLabel={t('tasks.editTitle')}
               className="block w-full text-left text-2xl font-bold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               onCommit={(title) => patch({ title })}
             />
+            </h1>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
+              <span>{t('tasks.updatedLabel', 'Updated')}: {formatDate(task.updatedAt)}</span>
+              {task.dueDate && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatDate(task.dueDate)}</span>}
+              {patchMutation.isPending && <span role="status" className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />{t('common.saving', 'Saving…')}</span>}
+            </div>
             {task.locked && (
               <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                 <Lock className="h-3 w-3" />
@@ -357,8 +405,10 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             )}
           </div>
 
+          <TaskTimePanel key={task.id} task={task} />
+
           {/* Description */}
-          <section className="mb-8">
+          <section className="mb-5 rounded-xl border border-border bg-card p-4 shadow-theme-sm sm:p-5">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('common.description')}
             </h3>
@@ -372,8 +422,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                   maxLength={10000}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" className="h-7 text-xs" onClick={saveDesc}>{t('common.save')}</Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDescEditMode(false)}>{t('common.cancel')}</Button>
+                  <Button size="sm" className="h-7 text-xs" onClick={saveDesc} disabled={patchMutation.isPending}>{t('common.save')}</Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDescEditMode(false)} disabled={patchMutation.isPending}>{t('common.cancel')}</Button>
                 </div>
               </div>
             ) : (
@@ -382,12 +432,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                 tabIndex={0}
                 className="min-h-16 cursor-text rounded-lg border border-dashed border-border bg-background px-3 py-2.5 text-sm transition-colors hover:border-ring/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => { setDescDraft(task.description ?? ''); setDescEditMode(true); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setDescDraft(task.description ?? ''); setDescEditMode(true); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDescDraft(task.description ?? ''); setDescEditMode(true); } }}
               >
                 {task.description ? (
                   <div
                     className="prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: task.description }}
+                    dangerouslySetInnerHTML={{ __html: typeof window === 'undefined' ? '' : DOMPurify.sanitize(task.description) }}
                   />
                 ) : (
                   <p className="text-muted-foreground/60 italic">{t('tasks.clickAddDescription')}</p>
@@ -397,7 +447,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           </section>
 
           {/* Subtasks */}
-          <div className="mb-8">
+          <div className="mb-5 rounded-xl border border-border bg-card p-4 shadow-theme-sm sm:p-5">
             <TaskSubtasksPanel
               parentId={taskId}
               subtasks={subtasksQuery.data ?? []}
@@ -409,7 +459,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           </div>
 
           {/* Activity / Chat */}
-          <div className="pb-8">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-theme-sm sm:p-5">
             <TaskChatPanel
               notes={notesQuery.data ?? []}
               isLoading={notesQuery.isLoading}
@@ -423,10 +473,10 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
         </div>
 
         {/* Right — properties sidebar */}
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-border bg-card px-4 py-6 scrollbar-thin">
+        <aside className="w-full shrink-0 border-t border-border bg-card px-4 py-6 scrollbar-thin sm:px-6 lg:w-80 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:px-5">
           <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tasks.properties')}</h3>
 
-          <div className="space-y-3">
+          <fieldset disabled={patchMutation.isPending} className="space-y-4">
             {/* Status */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">{t('tasks.status')}</label>
@@ -531,45 +581,19 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             {/* Start date */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">{t('tasks.startDate')}</label>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                onClick={() => startInputRef.current?.showPicker?.()}
-              >
-                <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={task.startDate ? 'font-medium' : 'text-muted-foreground text-xs'}>
-                  {formatDate(task.startDate, t('tasks.setDate'))}
-                </span>
-                <input
-                  ref={startInputRef}
-                  type="date"
-                  className="sr-only"
-                  value={toDateValue(task.startDate)}
-                  onChange={(e) => patch({ startDate: e.target.value || null })}
-                />
-              </button>
+              <div className="relative">
+                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input type="date" aria-label={t('tasks.startDate')} className="h-9 pl-9 text-sm [color-scheme:light] dark:[color-scheme:dark]" value={toDateValue(task.startDate)} onChange={(e) => patch({ startDate: e.target.value || null })} />
+              </div>
             </div>
 
             {/* Due date */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">{t('tasks.dueDate')}</label>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                onClick={() => dueInputRef.current?.showPicker?.()}
-              >
-                <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={task.dueDate ? 'font-medium' : 'text-muted-foreground text-xs'}>
-                  {formatDate(task.dueDate, t('tasks.setDate'))}
-                </span>
-                <input
-                  ref={dueInputRef}
-                  type="date"
-                  className="sr-only"
-                  value={toDateValue(task.dueDate)}
-                  onChange={(e) => patch({ dueDate: e.target.value || null })}
-                />
-              </button>
+              <div className="relative">
+                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input type="date" aria-label={t('tasks.dueDate')} className="h-9 pl-9 text-sm [color-scheme:light] dark:[color-scheme:dark]" value={toDateValue(task.dueDate)} onChange={(e) => patch({ dueDate: e.target.value || null })} />
+              </div>
               <div className="flex gap-1.5">
                 <Input
                   value={dueText}
@@ -585,7 +609,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                 </Button>
               </div>
             </div>
-          </div>
+          </fieldset>
 
           <div className="my-5 border-t border-border" />
 

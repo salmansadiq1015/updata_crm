@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 import {
   DEFAULT_ACCOUNTING_CURRENCY,
   FIXED_ASSET_METHODS,
@@ -20,7 +21,7 @@ function numberOrZero(value) {
 export function defaultFixedAssetFilters() {
   return {
     status: 'ALL',
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
     search: '',
   };
 }
@@ -32,7 +33,7 @@ export function defaultFixedAssetForm() {
     description: '',
     acquisitionDate: todayInput(),
     placedInServiceDate: '',
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
     acquisitionCost: '1000',
     salvageValue: '0',
     usefulLifeMonths: '60',

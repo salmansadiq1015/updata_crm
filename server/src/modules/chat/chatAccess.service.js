@@ -6,6 +6,8 @@ import Order from '../qop/order.model.js';
 import Assignment from '../deploy/assignment.model.js';
 import Task from '../tasks/task.model.js';
 import User from '../auth/user.model.js';
+import Lead from '../crm/lead.model.js';
+import { loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
 import { AuthorizationError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 
 function idOf(value) {
@@ -58,6 +60,33 @@ async function collectAssignments(assignments, set) {
 
 const chatAccessService = {
   isAdmin,
+
+  async canReadLeads(user) {
+    if (isAdmin(user)) return true;
+    return satisfiesPermission(await loadUserPermissions(user), 'lead:read');
+  },
+
+  async assertLeadAccess(leadIds, user) {
+    if (!await this.canReadLeads(user)) throw new AuthorizationError('Lead access is required for this conversation');
+    const ids = uniqueIds(leadIds);
+    if (ids.length !== (leadIds || []).length) throw new ValidationError('Select valid, unique leads');
+    const count = await Lead.countDocuments({ _id: { $in: ids }, isDeleted: { $ne: true } });
+    if (count !== ids.length) throw new NotFoundError('One or more selected leads');
+    return ids;
+  },
+
+  async assertLeadMembersAllowed(memberIds) {
+    const ids = uniqueIds(memberIds);
+    const users = await User.find({ _id: { $in: ids }, isDeleted: false, status: 'active' }).populate('role', 'name').lean();
+    if (users.length !== ids.length) throw new ValidationError('Select active team members');
+    const allowed = await Promise.all(users.map(async user => {
+      if (isAdmin(user)) return true;
+      const permissions = await loadUserPermissions(user);
+      return satisfiesPermission(permissions, 'chat:read') && satisfiesPermission(permissions, 'lead:read');
+    }));
+    if (allowed.some(value => !value)) throw new ValidationError('Every participant needs chat and lead access');
+    return ids;
+  },
 
   async resolveProjectParticipantIds(projectId) {
     if (!mongoose.isValidObjectId(projectId)) throw new NotFoundError('Project', projectId);
@@ -182,6 +211,7 @@ const chatAccessService = {
   },
 
   async assertLinkedRoomAccess(room, user) {
+    if (room?.roomType === 'LEAD' || room?.leadIds?.length) await this.assertLeadAccess((room.leadIds || []).map(idOf), user);
     if (!room?.projectId && !room?.orderId) return [];
     return this.assertContextAccess({ projectId: idOf(room.projectId), orderId: idOf(room.orderId) }, user);
   },

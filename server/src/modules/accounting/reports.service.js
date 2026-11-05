@@ -1,3 +1,4 @@
+import { roundCurrency, currencyDigits } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import accountRepository from './account.repository.js';
 import JournalEntry from './journalEntry.model.js';
@@ -7,9 +8,7 @@ const FINANCIAL_ACCOUNT_TYPES = new Set(['REVENUE', 'EXPENSE']);
 const BALANCE_SHEET_TYPES = new Set(['ASSET', 'LIABILITY', 'EQUITY']);
 const DEBIT_NORMAL_TYPES = new Set(['ASSET', 'EXPENSE']);
 
-function roundMoney(value) {
-  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
-}
+function roundMoney(value, currency = 'CHF') { return roundCurrency(value, currency); }
 
 function defaultPeriod() {
   const now = new Date();
@@ -47,24 +46,24 @@ function applyReportScope(match, query = {}) {
   return match;
 }
 
-function accountAmount(accountType, totals) {
+function accountAmount(accountType, totals, currency) {
   const debit = Number(totals.debit || 0);
   const credit = Number(totals.credit || 0);
-  if (accountType === 'REVENUE') return roundMoney(credit - debit);
-  if (accountType === 'EXPENSE') return roundMoney(debit - credit);
+  if (accountType === 'REVENUE') return roundMoney(credit - debit, currency);
+  if (accountType === 'EXPENSE') return roundMoney(debit - credit, currency);
   return 0;
 }
 
-function signedAccountBalance(accountType, totals) {
+function signedAccountBalance(accountType, totals, currency) {
   const debit = Number(totals.debit || 0);
   const credit = Number(totals.credit || 0);
   return DEBIT_NORMAL_TYPES.has(accountType)
-    ? roundMoney(debit - credit)
-    : roundMoney(credit - debit);
+    ? roundMoney(debit - credit, currency)
+    : roundMoney(credit - debit, currency);
 }
 
-function trialBalanceSides(accountType, balance) {
-  const amount = roundMoney(balance);
+function trialBalanceSides(accountType, balance, currency) {
+  const amount = roundMoney(balance, currency);
   const normalDebit = DEBIT_NORMAL_TYPES.has(accountType);
   if (amount >= 0) {
     return normalDebit
@@ -178,9 +177,9 @@ class AccountingReportsService {
           accountNumber: account.accountNumber,
           accountName: account.name,
           type: account.type,
-          debit: roundMoney(totals.debit),
-          credit: roundMoney(totals.credit),
-          amount: accountAmount(account.type, totals),
+          debit: roundMoney(totals.debit, currency),
+          credit: roundMoney(totals.credit, currency),
+          amount: accountAmount(account.type, totals, currency),
         };
       })
       .filter((row) => row.amount !== 0 || row.debit !== 0 || row.credit !== 0)
@@ -188,11 +187,11 @@ class AccountingReportsService {
 
     const revenue = roundMoney(rows
       .filter((row) => row.type === 'REVENUE')
-      .reduce((sum, row) => sum + row.amount, 0));
+      .reduce((sum, row) => sum + row.amount, 0), currency);
     const expenses = roundMoney(rows
       .filter((row) => row.type === 'EXPENSE')
-      .reduce((sum, row) => sum + row.amount, 0));
-    const netProfit = roundMoney(revenue - expenses);
+      .reduce((sum, row) => sum + row.amount, 0), currency);
+    const netProfit = roundMoney(revenue - expenses, currency);
 
     return {
       period: {
@@ -204,7 +203,7 @@ class AccountingReportsService {
       revenue,
       expenses,
       netProfit,
-      margin: revenue ? roundMoney((netProfit / revenue) * 100) : 0,
+      margin: revenue ? roundMoney((netProfit / revenue) * 100, 'CHF') : 0,
       rows,
       groups: {
         revenue: rows.filter((row) => row.type === 'REVENUE'),
@@ -230,9 +229,9 @@ class AccountingReportsService {
       Type: row.type,
       AccountNumber: row.accountNumber,
       AccountName: row.accountName,
-      Debit: Number(row.debit || 0).toFixed(2),
-      Credit: Number(row.credit || 0).toFixed(2),
-      Amount: Number(row.amount || 0).toFixed(2),
+      Debit: Number(row.debit || 0).toFixed(currencyDigits(report.currency)),
+      Credit: Number(row.credit || 0).toFixed(currencyDigits(report.currency)),
+      Amount: Number(row.amount || 0).toFixed(currencyDigits(report.currency)),
       Currency: report.currency,
       StartDate: report.period.startDate,
       EndDate: report.period.endDate,
@@ -244,7 +243,7 @@ class AccountingReportsService {
       AccountName: 'Revenue',
       Debit: '',
       Credit: '',
-      Amount: Number(report.revenue).toFixed(2),
+      Amount: Number(report.revenue).toFixed(currencyDigits(report.currency)),
       Currency: report.currency,
       StartDate: report.period.startDate,
       EndDate: report.period.endDate,
@@ -255,7 +254,7 @@ class AccountingReportsService {
       AccountName: 'Expenses',
       Debit: '',
       Credit: '',
-      Amount: Number(report.expenses).toFixed(2),
+      Amount: Number(report.expenses).toFixed(currencyDigits(report.currency)),
       Currency: report.currency,
       StartDate: report.period.startDate,
       EndDate: report.period.endDate,
@@ -266,7 +265,7 @@ class AccountingReportsService {
       AccountName: 'Net profit',
       Debit: '',
       Credit: '',
-      Amount: Number(report.netProfit).toFixed(2),
+      Amount: Number(report.netProfit).toFixed(currencyDigits(report.currency)),
       Currency: report.currency,
       StartDate: report.period.startDate,
       EndDate: report.period.endDate,
@@ -297,9 +296,9 @@ class AccountingReportsService {
           accountNumber: account.accountNumber,
           accountName: account.name,
           type: account.type,
-          debit: roundMoney(totals.debit),
-          credit: roundMoney(totals.credit),
-          balance: signedAccountBalance(account.type, totals),
+          debit: roundMoney(totals.debit, currency),
+          credit: roundMoney(totals.credit, currency),
+          balance: signedAccountBalance(account.type, totals, currency),
         };
       })
       .filter((row) => row.balance !== 0 || row.debit !== 0 || row.credit !== 0)
@@ -310,9 +309,9 @@ class AccountingReportsService {
       liabilities: rows.filter((row) => row.type === 'LIABILITY'),
       equity: rows.filter((row) => row.type === 'EQUITY'),
     };
-    const totalAssets = roundMoney(groups.assets.reduce((sum, row) => sum + row.balance, 0));
-    const totalLiabilities = roundMoney(groups.liabilities.reduce((sum, row) => sum + row.balance, 0));
-    const totalEquity = roundMoney(groups.equity.reduce((sum, row) => sum + row.balance, 0));
+    const totalAssets = roundMoney(groups.assets.reduce((sum, row) => sum + row.balance, 0), currency);
+    const totalLiabilities = roundMoney(groups.liabilities.reduce((sum, row) => sum + row.balance, 0), currency);
+    const totalEquity = roundMoney(groups.equity.reduce((sum, row) => sum + row.balance, 0), currency);
 
     return {
       asOfDate: endDate.toISOString().slice(0, 10),
@@ -322,8 +321,8 @@ class AccountingReportsService {
       totalAssets,
       totalLiabilities,
       totalEquity,
-      totalLiabilitiesAndEquity: roundMoney(totalLiabilities + totalEquity),
-      imbalance: roundMoney(totalAssets - totalLiabilities - totalEquity),
+      totalLiabilitiesAndEquity: roundMoney(totalLiabilities + totalEquity, currency),
+      imbalance: roundMoney(totalAssets - totalLiabilities - totalEquity, currency),
       rows,
       groups,
     };
@@ -345,15 +344,15 @@ class AccountingReportsService {
     const rows = accounts
       .map((account) => {
         const totals = totalsByAccount.get(String(account._id)) || {};
-        const balance = signedAccountBalance(account.type, totals);
-        const sides = trialBalanceSides(account.type, balance);
+        const balance = signedAccountBalance(account.type, totals, currency);
+        const sides = trialBalanceSides(account.type, balance, currency);
         return {
           accountId: account._id,
           accountNumber: account.accountNumber,
           accountName: account.name,
           type: account.type,
-          debit: roundMoney(totals.debit),
-          credit: roundMoney(totals.credit),
+          debit: roundMoney(totals.debit, currency),
+          credit: roundMoney(totals.credit, currency),
           balance,
           ...sides,
         };
@@ -361,8 +360,8 @@ class AccountingReportsService {
       .filter((row) => row.balance !== 0 || row.debit !== 0 || row.credit !== 0)
       .sort((a, b) => String(a.accountNumber).localeCompare(String(b.accountNumber)));
 
-    const totalDebit = roundMoney(rows.reduce((sum, row) => sum + row.debitBalance, 0));
-    const totalCredit = roundMoney(rows.reduce((sum, row) => sum + row.creditBalance, 0));
+    const totalDebit = roundMoney(rows.reduce((sum, row) => sum + row.debitBalance, 0), currency);
+    const totalCredit = roundMoney(rows.reduce((sum, row) => sum + row.creditBalance, 0), currency);
 
     return {
       asOfDate: endDate.toISOString().slice(0, 10),
@@ -371,7 +370,7 @@ class AccountingReportsService {
       scope: buildScope(query),
       totalDebit,
       totalCredit,
-      imbalance: roundMoney(totalDebit - totalCredit),
+      imbalance: roundMoney(totalDebit - totalCredit, currency),
       rows,
     };
   }
@@ -393,7 +392,7 @@ class AccountingReportsService {
     const rows = accounts
       .map((account) => {
         const totals = totalsByAccount.get(String(account._id)) || {};
-        const amount = signedAccountBalance(account.type, totals);
+        const amount = signedAccountBalance(account.type, totals, currency);
         let category = 'OPERATING';
         if (account.type === 'EQUITY' || account.type === 'LIABILITY') category = 'FINANCING';
         if (account.type === 'ASSET' && !String(account.accountNumber || '').startsWith('10')) category = 'INVESTING';
@@ -404,8 +403,8 @@ class AccountingReportsService {
           type: account.type,
           category,
           amount,
-          debit: roundMoney(totals.debit),
-          credit: roundMoney(totals.credit),
+          debit: roundMoney(totals.debit, currency),
+          credit: roundMoney(totals.credit, currency),
         };
       })
       .filter((row) => row.amount !== 0 || row.debit !== 0 || row.credit !== 0)
@@ -413,7 +412,7 @@ class AccountingReportsService {
 
     const totalByCategory = (category) => roundMoney(rows
       .filter((row) => row.category === category)
-      .reduce((sum, row) => sum + row.amount, 0));
+      .reduce((sum, row) => sum + row.amount, 0), currency);
 
     const operating = totalByCategory('OPERATING');
     const investing = totalByCategory('INVESTING');
@@ -429,7 +428,7 @@ class AccountingReportsService {
       operating,
       investing,
       financing,
-      netCashFlow: roundMoney(operating + investing + financing),
+      netCashFlow: roundMoney(operating + investing + financing, currency),
       rows,
       warnings: [
         'Cash-flow categories are derived from account type/number until dedicated cash-flow mapping exists.',

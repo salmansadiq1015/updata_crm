@@ -33,11 +33,29 @@ const isHardBlock = (reason) => HARD_BLOCK_REASONS.includes(reason);
  * AI calling — called in _dispatchCall after the channel's own gates, before the
  * attempt is booked. Returns null (go ahead) or the dispatch result to return.
  */
+// AI follow-up reasons where the LEAD asked for the next conversation ("call me in 10 minutes").
+const LEAD_REQUESTED_FOLLOW_UP = new Set(['CALLBACK_REQUESTED', 'INTERESTED_NEEDS_MORE_TIME', 'APPOINTMENT_PENDING']);
+
+/**
+ * A follow-up call the lead explicitly requested, or a person's deliberate "Call now"
+ * (immediate run of a follow-up), is exempt from frequency / quiet-hours limits like a
+ * SIM callback — never from hard blocks (do-not-contact, suppression, revoked consent).
+ * Automatic retries (unreachable, incomplete answers) stay rate-limited.
+ */
+async function isRequestedFollowUp(campaign) {
+  if (campaign.kind !== 'follow_up' || !campaign.followUpId) return false;
+  if (campaign.runMode === 'immediate') return true;
+  const { default: LeadFollowUp } = await import('../crm/leadFollowUp.model.js');
+  const fu = await LeadFollowUp.findById(campaign.followUpId).select('automation.reason').lean();
+  return LEAD_REQUESTED_FOLLOW_UP.has(fu?.automation?.reason);
+}
+
 export async function aiCallGate(service, campaign, recipient, { audioVerificationTest = false } = {}) {
   if (audioVerificationTest || campaign.isTest) return null;
   const decision = await safeReserve({
     leadId: recipient.leadId, channel: 'voice', campaignId: campaign._id, source: 'ai_calling',
     refId: `${recipient._id}:${(recipient.attemptCount || 0) + 1}`,
+    force: await isRequestedFollowUp(campaign).catch(() => false),
   });
   if (decision.allowed) return null;
   const { default: CampaignRecipient } = await import('../aiCalling/campaignRecipient.model.js');

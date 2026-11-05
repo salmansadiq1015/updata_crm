@@ -27,6 +27,8 @@ export const CHAT_MESSAGE_TYPES = [
 
 export const CHAT_FILTERS = [
   { value: 'All', labelKey: 'common.all' },
+  { value: 'Unread', labelKey: 'chat.workspace.unread' },
+  { value: 'Leads', labelKey: 'chat.workspace.leads' },
   { value: 'Direct', labelKey: 'chat.direct' },
   { value: 'Groups', labelKey: 'chat.groups' },
   { value: 'Projects', labelKey: 'common.projects' },

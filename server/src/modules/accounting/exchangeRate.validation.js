@@ -1,7 +1,8 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { EXCHANGE_RATE_SOURCES } from './exchangeRate.model.js';
 
-const currency = Joi.string().trim().uppercase().pattern(/^[A-Z]{3}$/).length(3);
+const currency = Joi.string().trim().uppercase().valid(...CURRENCY_CODES);
 
 export const listExchangeRatesSchema = {
   query: Joi.object({

@@ -66,6 +66,8 @@ export const listTasksSchema = {
     siteId: objectId,
     meetingId: objectId,
     departmentId: objectId,
+    active: Joi.boolean(),
+    completedThisWeek: Joi.boolean(),
     overdue: Joi.boolean(),
     dueToday: Joi.boolean(),
     inPool: Joi.boolean(),

@@ -59,7 +59,7 @@ export function AiChatMessage({
             className={cn(
               'w-fit max-w-full break-words px-4 py-3 text-sm leading-6 shadow-sm',
               isUser
-                ? 'rounded-2xl rounded-br-md bg-primary-gradient text-white shadow-primary/20'
+                ? 'rounded-2xl rounded-br-md bg-primary-gradient text-primary-foreground shadow-primary/20'
                 : 'rounded-2xl rounded-bl-md border border-border/80 bg-card/90 text-card-foreground shadow-black/5 dark:bg-card/75',
               retryState?.isRetrying && 'opacity-60 ring-2 ring-primary/40 animate-pulse'
             )}

@@ -70,14 +70,14 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  /* Compact ClickUp-style radius scale */
-  --radius-sm: 0.25rem;   /* 4px */
-  --radius-md: 0.375rem;  /* 6px */
-  --radius-lg: 0.5rem;    /* 8px  — DEFAULT */
-  --radius-xl: 0.75rem;   /* 12px — cards */
-  --radius-2xl: 1rem;     /* 16px — modals */
-  --radius-3xl: 1.25rem;  /* 20px */
-  --radius-4xl: 1.5rem;   /* 24px */
+  /* Soft, consistent corners; action buttons use a full pill radius. */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2rem;
 
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
@@ -118,40 +118,41 @@
    Design System — Light Theme (hex-based)
    ═══════════════════════════════════════════ */
 :root {
-  /* Updata brand scale, anchored on the logo navy #1C388E (= 700).
-     Light mode uses the brand navy itself; dark mode needs a lighter step
-     (the navy only reaches 1.87:1 on the dark background). */
-  --brand-50:  #EEF2FB;
-  --brand-100: #D9E1F5;
-  --brand-200: #B3C3EB;
-  --brand-300: #8AA4F0;
-  --brand-400: #6E8BE8;
-  --brand-500: #4E74DB;
-  --brand-600: #2F52B8;
-  --brand-700: #1C388E;
-  --brand-800: #162C6F;
-  --brand-900: #101F4E;
+  /* A single sky-blue identity across semantic and brand utilities. */
+  --brand-50:  #F0F9FF;
+  --brand-100: #E0F2FE;
+  --brand-200: #BAE6FD;
+  --brand-300: #7DD3FC;
+  --brand-400: #38BDF8;
+  --brand-500: #0EA5E9;
+  --brand-600: #0284C7;
+  --brand-700: #0369A1;
+  --brand-800: #075985;
+  --brand-900: #0C4A6E;
   /* Logo secondary - the red of the Updata mark */
   --brand-red: #D00A19;
   --brand-red-dark: #A00812;
 
-  --background: #F6F7FB;
+  --background: #F5F8FC;
   --surface: #FFFFFF;
-  --foreground: #17223B;
+  --foreground: #172B3A;
   --card: #FFFFFF;
   --card-foreground: #111827;
   --popover: #FFFFFF;
   --popover-foreground: #111827;
 
-  --primary: var(--brand-700);
+  --primary: #027BB9;
   --primary-foreground: #FFFFFF;
-  --primary-light: var(--brand-500);
+  --primary-light: var(--brand-400);
+  --primary-gradient: linear-gradient(135deg, #027BB9 0%, #037CB7 50%, #0369A1 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #037CB7 0%, #0369A1 55%, #075985 100%);
+  --primary-shadow: 0 4px 12px rgb(2 132 199 / .18), inset 0 1px 0 rgb(255 255 255 / .22);
 
-  --secondary: var(--brand-600);
-  --secondary-foreground: #FFFFFF;
+  --secondary: #EAF4FA;
+  --secondary-foreground: #075985;
 
-  --muted: #F0F2F7;
-  --muted-foreground: #626E84;
+  --muted: #EDF3F8;
+  --muted-foreground: #607488;
 
   --accent: var(--brand-50);
   --accent-foreground: var(--brand-700);
@@ -164,11 +165,11 @@
   --success-foreground: #FFFFFF;
   --warning: #F59E0B;
   --warning-foreground: #111827;
-  --info: #3B82F6;
+  --info: var(--brand-600);
   --info-foreground: #FFFFFF;
 
-  --border: #E3E7F0;
-  --input: #D7DDE8;
+  --border: #DFE8EF;
+  --input: #CDDCE7;
   --ring: var(--brand-700);
 
   --chart-1: var(--brand-600);
@@ -177,7 +178,7 @@
   --chart-4: #F59E0B;
   --chart-5: #EC4899;
 
-  --radius: 0.5rem;
+  --radius: 0.875rem;
 
   --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.04);
   --shadow-md: 0 4px 12px rgb(17 24 39 / 0.06), 0 1px 3px rgb(17 24 39 / 0.03);
@@ -198,25 +199,28 @@
    Design System — Dark Theme
    ═══════════════════════════════════════════ */
 .dark {
-  --background: #0C111D;
-  --surface: #121A2A;
+  --background: #0A111B;
+  --surface: #111D2C;
   --foreground: #E8ECF5;
-  --card: #121A2A;
+  --card: #111D2C;
   --card-foreground: #E8ECF5;
-  --popover: #161F31;
+  --popover: #152335;
   --popover-foreground: #E5E7EB;
 
-  --primary: var(--brand-500);
-  --primary-foreground: #FFFFFF;
+  --primary: var(--brand-400);
+  --primary-foreground: #062337;
   --primary-light: var(--brand-300);
+  --primary-gradient: linear-gradient(135deg, #7DD3FC 0%, #38BDF8 50%, #0EA5E9 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #BAE6FD 0%, #7DD3FC 50%, #38BDF8 100%);
+  --primary-shadow: 0 4px 18px rgb(14 165 233 / .16), inset 0 1px 0 rgb(255 255 255 / .3);
 
-  --secondary: #1F2937;
+  --secondary: #1A2C3D;
   --secondary-foreground: #E5E7EB;
 
-  --muted: #1F2937;
-  --muted-foreground: #9CA3AF;
+  --muted: #192939;
+  --muted-foreground: #9CAFC2;
 
-  --accent: var(--brand-800);
+  --accent: #122F43;
   --accent-foreground: var(--brand-200);
 
   --destructive: #EF4444;
@@ -227,11 +231,11 @@
   --success-foreground: #FFFFFF;
   --warning: #F59E0B;
   --warning-foreground: #111827;
-  --info: #60A5FA;
+  --info: var(--brand-400);
   --info-foreground: #0F172A;
 
-  --border: #1F2937;
-  --input: #1F2937;
+  --border: #243447;
+  --input: #2C4055;
   --ring: var(--brand-400);
 
   --chart-1: var(--brand-400);
@@ -245,11 +249,11 @@
   --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
 
   /* Sidebar — same dark obsidian */
-  --sidebar: #080C14;
+  --sidebar: #0B1521;
   --sidebar-foreground: #E5E7EB;
   --sidebar-primary: var(--brand-400);
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1F2937;
+  --sidebar-accent: #172A3A;
   --sidebar-accent-foreground: #E5E7EB;
   --sidebar-border: rgba(255,255,255,0.05);
   --sidebar-ring: var(--brand-400);
@@ -455,7 +459,7 @@
 
 /* Gradient text */
 .text-gradient {
-  background: linear-gradient(135deg, var(--brand-700), var(--brand-500));
+  background: linear-gradient(135deg, var(--primary), var(--accent-foreground));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -464,22 +468,22 @@
 /* Grid mesh background */
 .bg-grid {
   background-image:
-    linear-gradient(rgb(123 97 255 / 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(123 97 255 / 0.05) 1px, transparent 1px);
+    linear-gradient(rgb(14 165 233 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(14 165 233 / 0.05) 1px, transparent 1px);
   background-size: 60px 60px;
 }
 .dark .bg-grid {
   background-image:
-    linear-gradient(rgb(159 122 234 / 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(159 122 234 / 0.08) 1px, transparent 1px);
+    linear-gradient(rgb(56 189 248 / 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(56 189 248 / 0.08) 1px, transparent 1px);
 }
 
 /* Primary gradient background */
 .bg-primary-gradient {
-  background: linear-gradient(135deg, var(--brand-700), var(--brand-500));
+  background: var(--primary-gradient);
 }
-.bg-primary-gradient:hover {
-  background: linear-gradient(135deg, var(--brand-800), var(--brand-600));
+.bg-primary-gradient:not(:disabled):not([aria-disabled="true"]):hover {
+  background: var(--primary-gradient-hover);
 }
 
 /* Thin scrollbar */
@@ -517,13 +521,13 @@
   box-shadow:
     inset 1px 0 0 rgba(255,255,255,0.03),
     4px 0 32px rgba(0,0,0,0.5),
-    0 0 80px rgba(139,92,246,0.06) inset;
+    0 0 80px rgb(14 165 233 / .04) inset;
 }
 .sidebar-ambient {
   background:
     radial-gradient(ellipse 140% 45% at 50% 0%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 35% at 0% 60%, oklch(0.6 0.22 260 / 5%) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 30% at 100% 90%, oklch(0.55 0.2 310 / 4%) 0%, transparent 50%);
+    radial-gradient(ellipse 60% 35% at 0% 60%, rgb(14 165 233 / 5%) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 30% at 100% 90%, rgb(56 189 248 / 4%) 0%, transparent 50%);
 }
 .scrollbar-dark {
   scrollbar-width: thin;
@@ -707,7 +711,7 @@
   z-index: 0;
   background:
     radial-gradient(1000px 420px at 18% 0%, rgb(20 184 166 / 0.2), transparent 62%),
-    radial-gradient(850px 420px at 74% 8%, rgb(168 85 247 / 0.18), transparent 58%),
+    radial-gradient(850px 420px at 74% 8%, rgb(56 189 248 / 0.18), transparent 58%),
     radial-gradient(900px 520px at 92% 72%, rgb(59 130 246 / 0.16), transparent 62%),
     linear-gradient(115deg, rgb(255 255 255 / 0.05), transparent 32%, rgb(45 212 191 / 0.06) 68%, transparent);
   filter: saturate(130%);
@@ -756,7 +760,7 @@
 }
 
 .accounting-kicker {
-  color: #0891b2;
+  color: var(--primary);
   box-shadow: 0 0 32px rgb(14 165 233 / 0.12);
 }
 
@@ -902,7 +906,8 @@
 }
 
 .accounting-premium [data-slot="button"][data-variant="default"] {
-  background: linear-gradient(135deg, #7c3aed, #0891b2) !important;
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
   box-shadow: 0 12px 32px rgb(8 145 178 / 0.18);
 }
 

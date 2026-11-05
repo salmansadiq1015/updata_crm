@@ -11,6 +11,7 @@
 // (silence when empty), so the phone's clock paces everything.
 
 #include "bridge.h"
+#include "callowner.h"
 #include "hostwatchdog.h"
 
 #include <stdio.h>
@@ -55,6 +56,7 @@
 #define CAP_MSBC (1 << 3)
 #define CAP_DIAL_AUTH (1 << 4)
 #define CAP_PRESENCE_BUTTON (1 << 5)
+#define CAP_ANSWER (1 << 6)
 
 typedef struct {
     uint8_t type;
@@ -83,6 +85,7 @@ static struct {
     volatile bool host_lost_pending, dial_pending, down_started;
     volatile uint32_t up_index;
     volatile uint32_t state_version;
+    callowner_t owner;  // host-started/answered call: the only kind the host watchdog may end
     uint8_t reset_reason;
 } S;
 
@@ -158,7 +161,7 @@ static uint8_t current_state(void)
 
 static void send_state(void)
 {
-    uint8_t p[22];
+    uint8_t p[23];
     p[0] = current_state();
     p[1] = S.hfp;
     p[2] = S.call;
@@ -170,6 +173,7 @@ static void send_state(void)
     memcpy(p + 8, S.peer, 6);
     proto_wr32(p + 14, S.call_ref);
     proto_wr32(p + 18, S.ag_features);
+    p[22] = S.owner.owned ? 1 : 0;  // flags: bit0 = the current call is host-owned
     tx_frame(T_STATE, p, sizeof(p));
 }
 
@@ -195,7 +199,7 @@ static void send_hello_ack(void)
     p[0] = PROTO_MAJOR;
     p[1] = PROTO_MINOR;
     p[2] = (uint8_t)chip.revision;
-    p[3] = CAP_HFP_HF | CAP_VOICE_OVER_HCI | CAP_CVSD | CAP_DIAL_AUTH | CAP_PRESENCE_BUTTON;
+    p[3] = CAP_HFP_HF | CAP_VOICE_OVER_HCI | CAP_CVSD | CAP_DIAL_AUTH | CAP_PRESENCE_BUTTON | CAP_ANSWER;
     if (addr) {
         memcpy(p + 4, addr, 6);
     } else {
@@ -260,8 +264,11 @@ static void tx_task(void *arg)
             last_stats = now;
             send_stats();
         }
-        // Host gone during a call: the lead would hear dead air. End the call, tell the next session.
-        if (S.session_open && (S.call || S.callsetup) && hostwatchdog_expired(now, S.last_host_rx_ms, CONFIG_UPDATA_HOST_TIMEOUT_MS)) {
+        // Host gone during a call it dialed or answered: the caller would hear dead air. End that
+        // call and tell the next session. A ringing call left for a person, or one a person picked
+        // up on the handset, is not the host's: never reject or hang it up.
+        if (callowner_watchdog_should_end(&S.owner, S.session_open, S.call, S.callsetup,
+                                          hostwatchdog_expired(now, S.last_host_rx_ms, CONFIG_UPDATA_HOST_TIMEOUT_MS))) {
             S.session_open = false;
             S.host_lost_pending = true;
             esp_hf_client_reject_call();  // AT+CHUP: ends a dialing, ringing or active call
@@ -350,11 +357,30 @@ static uint8_t cmd_dial(const proto_frame_t *f)
     num[nlen] = 0;
     S.call_ref = call_ref;
     S.dial_pending = true;
+    callowner_claim(&S.owner, false);
     if (esp_hf_client_dial(num) != ESP_OK) {
         S.dial_pending = false;
+        callowner_release(&S.owner);
         return R_STACK_ERROR;
     }
     dialpolicy_commit(&s_policy, counter, now);
+    state_changed();
+    return R_OK;
+}
+
+static uint8_t cmd_answer(const proto_frame_t *f)
+{
+    uint32_t call_ref = f->len == 4 ? proto_rd32(f->payload) : 0;
+    uint8_t rc = answer_check(f->len, call_ref, S.hfp == HFP_SLC, S.call, S.callsetup, S.dial_pending);
+    if (rc != R_OK) {
+        return rc;
+    }
+    S.call_ref = call_ref;
+    callowner_claim(&S.owner, true);  // the phone is already ringing
+    if (esp_hf_client_answer_call() != ESP_OK) {  // ATA
+        callowner_release(&S.owner);
+        return R_STACK_ERROR;
+    }
     state_changed();
     return R_OK;
 }
@@ -444,6 +470,9 @@ static void handle_frame(const proto_frame_t *f)
     case T_DIAL:
         rc = cmd_dial(f);
         break;
+    case T_ANSWER:
+        rc = cmd_answer(f);
+        break;
     case T_HANGUP:  // always allowed: ending a call is the safe direction
         if (!(S.call || S.callsetup || S.dial_pending)) {
             rc = R_BAD_STATE;
@@ -461,6 +490,11 @@ static void handle_frame(const proto_frame_t *f)
     case T_AUDIO_DISCONNECT:
         if (S.audio == AUDIO_OFF || esp_hf_client_disconnect_audio(S.peer) != ESP_OK) {
             rc = R_BAD_STATE;
+        } else {
+            // The phone's own earpiece takes the call (takeover / person answered): a person
+            // owns it now, so a later host loss must not hang it up.
+            callowner_release(&S.owner);
+            state_changed();
         }
         break;
     case T_DTMF: {
@@ -577,6 +611,7 @@ static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
             S.callsetup = 0;
             S.audio = AUDIO_OFF;
             S.dial_pending = false;
+            callowner_release(&S.owner);
         }
         break;
     case ESP_HF_CLIENT_AUDIO_STATE_EVT:
@@ -600,12 +635,14 @@ static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
             S.ended_at_us = esp_timer_get_time();
         }
         S.call = p->call.status == ESP_HF_CALL_STATUS_CALL_IN_PROGRESS ? 1 : 0;
+        callowner_on_indicators(&S.owner, S.call, S.callsetup);
         break;
     case ESP_HF_CLIENT_CIND_CALL_SETUP_EVT:
         if (S.callsetup && p->call_setup.status == ESP_HF_CALL_SETUP_STATUS_IDLE && !S.call) {
             S.ended_at_us = esp_timer_get_time();  // ended before it was answered
         }
         S.callsetup = (uint8_t)p->call_setup.status;
+        callowner_on_indicators(&S.owner, S.call, S.callsetup);
         break;
     case ESP_HF_CLIENT_CIND_SIGNAL_STRENGTH_EVT:
         S.signal = (uint8_t)p->signal_strength.value;
@@ -621,6 +658,10 @@ static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
             post_event(EV_CLIP, p->clip.number, (uint16_t)strnlen(p->clip.number, 40));
         }
         break;
+    case ESP_HF_CLIENT_CCWA_EVT:  // call waiting: the host reports it; it never answers it
+        post_event(EV_CALL_WAITING, p->ccwa.number ? p->ccwa.number : "",
+                   p->ccwa.number ? (uint16_t)strnlen(p->ccwa.number, 40) : 0);
+        break;
     case ESP_HF_CLIENT_VOLUME_CONTROL_EVT: {
         uint8_t v[2] = {(uint8_t)p->volume_control.type, (uint8_t)p->volume_control.volume};
         post_event(EV_VOLUME, v, 2);
@@ -635,6 +676,9 @@ static void hf_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p)
                    : p->at_response.code == ESP_HF_AT_RESPONSE_CODE_CME ? (uint8_t)p->at_response.cme
                                                                          : (uint8_t)(0x80 | p->at_response.code);
             S.dial_pending = false;
+            if (d[4] != 0 && !S.call && !S.callsetup) {
+                callowner_release(&S.owner);  // the phone refused the dial: no call to own
+            }
             post_event(EV_DIAL_RESULT, d, sizeof(d));
         }
         break;

@@ -11,6 +11,7 @@ export const LEAD_EVENT_TYPES = Object.freeze([
   'assignment.auto', 'assignment.manual', 'assignment.cleared',
   'sla.started', 'sla.breached', 'sla.escalated', 'sla.met', 'sla.late',
   'follow_up.overdue', 'follow_up.escalated',
+  'call.evaluated',
 ]);
 
 const leadEventSchema = new mongoose.Schema({

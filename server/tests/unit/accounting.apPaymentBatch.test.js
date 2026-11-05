@@ -155,6 +155,7 @@ describe('AP payment batch integrity', () => {
     expect(paymentBatchRepository.create).toHaveBeenCalledWith(
       {
         batchNumber: 'PB-2026-00001',
+        currency: 'CHF',
         totalAmount: 100.25,
         invoiceCount: 2,
         invoiceIds: ['invoice-1', 'invoice-2'],

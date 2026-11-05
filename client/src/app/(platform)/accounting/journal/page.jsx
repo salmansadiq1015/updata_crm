@@ -1,4 +1,7 @@
 'use client';
+import { currencyDigits } from '@/shared/data/currencies';
+import { CurrencyPicker } from '@/modules/accounting/components/currency-picker';
+import { getAccountingCurrency, useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { Plus, RotateCcw, Download } from 'lucide-react';
@@ -19,8 +22,8 @@ import { useJournalMutations } from '@/modules/accounting/hooks/use-accounting-m
 import { journalService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
 
-const fmt = (n) =>
-  new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
+const fmt = (n, currency = getAccountingCurrency()) =>
+  new Intl.NumberFormat('de-CH', { minimumFractionDigits: currencyDigits(currency), maximumFractionDigits: currencyDigits(currency) }).format(n ?? 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 
 const REF_TYPE_CONFIG = {
@@ -68,7 +71,7 @@ function JournalFormDialog({
     debitAccountId: '',
     creditAccountId: '',
     amount: '',
-    currency: 'CHF',
+    currency: getAccountingCurrency(),
     companyId: 'ALL',
     branchId: 'ALL',
   });
@@ -105,13 +108,7 @@ function JournalFormDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
-              <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CHF">CHF</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencyPicker label="Currency" value={form.currency} onValueChange={(v) => set('currency', v)} />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -176,7 +173,7 @@ function JournalFormDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">{de ? 'Betrag' : 'Amount'}</Label>
-            <Input type="number" step="0.05" min="0.05" className="h-8 font-mono" value={form.amount} onChange={(e) => set('amount', e.target.value)} required placeholder="0.00" />
+            <Input type="number" step={10 ** -currencyDigits(form.currency)} min={10 ** -currencyDigits(form.currency)} className="h-8 font-mono" value={form.amount} onChange={(e) => set('amount', e.target.value)} required placeholder="0.00" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={createEntry.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
@@ -191,6 +188,7 @@ function JournalFormDialog({
 }
 
 export default function JournalPage() {
+  const { currency } = useAccountingCurrency();
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const [dateRange, setDateRange] = useState(() => currentYearRange());
@@ -210,6 +208,7 @@ export default function JournalPage() {
   )), [branches, scopeFilters.companyId]);
 
   const filters = {
+    currency,
     limit: 50,
     entryDateFrom: dateRange.startDate,
     entryDateTo: dateRange.endDate,
@@ -249,6 +248,7 @@ export default function JournalPage() {
     setIsExporting(true);
     try {
       const response = await journalService.export({
+        currency,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         ...(scopeFilters.companyId !== 'ALL' && { companyId: scopeFilters.companyId }),
@@ -391,7 +391,7 @@ export default function JournalPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right font-mono font-medium tabular-nums">
-                    {fmt(entry.amount)} <span className="text-muted-foreground text-xs">{entry.currency}</span>
+                    {fmt(entry.amount, entry.currency)} <span className="text-muted-foreground text-xs">{entry.currency}</span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     {entry.referenceType === 'MANUAL' && !entry.reversalOf && (

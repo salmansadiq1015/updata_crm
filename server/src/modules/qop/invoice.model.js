@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
@@ -159,7 +160,7 @@ const invoiceSchema = new mongoose.Schema(
     lineItems: [lineItemSchema],
     currency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     globalDiscountPercent: { type: Number, default: 0, min: 0, max: 100 },

@@ -3,6 +3,8 @@ export function buildNotificationDeepLink(entityType, entityId) {
   const id = entityId.toString();
 
   switch (entityType) {
+    case 'EmailMessage':
+      return `/email?messageId=${id}`;
     case 'Task':
       return `/tasks?taskId=${id}`;
     case 'Meeting':

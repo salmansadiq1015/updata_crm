@@ -299,11 +299,11 @@ function DashboardSkeleton() {
   );
 }
 
-function DashboardError({ onRetry, isFetching, t }: { onRetry: () => void; isFetching: boolean; t: TranslateFn }) {
+function DashboardError({ onRetry, isFetching, t, embedded = false }: { onRetry: () => void; isFetching: boolean; t: TranslateFn; embedded?: boolean }) {
   return (
-    <main className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-xl border border-destructive/20 bg-card p-6 text-center shadow-theme-sm">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10">
+    <main className={embedded ? "py-2" : "flex min-h-0 flex-1 items-center justify-center p-6"}>
+      <section className={cn("rounded-xl border border-destructive/20 bg-card p-5 shadow-theme-sm", !embedded && "w-full max-w-md text-center")}>
+        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10", !embedded && "mx-auto")}>
           <AlertCircle className="h-6 w-6 text-destructive" />
         </div>
         <h2 className="mt-4 text-base font-semibold text-foreground">
@@ -641,6 +641,11 @@ function TaskSection({ sectionKey, tasks, total, config, t, formatDate, onOpenTa
   );
 }
 
+function DashboardShell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="space-y-5">{children}</div>;
+  return <div className="flex h-full min-h-0 flex-col bg-background"><main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6"><div className="space-y-5">{children}</div></main></div>;
+}
+
 /**
  * `embedded` renders only the analysis blocks, for the collapsible section of
  * the tasks workspace: the page chrome, the header and the metric row are the
@@ -707,7 +712,7 @@ export function TaskDashboardPage({ embedded = false }: { embedded?: boolean } =
     );
   }
 
-  if (dashboardQuery.isError) {
+  if (dashboardQuery.isError && !dashboardQuery.data) {
     return (
       <div className="flex h-full min-h-0 flex-col bg-background">
         <DashboardError
@@ -716,23 +721,25 @@ export function TaskDashboardPage({ embedded = false }: { embedded?: boolean } =
           }}
           isFetching={dashboardQuery.isFetching}
           t={t}
+          embedded={embedded}
         />
       </div>
     );
   }
 
-  const Shell = embedded
-    ? ({ children }: { children: React.ReactNode }) => <div className="space-y-5">{children}</div>
-    : ({ children }: { children: React.ReactNode }) => (
-      <div className="flex h-full min-h-0 flex-col bg-background">
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
-          <div className="space-y-5">{children}</div>
-        </main>
-      </div>
-    );
-
   return (
-    <Shell>
+    <DashboardShell embedded={embedded}>
+      {dashboardQuery.isError || dashboardQuery.data?.sampleUnavailable ? (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+          <span>{dashboardQuery.isError
+            ? t('tasks.dashboard.cachedWarning', 'Showing saved analysis. The latest update could not be loaded.')
+            : t('tasks.dashboard.sampleWarning', 'Some chart samples are unavailable. Task totals are still up to date.')}</span>
+          <Button variant="outline" size="sm" onClick={() => void dashboardQuery.refetch()} disabled={dashboardQuery.isFetching}>
+            <RefreshCw className={cn('h-3.5 w-3.5', dashboardQuery.isFetching && 'animate-spin')} />
+            {t('common.retry', 'Retry')}
+          </Button>
+        </div>
+      ) : null}
       {!embedded && (
           <DashboardHeader
             upcomingDays={upcomingDays}
@@ -893,6 +900,6 @@ export function TaskDashboardPage({ embedded = false }: { embedded?: boolean } =
               onOpenAll={openAllTasks}
             />
           </div>
-    </Shell>
+    </DashboardShell>
   );
 }

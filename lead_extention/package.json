@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:browser": "node tests/browser-smoke.mjs",
     "test:maps-browser": "npm run build && node tests/maps-browser-regression.mjs",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:ui-browser": "npm run build && node tests/ui-browser-regression.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

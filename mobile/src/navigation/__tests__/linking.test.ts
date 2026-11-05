@@ -33,4 +33,12 @@ describe('deep links', () => {
     });
     expect(resolve('call-agent/settings')).toMatchObject({ name: 'CallAgentSettings' });
   });
+
+  it('maps incoming-call links', () => {
+    expect(resolve('incoming-calls')).toMatchObject({ name: 'IncomingCalls' });
+    expect(resolve('incoming-calls/6721a0f4c2b1d3e4f5a6b7c8')).toMatchObject({
+      name: 'IncomingCallDetail',
+      params: { id: '6721a0f4c2b1d3e4f5a6b7c8' },
+    });
+  });
 });

@@ -410,6 +410,17 @@ export const queryKeys = {
     },
     importJob: (jobId) => ['discovery', 'importJob', jobId],
   },
+  inboundCalls: {
+    all: () => ['inbound-calls'],
+    list: (params) => ['inbound-calls', 'list', params],
+    stats: (params) => ['inbound-calls', 'stats', params],
+    analytics: (params) => ['inbound-calls', 'analytics', params],
+    live: () => ['inbound-calls', 'live'],
+    detail: (id) => ['inbound-calls', 'detail', id],
+    devices: () => ['inbound-calls', 'devices'],
+    settings: () => ['inbound-calls', 'settings'],
+    costs: (params) => ['inbound-calls', 'costs', params],
+  },
   leads: {
     all: () => ['leads'],
     list: (params) => ['leads', 'list', params],

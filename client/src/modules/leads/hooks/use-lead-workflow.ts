@@ -10,6 +10,8 @@ import type {
   AnswerCorrectionInput,
   AssignmentPolicy,
   CreateFollowUpInput,
+  FollowUp,
+  FollowUpAiAction,
   FollowUpListParams,
   TimelineFilters,
 } from '../types/lead-workflow-types';
@@ -23,6 +25,10 @@ export const leadWorkflowKeys = {
   followUps: ['lead-follow-ups'] as const,
   followUpList: (params: FollowUpListParams) => ['lead-follow-ups', 'list', params] as const,
   followUpSummary: (scope: string, tz: string) => ['lead-follow-ups', 'summary', scope, tz] as const,
+  followUpDetail: (id: string | null) => ['lead-follow-ups', 'detail', id] as const,
+  // Outside the realtime-invalidated roots: agents / the org switch don't change per follow-up event.
+  followUpAgents: ['lead-follow-up-ai', 'agents'] as const,
+  followUpAutomationSettings: ['lead-follow-up-ai', 'settings'] as const,
   policy: [...['lead-workflow'], 'policy'] as const,
 };
 
@@ -43,6 +49,7 @@ export function useLeadTimeline(leadId: string | null, filters: TimelineFilters 
     getNextPageParam: (last) => (last.pagination.hasNext ? last.pagination.nextCursor : undefined),
     enabled: Boolean(leadId),
     staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -84,6 +91,7 @@ export function useFollowUps(params: FollowUpListParams) {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.pagination.hasNext ? last.pagination.nextCursor : undefined),
     staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -92,6 +100,7 @@ export function useFollowUpSummary(scope: string, tz: string) {
     queryKey: leadWorkflowKeys.followUpSummary(scope, tz),
     queryFn: () => leadWorkflowApi.followUpSummary(scope, tz),
     staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -109,6 +118,52 @@ export function useFollowUpAction() {
       void qc.invalidateQueries({ queryKey: leadWorkflowKeys.followUps });
       void qc.invalidateQueries({ queryKey: [...leadWorkflowKeys.root, 'timeline'] });
     },
+  });
+}
+
+/** One follow-up, seeded from the list row so the detail panel renders instantly and stays live. */
+export function useFollowUp(id: string | null, initial?: FollowUp | null) {
+  return useQuery({
+    queryKey: leadWorkflowKeys.followUpDetail(id),
+    queryFn: () => leadWorkflowApi.followUp(id ?? ''),
+    enabled: Boolean(id),
+    initialData: initial ?? undefined,
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+  });
+}
+
+/** Assign / change the AI agent, call now, pause, resume, hand to a person. */
+export function useFollowUpAiAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: FollowUpAiAction) => leadWorkflowApi.followUpAiAction(input),
+    onSuccess: (data, input) => { if (data) qc.setQueryData(leadWorkflowKeys.followUpDetail(input.id), data); },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: leadWorkflowKeys.followUps });
+      void qc.invalidateQueries({ queryKey: [...leadWorkflowKeys.root, 'timeline'] });
+    },
+  });
+}
+
+/** Outbound AI agents a follow-up can be handed to (needs ai-calling:read). */
+export function useFollowUpAgents(enabled: boolean) {
+  return useQuery({
+    queryKey: leadWorkflowKeys.followUpAgents,
+    queryFn: () => leadWorkflowApi.followUpAgents(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** Organisation switch for automatic AI follow-up calls (needs ai-calling:read). */
+export function useFollowUpAutomationSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: leadWorkflowKeys.followUpAutomationSettings,
+    queryFn: () => leadWorkflowApi.followUpAutomationSettings(),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
   });
 }
 
@@ -137,12 +192,18 @@ export function useSaveAssignmentPolicy() {
 
 /**
  * Realtime refresh: the server emits `lead:follow-up` (inbox changes, overdue
- * alerts) and `lead:sla` (breach / escalation / response) to the user's room.
+ * alerts, AI follow-up `{ type: 'automation' }` state changes, evaluated calls)
+ * and `lead:sla` (breach / escalation / response) to the user's room. Every
+ * `lead:follow-up` payload refreshes the list, summary and open detail panel.
  */
 export function useLeadWorkflowRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
-    const onFollowUp = () => { void qc.invalidateQueries({ queryKey: leadWorkflowKeys.followUps }); };
+    const onFollowUp = () => {
+      void qc.invalidateQueries({ queryKey: leadWorkflowKeys.followUps });
+      void qc.invalidateQueries({ queryKey: leadWorkflowKeys.root });
+      void qc.invalidateQueries({ queryKey: ['leads'] });
+    };
     const onSla = () => { void qc.invalidateQueries({ queryKey: ['leads'] }); };
     let current: Socket | null = null;
     const register = (socket: Socket | null) => {

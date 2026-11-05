@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FrameDecoder, SeqTracker, T, build, crc16, encodeFrame, parse, parseBdaddr, MAX_PAYLOAD } from '../src/esp32/protocol.js';
+import { CAP, FrameDecoder, SeqTracker, T, build, crc16, encodeFrame, parse, parseBdaddr, MAX_PAYLOAD } from '../src/esp32/protocol.js';
 import { dialMessage, normalizeNumber, signDial, verifyDial } from '../src/esp32/dialAuth.js';
 
 // Same vectors as esp32/firmware/test/host/test_main.c
@@ -79,10 +79,15 @@ test('payload parsers', () => {
   st.writeUInt32LE(879, 18);
   assert.deepEqual(parse[T.STATE](st), {
     device: 'audio_ready', hfp: 'slc', call: 1, callsetup: 0, audio: 'on', codec: 'cvsd', signal: null, battery: 4,
-    peer: '04:01:BB:51:10:48', callRef: 42, agFeatures: 879,
+    peer: '04:01:BB:51:10:48', callRef: 42, agFeatures: 879, hostOwned: null,
   });
+  // firmware 0.1.4+ appends a flags byte: bit0 = host-owned call
+  assert.equal(parse[T.STATE](Buffer.concat([st, Buffer.from([1])])).hostOwned, true);
+  assert.equal(parse[T.STATE](Buffer.concat([st, Buffer.from([0])])).hostOwned, false);
   assert.deepEqual(parse[T.ACK](Buffer.from([0x34, 0x12, T.DIAL, 5])), { ackedSeq: 0x1234, command: T.DIAL, result: 'unauthorized', code: 5 });
   assert.deepEqual(parse[T.EVENT](Buffer.from([6, 42, 0, 0, 0, 0])), { name: 'dial_result', callRef: 42, ok: true, cme: 0 });
+  assert.deepEqual(parse[T.EVENT](Buffer.concat([Buffer.from([9]), Buffer.from('+923004445566')])), { name: 'call_waiting', number: '+923004445566' });
+  assert.deepEqual(parse[T.EVENT](Buffer.from([9])), { name: 'call_waiting', number: '' });
   assert.throws(() => parseBdaddr('04:01:BB:51:10'), /bad Bluetooth address/);
 });
 
@@ -99,4 +104,11 @@ test('dial authorization matches the firmware vector and rejects any change', ()
   assert.throws(() => signDial(Buffer.alloc(16), f), /32 bytes/);
   assert.equal(normalizeNumber('+92 300-123 4567'), '+923001234567');
   for (const bad of ['', '12', '*#06#', '0300;ATH', '123456789012345678901']) assert.throws(() => normalizeNumber(bad));
+});
+
+test('ANSWER: type 0x26, nonzero u32 callRef, capability bit 6', () => {
+  assert.equal(T.ANSWER, 0x26);
+  assert.equal(CAP.ANSWER, 0x40);
+  assert.equal(encodeFrame(T.ANSWER, 5, build.answer(0x01020304)).toString('hex').slice(0, 24), 'a55a260005000400' + '04030201');
+  for (const bad of [0, -1, 1.5, 2 ** 32]) assert.throws(() => build.answer(bad), RangeError);
 });

@@ -264,7 +264,7 @@ export function TaskFileViewer({
           <Upload className="h-3.5 w-3.5" />
           {isUploading ? t('tasks.files.uploading', 'Wird hochgeladen…') : t('tasks.files.upload', 'Hochladen')}
         </Button>
-        <input ref={fileInputRef} type="file" className="sr-only" onChange={handleFileChange} />
+        <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
       </div>
 
       {isLoading ? (

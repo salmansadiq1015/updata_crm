@@ -135,7 +135,7 @@ export function AccountingStatCard({
 export function AccountingAgingPanel({ buckets, label, rows, totalLabel, format }) {
   if (!buckets) return null;
 
-  const total = rows.reduce((sum, row) => sum + (buckets[row.key] ?? 0), 0) || 1;
+  const total = rows.reduce((sum, row) => sum + (buckets[row.key] ?? 0), 0);
 
   return (
     <section className="accounting-card p-5">
@@ -151,7 +151,7 @@ export function AccountingAgingPanel({ buckets, label, rows, totalLabel, format 
           <span
             key={row.key}
             className={row.color}
-            style={{ width: `${((buckets[row.key] ?? 0) / total) * 100}%` }}
+            style={{ width: `${((buckets[row.key] ?? 0) / (total || 1)) * 100}%` }}
           />
         ))}
       </div>

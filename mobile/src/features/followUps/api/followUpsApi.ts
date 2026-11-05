@@ -9,7 +9,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overdue items stay visible for 30 days; the agenda looks 30 days ahead. */
 export const FOLLOW_UP_WINDOW_DAYS = { past: 30, future: 30 } as const;
 
+const aiPath = (id: string, action: 'call-now' | 'pause' | 'resume') => `/ai-calling/follow-ups/${id}/${action}`;
+
 export const followUpsApi = {
+  /** AI follow-up controls (server aiCalling/followUpCalling.routes.js); the server checks ownership. */
+  async aiAction(followUpId: string, action: 'call-now' | 'pause' | 'resume'): Promise<void> {
+    await api.post(aiPath(followUpId, action));
+  },
   async list(scope: FollowUpScope, signal?: AbortSignal, now: Date = new Date()): Promise<FollowUp[]> {
     const { data } = await api.get(ENDPOINTS.leads.followUps, z.array(followUpSchema), {
       signal,

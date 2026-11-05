@@ -1,9 +1,10 @@
+import { currencyDigits } from '@/shared/data/currencies';
 export function formatMoney(value, currency = 'CHF', options = {}) {
   return new Intl.NumberFormat('de-CH', {
     style: 'currency',
     currency,
-    minimumFractionDigits: options.minimumFractionDigits ?? 2,
-    maximumFractionDigits: options.maximumFractionDigits ?? 2,
+    minimumFractionDigits: options.minimumFractionDigits ?? currencyDigits(currency),
+    maximumFractionDigits: options.maximumFractionDigits ?? currencyDigits(currency),
   }).format(Number(value || 0));
 }
 

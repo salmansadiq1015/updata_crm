@@ -2,7 +2,8 @@ import type { RawBusinessRecord, SearchRecord } from './types';
 import { normalizePhone, normalizeText, normalizeUrl } from './utils';
 
 export const DISCOVERY_BATCH_SIZE = 25;
-export const CRM_BATCH_SIZE = 25;
+// Match the existing CRM bulk-import schema limit. Discovery still uses 25.
+export const CRM_BATCH_SIZE = 500;
 export const REQUIRED_STABLE_END_ROUNDS = 3;
 export const CHECKPOINT_VERSION = 2;
 

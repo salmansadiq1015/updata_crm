@@ -1,4 +1,5 @@
 import User from './user.model.js';
+import { buildUserSearchFilter } from './userSearch.js';
 import {
   buildCursorQuery,
   buildCursorSort,
@@ -75,14 +76,8 @@ class UserRepository {
       ...buildCursorQuery(cursor, resolvedSortBy, sortOrder),
     };
 
-    // Text search
-    if (search) {
-      filter.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-      ];
-    }
+    // Keep cursor $or and search conditions independent; neither may replace the other.
+    Object.assign(filter, buildUserSearchFilter(search));
 
     const sort = buildCursorSort(resolvedSortBy, sortOrder);
 
@@ -104,10 +99,8 @@ class UserRepository {
   async findIdsByNameOrEmail(search, limit = 50) {
     const term = typeof search === 'string' ? search.trim() : '';
     if (!term) return [];
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = { $regex: escaped, $options: 'i' };
     const docs = await User.find(
-      { $or: [{ firstName: regex }, { lastName: regex }, { email: regex }] },
+      buildUserSearchFilter(term),
       { _id: 1 },
     ).limit(Math.max(1, Math.min(Number(limit) || 50, 200))).lean();
     return docs.map((doc) => doc._id);

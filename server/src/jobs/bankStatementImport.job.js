@@ -14,12 +14,13 @@ export class BankStatementImportWorker extends BaseWorker {
     super('bank-statement-import');
   }
 
-  async process(job) {
+  async process(_job) {
     // Lazy import to avoid circular dependencies
     const BankAccount = (await import('../modules/accounting/bankAccount.model.js')).default;
 
     const accounts = await BankAccount.find({
       autoRetrieveEnabled: true,
+      connectionType: { $in: ['EBICS', 'SFTP'] },
       status: 'ACTIVE',
     }).lean();
 

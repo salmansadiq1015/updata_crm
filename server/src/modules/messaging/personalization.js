@@ -3,6 +3,7 @@ const VARIABLE_PATTERN = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g;
 export const ALLOWED_VARIABLES = Object.freeze([
   'firstName', 'lastName', 'fullName', 'businessName', 'email', 'phone', 'city',
   'country', 'category', 'rating', 'assignedUserName', 'companyName', 'senderName', 'link',
+  'qualificationStatus', 'callSummary', 'customField',
 ]);
 
 export function escapeHtml(value) {
@@ -41,6 +42,10 @@ export function leadVariables(lead, context = {}) {
       : '',
     companyName: context.companyName || process.env.COMPANY_NAME || 'Updata.ai',
     senderName: context.senderName || '',
+    qualificationStatus: lead?.latestCall?.qualificationStatus || '',
+    callSummary: context.callSummary || '',
+    // Generic customField must be explicitly supplied; never guess a field or answer.
+    customField: context.customField ?? '',
   };
 }
 

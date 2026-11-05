@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingFilters } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { Boxes, CheckCircle2, Layers3, PackageCheck } from 'lucide-react';
@@ -56,7 +57,7 @@ function MetricTile({ label, value, sub }) {
 export default function InventoryAccountingPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const [filters, setFilters] = useState(defaultInventoryFilters());
+  const [filters, setFilters] = useAccountingFilters(defaultInventoryFilters());
   const valuationParams = useMemo(() => buildInventoryValuationParams(filters), [filters]);
   const movementParams = useMemo(() => buildInventoryMovementParams(filters), [filters]);
   const { data: valuation, isLoading: valuationLoading } = useInventoryValuation(valuationParams);

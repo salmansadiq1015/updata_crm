@@ -11,7 +11,7 @@ const SKIP_PATHS = ['/health/live', '/health/ready', '/metrics'];
 
 /** SMS link tokens are bearer secrets: never write them to logs. */
 export function redactPath(url) {
-  return String(url || '').replace(/^\/c\/[^/?#]+/, '/c/[link]');
+  return String(url || '').replace(/^\/c\/[^/?#]+/, '/c/[link]').replace(/([?&](?:code|state|access_token|refresh_token|validationToken)=)[^&#]*/gi, '$1[redacted]');
 }
 
 export function requestLogger(req, res, next) {

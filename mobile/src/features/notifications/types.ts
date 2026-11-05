@@ -55,7 +55,8 @@ export const unreadCountSchema = z.object({ unreadCount: z.number().int().nonneg
 
 export type NotificationTarget =
   | { screen: 'LeadDetail'; params: { leadId: string } }
-  | { screen: 'AiAgentCampaignDetail'; params: { kind: 'call' | 'sms'; campaignId: string } };
+  | { screen: 'AiAgentCampaignDetail'; params: { kind: 'call' | 'sms'; campaignId: string } }
+  | { screen: 'IncomingCallDetail'; params: { id: string } };
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
@@ -64,6 +65,10 @@ export function notificationTarget(notification: AppNotification): NotificationT
   const id = notification.relatedEntityId;
   if (id && OBJECT_ID.test(id)) {
     if (notification.relatedEntityType === 'Lead') return { screen: 'LeadDetail', params: { leadId: id } };
+    // Incoming-call notifications (inbound_calls.missed / interrupted / qualified).
+    if (notification.relatedEntityType === 'InboundCall') {
+      return { screen: 'IncomingCallDetail', params: { id } };
+    }
     if (['CallCampaign', 'AiCallCampaign'].includes(notification.relatedEntityType ?? '')) {
       return { screen: 'AiAgentCampaignDetail', params: { kind: 'call', campaignId: id } };
     }
@@ -81,6 +86,11 @@ export function notificationTarget(notification: AppNotification): NotificationT
     {
       pattern: /(?:^updata:\/\/|^\/)ai-calling\/campaigns\/([0-9a-f]{24})(?:$|[/?#])/i,
       target: (campaignId) => ({ screen: 'AiAgentCampaignDetail', params: { kind: 'call', campaignId } }),
+    },
+    {
+      // `/incoming-calls?call=<id>` (web link) or `updata://incoming-calls/<id>`.
+      pattern: /(?:^updata:\/\/|^\/)incoming-calls(?:\/|\?(?:[^#]*&)?call=)([0-9a-f]{24})(?:$|[/?#&])/i,
+      target: (id) => ({ screen: 'IncomingCallDetail', params: { id } }),
     },
     {
       pattern: /(?:^updata:\/\/|^\/)messaging\/campaigns\/([0-9a-f]{24})(?:$|[/?#])/i,

@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
@@ -17,7 +18,7 @@ export const accountingSearchSchema = {
     type: Joi.string().valid(...ACCOUNTING_SEARCH_TYPES).default('ALL'),
     status: Joi.string().trim().max(60).allow(''),
     accountId: objectId,
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     startDate: Joi.date().iso(),
     endDate: Joi.date().iso().min(Joi.ref('startDate')),
     minAmount: Joi.number().min(0),

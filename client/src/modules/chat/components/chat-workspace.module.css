@@ -1,0 +1,10 @@
+.workspace { isolation: isolate; }
+.workspace :global(.chat-conversations) { background: color-mix(in srgb, var(--card) 94%, var(--background)); }
+.workspace :global(.chat-empty) { background: radial-gradient(ellipse at 60% 35%, color-mix(in srgb, var(--primary) 5%, transparent), transparent 65%); }
+.workspace :global(.chat-empty-mark) { box-shadow: 0 8px 36px color-mix(in srgb, var(--primary) 6%, transparent), inset 0 1px 0 rgb(255 255 255 / .1); }
+.workspace :global(.chat-panel-header) { background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(16px); }
+.workspace :global(.chat-message-list) { background: radial-gradient(ellipse at 45% 5%, color-mix(in srgb, var(--primary) 2%, transparent), transparent 60%); }
+.workspace :global(.chat-composer) { padding-bottom: max(8px, env(safe-area-inset-bottom)); background: var(--card); }
+.workspace :global(.chat-composer textarea) { background: var(--background); border: 1px solid var(--border); border-radius: 16px; }
+.workspace :global(.chat-composer textarea):focus { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+@media (max-width: 767px) { .workspace :global(.chat-conversations) { border-inline-end: 0; } }

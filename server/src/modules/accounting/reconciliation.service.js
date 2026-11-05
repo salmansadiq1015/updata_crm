@@ -1,4 +1,6 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
+import { matchBankCategoryRule } from './bankCategoryRules.js';
 import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
 import reconciliationLearningRepository from './reconciliationLearning.repository.js';
 import eventBus from '../../shared/events/EventBus.js';
@@ -9,9 +11,6 @@ import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 
-function roundMoney(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
 
 class ReconciliationService {
   /**
@@ -23,6 +22,9 @@ class ReconciliationService {
 
     const unmatched = await bankTransactionRepository.findUnmatched(bankAccountId);
 
+    const bankAccountRepository = (await import('./bankAccount.repository.js')).default;
+    const bankAccount = await bankAccountRepository.findById(bankAccountId);
+    let categorizedCount = 0;
     let matchedCount = 0;
     let unmatchedCount = 0;
 
@@ -44,6 +46,7 @@ class ReconciliationService {
             matchedInvoice = await Invoice.findOne({
               invoiceNumber: txn.reference,
               isDeleted: false,
+              currency: txn.currency,
               status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
               amountDue: { $gt: 0 },
             }).lean();
@@ -58,6 +61,7 @@ class ReconciliationService {
           if (!matchedInvoice) {
             const candidates = await Invoice.find({
               isDeleted: false,
+              currency: txn.currency,
               status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
               amountDue: txn.amount,
             }).populate('customerId', 'name companyName').lean();
@@ -85,8 +89,9 @@ class ReconciliationService {
 
           if (!matchedApInvoice) {
             matchedApInvoice = await apInvoiceRepository.findOpenForAutoMatch({
+              currency: txn.currency,
               reference: txn.reference,
-              amount: roundMoney(Math.abs(txn.amount)),
+              amount: roundCurrency(Math.abs(txn.amount), txn.currency),
               payeeName: txn.payerPayeeName,
             });
           }
@@ -138,7 +143,16 @@ class ReconciliationService {
           unmatchedCount++;
         }
       } else {
-        unmatchedCount++;
+        const accountId = matchBankCategoryRule(txn, bankAccount?.categoryRules);
+        if (accountId) {
+          try {
+            await this.categorize(txn._id, accountId, null);
+            categorizedCount++;
+          } catch (err) {
+            unmatchedCount++;
+            logger.warn('Automatic categorization requires review', { transactionId: txn._id, error: { message: err.message } });
+          }
+        } else unmatchedCount++;
       }
     }
 
@@ -156,7 +170,7 @@ class ReconciliationService {
       unmatchedCount,
     });
 
-    return { matchedCount, unmatchedCount };
+    return { matchedCount, unmatchedCount, ...(categorizedCount ? { categorizedCount } : {}) };
   }
 
   async _findLearnedArMatch(txn) {
@@ -174,7 +188,7 @@ class ReconciliationService {
       customerId: learned.entityId,
       isDeleted: false,
       status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
-      amountDue: roundMoney(txn.amount),
+      amountDue: roundCurrency(txn.amount, txn.currency),
     })
       .sort({ dueDate: 1, _id: 1 })
       .limit(2)
@@ -196,7 +210,7 @@ class ReconciliationService {
     const apInvoiceRepository = (await import('./apInvoice.repository.js')).default;
     return apInvoiceRepository.findSingleOpenBySupplierAndAmount({
       supplierId: learned.entityId,
-      amount: roundMoney(Math.abs(txn.amount)),
+      amount: roundCurrency(Math.abs(txn.amount), txn.currency),
       currency: txn.currency,
     });
   }
@@ -233,6 +247,7 @@ class ReconciliationService {
   }
 
   async getReport(params = {}) {
+    const roundMoney = value => roundCurrency(value, params.currency);
     const bankTransactionRepository = (await import('./bankTransaction.repository.js')).default;
     const summary = await bankTransactionRepository.getReconciliationSummary(params);
 
@@ -309,6 +324,8 @@ class ReconciliationService {
       // Find candidate invoices by amount proximity
       const amountRange = txn.amount * 0.1; // 10% tolerance
       const candidates = await Invoice.find({
+        currency: txn.currency,
+        isDeleted: false,
         status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
         $or: [
           { amountDue: { $gte: txn.amount - amountRange, $lte: txn.amount + amountRange } },
@@ -418,9 +435,12 @@ class ReconciliationService {
         }).session(session).lean();
         if (!invoice) throw new NotFoundError('Invoice', invoiceId);
 
+        if (invoice.currency && txn.currency && invoice.currency !== txn.currency) throw new ConflictError('Invoice and bank transaction currencies must match');
+
         payment = await arPaymentRepository.create({
           paymentDate: txn.transactionDate || txn.valueDate,
           amount: txn.amount,
+          currency: txn.currency,
           customerId: invoice.customerId?._id || invoice.customerId,
           paymentReference: txn.reference,
           bankAccountId: txn.bankAccountId,
@@ -438,8 +458,8 @@ class ReconciliationService {
           allocatedBy: userId,
         }, { session });
 
-        const newAmountPaid = Math.round(((invoice.amountPaid || 0) + txn.amount) * 100) / 100;
-        const newAmountDue = Math.round(((invoice.amountDue || 0) - txn.amount) * 100) / 100;
+        const newAmountPaid = roundCurrency((invoice.amountPaid || 0) + txn.amount, txn.currency);
+        const newAmountDue = roundCurrency((invoice.amountDue || 0) - txn.amount, txn.currency);
         const invoiceUpdate = await Invoice.updateOne(
           {
             _id: invoiceId,
@@ -526,16 +546,17 @@ class ReconciliationService {
           );
         }
 
-        amount = Math.round(Math.abs(txn.amount) * 100) / 100;
+        amount = roundCurrency(Math.abs(txn.amount), txn.currency);
         invoice = await apInvoiceRepository.findById(apInvoiceId, { session });
         if (!invoice) throw new NotFoundError('ApInvoice', apInvoiceId);
         if (!['RECORDED', 'APPROVED', 'PARTIALLY_PAID'].includes(invoice.status)) {
           throw new ConflictError(`AP invoice ${invoice.apInvoiceNumber} is not open for reconciliation`);
         }
-        if (Math.round((invoice.outstandingAmount || 0) * 100) / 100 < amount) {
+        if (roundCurrency(invoice.outstandingAmount, txn.currency) < amount) {
           throw new ConflictError(`Payment exceeds outstanding amount for AP invoice ${invoice.apInvoiceNumber}`);
         }
 
+        if (invoice.currency && txn.currency && invoice.currency !== txn.currency) throw new ConflictError('Invoice and bank transaction currencies must match');
         const invoiceUpdate = await apInvoiceRepository.applyPaymentDelta(apInvoiceId, amount, { session });
         if (invoiceUpdate.matchedCount !== 1) {
           throw new ConflictError('AP invoice changed while reconciliation was being posted');
@@ -674,33 +695,29 @@ class ReconciliationService {
       throw new ConflictError('Transaction is already matched or categorized');
     }
 
-    // Update bank transaction
-    await bankTransactionRepository.updateReconciliation(transactionId, 'CATEGORIZED', {
-      matchedAccountId: accountId,
-    });
-
-    // Create journal entry for the categorized transaction
+    const session = await mongoose.startSession();
     try {
-      const journalEntryService = (await import('./journalEntry.service.js')).default;
-      const bankClearingAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING);
-      const debitAcct = txn.amount >= 0 ? bankClearingAccountId : accountId;
-      const creditAcct = txn.amount >= 0 ? accountId : bankClearingAccountId;
-
-      await journalEntryService.createFromEvent(
-        'CATEGORIZATION',
-        transactionId,
-        debitAcct,
-        creditAcct,
-        Math.abs(txn.amount),
-        `Categorized: ${txn.bookingText || txn.reference || transactionId}`,
-        userId,
-      );
-    } catch (err) {
-      logger.warn('Failed to create journal entry for categorization', {
-        module: 'accounting',
-        transactionId,
-        error: { message: err.message },
+      await session.withTransaction(async () => {
+        const accountRepository = (await import('./account.repository.js')).default;
+        const destination = await accountRepository.findById(accountId, { session });
+        if (!destination || !destination.isActive) throw new NotFoundError('Active Account', accountId);
+        if (!Number.isFinite(txn.amount) || txn.amount === 0) throw new AppError('Cannot categorize a zero or invalid amount', 400, ERROR_CODES.INVALID_INPUT);
+        const claimed = await bankTransactionRepository.markReconciledIfUnmatched(transactionId, 'CATEGORIZED', { matchedAccountId: accountId }, { session });
+        if (claimed.modifiedCount !== 1) throw new ConflictError('Transaction is already matched or categorized');
+        const journalEntryService = (await import('./journalEntry.service.js')).default;
+        const bankClearingAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING);
+        await journalEntryService.createFromEvent(
+          'CATEGORIZATION', transactionId,
+          txn.amount > 0 ? bankClearingAccountId : accountId,
+          txn.amount > 0 ? accountId : bankClearingAccountId,
+          Math.abs(txn.amount),
+          `Categorized: ${txn.bookingText || txn.reference || transactionId}`,
+          userId,
+          { session, currency: txn.currency, entryDate: txn.transactionDate || txn.valueDate },
+        );
       });
+    } finally {
+      await session.endSession();
     }
 
     auditService.logEvent({

@@ -153,7 +153,7 @@ describe('ISO 20022 parser', () => {
   });
 
   test('reports invalid transaction currency with source line diagnostics', () => {
-    const invalidCurrencyXml = camt053Xml.replace('<Amt Ccy="CHF">250.10</Amt>', '<Amt Ccy="USD">250.10</Amt>');
+    const invalidCurrencyXml = camt053Xml.replace('<Amt Ccy="CHF">250.10</Amt>', '<Amt Ccy="ZZZ">250.10</Amt>');
 
     try {
       parseCamt053(invalidCurrencyXml);
@@ -164,15 +164,15 @@ describe('ISO 20022 parser', () => {
         code: ERROR_CODES.ACCT_BANK_IMPORT_PARSE_FAILED,
       });
       expect(error.details[0]).toMatchObject({
-        expected: 'CHF or EUR',
-        actual: 'USD',
+        expected: 'supported ISO 4217 currency',
+        actual: 'ZZZ',
         messageType: 'camt.053',
       });
       expect(error.details[0].line).toEqual(expect.any(Number));
       expect(error.details[0].line).toBeGreaterThan(0);
       expect(error.details[0].column).toEqual(expect.any(Number));
       expect(error.details[0].column).toBeGreaterThan(0);
-      expect(error.details[0].snippet).toContain('Ccy="USD"');
+      expect(error.details[0].snippet).toContain('Ccy="ZZZ"');
     }
   });
 
@@ -285,7 +285,7 @@ describe('bank statement import validation', () => {
       default: paymentBatchRepository,
     }));
     jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
-      default: { del: jest.fn(), getOrSet: jest.fn() },
+      default: { del: jest.fn(), invalidatePattern: jest.fn(), getOrSet: jest.fn() },
     }));
     jest.unstable_mockModule('../../src/shared/events/EventBus.js', () => ({
       default: { publish: jest.fn() },
@@ -340,7 +340,7 @@ describe('bank statement import validation', () => {
       default: paymentBatchRepository,
     }));
     jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
-      default: { del: jest.fn(), getOrSet: jest.fn() },
+      default: { del: jest.fn(), invalidatePattern: jest.fn(), getOrSet: jest.fn() },
     }));
     jest.unstable_mockModule('../../src/shared/events/EventBus.js', () => ({
       default: { publish: jest.fn() },

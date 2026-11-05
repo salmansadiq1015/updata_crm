@@ -18,7 +18,7 @@ import { costDiagnostics } from './engine/costDiagnostics.js';
  */
 
 const TEST_PROVIDERS = new Set(['livekit_web', 'web_link_preview']);
-const REACHED = new Set(['unresponsive', 'answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact']);
+const REACHED = new Set(['unresponsive', 'answered_completed', 'answered_partial', 'interrupted', 'declined', 'callback_requested', 'do_not_contact']);
 const MAX_CALLS = 5000;
 const CALL_LIST_LIMIT = 300;
 const round = (v, d = 6) => Number((v || 0).toFixed(d));
@@ -67,7 +67,8 @@ export function behaviorProfile(call) {
   const d = call.disposition;
   const outcome = !REACHED.has(d) ? 'not_reached'
     : d === 'answered_completed' ? 'engaged'
-      : d === 'answered_partial' ? 'partially_engaged'
+      : ['answered_partial', 'interrupted'].includes(d) ? 'partially_engaged'
+        : d === 'unresponsive' ? 'unresponsive'
         : d === 'callback_requested' ? 'callback_requested'
           : d === 'declined' ? 'declined' : 'opted_out';
   return {

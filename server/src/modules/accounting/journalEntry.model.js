@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 
 export const REFERENCE_TYPES = [
@@ -42,11 +43,11 @@ const journalEntrySchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: 0.01,
+      min: 0.0001,
     },
     currency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     companyId: {

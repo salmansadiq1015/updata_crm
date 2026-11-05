@@ -1,5 +1,6 @@
 /**
- * Gateway → CRM API (`/api/v1/paired-phone/gateway/*`), authenticated by the device's bearer token.
+ * Gateway → CRM API (`/api/v1/paired-phone/gateway/*`, incoming calls under `.../gateway/inbound/*`),
+ * authenticated by the device's bearer token.
  *
  * Call events go through a durable outbox: each has a stable eventId (the CRM de-duplicates on
  * it), is appended to a JSON-lines file before the first send, and is retried with backoff until
@@ -93,10 +94,28 @@ export class CrmClient {
     return this.request('/calls/claim', { sessionNonce });
   }
 
+  /** Call events; incoming calls (`in_…`) go to the inbound API, outbound ones to /calls. */
   sendEvent(callId, event) {
-    return this.request(`/calls/${encodeURIComponent(callId)}/events`, event);
+    const base = isInboundCallId(callId) ? '/inbound/calls' : '/calls';
+    return this.request(`${base}/${encodeURIComponent(callId)}/events`, event);
+  }
+
+  /**
+   * The phone is ringing: get the CRM's decision. Idempotent per sessionId (retry with the same
+   * one). `waiting`: a second call while the phone is in a call (recorded, left to the phone);
+   * the same sessionId reported later with waiting=false is re-decided once it rings on its own.
+   */
+  ringInbound({ sessionId, number = '', simSlot = null, at, waiting = false }) {
+    return this.request('/inbound/ring', { sessionId, number: number || '', simSlot, ...(at ? { at } : {}), waiting: Boolean(waiting) });
+  }
+
+  /** Room details after the owner asked the AI to answer a call that was left ringing. */
+  inboundAnswerJob(callId) {
+    return this.request(`/inbound/calls/${encodeURIComponent(callId)}/answer-job`);
   }
 }
+
+export const isInboundCallId = (callId) => /^in_/.test(String(callId || ''));
 
 /** Durable, ordered-per-call delivery of call events. */
 export class EventOutbox {

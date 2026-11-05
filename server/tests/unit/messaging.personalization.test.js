@@ -22,6 +22,14 @@ describe('messaging personalization', () => {
     expect(output.unresolved).toEqual(['unknownThing']);
   });
 
+  it('renders lifecycle context with the existing HTML escaping and explicit custom-field values', () => {
+    const values = leadVariables({ ...lead, latestCall: { qualificationStatus: 'QUALIFIED' } }, {
+      callSummary: 'Requested <demo>', customField: 'Enterprise',
+    });
+    expect(renderPersonalized('{{qualificationStatus}}: {{callSummary}} / {{customField}}', values, { html: true }))
+      .toEqual({ value: 'QUALIFIED: Requested &lt;demo&gt; / Enterprise', missing: [], unresolved: [] });
+  });
+
   it.each([
     ['', 'GSM-7', 0, 0],
     ['^'.repeat(80), 'GSM-7', 160, 1],

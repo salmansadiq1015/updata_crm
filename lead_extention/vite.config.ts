@@ -8,7 +8,7 @@ const wrapClassicContentScript = (): Plugin => ({
   generateBundle(_options, bundle) {
     const entry = bundle['content/maps.js'];
     if (!entry || entry.type !== 'chunk') throw new Error('The Maps content-script bundle was not generated.');
-    if (/^\s*import\s/m.test(entry.code)) throw new Error('Manifest V3 classic content scripts cannot contain ESM imports.');
+    if (entry.imports.length || entry.dynamicImports.length) throw new Error('Manifest V3 classic content scripts cannot contain ESM imports.');
     entry.code = `(() => {\n${entry.code}\n})();\n`;
   }
 });

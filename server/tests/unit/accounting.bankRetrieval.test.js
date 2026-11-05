@@ -85,7 +85,7 @@ async function loadBankingService({ account, existsStatement = false } = {}) {
     default: reconciliationService,
   }));
   jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
-    default: { del: jest.fn(), getOrSet: jest.fn() },
+    default: { del: jest.fn(), invalidatePattern: jest.fn(), getOrSet: jest.fn() },
   }));
   jest.unstable_mockModule('../../src/shared/events/EventBus.js', () => ({
     default: { publish: jest.fn() },
@@ -192,5 +192,16 @@ describe('bank statement automated retrieval', () => {
     });
     expect(bankTransactionRepository.bulkCreate).not.toHaveBeenCalled();
     expect(await fs.readdir(folders.processedDirectory)).toHaveLength(1);
+  });
+});
+
+describe('bank automation configuration', () => {
+  test('rejects scheduled retrieval on manual accounts before persisting', async () => {
+    const { bankingService } = await loadBankingService();
+    await expect(bankingService.createBankAccount({ connectionType: 'MANUAL', autoRetrieveEnabled: true }, 'user')).rejects.toMatchObject({ statusCode: 400 });
+  });
+  test('rejects enabled gateway retrieval without a server inbox', async () => {
+    const { bankingService } = await loadBankingService();
+    await expect(bankingService.createBankAccount({ connectionType: 'SFTP', autoRetrieveEnabled: true, connectionConfig: {} }, 'user')).rejects.toMatchObject({ statusCode: 400 });
   });
 });

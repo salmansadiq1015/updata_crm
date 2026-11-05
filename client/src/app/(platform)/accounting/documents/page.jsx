@@ -1,4 +1,6 @@
 'use client';
+import { CurrencyPicker } from '@/modules/accounting/components/currency-picker';
+import { getAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
@@ -102,7 +104,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
           ...form,
           total: Number(form.total || 0),
           vat: Number(form.vat || 0),
-          currency: form.currency || 'CHF',
+          currency: form.currency || getAccountingCurrency(),
         },
       },
     });
@@ -184,13 +186,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
                   </label>
                   <label className="grid gap-1 text-xs font-medium">
                     {de ? 'Währ.' : 'Curr.'}
-                    <Select value={form.currency || 'CHF'} onValueChange={(value) => setOcrField('currency', value)}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CHF">CHF</SelectItem>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <CurrencyPicker label="Currency" value={form.currency || getAccountingCurrency()} onValueChange={(value) => setOcrField('currency', value)} />
                   </label>
                 </div>
               </div>

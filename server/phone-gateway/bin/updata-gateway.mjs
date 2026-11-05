@@ -20,7 +20,7 @@ import { chmodSync, copyFileSync, existsSync, rmSync } from 'node:fs';
 import { CrmClient, EventOutbox } from '../src/gateway/crmClient.js';
 import { GatewayDaemon, GATEWAY_VERSION } from '../src/gateway/daemon.js';
 import { KeepAwake, acquireLock, deleteConfig, gatewayPaths, loadConfig, saveConfig } from '../src/gateway/system.js';
-import { closeSerialDevice, createBoardOpener, findBoardPort, listPorts, openSerialDevice } from '../src/esp32/serial.js';
+import { closeSerialDevice, countBootBanners, createBoardOpener, findBoardPort, listPorts, openSerialDevice } from '../src/esp32/serial.js';
 import { manageService } from '../src/gateway/service.js';
 import { reconnectConfig } from '../src/gateway/reconnect.js';
 
@@ -138,6 +138,7 @@ const commands = {
       options: { agentGainDb },
       openDevice: createBoardOpener({ path, onError: (err) => log('serial_error', { error: err.message }) }),
       closeDevice: closeSerialDevice,
+      checkBootLoop: (portPath) => countBootBanners({ path: portPath }),
     });
     log('playback_gain', { db: agentGainDb });
     const shutdown = async (signal) => {

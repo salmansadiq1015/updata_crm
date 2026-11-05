@@ -44,6 +44,8 @@ let Task;
 let TaskList;
 let taskService;
 let taskDashboardService;
+let taskTimeService;
+let TaskTimeSession;
 
 function objectId() {
   return new mongoose.Types.ObjectId();
@@ -85,6 +87,9 @@ beforeAll(async () => {
   ({ default: Task } = await import('../../src/modules/tasks/task.model.js'));
   ({ default: taskService } = await import('../../src/modules/tasks/task.service.js'));
   ({ default: taskDashboardService } = await import('../../src/modules/tasks/taskDashboard.service.js'));
+  ({ default: taskTimeService } = await import('../../src/modules/tasks/taskTime.service.js'));
+  ({ default: TaskTimeSession } = await import('../../src/modules/tasks/taskTimeSession.model.js'));
+  await TaskTimeSession.init();
 });
 
 afterEach(async () => {
@@ -220,5 +225,144 @@ describe('Task dashboard active status coverage', () => {
     expect(dashboard.upcoming.map((task) => task.title)).toContain('Paused upcoming');
     expect(stats.totalOpen).toBe(2);
     expect(stats.overdueCount).toBe(1);
+  });
+});
+
+describe('Task metric filter contracts', () => {
+  test('active includes paused and in-progress work and excludes closed work', async () => {
+    const userId = objectId();
+    const list = await createList(userId);
+    for (const status of ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']) {
+      await createTask(list._id, userId, { title: status, status });
+    }
+    const page = await taskService.list({ active: true, assigneeId: String(userId), limit: 50 }, userId);
+    expect(page.data.map((task) => task.status).sort()).toEqual(['IN_PROGRESS', 'ON_HOLD', 'OPEN']);
+  });
+
+  test('completed-this-week excludes historical completions and other assignees', async () => {
+    const userId = objectId();
+    const list = await createList(userId);
+    await createTask(list._id, userId, { title: 'This week', status: 'COMPLETED', completedAt: new Date() });
+    await createTask(list._id, userId, { title: 'Last month', status: 'COMPLETED', completedAt: new Date(Date.now() - 30 * 86400000) });
+    await createTask(list._id, userId, { title: 'Colleague', assigneeId: objectId(), status: 'COMPLETED', completedAt: new Date() });
+    const page = await taskService.list({ completedThisWeek: true, assigneeId: String(userId), limit: 50 }, userId);
+    expect(page.data.map((task) => task.title)).toEqual(['This week']);
+  });
+});
+
+
+describe('Persistent task timers', () => {
+  async function fixture() {
+    const userId = objectId();
+    const list = await createList(userId);
+    const task = await createTask(list._id, userId);
+    return { userId, list, task };
+  }
+
+  test('tracks server time, excludes pauses, resumes and stops idempotently', async () => {
+    const { userId, task } = await fixture();
+    const first = await taskTimeService.start(task._id, { mode: 'FOCUS', targetMinutes: 25 }, userId);
+    const sessionId = first.session.id;
+    await TaskTimeSession.updateOne({ _id: sessionId }, { segmentStartedAt: new Date(Date.now() - 60000) });
+    const paused = await taskTimeService.transition(sessionId, 'pause', {}, userId);
+    expect(paused.session.status).toBe('PAUSED');
+    expect(paused.session.elapsedMs).toBeGreaterThanOrEqual(60000);
+    const saved = paused.session.elapsedMs;
+    const stillPaused = await taskTimeService.transition(sessionId, 'pause', {}, userId);
+    expect(stillPaused.session.elapsedMs).toBe(saved);
+    expect(stillPaused.session.pauseCount).toBe(1);
+    await taskTimeService.transition(sessionId, 'resume', {}, userId);
+    await TaskTimeSession.updateOne({ _id: sessionId }, { segmentStartedAt: new Date(Date.now() - 30000) });
+    expect((await taskTimeService.transition(sessionId, 'stop', { note: '$literal note' }, userId)).session).toBeNull();
+    const stopped = await TaskTimeSession.findById(sessionId).lean();
+    expect(stopped.elapsedMs).toBeGreaterThanOrEqual(saved + 30000);
+    expect(stopped.note).toBe('$literal note');
+    expect(stopped.stoppedAt).toBeInstanceOf(Date);
+    await taskTimeService.transition(sessionId, 'stop', { note: 'Retry' }, userId);
+    expect((await TaskTimeSession.findById(sessionId)).elapsedMs).toBe(stopped.elapsedMs);
+    expect((await TaskTimeSession.findById(sessionId)).note).toBe('$literal note');
+  });
+
+  test('concurrent starts reserve one employee timer and repeated starts reuse it', async () => {
+    const { userId, list, task } = await fixture();
+    const other = await createTask(list._id, userId);
+    const results = await Promise.allSettled([taskTimeService.start(task._id, {}, userId), taskTimeService.start(other._id, {}, userId)]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await TaskTimeSession.countDocuments({ userId, isActive: true })).toBe(1);
+    const active = await taskTimeService.active(userId);
+    const retry = await taskTimeService.start(active.session.taskId, {}, userId);
+    expect(retry.session.id).toBe(active.session.id);
+    await taskTimeService.transition(active.session.id, 'pause', {}, userId);
+    await expect(taskTimeService.start(String(task._id) === active.session.taskId ? other._id : task._id, {}, userId)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  test('employees cannot alter another employee session or start a closed or locked task', async () => {
+    const { userId, task } = await fixture();
+    const { session } = await taskTimeService.start(task._id, {}, userId);
+    await expect(taskTimeService.transition(session.id, 'stop', {}, objectId())).rejects.toMatchObject({ statusCode: 404 });
+    await Task.updateOne({ _id: task._id }, { locked: true });
+    await expect(taskTimeService.start(task._id, {}, objectId())).rejects.toMatchObject({ statusCode: 403 });
+    await Task.updateOne({ _id: task._id }, { status: 'COMPLETED' });
+    await expect(taskTimeService.start(task._id, {}, userId)).rejects.toMatchObject({ statusCode: 400 });
+    expect((await taskTimeService.active(userId)).session).toBeNull();
+  });
+
+  test('completion and deletion stop active sessions without losing recorded time', async () => {
+    const { userId, list, task } = await fixture();
+    const { session } = await taskTimeService.start(task._id, {}, userId);
+    await taskService.changeStatus(task._id, 'COMPLETED', userId);
+    expect((await TaskTimeSession.findById(session.id)).stopReason).toBe('TASK_CLOSED');
+    const other = await createTask(list._id, userId);
+    const second = await taskTimeService.start(other._id, {}, userId);
+    await taskService.remove(other._id, userId);
+    expect((await TaskTimeSession.findById(second.session.id)).stopReason).toBe('TASK_DELETED');
+  });
+
+  test('task and employee summaries use stopped-session averages and preserve history', async () => {
+    const { userId, task } = await fixture();
+    const colleague = objectId();
+    const base = { taskId: task._id, taskTitle: task.title, status: 'STOPPED', isActive: false, startedAt: new Date(), stoppedAt: new Date() };
+    await TaskTimeSession.create([
+      { ...base, userId, elapsedMs: 60000 }, { ...base, userId, elapsedMs: 180000 }, { ...base, userId: colleague, elapsedMs: 120000 },
+      { ...base, userId, status: 'PAUSED', isActive: true, stoppedAt: null, elapsedMs: 30000 },
+    ]);
+    const summary = await taskTimeService.summary(userId, { taskId: task._id, days: 0 });
+    expect(summary).toMatchObject({ totalMs: 390000, myTotalMs: 270000, averageSessionMs: 120000, averageTaskMs: 390000, sessionCount: 4, activeCount: 1 });
+    expect(summary.employees).toHaveLength(2);
+    expect(summary.sessions).toHaveLength(4);
+    const ownReport = await taskTimeService.summary(userId, { scope: 'mine', days: 30 });
+    expect(ownReport.totalMs).toBe(270000);
+    expect(ownReport.employees).toHaveLength(1);
+  });
+
+  test('secondary assignees can track their own work on a shared task', async () => {
+    const { task } = await fixture();
+    const colleague = objectId();
+    await Task.updateOne({ _id: task._id }, { assigneeIds: [colleague] });
+    const result = await taskTimeService.start(task._id, {}, colleague);
+    expect(result.session.userId).toBe(String(colleague));
+  });
+
+  test('session history is paginated and deleted-task time remains in employee reports', async () => {
+    const { userId, task } = await fixture();
+    await TaskTimeSession.insertMany(Array.from({ length: 21 }, () => ({ taskId: task._id, taskTitle: task.title, userId,
+      status: 'STOPPED', isActive: false, elapsedMs: 1000, startedAt: new Date(), stoppedAt: new Date() })));
+    const first = await taskTimeService.summary(userId, { taskId: task._id, days: 0, page: 1 });
+    const last = await taskTimeService.summary(userId, { taskId: task._id, days: 0, page: 2 });
+    expect(first.sessions).toHaveLength(20);
+    expect(first.hasMore).toBe(true);
+    expect(last.sessions).toHaveLength(1);
+    expect(last.hasMore).toBe(false);
+    await taskService.remove(task._id, userId);
+    expect((await taskTimeService.summary(userId, { scope: 'mine', days: 0 })).totalMs).toBe(21000);
+  });
+
+  test('reports exclude confidential tasks even in team scope', async () => {
+    const { userId, task } = await fixture();
+    await Task.updateOne({ _id: task._id }, { locked: true });
+    await TaskTimeSession.create({ taskId: task._id, taskTitle: task.title, userId, status: 'STOPPED', isActive: false, startedAt: new Date(), elapsedMs: 1000 });
+    const report = await taskTimeService.summary(objectId(), { scope: 'team', days: 0 });
+    expect(report.totalMs).toBe(0);
+    expect(report.employees).toEqual([]);
   });
 });

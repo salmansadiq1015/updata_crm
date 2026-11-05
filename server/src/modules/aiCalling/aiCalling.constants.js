@@ -61,6 +61,8 @@ export const DISPOSITIONS = Object.freeze([
   'do_not_contact',       // person asked to stop being called
   'failed',               // technical failure, never connected
   'needs_review',         // ambiguous / contradictory — do NOT auto-qualify
+  'interrupted',          // answered call interrupted; retain answers, never auto-redial
+  'cancelled',            // cancelled attempt, separate from a provider failure
 ]);
 
 // Qualification verdict produced by the status-rule engine.

@@ -1,8 +1,10 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 export const listOpenItemsSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     entityType: Joi.string().valid('AR', 'AP', 'ALL').default('ALL'),
     customerId: objectId,
     supplierId: objectId,
@@ -13,6 +15,7 @@ export const listOpenItemsSchema = {
 
 export const agingSchema = {
   query: Joi.object({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     entityType: Joi.string().valid('AR', 'AP', 'ALL').default('ALL'),
   }),
 };

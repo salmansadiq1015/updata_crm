@@ -1,3 +1,4 @@
+import { registerEmailAgentTools } from '../email/email.agent.js';
 import { Router } from 'express';
 import controller from './aiCalling.controller.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
@@ -9,11 +10,13 @@ import { providerSettings, saveProviderSettings, testProviderAccess, recordVoice
 import callingAgentRoutes from './callingAgent.routes.js';
 import callingQualityRoutes from './callingQuality.routes.js';
 import callingIntelligenceRoutes, { registerTransferAgentTools } from './callingIntelligence.routes.js';
+import followUpCallingRoutes from './followUpCalling.routes.js';
 
 const router = Router();
 router.use(callingAgentRoutes);
 router.use(callingQualityRoutes); // quality dashboard, benchmarks, script experiments
 router.use(callingIntelligenceRoutes);
+router.use(followUpCallingRoutes); // AI follow-up calling: agent types, automation switch, follow-up controls
 
 // Campaigns
 router.get('/campaigns', authenticate, requirePermission('ai-calling:read'), validate(schemas.listCampaigns), (req, res, next) => controller.listCampaigns(req, res, next));
@@ -91,6 +94,7 @@ agentToolRoutes.post('/:callId/decline', authenticateAgentCall, validate(schemas
 agentToolRoutes.post('/:callId/transcript', authenticateAgentCall, validate(schemas.agentTranscript), (req, res, next) => controller.agentTranscript(req, res, next));
 agentToolRoutes.post('/:callId/activity', authenticateAgentCall, validate(schemas.agentActivity), (req, res, next) => controller.agentActivity(req, res, next));
 registerTransferAgentTools(agentToolRoutes);
+registerEmailAgentTools(agentToolRoutes);
 agentToolRoutes.post('/:callId/end', authenticateAgentCall, validate(schemas.agentEnd), (req, res, next) => controller.agentEnd(req, res, next));
 
 // Telephony provider webhooks (signature-verified inside the controller).

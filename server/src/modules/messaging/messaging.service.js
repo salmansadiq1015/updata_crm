@@ -179,14 +179,25 @@ async function resolveLeadIds(selection) {
 
 async function renderForLead(campaign, lead, template) {
   const fallbacks = mapFallbacks(campaign.content.fallbackValues);
+  let callSummary = '';
+  if (lead.latestCall?.callId && extractVariables(campaign.content.subject, campaign.content.bodyText, campaign.content.bodyHtml).includes('callSummary')) {
+    const { default: CallRecord } = await import('../aiCalling/callRecord.model.js');
+    const call = await CallRecord.findOne({ _id: lead.latestCall.callId, leadId: lead._id, createdBy: campaign.createdBy?._id || campaign.createdBy })
+      .select('callNotes.summary').lean();
+    callSummary = call?.callNotes?.summary || '';
+  }
   // Company and sender are campaign-level form values, not lead fallbacks.
   // Keep the existing profile/environment values as safe defaults, while an
   // explicitly entered campaign value takes precedence.
   const vars = leadVariables(lead, {
     companyName: fallbacks.companyName || undefined,
     senderName: fallbacks.senderName || campaign.createdBy?.firstName || '',
+    callSummary,
   });
-  const required = template?.requiredVariables || [];
+  const required = [...new Set([...(template?.requiredVariables || []),
+    ...extractVariables(campaign.content.subject, campaign.content.bodyText, campaign.content.bodyHtml)
+      .filter((key) => ['qualificationStatus', 'callSummary', 'customField'].includes(key)),
+  ])];
   const subject = renderPersonalized(campaign.content.subject, vars, { fallbacks, required });
   const bodyText = renderPersonalized(campaign.content.bodyText, vars, { fallbacks, required });
   const bodyHtml = renderPersonalized(campaign.content.bodyHtml, vars, { html: true, fallbacks, required });

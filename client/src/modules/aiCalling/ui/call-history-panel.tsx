@@ -12,7 +12,7 @@ import { StatusPill } from './status-pill';
 
 const OUTCOMES = [
   'answered_completed', 'answered_partial', 'callback_requested', 'declined',
-  'do_not_contact', 'no_answer', 'busy', 'voicemail', 'failed', 'needs_review',
+  'do_not_contact', 'no_answer', 'busy', 'voicemail', 'failed', 'needs_review', 'interrupted', 'cancelled',
 ];
 
 const STATES = [

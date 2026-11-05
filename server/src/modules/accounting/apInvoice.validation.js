@@ -1,13 +1,14 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination, iban } from '../../shared/validation/commonSchemas.js';
 
 const AP_STATUSES = ['RECORDED', 'APPROVED', 'PAID', 'PARTIALLY_PAID', 'DISPUTED', 'CANCELLED'];
-const CURRENCIES = ['CHF', 'EUR'];
+const CURRENCIES = CURRENCY_CODES;
 const BIC_PATTERN = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/i;
 
 const lineAllocationSchema = Joi.object({
   accountId: objectId.required(),
-  amount: Joi.number().positive().precision(2).required(),
+  amount: Joi.number().positive().precision(4).required(),
   costCenter: Joi.string().trim().max(50).allow('', null),
   projectReference: Joi.string().trim().max(100).allow('', null),
   orderReference: Joi.string().trim().max(100).allow('', null),
@@ -79,6 +80,7 @@ export const disputeApSchema = {
 
 export const listApSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     status: Joi.string().valid(...AP_STATUSES),
     supplierId: objectId,
     dueDateFrom: Joi.date().iso(),

@@ -8,6 +8,7 @@ import { aiCallingApi } from '../services/ai-calling-api';
 import { useAnalytics } from '../hooks/use-ai-calling';
 
 const DISPOSITION_COLORS: Record<string, string> = {
+  interrupted: 'bg-amber-500', cancelled: 'bg-muted-foreground/30',
   answered_completed: 'bg-emerald-500', answered_partial: 'bg-amber-500', callback_requested: 'bg-blue-500',
   declined: 'bg-muted-foreground/40', do_not_contact: 'bg-rose-500', no_answer: 'bg-muted-foreground/30',
   busy: 'bg-muted-foreground/30', voicemail: 'bg-muted-foreground/30', failed: 'bg-rose-400', needs_review: 'bg-rose-500',

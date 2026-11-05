@@ -28,6 +28,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
       AiCallHistory: 'leads/:leadId/ai-calls',
       AiCallDetail: 'ai-calls/:callId',
       CallAgentSettings: 'call-agent/settings',
+      IncomingCalls: 'incoming-calls',
+      IncomingCallDetail: 'incoming-calls/:id',
     },
   },
 };

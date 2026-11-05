@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { AuthLayout } from '@/modules/auth/components/auth-layout';
+import { LoginLayout } from '@/modules/auth/components/login-layout';
 import { LoginForm } from '@/modules/auth/components/login-form';
 
 export const metadata = {
@@ -22,10 +22,10 @@ function LoginFallback() {
 
 export default function LoginPage() {
   return (
-    <AuthLayout>
+    <LoginLayout>
       <Suspense fallback={<LoginFallback />}>
         <LoginForm />
       </Suspense>
-    </AuthLayout>
+    </LoginLayout>
   );
 }

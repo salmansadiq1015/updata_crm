@@ -1,6 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import Link from 'next/link';
+import { useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Archive,
@@ -25,6 +29,8 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { BankingAnalytics } from '@/modules/accounting/components/banking-analytics';
+import { useBankAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useAccountingDashboard } from '@/modules/accounting/hooks/use-accounting-queries';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -238,18 +244,22 @@ const WORKSPACES = [
 export default function AccountingDashboard() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
+  const { currency } = useAccountingCurrency();
+  const formatSelectedAmount = value => formatAmount(value, currency);
+  const [workspaceQuery, setWorkspaceQuery] = useState('');
   const yearRange = useMemo(() => currentYearRange(), []);
 
   const { data: snapshot, isLoading: loading } = useAccountingDashboard({
     ...yearRange,
-    currency: DASHBOARD_CURRENCY,
+    currency,
     forecastDays: 30,
   });
 
+  const { data: connectedAccounts = [] } = useBankAccounts();
   const kpis = snapshot?.kpis || {};
   const arAging = snapshot?.aging?.receivables;
   const apAging = snapshot?.aging?.payables;
-  const bankAccounts = snapshot?.cash?.balances || [];
+  const bankAccounts = (snapshot?.cash?.balances || []).filter(account => account.currency === currency);
   const projections = snapshot?.cash?.forecast?.projections || [];
   const projectedBalance = projections.length
     ? projections[projections.length - 1].netPosition
@@ -266,7 +276,7 @@ export default function AccountingDashboard() {
   const statCards = [
     {
       label: de ? 'Offene Forderungen' : 'Open Receivables',
-      value: formatAmount(kpis.openReceivables),
+      value: formatSelectedAmount(kpis.openReceivables),
       sub: `${arAging?.invoiceCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`,
       icon: TrendingUp,
       accent: 'emerald',
@@ -274,7 +284,7 @@ export default function AccountingDashboard() {
     },
     {
       label: de ? 'Überfällig' : 'Overdue',
-      value: formatAmount(kpis.overdueReceivables),
+      value: formatSelectedAmount(kpis.overdueReceivables),
       sub: de ? 'kritische Forderungen' : 'receivables at risk',
       icon: AlertTriangle,
       accent: 'rose',
@@ -283,7 +293,7 @@ export default function AccountingDashboard() {
     },
     {
       label: de ? 'Verbindlichkeiten' : 'Payables',
-      value: formatAmount(kpis.openPayables),
+      value: formatSelectedAmount(kpis.openPayables),
       sub: `${apAging?.invoiceCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`,
       icon: TrendingDown,
       accent: 'amber',
@@ -291,7 +301,7 @@ export default function AccountingDashboard() {
     },
     {
       label: de ? 'Bankguthaben' : 'Bank Balance',
-      value: formatAmount(kpis.bankBalance),
+      value: formatSelectedAmount(kpis.bankBalance),
       sub: `${bankAccounts.length} ${de ? 'Konten' : 'accounts'}`,
       icon: Banknote,
       accent: 'sky',
@@ -299,8 +309,8 @@ export default function AccountingDashboard() {
     },
     {
       label: de ? '30 Tage Cash' : '30-Day Cash',
-      value: formatAmount(kpis.projectedCashPosition ?? projectedBalance),
-      sub: `${de ? 'Fällige Zahlungen' : 'Due outflows'} ${formatAmount(upcomingOutflows)}`,
+      value: formatSelectedAmount(kpis.projectedCashPosition ?? projectedBalance),
+      sub: `${de ? 'Fällige Zahlungen' : 'Due outflows'} ${formatSelectedAmount(upcomingOutflows)}`,
       icon: WalletCards,
       accent: 'cyan',
       href: '/accounting/cash',
@@ -308,7 +318,7 @@ export default function AccountingDashboard() {
     },
     {
       label: de ? 'Gewinn YTD' : 'YTD Profit',
-      value: formatAmount(kpis.netProfit, snapshot?.currency),
+      value: formatSelectedAmount(kpis.netProfit, snapshot?.currency),
       sub: `${de ? 'Marge' : 'Margin'} ${profitMargin.toFixed(1)}%`,
       icon: LineChart,
       accent: 'lime',
@@ -325,17 +335,17 @@ export default function AccountingDashboard() {
         description={
           de
             ? 'Finanzlage, Liquidität und offene Verpflichtungen in einer hochwertigen Management-Sicht.'
-            : 'A premium management view for liquidity, open obligations, exposure, and financial health.'
+            : 'Liquidity, obligations, and financial performance at a glance.'
         }
         chips={[
           de ? 'Live Snapshot' : 'Live snapshot',
-          DASHBOARD_CURRENCY,
+          currency,
           de ? '30-Tage Prognose' : '30-day forecast',
         ]}
       >
         <AccountingHeroSignal
           label={de ? 'Netto Exposure' : 'Net Exposure'}
-          value={formatAmount(exposure)}
+          value={formatSelectedAmount(exposure)}
           sub={de ? 'Forderungen minus Verbindlichkeiten' : 'Receivables minus payables'}
           icon={Scale}
           accent={exposure >= 0 ? 'emerald' : 'rose'}
@@ -352,27 +362,30 @@ export default function AccountingDashboard() {
           ))}
       </div>
 
+      <BankingAnalytics accounts={connectedAccounts} de={de} compact />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <AccountingAgingPanel
           buckets={arAging?.buckets}
           label={de ? 'Forderungen nach Fälligkeit' : 'AR Aging'}
           rows={agingRows}
           totalLabel={de ? 'Offene Kundenpositionen' : 'Open customer exposure'}
-          format={formatAmount}
+          format={formatSelectedAmount}
         />
         <AccountingAgingPanel
           buckets={apAging?.buckets}
           label={de ? 'Verbindlichkeiten nach Fälligkeit' : 'AP Aging'}
           rows={agingRows}
           totalLabel={de ? 'Offene Lieferantenpositionen' : 'Open vendor obligations'}
-          format={formatAmount}
+          format={formatSelectedAmount}
         />
       </div>
 
       <section className="flex flex-col gap-4">
-        <AccountingSectionTitle>{de ? 'Arbeitsbereiche' : 'Workspaces'}</AccountingSectionTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3"><AccountingSectionTitle>{de ? 'Arbeitsbereiche' : 'Workspaces'}</AccountingSectionTitle><Input aria-label={de ? 'Arbeitsbereiche durchsuchen' : 'Search accounting workspaces'} className="h-9 max-w-xs text-xs" value={workspaceQuery} onChange={e => setWorkspaceQuery(e.target.value)} placeholder={de ? 'Arbeitsbereich suchen…' : 'Find a workspace…'} /></div>
+        <div className="flex flex-wrap gap-2">{[['/accounting/bank', de ? 'Banking öffnen' : 'Open banking'], ['/accounting/reconciliation', de ? 'Transaktionen prüfen' : 'Review transactions'], ['/accounting/cash', de ? 'Liquidität planen' : 'Plan cash flow']].map(([href, label]) => <Button asChild variant="outline" size="sm" key={href}><Link href={href}>{label}</Link></Button>)}</div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-          {WORKSPACES.map((workspace) => (
+          {WORKSPACES.filter(workspace => `${workspace.label} ${workspace.labelDe} ${workspace.description} ${workspace.descriptionDe}`.toLocaleLowerCase().includes(workspaceQuery.trim().toLocaleLowerCase())).map((workspace) => (
             <AccountingWorkspaceCard
               key={workspace.href}
               href={workspace.href}

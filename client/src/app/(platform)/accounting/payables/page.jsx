@@ -1,4 +1,7 @@
 'use client';
+import { currencyDigits } from '@/shared/data/currencies';
+import { CurrencyPicker } from '@/modules/accounting/components/currency-picker';
+import { getAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import { Building2, CreditCard, Download, Plus, Search, Trash2 } from 'lucide-react';
@@ -25,8 +28,8 @@ import {
   emptyApLine,
 } from '@/modules/accounting/utils/ap-invoice-payload';
 
-const fmt = (n, currency = 'CHF') =>
-  new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0);
+const fmt = (n, currency = getAccountingCurrency()) =>
+  new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: currencyDigits(currency), maximumFractionDigits: currencyDigits(currency) }).format(n ?? 0);
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 
@@ -60,7 +63,7 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
     invoiceDate: today,
     dueDate: today,
     paymentTermsDays: '30',
-    currency: 'CHF',
+    currency: getAccountingCurrency(),
     projectReference: '',
     orderReference: '',
   });
@@ -140,13 +143,7 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
-              <Select value={form.currency} onValueChange={(value) => set('currency', value)}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CHF">CHF</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencyPicker label="Currency" value={form.currency} onValueChange={(value) => set('currency', value)} />
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
@@ -198,7 +195,7 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
                     <Input className="h-9" value={line.description} onChange={(event) => setLine(index, 'description', event.target.value)} placeholder={de ? 'Beschreibung' : 'Description'} required />
                     <Input type="number" min="0" step="0.001" className="h-9" value={line.quantity} onChange={(event) => setLine(index, 'quantity', event.target.value)} required />
                     <Input className="h-9" value={line.unit} onChange={(event) => setLine(index, 'unit', event.target.value)} />
-                    <Input type="number" min="0" step="0.01" className="h-9" value={line.unitPrice} onChange={(event) => setLine(index, 'unitPrice', event.target.value)} required />
+                    <Input type="number" min="0" step={10 ** -currencyDigits(form.currency)} className="h-9" value={line.unitPrice} onChange={(event) => setLine(index, 'unitPrice', event.target.value)} required />
                     <Select value={line.vatRate} onValueChange={(value) => setLine(index, 'vatRate', value)}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>

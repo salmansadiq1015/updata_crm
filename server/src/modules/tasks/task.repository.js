@@ -64,7 +64,7 @@ class TaskRepository {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
     // Extract special filters before passing to buildFilter
-    const { overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, inPool, accessUserId, accessibleListIds, ...standardFilters } = filters;
+    const { active, completedThisWeek, overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, inPool, accessUserId, accessibleListIds, ...standardFilters } = filters;
 
     // Map createdById to the actual field name
     if (createdById) {
@@ -99,6 +99,16 @@ class TaskRepository {
         baseFilter.dueDate.$lte = baseFilter.dueTo.$lte;
         delete baseFilter.dueTo;
       }
+    }
+
+    if (active === true || active === 'true') {
+      baseFilter.status = { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] };
+    }
+    if (completedThisWeek === true || completedThisWeek === 'true') {
+      const now = new Date();
+      const mondayOffset = (now.getDay() + 6) % 7;
+      baseFilter.status = 'COMPLETED';
+      baseFilter.completedAt = { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset) };
     }
 
     // Handle overdue filter

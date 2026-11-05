@@ -16,6 +16,7 @@ export const listMessagesSchema = {
   query: Joi.object({
     limit: Joi.number().integer().min(1).max(100).default(50),
     before: Joi.string().isoDate().optional(),
+    beforeId: Joi.string().hex().length(24).optional(),
   }),
 };
 
@@ -36,6 +37,7 @@ export const sendMessageSchema = {
   body: Joi.object({
     messageType: Joi.string().valid('TEXT', 'PHOTO', 'DOCUMENT', 'AUDIO', 'VIDEO', 'VIEW_ONCE').default('TEXT'),
     content: Joi.string().max(5000).allow('').default(''),
+    clientMessageId: Joi.string().trim().min(1).max(80).optional(),
     attachmentUrl: Joi.string().uri().optional().allow(null),
     attachmentFileId: Joi.string().hex().length(24).optional().allow(null),
     replyToId: Joi.string().hex().length(24).optional().allow(null),
@@ -65,7 +67,7 @@ export const editMessageSchema = {
     roomId: Joi.string().hex().length(24).required(),
     msgId: Joi.string().hex().length(24).required(),
   }),
-  body: Joi.object({ content: Joi.string().max(5000).required() }),
+  body: Joi.object({ content: Joi.string().trim().min(1).max(5000).required() }),
 };
 
 export const createGroupRoomSchema = {
@@ -83,3 +85,14 @@ export const joinByCodeSchema = {
     joinCode: Joi.string().length(4).pattern(/^\d{4}$/).required(),
   }),
 };
+
+const leadIds = Joi.array().items(Joi.string().hex().length(24)).unique().max(25);
+export const createLeadRoomSchema = {
+  body: Joi.object({ name: Joi.string().trim().min(1).max(100).required(), description: Joi.string().trim().max(500).allow('').optional(), leadIds: leadIds.min(1).required(), memberIds: Joi.array().items(Joi.string().hex().length(24)).unique().max(50).default([]) }),
+};
+export const updateChatLeadsSchema = {
+  ...roomIdParamSchema,
+  body: Joi.object({ leadIds: leadIds.required(), name: Joi.string().trim().min(1).max(100).optional(), version: Joi.number().integer().min(0).required() }),
+};
+
+export const summarizeRoomSchema = { ...roomIdParamSchema, body: Joi.object({ language: Joi.string().valid('en', 'fr', 'de', 'ar').default('en') }) };

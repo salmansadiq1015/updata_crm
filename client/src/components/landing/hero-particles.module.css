@@ -1,0 +1,61 @@
+.field {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 720px;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1000px;
+  mask-image: linear-gradient(#000 75%, transparent);
+}
+.halo { position: absolute; inset: 0; background: radial-gradient(ellipse at 8% 46%, #296cc619, transparent 33%), radial-gradient(ellipse at 92% 40%, #8552d31c, transparent 32%); }
+.arc, .arcSecondary { position: absolute; top: 20%; left: -15%; width: 130%; height: 70%; border: 1px solid #90b7ff0c; border-radius: 50%; transform: rotate(-14deg); }
+.arcSecondary { top: 3%; transform: rotate(15deg); border-color: #b9a1ff0b; }
+.object { position: absolute; left: var(--x); top: var(--y); animation: levitate 12s ease-in-out var(--delay) infinite; }
+.tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid rgb(var(--tint) / .38);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgb(var(--tint) / .24), rgb(var(--tint) / .03) 70%);
+  color: rgb(var(--tint));
+  box-shadow: inset 2px 2px 2px #ffffff15, inset -2px -2px 4px #0004, 5px 7px 0 rgb(var(--tint) / .06), 0 14px 38px rgb(var(--tint) / .12);
+  transform: rotateX(14deg) rotateY(-20deg) rotateZ(var(--tilt));
+}
+.tile::after { content: ''; position: absolute; inset: 5px; border: 1px solid rgb(var(--tint) / .08); border-radius: 13px; }
+.tile svg { width: 26px; height: 26px; filter: drop-shadow(0 0 10px rgb(var(--tint) / .35)); }
+.streams { position: absolute; inset: 0; mask-image: linear-gradient(90deg, #000 0%, #000 15%, #0002 33%, #0001 50%, #0002 67%, #000 85%); }
+.traveler { position: absolute; left: -5%; top: var(--y); width: var(--size); height: var(--size); animation: traverse var(--duration) linear var(--delay) infinite; }
+.traveler > span { display: block; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff, rgb(var(--tint)) 35%, rgb(var(--tint) / .3) 80%); box-shadow: 0 0 14px rgb(var(--tint) / .45); }
+.traveler:nth-child(3n)::after { content: ''; position: absolute; top: 45%; right: 100%; width: 38px; height: 1px; background: linear-gradient(90deg, transparent, rgb(var(--tint) / .35)); }
+.traveler:nth-child(even)::after { right: auto; left: 100%; transform: rotate(180deg); }
+.orb, .orbSmall { position: absolute; top: 47%; left: 5%; width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle at 30% 23%, #daf6ff, #5caed7 20%, #224e96 48%, #080d21 78%); box-shadow: 0 8px 24px #3b9cfc20; animation: levitate 10s ease-in-out -4s infinite; }
+.orbSmall { left: auto; right: 7%; top: 53%; width: 19px; height: 19px; background: radial-gradient(circle at 30% 23%, #f5e3ff, #b48df7 20%, #5a389c 48%, #110d26 78%); animation-delay: -8s; }
+.ring { position: absolute; left: 23%; top: 14%; width: 31px; height: 31px; border: 6px solid #91b4ed; border-top-color: #daeaff; border-bottom-color: #23416b; border-radius: 50%; box-shadow: 0 6px 18px #2563eb25, inset 0 2px 3px #ffffff50; animation: ringFloat 14s ease-in-out -2s infinite; }
+.motionToggle { position: absolute; right: 20px; top: 100px; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #ffffff12; border-radius: 50%; background: #0c142580; color: #91a1ba; cursor: pointer; transition: color .2s, border-color .2s; }
+.motionToggle:hover { color: #fff; border-color: #ffffff40; }
+.motionToggle:focus-visible { outline: 2px solid #9fb9fc; outline-offset: 4px; }
+.motionToggle svg { width: 12px; height: 12px; }
+.field[data-paused='true'] * { animation-play-state: paused; }
+@keyframes traverse { from { transform: translate3d(-5vw, 12px, 0); } to { transform: translate3d(115vw, -24px, 0); } }
+@keyframes levitate { 0%, 100% { transform: translate3d(0, 0, 0) rotate(-3deg); } 50% { transform: translate3d(18px, -22px, 25px) rotate(5deg); } }
+@keyframes ringFloat { 0%, 100% { transform: translateY(0) rotateX(45deg) rotateY(-24deg); } 50% { transform: translateY(-18px) rotateX(65deg) rotateY(20deg); } }
+@media (min-width: 1800px) { .field { height: 800px; } .tile { width: 78px; height: 78px; border-radius: 22px; } .tile svg { width: 32px; height: 32px; } }
+@media (max-width: 1100px) { .tile { width: 44px; height: 44px; border-radius: 13px; } .tile svg { width: 20px; height: 20px; } }
+@media (max-width: 640px) {
+  .field { height: 680px; opacity: .7; }
+  .object { display: none; }
+  .object:nth-of-type(4), .object:nth-of-type(5) { display: block; top: 12% !important; }
+  .tile { width: 32px; height: 32px; border-radius: 10px; }
+  .tile svg { width: 16px; height: 16px; }
+  .traveler:nth-child(n+13) { display: none; }
+  .streams { mask-image: linear-gradient(90deg, #000, #0001 22%, transparent 50%, #0001 78%, #000); }
+  .orb { left: 2%; width: 15px; height: 15px; }
+  .orbSmall { right: 2%; width: 12px; height: 12px; }
+  .ring { display: none; }
+  .motionToggle { top: 86px; right: 14px; width: 28px; height: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { .field * { animation: none !important; } .traveler { display: none; } .motionToggle { display: none; } }

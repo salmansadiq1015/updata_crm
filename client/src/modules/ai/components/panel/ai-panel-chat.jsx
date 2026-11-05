@@ -301,7 +301,7 @@ export function AiPanelChat({ onClose }) {
     <div className="relative z-10 flex h-full min-h-0 flex-col">
       <SheetHeader className="flex shrink-0 flex-row items-center justify-between border-b border-white/10 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-red text-white shadow-[0_18px_46px_rgba(208,10,25,0.22)]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-[0_18px_46px_rgba(14,165,233,0.22)]">
             <BrainCircuit className="h-5 w-5" />
           </span>
           <div className="min-w-0">

@@ -170,9 +170,36 @@ class LeadSlaService {
       }
     }
 
+    // Planned reminders use the existing sweep and notification dedupe. A failed
+    // notification remains eligible; snoozing automatically re-arms the reminder.
+    const reminders = await LeadFollowUp.find({
+      status: { $in: FOLLOW_UP_OPEN_STATUSES }, reminderMinutes: { $ne: null }, nextDueAt: { $gt: now },
+      $expr: { $and: [
+        { $ne: ['$reminderNotifiedFor', '$nextDueAt'] },
+        { $lte: [{ $subtract: ['$nextDueAt', { $multiply: ['$reminderMinutes', MINUTE] }] }, now] },
+      ] },
+    }).select('_id leadId ownerId nextDueAt priority').limit(BATCH).lean();
+    const reminderNames = await this._leadNames(reminders.map((fu) => fu.leadId));
+    for (const fu of reminders) {
+      if (!reminderNames.has(String(fu.leadId))) continue;
+      const delivered = await notify({
+        channels: ['IN_APP'], recipientIds: [String(fu.ownerId)], type: 'lead.follow_up_reminder', category: 'CRM', priority: fu.priority || 'NORMAL',
+        payload: { title: `Upcoming follow-up: ${reminderNames.get(String(fu.leadId))}`, message: `Due ${new Date(fu.nextDueAt).toISOString()}.`, leadId: String(fu.leadId), followUpId: String(fu._id) },
+        sourceModule: 'crm', sourceEvent: 'FOLLOW_UP_REMINDER', sourceEntityType: 'Lead', sourceEntityId: fu.leadId,
+        idempotencyKey: `lead-follow-up-reminder-${fu._id}-${new Date(fu.nextDueAt).getTime()}`,
+      });
+      if (delivered) await LeadFollowUp.updateOne({ _id: fu._id, nextDueAt: fu.nextDueAt, status: { $in: FOLLOW_UP_OPEN_STATUSES } }, { $set: { reminderNotifiedFor: fu.nextDueAt } });
+    }
+
     // 3. Follow-ups whose (next) due time passed: one owner alert per due time.
+    // An AI follow-up call that is in progress, or due within the last 30 minutes (the
+    // dispatcher picks it up every minute), is being worked — not overdue for a person.
+    const aiWorking = { $nor: [
+      { 'automation.mode': 'ai', 'automation.state': { $in: ['queued', 'calling', 'retry_scheduled'] } },
+      { 'automation.mode': 'ai', 'automation.state': 'scheduled', nextDueAt: { $gt: new Date(now.getTime() - 30 * MINUTE) } },
+    ] };
     const overdueFollowUps = await LeadFollowUp.find({
-      status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $lte: now },
+      status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $lte: now }, ...aiWorking,
       $expr: { $ne: ['$overdueNotifiedFor', '$nextDueAt'] },
     }).select('_id leadId ownerId nextDueAt timezone note').limit(BATCH).lean();
     const leadNames = await this._leadNames(overdueFollowUps.map((f) => f.leadId));
@@ -205,7 +232,7 @@ class LeadSlaService {
     if (policy.escalation.enabled) {
       const cutoff = new Date(now.getTime() - policy.escalation.followUpAfterMinutes * MINUTE);
       const stale = await LeadFollowUp.find({
-        status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $lte: cutoff },
+        status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $lte: cutoff }, ...aiWorking,
         $expr: { $ne: ['$escalatedFor', '$nextDueAt'] },
       }).select('_id leadId ownerId nextDueAt').limit(BATCH).lean();
       const names = await this._leadNames(stale.map((f) => f.leadId));

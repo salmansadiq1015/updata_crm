@@ -14,7 +14,7 @@ const nullableId = z
     if (!value) return null;
     if (typeof value === 'string') return value;
     return value._id ?? value.id ?? null;
-  });
+  }).default(null);
 
 // The API populates projectId/orderId with the linked record, but nullableId
 // reduces them to ids. Lift the display name out first so the UI can show
@@ -56,11 +56,11 @@ export const rawTaskSchema = z
     startDate: z.union([z.string(), z.date(), z.null(), z.undefined()]).transform((value) => {
       if (!value) return null;
       return value instanceof Date ? value.toISOString() : value;
-    }),
+    }).default(null),
     dueDate: z.union([z.string(), z.date(), z.null(), z.undefined()]).transform((value) => {
       if (!value) return null;
       return value instanceof Date ? value.toISOString() : value;
-    }),
+    }).default(null),
     sortOrder: z.number().default(0),
     depth: z.number().default(0),
     subtaskCount: z.number().default(0),
@@ -70,9 +70,9 @@ export const rawTaskSchema = z
     __v: z.number().optional(),
     createdAt: z.union([z.string(), z.date()]).optional(),
     updatedAt: z.union([z.string(), z.date()]).optional(),
-    completedAt: z.union([z.string(), z.date(), z.null(), z.undefined()]),
+    completedAt: z.union([z.string(), z.date(), z.null(), z.undefined()]).default(null),
     completedBy: nullableId,
-    cancelledAt: z.union([z.string(), z.date(), z.null(), z.undefined()]),
+    cancelledAt: z.union([z.string(), z.date(), z.null(), z.undefined()]).default(null),
     locked: z.boolean().optional(),
     lockedBy: nullableId,
     inPool: z.boolean().optional(),

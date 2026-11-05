@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const chatRoomSchema = new Schema({
-  roomType:        { type: String, enum: ['PROJECT', 'ORDER', 'DM', 'GROUP', 'TEAM', 'DEPARTMENT', 'TASK'], required: true },
+  roomType:        { type: String, enum: ['PROJECT', 'ORDER', 'DM', 'GROUP', 'TEAM', 'DEPARTMENT', 'TASK', 'LEAD'], required: true },
+  leadIds:        [{ type: Schema.Types.ObjectId, ref: 'Lead' }],
+  leadChatKey:     { type: String, default: null },
   projectId:       { type: Schema.Types.ObjectId, ref: 'Project', default: null },
   orderId:         { type: Schema.Types.ObjectId, ref: 'Order', default: null },
   taskId:          { type: Schema.Types.ObjectId, ref: 'Task', default: null },
@@ -23,6 +25,8 @@ const chatRoomSchema = new Schema({
   admins:            [{ type: Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 
+chatRoomSchema.index({ leadIds: 1 });
+chatRoomSchema.index({ leadChatKey: 1 }, { unique: true, partialFilterExpression: { leadChatKey: { $type: 'string' } }, name: 'uniq_lead_chat_context' });
 chatRoomSchema.index({ roomType: 1, projectId: 1 });
 // Unique partial index guarding against concurrent creation of duplicate PROJECT rooms.
 // Key order inverted vs the index above: MongoDB forbids two indexes with identical key patterns.

@@ -1,10 +1,26 @@
+import { summarizeConversation } from './chatSummary.service.js';
+import { createLeadChat, updateChatLeads } from './chatLead.service.js';
 import chatRoomService from './chatRoom.service.js';
 import chatMessageService from './chatMessage.service.js';
 
 class ChatController {
+  async summarize(req, res, next) {
+    try { return res.success({ data: await summarizeConversation(req.params.roomId, req.user, req.body.language) }); } catch (error) { next(error); }
+  }
+
+  async createLeadRoom(req, res, next) {
+    try { return res.success({ data: await createLeadChat(req.body, req.user) }, 201); } catch (error) { next(error); }
+  }
+  async updateLeads(req, res, next) {
+    try {
+      const room = await chatRoomService.assertMembership(req.params.roomId, req.user);
+      return res.success({ data: await updateChatLeads(req.params.roomId, req.body, req.user, room) });
+    } catch (error) { next(error); }
+  }
+
   async listRooms(req, res, next) {
     try {
-      const rooms = await chatRoomService.listRoomsForUser(req.user._id);
+      const rooms = await chatRoomService.listRoomsForUser(req.user);
       return res.success({ data: rooms });
     } catch (err) { next(err); }
   }
@@ -34,11 +50,11 @@ class ChatController {
 
   async listMessages(req, res, next) {
     try {
-      const { limit, before } = req._validatedQuery || req.query;
+      const { limit, before, beforeId } = req._validatedQuery || req.query;
       const messages = await chatMessageService.listMessages(
         req.params.roomId,
         req.user,
-        { limit: Number(limit) || 50, before }
+        { limit: Number(limit) || 50, before, beforeId }
       );
       return res.success({ data: messages });
     } catch (err) { next(err); }

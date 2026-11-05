@@ -3,10 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { chatService } from '../services/chat-service';
 
-export function useChatUsers({ enabled = true } = {}) {
+export function useChatUsers({ enabled = true, search = '' } = {}) {
   return useQuery({
-    queryKey: ['chat', 'directory', 'users', 'active'],
-    queryFn: () => chatService.listUsers(),
+    queryKey: ['chat', 'directory', 'users', 'active', search],
+    queryFn: () => chatService.listUsers(search),
     enabled,
     staleTime: 60_000,
   });

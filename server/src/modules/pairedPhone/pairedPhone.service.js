@@ -19,6 +19,7 @@ import jwt from 'jsonwebtoken';
 
 import PairedDevice from './pairedDevice.model.js';
 import PairingCode from './pairingCode.model.js';
+import InboundSettings from '../inboundCalling/inboundSettings.model.js';
 import CallRecord from '../aiCalling/callRecord.model.js';
 import CallCampaign from '../aiCalling/callCampaign.model.js';
 import CampaignRecipient from '../aiCalling/campaignRecipient.model.js';
@@ -441,6 +442,7 @@ class PairedPhoneService {
       set['board.idf'] = b.idf || null;
       set['board.chipRevision'] = Number.isFinite(b.chipRevision) ? b.chipRevision : null;
       set['board.keyProvisioned'] = Boolean(b.keyProvisioned);
+      set['board.canAnswer'] = typeof b.canAnswer === 'boolean' ? b.canAnswer : null;
       if (b.sessionNonce && b.sessionNonce !== device.dial?.nonce) {
         set['dial.nonce'] = b.sessionNonce;
         set['dial.counter'] = 0; // the firmware reset its counter with the new session
@@ -460,6 +462,9 @@ class PairedPhoneService {
     };
     if (body.stats) set.stats = body.stats;
     if (body.error?.code) set.lastError = { code: String(body.error.code).slice(0, 60), message: String(body.error.message || '').slice(0, 300), at: now };
+    // The gateway reports no error any more: clear a stale connection error (it recovered).
+    // Errors a person must act on (e.g. FIRMWARE_CHANGED → verify audio) are kept.
+    else if (b.connected && /^(HEARTBEAT_|CRM_|BOARD_(LOST|OPEN_FAILED)|CLAIM_FAILED|SERIAL_)/.test(device.lastError?.code || '')) set.lastError = { code: null, message: null, at: null };
     // A different firmware than the one verified needs a new audio check.
     if (device.audioVerifiedAt && b.connected && b.firmware && device.audioVerification?.firmware && b.firmware !== device.audioVerification.firmware) {
       set.audioVerifiedAt = null;
@@ -473,6 +478,13 @@ class PairedPhoneService {
       if (call?.gateway?.command?.kind && !call.gateway.command.ackedAt) {
         commands.push({ type: call.gateway.command.kind, callId: call.internalCallId });
       }
+    }
+    // Owner commands for incoming calls on this phone (reject / answer / takeover / hang up).
+    try {
+      const inbound = (await import('../inboundCalling/inboundCall.service.js')).default;
+      commands.push(...await inbound.pendingCommands(device._id));
+    } catch (error) {
+      logger.warn('Incoming call commands unavailable for heartbeat', { module: 'paired-phone', error: error.message });
     }
     // Holding some key does not prove the newly delivered key was written.
     // Only explicit confirmation after the firmware's provisioning ACK may do that.
@@ -489,6 +501,8 @@ class PairedPhoneService {
       voicePaused: Boolean(fresh.archivedAt) || await (await aiCalling()).default.isVoicePaused(),
       // Keeps the laptop awake while campaigns using this phone are running.
       activeCampaigns: fresh.archivedAt ? 0 : await CallCampaign.countDocuments({ pairedDeviceId: device._id, transport: 'paired_phone', status: { $in: ['running', 'scheduled'] } }),
+      // Incoming AI answering is on for this phone's owner: the computer must stay awake to receive calls.
+      inboundAnswering: !fresh.archivedAt && Boolean((await InboundSettings.findOne({ createdBy: device.createdBy }).select('enabled').lean())?.enabled),
       commands,
       setup: publicSetup(fresh.setup, now),
     };

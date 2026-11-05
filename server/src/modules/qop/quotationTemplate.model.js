@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
@@ -25,7 +26,7 @@ const quotationTemplateSchema = new mongoose.Schema(
     description: { type: String, maxlength: 1000, default: '' },
     category: { type: String, maxlength: 100, default: '' },
     language: { type: String, enum: ['de', 'fr', 'it', 'en'], default: 'de' },
-    currency: { type: String, enum: ['CHF', 'EUR'], default: 'CHF' },
+    currency: { type: String, enum: CURRENCY_CODES, default: 'CHF' },
     introduction: { type: String, maxlength: 5000, default: '' },
     notes: { type: String, maxlength: 5000, default: '' },
     paymentTerms: { type: String, maxlength: 1000, default: '' },

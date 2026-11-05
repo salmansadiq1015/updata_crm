@@ -295,6 +295,12 @@ describe('aiCalling post-call processing', () => {
     const updatedLead = await Lead.findById(lead._id).lean();
     expect(updatedLead.status).toBe('qualified');
     expect(updatedLead.lastContactChannel).toBe('phone');
+    expect(updatedLead.pipelineStage).toBe('FOLLOW_UP');
+    expect(updatedLead.latestCall).toMatchObject({ callStatus: 'CALL_COMPLETED', qualificationStatus: 'QUALIFIED', recommendedAction: 'INTRODUCTION_EMAIL' });
+    const { default: FollowUp } = await import('../../src/modules/crm/leadFollowUp.model.js');
+    const followUp = await FollowUp.findOne({ leadId: lead._id }).lean();
+    expect(followUp).toMatchObject({ channel: 'email', status: 'open', source: { type: 'ai_call', qualification: 'qualified' } });
+    expect(String(followUp.source.callRecordId)).toBe(String(call._id));
 
     const transition = await LeadCallTransition.findOne({ leadId: lead._id }).lean();
     expect(transition).toMatchObject({ previousStatus: 'new', newStatus: 'qualified', ruleId: 'q' });
@@ -309,6 +315,95 @@ describe('aiCalling post-call processing', () => {
     const second = await service.processCallResults(call._id, { durationSeconds: 60 });
     expect(second.duplicate).toBe(true);
     expect(await LeadCallTransition.countDocuments({ leadId: call.leadId })).toBe(1);
+    const { default: FollowUp } = await import('../../src/modules/crm/leadFollowUp.model.js');
+    expect(await FollowUp.countDocuments({ leadId: call.leadId })).toBe(1);
+  });
+
+  it.each([null, 'saved@example.com'])('makes a collected email available while preserving an existing address (%s)', async (existingEmail) => {
+    const { lead, call, campaign } = await seedCallWithAnswers({ email: existingEmail }, {
+      active: { validation: 'valid', normalizedValue: true }, interest: { validation: 'valid', normalizedValue: 'yes' },
+      email: { validation: 'valid', normalizedValue: 'New@Example.com', confirmed: true },
+    });
+    await CallCampaign.updateOne({ _id: campaign._id }, { $push: { 'questionnaire.questions': {
+      fieldKey: 'email', type: 'email', label: 'Email', text: 'Where should we send the information?', order: 3, mapTo: 'email', confirmCritical: true,
+    } } });
+    await service.processCallResults(call._id, {});
+    expect((await Lead.findById(lead._id).lean()).email).toBe(existingEmail || 'new@example.com');
+    expect((await CallRecord.findById(call._id).lean()).answers.find((answer) => answer.questionFieldKey === 'email').normalizedValue).toBe('New@Example.com');
+  });
+
+  it('reconciles a failed follow-up handoff without redialing or losing the saved call', async () => {
+    const { lead, call, recipient } = await seedCallWithAnswers({}, {
+      active: { validation: 'valid', normalizedValue: true },
+      interest: { validation: 'valid', normalizedValue: 'yes' },
+    });
+    const { default: followUps } = await import('../../src/modules/crm/leadFollowUp.service.js');
+    const failing = jest.spyOn(followUps, 'fromAiCall').mockRejectedValueOnce(new Error('temporary storage failure'));
+    try {
+      await expect(service.processCallResults(call._id, {})).rejects.toThrow('temporary storage failure');
+      const saved = await CallRecord.findById(call._id).lean();
+      expect(saved.state).toBe('completed');
+      expect(saved.answers).toHaveLength(2);
+      expect(saved.resultsProcessedAt).toBeNull();
+      expect((await Lead.findById(lead._id).lean()).pipelineStage).toBe('LEAD');
+      await CallRecord.updateOne({ _id: call._id }, { $set: { processingLeaseUntil: new Date(0) } });
+      await service.processCallResults(call._id, { source: 'reconcile' });
+      expect((await Lead.findById(lead._id).lean()).pipelineStage).toBe('FOLLOW_UP');
+      expect((await CampaignRecipient.findById(recipient._id).lean()).state).toBe('completed');
+      expect(await CallRecord.countDocuments({ leadId: lead._id })).toBe(1);
+    } finally { failing.mockRestore(); }
+  });
+
+  it('retains validated answers after lost audio but requires review before qualification', async () => {
+    const { lead, call, recipient } = await seedCallWithAnswers({}, {
+      active: { validation: 'valid', normalizedValue: true },
+      interest: { validation: 'valid', normalizedValue: 'yes' },
+    });
+    await CallRecord.updateOne({ _id: call._id }, { $set: { 'gateway.audioLostAt': new Date() } });
+    await service.processCallResults(call._id, {});
+    const saved = await CallRecord.findById(call._id).lean();
+    expect(saved).toMatchObject({ disposition: 'interrupted', qualification: 'review', reviewRequired: true });
+    expect(saved.answers).toHaveLength(2);
+    const updated = await Lead.findById(lead._id).lean();
+    expect(updated.pipelineStage).toBe('LEAD');
+    expect(updated.latestCall.callStatus).toBe('CALL_INTERRUPTED');
+    expect((await CampaignRecipient.findById(recipient._id).lean()).state).toBe('completed');
+  });
+
+  it('handles a cancellation webhook without classifying it as failure or scheduling a retry', async () => {
+    const { lead, call, recipient } = await seedCallWithAnswers({}, {});
+    await service.applyWebhookEvent({ provider: 'livekit_sip', internalCallId: call.internalCallId, eventType: 'cancelled', providerEventId: 'cancel-event' });
+    expect((await CallRecord.findById(call._id).lean()).state).toBe('cancelled');
+    expect((await CampaignRecipient.findById(recipient._id).lean()).state).toBe('cancelled');
+    expect((await Lead.findById(lead._id).lean()).latestCall.callStatus).toBe('CALL_CANCELLED');
+  });
+
+  it('records a completed call separately from a failed qualification result', async () => {
+    const { lead, call } = await seedCallWithAnswers({}, {
+      active: { validation: 'valid', normalizedValue: false },
+      interest: { validation: 'valid', normalizedValue: 'yes' },
+    });
+    await service.processCallResults(call._id, {});
+    expect((await CallRecord.findById(call._id).lean()).state).toBe('completed');
+    const stored = await Lead.findById(lead._id).lean();
+    expect(stored).toMatchObject({ status: 'unqualified', pipelineStage: 'LEAD', latestCall: { callStatus: 'CALL_COMPLETED', qualificationStatus: 'NOT_QUALIFIED' } });
+    const { default: FollowUp } = await import('../../src/modules/crm/leadFollowUp.model.js');
+    expect(await FollowUp.countDocuments({ leadId: lead._id })).toBe(0);
+  });
+
+  it('cancels automatic outreach after refusal while retaining human-created tasks', async () => {
+    const { lead, call } = await seedCallWithAnswers({}, {});
+    const { default: FollowUp } = await import('../../src/modules/crm/leadFollowUp.model.js');
+    const due = new Date();
+    const automatic = await FollowUp.create({ leadId: lead._id, ownerId: actor, createdBy: null, dueAt: due, nextDueAt: due, source: { type: 'ai_call' } });
+    const manual = await FollowUp.create({ leadId: lead._id, ownerId: actor, createdBy: actor, dueAt: due, nextDueAt: due, source: { type: 'manual' } });
+    await Lead.updateOne({ _id: lead._id }, { $set: { pipelineStage: 'FOLLOW_UP' } });
+    await CallRecord.updateOne({ _id: call._id }, { $set: { 'conversationState.endedReason': 'declined' } });
+    await service.processCallResults(call._id, { disposition: 'failed' });
+    expect((await FollowUp.findById(automatic._id).lean()).status).toBe('cancelled');
+    expect((await FollowUp.findById(manual._id).lean()).status).toBe('open');
+    expect((await CallRecord.findById(call._id).lean()).disposition).toBe('declined');
+    expect((await Lead.findById(lead._id).lean()).pipelineStage).toBe('LEAD');
   });
 
   it('automatically persists a grounded recap when a call ends without agent notes', async () => {
@@ -356,6 +451,10 @@ describe('aiCalling post-call processing', () => {
     expect(res.qualification).toBe('review');
     const updatedLead = await Lead.findById(lead._id).lean();
     expect(updatedLead.status).toBe('new'); // unchanged
+    expect(updatedLead.latestCall.qualificationStatus).toBe('PARTIALLY_QUALIFIED');
+    expect(updatedLead.pipelineStage).toBe('LEAD');
+    const { default: FollowUp } = await import('../../src/modules/crm/leadFollowUp.model.js');
+    expect(await FollowUp.countDocuments({ leadId: lead._id })).toBe(0);
     expect(notify).toHaveBeenCalled();
     const stored = await CallRecord.findById(call._id).lean();
     expect(stored.reviewRequired).toBe(true);

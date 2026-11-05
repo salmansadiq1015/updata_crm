@@ -50,6 +50,8 @@ export interface StatusRule {
 
 export interface AgentConfig {
   agentName: string;
+  /** Free-text conversation instructions (agent type template or admin-written). */
+  instructions?: string;
   organizationName?: string;
   disclosure?: string;
   language?: string;
@@ -505,8 +507,65 @@ export interface Analytics {
   byDay: Array<{ date: string; calls: number; answered: number; qualified: number }>;
 }
 
+/** outbound = campaigns only (default for legacy agents), inbound = answers incoming calls only, both = either. */
+export type AgentUsage = 'outbound' | 'inbound' | 'both';
+/** Business role template (server engine/agentTypes.js). Several agents may share a type. */
+export const AGENT_TYPES = ['sales', 'follow_up', 'customer_support', 'receptionist', 'lead_qualification', 'appointment', 'retention', 'collection', 'feedback', 'renewal', 'onboarding', 'custom'] as const;
+export type AgentType = (typeof AGENT_TYPES)[number];
+export const FOLLOW_UP_TRIGGERS = ['CALLBACK_REQUESTED', 'INTERESTED_NEEDS_MORE_TIME', 'INFORMATION_REQUESTED', 'TEMPORARILY_UNAVAILABLE', 'QUALIFICATION_INCOMPLETE', 'APPOINTMENT_PENDING'] as const;
+export type FollowUpTrigger = (typeof FOLLOW_UP_TRIGGERS)[number];
+/** Follow-up calling automation for one agent (server callingAgent.model.js followUpSchema). */
+export interface AgentFollowUpConfig {
+  enabled?: boolean; autoCall?: boolean; manualCall?: boolean;
+  triggers?: FollowUpTrigger[];
+  objective?: string; instructions?: string;
+  questions?: Question[];
+  schedule?: Schedule;
+  maxRounds?: number; minHoursBetweenRounds?: number; defaultCallbackDelayMinutes?: number;
+  unavailableRetryHours?: number; incompleteRetryHours?: number; informationRetryHours?: number; needsTimeRetryDays?: number;
+  eligibleLeadStatuses?: string[]; stopLeadStatuses?: string[];
+  /** outcome code (or QUALIFIED) → agent id that takes the next conversation. */
+  routes?: Record<string, string | null>;
+  /** Ordered rules on lead/call facts; the first match beats `routes` (server engine/followUpRouting.js). */
+  routingRules?: FollowUpRoutingRule[];
+  /** Who is told / takes over when a follow-up needs a person (empty = organisation default, then owner). */
+  escalation?: { userIds?: string[]; assignTo?: 'owner' | 'first_recipient'; email?: boolean };
+  escalateToUserId?: string | null;
+}
+export const ROUTING_LEAD_SOURCES = ['extension', 'google_places', 'manual', 'widget', 'import', 'incoming_call'] as const;
+export interface FollowUpRoutingRule {
+  id?: string; name?: string; enabled?: boolean; agentId: string;
+  when: { outcomes?: string[]; leadSources?: string[]; leadStatuses?: string[]; leadTypes?: string[]; languages?: string[]; countries?: string[]; cities?: string[]; businessTypes?: string[] };
+}
+export interface AgentTemplate { type: AgentType; objective: string; instructions: string; followUpInstructions: string; triggers: FollowUpTrigger[]; speakingStyle?: string; usage?: AgentUsage }
+export type FollowUpAutomationState = 'scheduled' | 'queued' | 'calling' | 'retry_scheduled' | 'paused' | 'completed' | 'no_answer' | 'busy' | 'failed' | 'cancelled' | 'skipped' | 'requires_human';
+export interface FollowUpAutomationView {
+  mode: 'ai' | 'human'; agentId: string | null; state: FollowUpAutomationState | null; reason: string | null; outcome: string | null;
+  round: number; attempts: number; campaignId: string | null; callRecordId: string | null; previousCallId: string | null;
+  notBefore: string | null; lastError: string | null; instructions: string | null;
+  timeResolution: { kind: string; approximate: boolean; requestedText: string | null; shiftedFrom: string | null } | null;
+  stateChangedAt: string | null; history: Array<{ state: string; at: string; reason: string | null }>;
+  call: { state: string; disposition: string | null; qualification: string | null; durationSeconds: number; answeredAt: string | null; endedAt: string | null; summary: string | null } | null;
+}
+export interface AgentFollowUpItem {
+  id: string; leadId: string; status: string; dueAt: string; nextDueAt: string; timezone: string | null; note: string | null;
+  lead: { id: string; name: string; leadNumber: string | null; status: string; phone: string | null } | null;
+  automation: FollowUpAutomationView | null;
+}
+export interface FollowUpSettings { enabled: boolean; forcedOffByEnv: boolean; pausedReason: string; changedAt: string | null; changedBy: string | null; voicePaused: boolean; escalationUserIds?: string[] }
+export interface FollowUpSummary {
+  total: number; byState: Record<string, number>; byOutcome: Record<string, number>;
+  scheduled: number; inProgress: number; completed: number; failed: number; noAnswer: number; requiresHuman: number; paused: number; cancelled: number; callbacks: number;
+  attempts: number; connected: number; answerRate: number; qualified: number; qualificationRate: number; avgDurationSeconds: number; avgAttemptsPerLead: number;
+  leadsReached: number; totalCost: number; costPerCall: number; costPerQualified: number;
+  humanManaged?: number;
+  automation: FollowUpSettings;
+}
 export interface CallingAgentInput {
   name: string; title?: string; description?: string;
+  usage?: AgentUsage;
+  agentType?: AgentType;
+  followUp?: AgentFollowUpConfig;
   availability?: 'draft' | 'active' | 'paused' | 'archived';
   avatarFileId?: string | null;
   avatarPresetId?: string | null;
@@ -515,6 +574,14 @@ export interface CallingAgentInput {
   questionnaire?: { questions: Question[] };
   statusRules?: StatusRule[]; schedule?: Schedule;
   transport?: CallTransport; pairedDeviceId?: string | null;
+  /** Incoming calls (inboundCalling): how this agent behaves as the receptionist. */
+  inbound?: {
+    greeting?: string; instructions?: string; escalationInstructions?: string;
+    /** Routing after the call: who gets the call, whether that beats the lead owner, and the work status per result. */
+    assignToUserId?: string | null; assignOverridesLeadOwner?: boolean; statusByResult?: Record<string, string>;
+    /** "Questions before goodbye" (inboundCalling/engine/closingQuestions.js). */
+    closingQuestions?: Array<{ key: string; label: string; question: string; type: string; required: boolean; options: string[] }>;
+  };
 }
 export interface CallingAgent extends CallingAgentInput {
   _id: string; availability: NonNullable<CallingAgentInput['availability']>; version: number;
@@ -525,7 +592,7 @@ export interface CallingAgent extends CallingAgentInput {
   latestCampaign: Campaign | null; lastActiveAt: string | null; createdAt: string; updatedAt: string;
 }
 export interface AgentImage { _id: string; name: string; url: string; size: number; createdAt: string; presetId?: string; thumbnailUrl?: string; category?: 'people' | 'ai'; description?: string }
-export interface AgentFilters { page?: number; search?: string; availability?: string; readiness?: string; campaignStatus?: string; sort?: string }
+export interface AgentFilters { page?: number; search?: string; availability?: string; readiness?: string; campaignStatus?: string; sort?: string; usage?: 'inbound' | 'outbound' }
 export interface AgentLaunchInput {
   idempotencyKey: string; name?: string; mode: 'now' | 'scheduled'; scheduledAt?: string | null;
   transport?: CallTransport; pairedDeviceId?: string | null;
@@ -558,8 +625,12 @@ export interface AnalyzedCall {
     outcome: CallOutcomeProfile; tone: LeadTone | null; toneEvidence: string | null;
     participation: { leadTurns: number; agentTurns: number; interruptions: number };
     answers: { valid: number; total: number };
+    questions?: number; callbackRequested?: boolean; humanRequested?: boolean;
   };
   cost: AnalyzedCallCost;
+  /** Incoming-call rows (GET /inbound-calls/costs): the caller is the "lead", the agent the "campaign". */
+  outcome?: string | null; answeredBy?: 'ai' | 'human' | null; qualificationResult?: string | null; inquiry?: string | null;
+  agentId?: string | null; agentName?: string | null; device?: string | null; sim?: string | null; leadCreated?: boolean; matchStatus?: string | null;
   costDiagnostics?: {
     cacheHitPercent: number | null; cachedInputTokens: number | null; estimatedCacheSavings: number | null; estimatedCostPerMinute: number | null;
     responseCount: number | null; averageOutputTokens: number | null; droppedResponses: number; compactions: number | null;
@@ -569,12 +640,17 @@ export interface AnalyzedCall {
 }
 export interface AnalyzedLead {
   pricingIncomplete?: boolean;
+  /** Incoming calls: callers without a lead have leadId null and a `caller:<number>` key. */
+  callerKey?: string;
   leadId: string; name: string; phone: string | null; status: string | null; calls: number; connected: number;
   seconds: number; cost: number; tokens: number; avgCostPerCall: number | null; lastCallAt: string; lastCallId: string;
   lastDisposition: string | null; lastQualification: string | null; lastTone: LeadTone | null; lastSummary: string;
 }
 export interface AgentCallAnalytics {
-  agent: { id: string; name: string }; currency: string;
+  agent: { id: string; name: string } | null; currency: string;
+  /** 'inbound' for GET /inbound-calls/costs (same shape plus the inbound extras below). */
+  scope?: 'inbound';
+  byAgent?: Array<{ agentId: string | null; name: string; calls: number; seconds: number; cost: number; tokens: number; avgCostPerCall: number | null }>;
   providerComparison?: ProviderCostComparison;
   totals: {
     calls: number; connected: number; completed: number; qualified: number; leads: number; totalCost: number; totalSeconds: number;
@@ -584,6 +660,7 @@ export interface AgentCallAnalytics {
     components: { model: number; telephony: number; platform: number; other: number };
     modelDetail: { audioIn: number; audioOut: number; textIn: number; textOut: number };
     callsWithUsage: number; callsWithoutCost: number;
+    answeredByAi?: number; missed?: number; leadsCreated?: number; aiSeconds?: number; avgCostPerAiCall?: number | null; costPerNewLead?: number | null;
   };
   testing: { calls: number; totalCost: number; seconds: number; tokens: number };
   pricing: { telephonyRatePerMinute: number; platformRatePerMinute: number; model: string | null };

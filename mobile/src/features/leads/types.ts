@@ -86,6 +86,14 @@ export const leadSchema = z
     name: z.string(),
     type: z.enum(LEAD_TYPES).catch('business'),
     status: z.enum(LEAD_STATUSES).catch('new'),
+    latestCall: z
+      .object({
+        callStatus: z.string().nullish(),
+        qualificationStatus: z.string().nullish(),
+        recommendedAction: z.string().nullish(),
+        missingFields: z.array(z.string()).default([]),
+      })
+      .nullish(),
     source: z.enum(LEAD_SOURCES).nullish().catch(null),
     address: addressSchema,
     phone: nullableString,
@@ -112,6 +120,7 @@ export const leadSchema = z
       name: raw.name,
       type: raw.type,
       status: raw.status,
+      ...(raw.latestCall ? { latestCall: raw.latestCall } : {}),
       source: raw.source ?? null,
       address: raw.address,
       phone: raw.phone,

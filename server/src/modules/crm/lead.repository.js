@@ -1,4 +1,5 @@
 import Lead from './lead.model.js';
+import { normalizeName } from '../businessDiscovery/engine/normalizer.js';
 import { businessIdentityKeys, googleIdentityKeys, identityAfterPatch, sameBusinessIdentity } from './leadIdentity.js';
 import {
   buildCursorQuery,
@@ -576,6 +577,47 @@ class LeadRepository {
     return matches(candidates);
   }
 
+  /** Batch equivalent of findImportDuplicates, preserving strict branch identity. */
+  async findImportDuplicatesBatch(leads = []) {
+    if (!leads.length) return [];
+    const keys = [...new Set(leads.flatMap(businessIdentityKeys))];
+    const placeIds = [...new Set(leads.map((lead) => lead.sourceMetadata?.googlePlaceId).filter(Boolean))];
+    const clauses = [];
+    if (keys.length) clauses.push({ businessIdentityKeys: { $in: keys } });
+    if (placeIds.length) clauses.push({ 'sourceMetadata.googlePlaceId': { $in: placeIds } });
+    const select = '_id leadNumber name type source sourceMetadata address location providerMeta notes businessIdentityKeys';
+    const exact = clauses.length ? await Lead.find({ $or: clauses }).select(select).lean() : [];
+    const byKey = new Map();
+    for (const candidate of exact) {
+      for (const key of [...businessIdentityKeys(candidate), ...googleIdentityKeys(candidate)]) {
+        byKey.set(key, [...(byKey.get(key) || []), candidate]);
+      }
+    }
+    const result = leads.map((lead) => {
+      const candidates = new Map(businessIdentityKeys(lead).flatMap((key) => byKey.get(key) || []).map((candidate) => [String(candidate._id), candidate]));
+      return [...candidates.values()].filter((candidate) => sameBusinessIdentity(lead, candidate));
+    });
+    const names = [...new Set(leads.filter((_lead, index) => !result[index].length).map((lead) => lead.name?.trim()).filter(Boolean))];
+    if (names.length) {
+      // Both branches can use lead_import_name_lookup: normal imports use an
+      // exact normalized-name $in, while only unnormalized legacy rows need
+      // accent-aware raw-name matching. Never scan all current leads by regex.
+      const legacy = await Lead.find({ $or: [
+        { normalizedName: { $in: [...new Set(names.map(normalizeName))] } },
+        { normalizedName: null, $or: names.map((name) => ({ name: { $regex: `^${accentSafeRegex(name)}$`, $options: 'i' } })) },
+      ] }).select(select).sort({ createdAt: 1, _id: 1 }).lean();
+      const byName = new Map();
+      for (const candidate of legacy) {
+        const name = normalizeName(candidate.name);
+        byName.set(name, [...(byName.get(name) || []), candidate]);
+      }
+      leads.forEach((lead, index) => {
+        if (!result[index].length) result[index] = (byName.get(normalizeName(lead.name)) || []).filter((candidate) => sameBusinessIdentity(lead, candidate));
+      });
+    }
+    return result.map((matches) => matches.map((lead) => ({ method: 'BUSINESS_IDENTITY', confidence: 1, lead })));
+  }
+
   /**
    * Bulk insert leads, ordered:false so one bad row does not abort the batch.
    * Returns per-row outcome: created docs plus captured write errors (e.g. the
@@ -588,19 +630,21 @@ class LeadRepository {
     }
 
     try {
-      const inserted = await Lead.insertMany(docs, { ordered: false });
+      const inserted = await Lead.insertMany(docs, { ordered: false, throwOnValidationError: true });
       return { created: inserted, errors: [], insertedCount: inserted.length, failedCount: 0 };
     } catch (err) {
       // ordered:false → partial success. Mongoose exposes insertedDocs and
       // writeErrors on the thrown error.
-      const created = err.insertedDocs || [];
+      const created = err.insertedDocs || (err.results || []).filter((item) => item && !(item instanceof Error) && item._id);
+      const validationErrors = err.validationErrors || (err.results || []).filter((item) => item instanceof Error && item.index !== undefined);
+      if (!err.writeErrors?.length && !err.result?.result?.writeErrors?.length && !validationErrors.length) throw err;
       const writeErrors = err.writeErrors
         || err.result?.result?.writeErrors
         || [];
-      const errors = writeErrors.map((writeError) => {
+      const errors = [...writeErrors, ...validationErrors].map((writeError) => {
         const info = writeError.err || writeError;
         return {
-          index: info.index,
+          index: writeError.index ?? info.index,
           code: info.code,
           message: info.errmsg || info.message || 'Insert failed',
           placeId: info.op?.sourceMetadata?.googlePlaceId ?? null,

@@ -9,5 +9,6 @@ export function useFollowUps(scope: FollowUpScope = 'mine') {
   return useQuery({
     queryKey: queryKeys.followUps.list(scope),
     queryFn: ({ signal }) => followUpsApi.list(scope, signal),
+    refetchInterval: 30_000,
   });
 }

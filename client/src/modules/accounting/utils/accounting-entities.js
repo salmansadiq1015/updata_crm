@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 export function defaultAccountingEntityForm() {
   return {
     entityCode: '',
@@ -5,7 +6,7 @@ export function defaultAccountingEntityForm() {
     legalName: '',
     type: 'COMPANY',
     parentId: '',
-    baseCurrency: 'CHF',
+    baseCurrency: getAccountingCurrency(),
     taxIdentifier: '',
     fiscalYearStartMonth: 1,
   };

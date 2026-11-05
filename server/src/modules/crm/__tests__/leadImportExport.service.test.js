@@ -1,5 +1,5 @@
 import {
-  jest, describe, it, beforeAll, afterEach, expect,
+  jest, describe, it, beforeAll, beforeEach, afterEach, expect,
 } from '@jest/globals';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
@@ -18,8 +18,9 @@ jest.unstable_mockModule('../lead.service.js', () => ({
 
 const mockList = jest.fn();
 const mockGetProviderMeta = jest.fn();
+const mockFindImportDuplicatesBatch = jest.fn();
 jest.unstable_mockModule('../lead.repository.js', () => ({
-  default: { list: mockList, getProviderMeta: mockGetProviderMeta },
+  default: { list: mockList, getProviderMeta: mockGetProviderMeta, findImportDuplicatesBatch: mockFindImportDuplicatesBatch },
 }));
 
 const mockGetNextLeadNumber = jest.fn();
@@ -59,6 +60,11 @@ let service;
 
 beforeAll(async () => {
   service = (await import('../leadImportExport.service.js')).default;
+});
+
+beforeEach(() => {
+  mockFindImportDuplicatesBatch.mockReset().mockImplementation(async (docs) => docs.map(() => []));
+  mockBulkCreate.mockReset().mockImplementation(async (docs) => ({ created: docs, insertedCount: docs.length, errors: [] }));
 });
 
 afterEach(() => {
@@ -409,7 +415,8 @@ describe('leadImportExportService.importExtensionLeads', () => {
     // Both rows import; the junk phone never fails the batch.
     expect(result).toMatchObject({ total: 2, created: 2, existing: 0, failed: 0 });
 
-    const junk = mockCreate.mock.calls.find((c) => c[0].name.startsWith('A'))[0];
+    const docs = mockBulkCreate.mock.calls[0][0];
+    const junk = docs.find((doc) => doc.name.startsWith('A'));
     expect(junk.phone).toBeNull(); // junk text dropped, row still created
     expect(junk.name).toHaveLength(255); // over-long name truncated
     expect(junk.website).toBe('https://example.fr/'); // scheme added
@@ -418,7 +425,7 @@ describe('leadImportExportService.importExtensionLeads', () => {
     expect(junk.providerMeta.reviewCount).toBe(1284);
     expect(junk.location).toBeNull(); // out-of-range latitude → no geo point
 
-    const good = mockCreate.mock.calls.find((c) => c[0].name === 'Valid Business')[0];
+    const good = docs.find((doc) => doc.name === 'Valid Business');
     expect(good.phone).toBe('+33 1 23 45 67 89'); // valid phone preserved
   });
 
@@ -432,10 +439,10 @@ describe('leadImportExportService.importExtensionLeads', () => {
       { clientId: 'good-web', businessName: 'Real Dentist', website: 'dentistetoulout-mohammedamine.ma' },
     ], 'user-1', { requestId: 'r-web' });
 
-    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Dentist')[0].website).toBeNull();
-    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Rated Shop')[0].website).toBeNull();
+    expect(mockBulkCreate.mock.calls[0][0].find((doc) => doc.name === 'Dentist').website).toBeNull();
+    expect(mockBulkCreate.mock.calls[0][0].find((doc) => doc.name === 'Rated Shop').website).toBeNull();
     // A real domain (incl. a Moroccan .ma) is kept and schemed.
-    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Real Dentist')[0].website)
+    expect(mockBulkCreate.mock.calls[0][0].find((doc) => doc.name === 'Real Dentist').website)
       .toBe('https://dentistetoulout-mohammedamine.ma/');
   });
 
@@ -713,15 +720,15 @@ describe('extension import provenance and lossless upload fallback', () => {
 
   it('always records Chrome extension provenance, with or without a place identifier', async () => {
     setupCreate();
-    const result = await service.importExtensionLeads([record(), record({ clientId: 'gym-2', placeIdentifier: 'place-2', category: 'Fitness center' })], 'user-1');
+    const result = await service.importExtensionLeads([record(), record({ clientId: 'gym-2', businessName: 'Second Gym', placeIdentifier: 'place-2', category: 'Fitness center' })], 'user-1');
     expect(result).toMatchObject({ total: 2, created: 2, failed: 0 });
-    for (const [doc] of mockCreate.mock.calls) {
+    for (const doc of mockBulkCreate.mock.calls[0][0]) {
       expect(doc.source).toBe('extension');
       expect(doc.sourceMetadata.importMethod).toBe('extension');
       expect(doc.address.area).toBe('Park Plaza');
     }
-    expect(mockCreate.mock.calls[0][0].sourceMetadata.businessType).toBe('Gym');
-    expect(mockCreate.mock.calls[1][0].sourceMetadata.businessType).toBe('Fitness center');
+    expect(mockBulkCreate.mock.calls[0][0][0].sourceMetadata.businessType).toBe('Gym');
+    expect(mockBulkCreate.mock.calls[0][0][1].sourceMetadata.businessType).toBe('Fitness center');
   });
 
   it.each(['No reviews', 'Online appointments', 'On-site services', 'N°1'])('replaces scraped metadata %s with the selected type during import', async (category) => {
@@ -770,5 +777,43 @@ describe('extension import provenance and lossless upload fallback', () => {
     expect(updates).not.toHaveProperty('source');
     expect(updates).not.toHaveProperty('sourceMetadata.businessType');
     expect(updates.address).toMatchObject({ area: 'City Centre', city: 'Mohammedia', country: 'MA' });
+  });
+});
+
+describe('extension bulk database contract', () => {
+  const record = (i) => ({ clientId: `c${i}`, businessName: `Hotel ${i}`, placeIdentifier: `place-${i}`, city: 'Lahore', country: 'PK', area: 'Gulberg' });
+  it('uses one duplicate phase, number reservation and bulk insert for the whole selection', async () => {
+    const result = await service.importExtensionLeads(Array.from({ length: 100 }, (_, i) => record(i)), 'trusted-user');
+    expect(result).toMatchObject({ total: 100, created: 100, failed: 0 });
+    expect(mockFindImportDuplicatesBatch).toHaveBeenCalledTimes(1);
+    expect(mockGetNextLeadNumberBlock).toHaveBeenCalledTimes(1);
+    expect(mockGetNextLeadNumberBlock).toHaveBeenCalledWith(100);
+    expect(mockBulkCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockFindDuplicates).not.toHaveBeenCalled();
+    expect(mockBulkCreate.mock.calls[0][0].every((doc) => doc.createdBy === 'trusted-user')).toBe(true);
+    expect(result.results.map((row) => row.clientId)).toEqual(Array.from({ length: 100 }, (_, i) => `c${i}`));
+  });
+  it('deduplicates repeated places inside the selection and isolates invalid rows', async () => {
+    const result = await service.importExtensionLeads([record(1), { ...record(1), clientId: 'repeat' }, { clientId: 'invalid', businessName: '' }], 'user-1');
+    expect(result).toMatchObject({ total: 3, created: 1, existing: 1, failed: 1 });
+    expect(result.results.map((row) => row.status)).toEqual(['created', 'existing', 'failed']);
+    expect(result.results[0].leadId).toBe(result.results[1].leadId);
+    expect(mockBulkCreate.mock.calls[0][0]).toHaveLength(1);
+  });
+  it('preserves confirmed rows and resolves concurrent unique-key races in a batch', async () => {
+    const winner = { _id: 'winner', leadNumber: 'L-00400', providerMeta: {}, address: {} };
+    mockFindImportDuplicatesBatch.mockResolvedValueOnce([[], []]).mockResolvedValueOnce([[{ lead: winner }]]);
+    mockBulkCreate.mockImplementationOnce(async (docs) => ({ created: [docs[0]], errors: [{ index: 1, code: 11000, message: 'duplicate identity' }] }));
+    const result = await service.importExtensionLeads([record(1), record(2)], 'user-1');
+    expect(result).toMatchObject({ created: 1, existing: 1, failed: 0 });
+    expect(result.results[1].leadId).toBe('winner');
+    expect(mockFindImportDuplicatesBatch).toHaveBeenCalledTimes(2);
+  });
+  it('does not claim success when a bulk database write is unconfirmed', async () => {
+    mockBulkCreate.mockRejectedValueOnce(new Error('database unavailable'));
+    const result = await service.importExtensionLeads([record(1), record(2)], 'user-1');
+    expect(result).toMatchObject({ created: 0, failed: 2 });
+    expect(result.results.every((row) => row.status === 'failed')).toBe(true);
   });
 });

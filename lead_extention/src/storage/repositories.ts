@@ -1,10 +1,11 @@
-import { clearStore, countStore, deleteRecord, getAll, getRecord, putRecord, putRecords } from './indexeddb';
+import { clearStore, countStore, deleteRecord, getAll, getRecord, getRecords, putRecord, putRecords } from './indexeddb';
 import type { Lead, SearchRecord } from '../shared/types';
 
 export const LeadRepository = {
   list: () => getAll<Lead>('leads'),
   listBySearch: async (searchId: string) => (await getAll<Lead>('leads')).filter((lead) => lead.searchId === searchId),
   get: (id: string) => getRecord<Lead>('leads', id),
+  getMany: (ids: string[]) => getRecords<Lead>('leads', ids),
   save: (lead: Lead) => putRecord('leads', lead),
   saveMany: (leads: Lead[]) => putRecords('leads', leads),
   remove: (id: string) => deleteRecord('leads', id),

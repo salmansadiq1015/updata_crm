@@ -1335,7 +1335,7 @@ async function startCrmImport(leadIds: string[] = []): Promise<{ ok: boolean; er
   if (!(await getAuthState()).authenticated) return { ok: false, error: 'Your CRM session has expired. Log in again.' };
   if (activeCrmImport?.status === 'running') return { ok: false, error: 'A CRM import is already running.' };
   const stored = await getCrmImportState();
-  const ids = leadIds.length ? leadIds : (stored?.status === 'partial' || stored?.status === 'failed' ? stored.failedLeadIds : []);
+  const ids = [...new Set(leadIds.length ? leadIds : (stored?.status === 'partial' || stored?.status === 'failed' ? stored.failedLeadIds : []))];
   if (!ids.length) return { ok: false, error: 'Select at least one lead to add to the CRM.' };
   activeCrmImport = { id: crypto.randomUUID(), status: 'running', total: ids.length, processed: 0, created: 0, existing: 0, failed: 0, failedLeadIds: [], leadIds: ids, processedLeadIds: [], nextIndex: 0, startedAt: nowIso(), completedAt: null, error: null };
   await saveCrmImport(); await chrome.alarms.create(CRM_IMPORT_ALARM, { periodInMinutes: 0.5 }); void runCrmImport(activeCrmImport); return { ok: true, state: activeCrmImport };
@@ -1361,7 +1361,7 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
     if (state.cancelRequested) { await finishCrmImport(state, 'cancelled'); activeCrmImport = null; return; }
     const batchIds = batches[batchIndex];
     const isLastBatch = batchIndex === batches.length - 1;
-    const leads = (await Promise.all(batchIds.map((id) => LeadRepository.get(id))))
+    const leads = (await LeadRepository.getMany(batchIds))
       .filter((lead): lead is Lead => Boolean(lead))
       .map((lead) => withImportSearchContext(lead, searchesById.get(lead.searchId)));
     const foundIds = new Set(leads.map((lead) => lead.id));
@@ -1371,18 +1371,36 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
       state.failedLeadIds.push(...missingIds);
       state.error = 'Some selected local leads no longer exist. The remaining records were still processed.';
     }
-    await Promise.all(leads.map(async (lead) => { lead.crmStatus = 'importing'; lead.crmError = null; await LeadRepository.save(lead); }));
+    for (const lead of leads) { lead.crmStatus = 'importing'; lead.crmError = null; }
+    await LeadRepository.saveMany(leads);
     try {
       if (!leads.length) throw new Error('No selected lead records were found in local storage.');
       const response = await importLeadsToCrm(leads, { importId: state.id, importTotal: state.total, importFinal: isLastBatch }); const byId = new Map(response.results.map((result) => [result.clientId, result]));
-      for (const lead of leads) { const item = byId.get(lead.id); const status = item?.status ?? 'failed'; lead.crmStatus = status === 'created' ? 'imported' : status === 'existing' ? 'existing' : 'failed'; lead.crmLeadId = item?.leadId ?? lead.crmLeadId; lead.crmLeadNumber = item?.leadNumber ?? lead.crmLeadNumber; lead.crmError = item?.message ?? null; await LeadRepository.save(lead); if (lead.crmStatus === 'imported') state.created += 1; else if (lead.crmStatus === 'existing') state.existing += 1; else { state.failed += 1; state.failedLeadIds.push(lead.id); } }
-    } catch (error) { state.failed += leads.length; state.error = errorMessage(error); state.failedLeadIds.push(...leads.map((lead) => lead.id)); for (const lead of leads) { lead.crmStatus = 'failed'; lead.crmError = errorMessage(error); await LeadRepository.save(lead); } }
+      for (const lead of leads) {
+        const item = byId.get(lead.id);
+        lead.crmStatus = item?.status === 'created' ? 'imported' : item?.status === 'existing' ? 'existing' : 'failed';
+        lead.crmLeadId = item?.leadId ?? lead.crmLeadId;
+        lead.crmLeadNumber = item?.leadNumber ?? lead.crmLeadNumber;
+        lead.crmError = item?.message ?? (item ? null : 'CRM did not confirm an outcome for this lead.');
+      }
+      await LeadRepository.saveMany(leads);
+      for (const lead of leads) {
+        if (lead.crmStatus === 'imported') state.created += 1;
+        else if (lead.crmStatus === 'existing') state.existing += 1;
+        else { state.failed += 1; state.failedLeadIds.push(lead.id); }
+      }
+    } catch (error) {
+      state.failed += leads.length; state.error = errorMessage(error);
+      state.failedLeadIds.push(...leads.map((lead) => lead.id));
+      for (const lead of leads) { lead.crmStatus = 'failed'; lead.crmError = errorMessage(error); }
+      await LeadRepository.saveMany(leads);
+    }
     for (const id of batchIds) processedIds.add(id);
     state.processedLeadIds = [...processedIds]; state.processed = processedIds.size; state.nextIndex = state.processed;
     await saveCrmImport(); await publishCrmImport();
   }
   if (state.cancelRequested) { await finishCrmImport(state, 'cancelled'); activeCrmImport = null; return; }
-  await finishCrmImport(state, state.failed ? 'partial' : 'completed'); activeCrmImport = null;
+  await finishCrmImport(state, state.failed === state.total ? 'failed' : state.failed ? 'partial' : 'completed'); activeCrmImport = null;
 }
 
 // Finalize an import run (completed / partial / cancelled): set the terminal
@@ -1403,10 +1421,10 @@ async function finishCrmImport(state: CrmImportProgress, status: CrmImportProgre
 // a worker restart) is reverted to "not-imported" so it is cleanly selectable to
 // add again — never shown stuck on "Adding…".
 async function resetImportingLeads(state: CrmImportProgress): Promise<void> {
-  await Promise.all((state.leadIds ?? []).map(async (id) => {
-    const lead = await LeadRepository.get(id);
-    if (lead && lead.crmStatus === 'importing') { lead.crmStatus = 'not-imported'; lead.crmError = null; await LeadRepository.save(lead); }
-  }));
+  const leads = (await LeadRepository.getMany(state.leadIds ?? []))
+    .filter((lead): lead is Lead => Boolean(lead) && lead!.crmStatus === 'importing');
+  for (const lead of leads) { lead.crmStatus = 'not-imported'; lead.crmError = null; }
+  await LeadRepository.saveMany(leads);
 }
 
 // Cancel an in-flight CRM import. A live run observes the persisted flag at its

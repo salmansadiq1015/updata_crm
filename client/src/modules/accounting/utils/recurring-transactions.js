@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 export function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -17,7 +18,7 @@ export function defaultTemplatePayload(type = 'JOURNAL') {
       supplierName: '',
       supplierInvoiceNumber: 'RECURRING-{period}',
       paymentTermsDays: 30,
-      currency: 'CHF',
+      currency: getAccountingCurrency(),
       lineItems: [
         { position: 1, description: '', quantity: 1, unitPrice: 0, vatRate: 0 },
       ],
@@ -30,7 +31,7 @@ export function defaultTemplatePayload(type = 'JOURNAL') {
       customerName: '',
       title: 'Recurring invoice {period}',
       paymentTermsDays: 30,
-      currency: 'CHF',
+      currency: getAccountingCurrency(),
       lineItems: [
         { position: 1, description: '', unit: 'pcs', quantity: 1, unitPrice: 0, vatRate: 0 },
       ],
@@ -42,7 +43,7 @@ export function defaultTemplatePayload(type = 'JOURNAL') {
     debitAccountId: '',
     creditAccountId: '',
     amount: 0,
-    currency: 'CHF',
+    currency: getAccountingCurrency(),
   };
 }
 

@@ -14,6 +14,9 @@ function normalizeList(payload) {
 }
 
 export const chatService = {
+  createLeadRoom: payload => apiClient.post(ENDPOINTS.CHAT.LEAD_ROOM, payload).then(r => r.data),
+  updateRoomLeads: (roomId, payload) => apiClient.patch(ENDPOINTS.CHAT.ROOM_LEADS(roomId), payload).then(r => r.data),
+  summarizeRoom: (roomId, language) => apiClient.post(ENDPOINTS.CHAT.ROOM_SUMMARY(roomId), { language }).then(r => r.data),
   listRooms: ()                                => apiClient.get(ENDPOINTS.CHAT.ROOMS).then(r => r.data || []),
   getOrCreateDmRoom: (targetUserId)            => apiClient.post(ENDPOINTS.CHAT.DM_ROOM, { targetUserId }).then(r => r.data),
   getOrCreateProjectRoom: (projectId)          => apiClient.post(ENDPOINTS.CHAT.PROJECT_ROOM, { projectId }).then(r => r.data),
@@ -29,7 +32,7 @@ export const chatService = {
   editMessage: (roomId, msgId, content)        => apiClient.patch(ENDPOINTS.CHAT.MESSAGE(roomId, msgId), { content }).then(r => r.data),
   blockUser: (roomId)                          => apiClient.post(ENDPOINTS.CHAT.ROOM_BLOCK(roomId)).then(r => r.data),
   unblockUser: (roomId)                        => apiClient.delete(ENDPOINTS.CHAT.ROOM_BLOCK(roomId)).then(r => r.data),
-  listUsers: ()                                => apiClient.get(ENDPOINTS.USERS.LIST, { params: { status: 'active', limit: 100 } }).then(r => normalizeList(extractData(r))),
+  listUsers: (search = '')                     => apiClient.get(ENDPOINTS.USERS.DIRECTORY, { params: { search, limit: 100 } }).then(r => normalizeList(extractData(r))),
   listProjects: ()                             => apiClient.get(ENDPOINTS.PM.PROJECTS, { params: { limit: 100 } }).then(r => normalizeList(extractData(r))),
   uploadFile: (formData, onProgress)           => apiClient.post(ENDPOINTS.FILES.UPLOAD, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

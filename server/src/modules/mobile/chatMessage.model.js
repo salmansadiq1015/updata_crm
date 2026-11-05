@@ -28,6 +28,7 @@ const chatMessageSchema = new mongoose.Schema(
       enum: MESSAGE_TYPES,
       default: 'TEXT',
     },
+    clientMessageId: { type: String, maxlength: 80, default: undefined },
     content: {
       type: String,
       maxlength: 5000,
@@ -69,6 +70,7 @@ chatMessageSchema.index({ projectId: 1, sentAt: -1 });
 chatMessageSchema.index({ senderId: 1 });
 chatMessageSchema.index({ isDeleted: 1 });
 chatMessageSchema.index({ roomId: 1, sentAt: -1 });
+chatMessageSchema.index({ roomId: 1, sentAt: -1, _id: -1 }, { name: 'chat_cursor' });
 
 // --- Soft-delete pre-hook ---
 chatMessageSchema.pre(/^find/, function () {
@@ -77,4 +79,6 @@ chatMessageSchema.pre(/^find/, function () {
 });
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
+chatMessageSchema.index({ roomId: 1, senderId: 1, clientMessageId: 1 }, { unique: true, partialFilterExpression: { clientMessageId: { $type: 'string' } }, name: 'uniq_room_sender_message' });
+
 export default ChatMessage;

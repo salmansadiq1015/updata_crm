@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import { jest, describe, it, beforeAll, afterEach, expect } from '@jest/globals';
+import { jest, describe, it, beforeAll, beforeEach, afterEach, expect } from '@jest/globals';
 import { serve } from '../../../../tests/helpers/serve.js';
 
 // End-to-end at the HTTP boundary: the real `validate(bulkImport)` gate + the
@@ -11,11 +11,12 @@ import { serve } from '../../../../tests/helpers/serve.js';
 
 const mockFindDuplicates = jest.fn();
 const mockCreate = jest.fn();
+const mockBulkCreate = jest.fn();
 jest.unstable_mockModule('../lead.service.js', () => ({
-  default: { bulkCreate: jest.fn(), findDuplicates: mockFindDuplicates, create: mockCreate },
+  default: { bulkCreate: mockBulkCreate, findDuplicates: mockFindDuplicates, create: mockCreate },
 }));
-jest.unstable_mockModule('../lead.repository.js', () => ({ default: { list: jest.fn() } }));
-jest.unstable_mockModule('../counter.service.js', () => ({ default: { getNextLeadNumber: jest.fn() } }));
+jest.unstable_mockModule('../lead.repository.js', () => ({ default: { list: jest.fn(), findImportDuplicatesBatch: async (docs) => docs.map(() => []) } }));
+jest.unstable_mockModule('../counter.service.js', () => ({ default: { getNextLeadNumber: jest.fn(), getNextLeadNumberBlock: async (n) => Array.from({ length: n }, (_, i) => `L-${i}`) } }));
 jest.unstable_mockModule('../../auth/audit.service.js', () => ({ default: { logEvent: jest.fn() } }));
 jest.unstable_mockModule('../../../metrics/index.js', () => ({ leadImportsTotal: { inc: jest.fn() } }));
 jest.unstable_mockModule('../../../shared/logger/index.js', () => ({
@@ -44,6 +45,10 @@ beforeAll(async () => {
   }));
 });
 
+beforeEach(() => {
+  mockBulkCreate.mockReset().mockImplementation(async (docs) => ({ created: docs, insertedCount: docs.length, errors: [] }));
+});
+
 afterEach(() => {
   mockFindDuplicates.mockReset();
   mockCreate.mockReset();
@@ -63,16 +68,13 @@ describe('POST /crm/leads/bulk-import (end-to-end path)', () => {
     expect(res.status).toBe(200); // was 400 before the fix
     expect(res.body.data).toMatchObject({ total: 9, created: 9, existing: 0, failed: 0 });
     expect(res.body.data.results).toHaveLength(9);
-    const row7 = mockCreate.mock.calls.find((c) => c[0].name === 'Hotel 7')[0];
+    const row7 = mockBulkCreate.mock.calls[0][0].find((doc) => doc.name === 'Hotel 7');
     expect(row7.phone).toBeNull(); // junk dropped; the row still imports
   });
 
   it('isolates a genuine per-row failure without failing the whole batch', async () => {
     mockFindDuplicates.mockResolvedValue([]);
-    mockCreate.mockImplementation(async (doc) => {
-      if (doc.name === 'Bad Row') throw new Error('DB write failed');
-      return { ...doc, _id: '507f1f77bcf86cd799439012', leadNumber: 'L-00051' };
-    });
+    mockBulkCreate.mockImplementationOnce(async (docs) => ({ created: [docs[0], docs[2]], errors: [{ index: 1, message: 'DB write failed' }] }));
 
     const res = await request(serve(app)).post('/api/v1/crm/leads/bulk-import').send({
       leads: [

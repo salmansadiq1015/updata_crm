@@ -13,15 +13,25 @@ describe('aiCalling statusRuleEngine', () => {
     expect(out).toMatchObject({ qualification: 'qualified', action: 'mark_qualified', ruleId: 'rule_qualified' });
   });
 
-  it('a completed call with no matching rule only records contact — never qualifies', () => {
+  it('complete answers failing configured qualification criteria are not qualified', () => {
     const out = evaluateOutcome({ statusRules: rules, answers: { active: true, interest: 'maybe' }, disposition: 'answered_completed' });
-    expect(out.qualification).toBe('none');
-    expect(out.action).toBe('mark_contacted');
+    expect(out.qualification).toBe('unqualified');
+    expect(out.action).toBe('mark_unqualified');
+  });
+
+  it('a completed call without any qualification criteria only records contact', () => {
+    expect(evaluateOutcome({ disposition: 'answered_completed', answers: { active: true } }))
+      .toMatchObject({ qualification: 'none', action: 'mark_contacted' });
   });
 
   it('incomplete required answers force review, never qualification', () => {
     const out = evaluateOutcome({ statusRules: rules, answers: { active: true, interest: 'yes' }, disposition: 'answered_partial', hasUnresolvedRequired: true });
     expect(out).toMatchObject({ qualification: 'review', action: 'request_review', requiresReview: true });
+  });
+
+  it.each(['answered_partial', 'needs_review', 'interrupted'])('never qualifies an incomplete %s call even when a positive rule matches', (disposition) => {
+    expect(evaluateOutcome({ statusRules: rules, answers: { active: true, interest: 'yes' }, disposition }))
+      .toMatchObject({ qualification: 'review', action: 'request_review', requiresReview: true });
   });
 
   it('do-not-contact overrides every content rule', () => {

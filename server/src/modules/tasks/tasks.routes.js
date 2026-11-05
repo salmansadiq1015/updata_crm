@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import taskRoutes from './task.routes.js';
+import taskTimeRoutes from './taskTime.routes.js';
 import taskListRoutes from './taskList.routes.js';
 import taskNoteRoutes from './taskNote.routes.js';
 import taskAttachmentRoutes from './taskAttachment.routes.js';
@@ -10,6 +11,7 @@ const router = Router();
 
 // Dashboard & sync routes (mounted before /:id to avoid conflicts)
 router.use('/', taskDashboardRoutes);
+router.use('/', taskTimeRoutes);
 
 // Core task CRUD + subtasks + bulk
 router.use('/', taskRoutes);

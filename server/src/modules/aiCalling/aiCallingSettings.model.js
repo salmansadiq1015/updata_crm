@@ -10,6 +10,16 @@ const aiCallingSettingsSchema = new mongoose.Schema({
   voicePaused: { type: Boolean, default: false },
   pausedReason: { type: String, trim: true, maxlength: 300, default: '' },
   pausedAt: { type: Date, default: null },
+  // Organisation-wide switch for AUTOMATIC follow-up calls (followUpCalling.service.js).
+  // Off by default: no agent places an automatic follow-up call until an admin enables it.
+  followUpAutomation: {
+    enabled: { type: Boolean, default: false },
+    pausedReason: { type: String, trim: true, maxlength: 300, default: '' },
+    changedAt: { type: Date, default: null },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Default escalation recipients for agents that name none.
+    escalationUserIds: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
+  },
   voiceProviders: { type: mongoose.Schema.Types.Mixed, default: undefined },
   providerCredentials: { type: mongoose.Schema.Types.Mixed, select: false, default: undefined },
   providerHealth: { type: mongoose.Schema.Types.Mixed, default: undefined },

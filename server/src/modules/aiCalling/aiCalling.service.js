@@ -14,6 +14,7 @@ import pairedPhoneService from '../pairedPhone/pairedPhone.service.js';
 import { LeadCallTransition, CallWebhookEvent } from './leadCallEvent.model.js';
 import Lead, { LEAD_STATUS } from '../crm/lead.model.js';
 import leadRepository from '../crm/lead.repository.js';
+import LeadEvent from '../crm/leadEvent.model.js';
 import userRepository from '../auth/user.repository.js';
 import auditService from '../auth/audit.service.js';
 import notificationService from '../notifications/notification.service.js';
@@ -33,6 +34,7 @@ import { answerRequirements, isConfirmation, validateAnswer } from './engine/ans
 import * as engine from './engine/questionEngine.js';
 import { evaluateOutcome } from './engine/statusRuleEngine.js';
 import { buildCallNotes } from './engine/callNotes.js';
+import { leadCallLifecycle } from './engine/leadLifecycle.js';
 import { conversationInsights } from './engine/conversationInsights.js';
 import { computeCallCost } from './engine/callCost.js';
 import { leadContext, buildSystemPrompt, dynamicLeadInstruction, disclosureText } from './engine/leadContext.js';
@@ -47,6 +49,10 @@ import * as contactPolicyHooks from '../contactPolicy/contactPolicy.hooks.js';
 import MessageSuppression from '../messaging/suppression.model.js';
 import { destinationHash } from '../messaging/destinationHash.js';
 import { onLeadSignalsChanged } from '../crm/leadQuality.hooks.js';
+import followUpCalling from './followUpCalling.service.js';
+import { leadActiveCall } from './leadCallLock.js';
+import { localTimeLine } from './engine/callbackTime.js';
+import { recipientTimezone } from './engine/callWindow.js';
 
 export { windowState };
 
@@ -61,7 +67,7 @@ const TICK_LEASE_MS = 90_000;             // one tick at a time per campaign
 const DISPATCH_LEASE_MS = 2 * 60_000;     // claim → provider request window
 const AGENT_CONTEXT_TIMEOUT_MS = Number(process.env.AGENT_CONTEXT_TIMEOUT_MS) || 8000; // worker accepted → loads the call
 const TERMINAL_CALL_STATES = new Set(['completed', 'no_answer', 'busy', 'voicemail', 'failed', 'cancelled']);
-const REACHED_DISPOSITIONS = ['unresponsive', 'answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact'];
+const REACHED_DISPOSITIONS = ['unresponsive', 'answered_completed', 'answered_partial', 'interrupted', 'declined', 'callback_requested', 'do_not_contact'];
 // Paired phone: the gateway still owns the phone call while its leg is in one of these states.
 const PAIRED_GATEWAY_LIVE = new Set(['queued', 'claimed', 'dialing']);
 // How long the gateway gets to report the end of a paired call after the agent left it.
@@ -181,7 +187,7 @@ export async function refreshCampaignSummary(campaignId) {
         _id: null,
         totalSeconds: { $sum: '$durationSeconds' },
         cost: { $sum: '$cost.amount' },
-        answered: { $sum: { $cond: [{ $in: ['$disposition', ['answered_completed', 'answered_partial', 'unresponsive']] }, 1, 0] } },
+        answered: { $sum: { $cond: [{ $in: ['$disposition', ['answered_completed', 'answered_partial', 'interrupted', 'unresponsive']] }, 1, 0] } },
         noAnswer: { $sum: { $cond: [{ $in: ['$disposition', ['no_answer', 'busy', 'voicemail']] }, 1, 0] } },
       } },
     ]),
@@ -535,8 +541,11 @@ class AiCallingService {
     };
   }
 
-  async listCampaigns(actor, { page = 1, limit = 25, status, channel, agentId } = {}) {
+  async listCampaigns(actor, { page = 1, limit = 25, status, channel, agentId, kind = 'standard' } = {}) {
     const filter = { createdBy: actor, launchKey: { $not: /^browser-test-/ } };
+    // Single-lead follow-up calls are listed on the agent's Follow-up tab, not as campaigns.
+    if (kind === 'follow_up') filter.kind = 'follow_up';
+    else if (kind !== 'all') filter.kind = { $ne: 'follow_up' };
     if (status) filter.status = status;
     if (agentId) filter.agentId = agentId;
     if (channel === 'web_link') filter.channel = 'web_link';
@@ -1118,6 +1127,17 @@ class AiCallingService {
       return { skipped: 'misconfigured', reason: misconfig };
     }
 
+    // Lead-level lock: never call a lead who is already on a call — an outbound call from ANY
+    // campaign or agent, or an incoming call they placed. Every competing outbound recipient is
+    // already in 'dialing' before it checks, so two concurrent claims always see each other and
+    // both defer (jittered) — never both dial.
+    const leadCall = audioVerificationTest ? { busy: false } : await leadActiveCall(recipient.leadId, { exceptRecipientId: recipient._id });
+    if (leadCall.busy) {
+      await this._releaseClaim(recipient._id, { deferMs: 30_000 + Math.floor(Math.random() * 30_000) });
+      recordCallMetric('dispatch', leadCall.kind === 'inbound' ? 'deferred_lead_on_inbound_call' : 'deferred_lead_busy');
+      return { deferred: leadCall.kind === 'inbound' ? 'lead_on_inbound_call' : 'lead_busy' };
+    }
+
     // --- Attempt bookkeeping. The recipient is pointed at the new call id BEFORE
     // the record exists, so a crash at any step is recoverable unambiguously
     // (see _recoverExpiredDispatches).
@@ -1146,7 +1166,14 @@ class AiCallingService {
     }
 
     const script = await resolveScriptVersion(campaign, recipient.leadId); // experiment arm / script version
+    // Follow-up call: answers already known for this lead are prefilled (never asked again).
+    const followUpCtx = campaign.kind === 'follow_up' ? await followUpCalling.contextFor(campaign, recipient.leadId).catch((e) => {
+      logger.warn('follow-up context unavailable', { module: 'ai-calling', campaignId: String(campaign._id), error: e.message }); return null;
+    }) : null;
+    const baseState = initialCallState(script.agentConfig || campaign.agentConfig);
     await CallRecord.create({
+      followUpId: campaign.followUpId || null,
+      previousCallId: followUpCtx?.previousCallId || null,
       ...script.stamp,
       _id: callObjectId,
       campaignId: campaign._id,
@@ -1161,7 +1188,7 @@ class AiCallingService {
       state: 'initiating',
       queuedAt: new Date(),
       initiatedAt: new Date(),
-      conversationState: initialCallState(script.agentConfig || campaign.agentConfig),
+      conversationState: followUpCtx ? { ...baseState, answers: { ...(baseState.answers || {}), ...followUpCtx.prefilled } } : baseState,
       conversationLanguage: { initial: initialLanguage(script.agentConfig || campaign.agentConfig), current: initialLanguage(script.agentConfig || campaign.agentConfig), detected: null, switches: [] },
       createdBy: recipient.createdBy,
     });
@@ -1206,6 +1233,7 @@ class AiCallingService {
       await CampaignRecipient.updateOne({ _id: recipient._id }, { $set: { leaseUntil: null } });
       await refreshCampaignSummary(campaign._id);
       emitToOwner(campaign.createdBy, 'ai-calling:call', { campaignId: String(campaign._id), callId: internalCallId, state: 'ringing' });
+      await followUpCalling.markCalling(campaign, callObjectId).catch((e) => logger.warn('follow-up state update failed', { module: 'ai-calling', error: e.message }));
       return { dialled: true, accepted: true, callId: internalCallId };
     }
     if (result.outcome === 'ambiguous') {
@@ -1226,6 +1254,7 @@ class AiCallingService {
       await this._scheduleRetryOrFail(campaign, updated, 'failed');
     }
     await refreshCampaignSummary(campaign._id);
+    await followUpCalling.afterDispatchRejected(campaign, recipient._id).catch((e) => logger.warn('follow-up state update failed', { module: 'ai-calling', error: e.message }));
     return { dialled: false, rejected: true, reason: result.errorMessage };
   }
 
@@ -1368,6 +1397,12 @@ class AiCallingService {
   async _finalizeRecipient(campaign, recipient, call) {
     // A late result for an OLDER attempt must not overwrite a newer attempt's state.
     if (String(recipient.lastCallId) !== String(call._id)) return;
+    if (call.disposition === 'cancelled') {
+      await CampaignRecipient.updateOne({ _id: recipient._id, ...NOT_PARKED }, { $set: {
+        state: 'cancelled', leaseUntil: null, nextAttemptAt: null, finalDisposition: 'cancelled', qualification: call.qualification,
+      } });
+      return;
+    }
     if (['no_answer', 'busy', 'voicemail', 'failed'].includes(call.disposition)) {
       await this._scheduleRetryOrFail(campaign, recipient, call.disposition);
     } else {
@@ -1441,6 +1476,8 @@ class AiCallingService {
     // Approved knowledge (stamped once per call) and the agent's human-transfer setup.
     const knowledge = await knowledgeService.forCall(call, campaign);
     const transfer = await humanTransferService.configForCampaign(campaign).catch(() => null);
+    const followUpCtx = campaign.kind === 'follow_up' ? await followUpCalling.contextFor(campaign, call.leadId).catch(() => null) : null;
+    const leadTz = campaign.schedule?.timezone && campaign.schedule.timezone !== 'UTC' ? campaign.schedule.timezone : (recipientTimezone(lead?.address?.country) || campaign.schedule?.timezone || 'UTC');
     return {
       callId: internalCallId,
       persistTranscript: true,
@@ -1455,7 +1492,10 @@ class AiCallingService {
       systemPrompt: [buildSystemPrompt({
         agentConfig: campaign.agentConfig, lead, objective: campaign.agentConfig?.objective,
         questions: [...(campaign.questionnaire?.questions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      }), `Current call language: ${state.language?.current || initialLanguage(campaign.agentConfig)}. This overrides the opening language on reconnect.`, knowledge.section, transfer ? TRANSFER_PROMPT_RULE : null].filter(Boolean).join('\n\n'),
+      }), campaign.agentConfig?.instructions ? `Agent instructions (from the CRM administrator):\n${String(campaign.agentConfig.instructions).slice(0, 4000)}` : null,
+      `Current call language: ${state.language?.current || initialLanguage(campaign.agentConfig)}. This overrides the opening language on reconnect.`,
+      followUpCtx?.section || localTimeLine(new Date(), leadTz), knowledge.section, transfer ? TRANSFER_PROMPT_RULE : null].filter(Boolean).join('\n\n'),
+      followUp: followUpCtx ? { followUpId: followUpCtx.followUpId ? String(followUpCtx.followUpId) : null, knownFields: Object.keys(followUpCtx.known) } : null,
       dynamicLeadInstruction: dynamicLeadInstruction(lead),
       knowledgeVersion: knowledge.stamp?.version ?? null,
       transfer: { enabled: Boolean(transfer) },
@@ -1812,6 +1852,12 @@ class AiCallingService {
     const parkedAmbiguous = call.state === 'needs_reconcile';
     const control = state.control || {};
     const prog = engine.progress(campaign.questionnaire, state);
+    // Follow-up calls start with answers already known from earlier calls (prefilled). Only
+    // answers given on THIS call show that the lead was reached and responded.
+    const hasPrefill = Object.values(state.answers || {}).some((a) => a?.prefilled);
+    const liveProg = hasPrefill
+      ? engine.progress(campaign.questionnaire, { ...state, answers: Object.fromEntries(Object.entries(state.answers || {}).filter(([, a]) => !a?.prefilled)) })
+      : prog;
 
     const requiredGaps = (campaign.questionnaire.questions || []).filter(q => q.required && engine.conditionMet(q.condition, state.answers || {}) && (state.answers?.[q.fieldKey]?.validation !== 'valid' || q.confirmCritical && !state.answers?.[q.fieldKey]?.confirmed)).map(q => q.fieldKey);
 
@@ -1822,14 +1868,16 @@ class AiCallingService {
       else if (state.endedReason === 'callback_requested') finalDisposition = 'callback_requested';
       else if (state.endedReason === 'declined') finalDisposition = 'declined';
       else if (state.endedReason === 'unresponsive') finalDisposition = 'unresponsive';
-      else if (requiredGaps.length === 0 && prog.total > 0 && prog.valid > 0) finalDisposition = 'answered_completed';
-      else if (prog.answered > 0) finalDisposition = 'answered_partial';
+      else if (requiredGaps.length === 0 && prog.total > 0 && (liveProg.valid > 0 || (hasPrefill && state.disclosed))) finalDisposition = 'answered_completed';
+      else if (liveProg.answered > 0) finalDisposition = 'answered_partial';
       // Reached a human who heard the disclosure, then hung up: they were reached
       // (don't redial as if unanswered), but nothing qualifies → review.
       else if (state.disclosed) finalDisposition = 'answered_partial';
       else finalDisposition = 'no_answer';
     }
-    if (state.endedReason === 'unresponsive') finalDisposition = 'unresponsive';
+    // Explicit conversational control is authoritative over a later carrier error.
+    if (['do_not_contact', 'callback_requested', 'declined', 'unresponsive'].includes(state.endedReason)) finalDisposition = state.endedReason;
+    if ((gw.audioLostAt || gw.takenOverAt || gw.command?.kind === 'takeover') && finalDisposition === 'answered_completed') finalDisposition = 'interrupted';
     // Paired phone: a person took the answered call over on the handset. The lead was reached,
     // whatever the AI collected or the line reported afterwards (no_answer/failed would redial).
     if (gw.takenOverAt && !REACHED_DISPOSITIONS.includes(finalDisposition)) finalDisposition = 'answered_partial';
@@ -1851,7 +1899,9 @@ class AiCallingService {
         questionFieldKey: q.fieldKey, questionnaireVersion: campaign.questionnaireVersion,
         label: q.label, type: q.type, rawAnswer: entry.rawAnswer || '', normalizedValue: entry.normalizedValue,
         mapTo: q.mapTo || null, validation: entry.validation, confirmed: entry.confirmed || false,
-        classification: entry.classification || null, clarifications: entry.clarifications || 0, noResponseCount: entry.noResponseCount || 0, reason: entry.reason || null, source: 'agent_tool',
+        classification: entry.classification || null, clarifications: entry.clarifications || 0, noResponseCount: entry.noResponseCount || 0, reason: entry.reason || null,
+        // Provenance: 'previous_call' / 'lead_record' = carried over from earlier evidence, not said on this call.
+        source: entry.prefilled ? (entry.prefillSource?.type || 'previous_call') : 'agent_tool',
         reviewStatus: entry.validation === 'valid' ? 'none' : 'pending',
       });
       if (entry.validation === 'valid') validValues[q.fieldKey] = entry.normalizedValue;
@@ -1859,14 +1909,14 @@ class AiCallingService {
 
     const outcome = evaluateOutcome({
       statusRules: campaign.statusRules, answers: validValues, disposition: finalDisposition,
-      hasUnresolvedRequired: requiredGaps.length > 0, control,
+      hasUnresolvedRequired: requiredGaps.length > 0 || parkedAmbiguous, control,
     });
 
     const reached = REACHED_DISPOSITIONS.includes(finalDisposition);
     // A parked (uncertain) call is never "no answer"/"failed" in the figures: nobody knows yet.
     if (parkedAmbiguous && !reached) finalDisposition = 'needs_review';
     const callState = reached ? 'completed'
-      : (['no_answer', 'busy', 'voicemail'].includes(finalDisposition) ? finalDisposition : 'failed');
+      : (['no_answer', 'busy', 'voicemail', 'cancelled'].includes(finalDisposition) ? finalDisposition : 'failed');
 
     // 1. Persist the call record (authoritative, retained even if later steps fail).
     const endedAt = call.endedAt || now;
@@ -1911,6 +1961,12 @@ class AiCallingService {
     // 3. Recipient terminal state / retry (web tests never touch the recipient; an ambiguous call
     //    already parked its recipient as failed/needs_reconcile: only a human may retry it).
     if (recipient && !isTestProvider(call.provider) && !parkedAmbiguous) await this._finalizeRecipient(campaign, recipient, call);
+    // Follow-up decision engine: close the follow-up this call executed, schedule the next
+    // conversation / escalate / stop. Idempotent (keyed by call id) and never blocks processing.
+    if (!campaign.isTest && !isTestProvider(call.provider)) {
+      try { await followUpCalling.afterCallProcessed({ call, campaign, outcome, disposition: finalDisposition, requiredGaps }); }
+      catch (e) { logger.warn('AI follow-up planning failed', { module: 'ai-calling', callId: call.internalCallId, error: e.message }); }
+    }
 
     // 4. Stamp processed — from here every other finisher is a no-op.
     const finalized = recipient && !isTestProvider(call.provider) ? await CampaignRecipient.findById(recipient._id).select('lastCallId state').lean() : null;
@@ -1954,11 +2010,13 @@ class AiCallingService {
    * crashed processing run can be safely repeated.
    */
   async _applyOutcomeToLead({ call, campaign, recipient, outcome, disposition, actorType = 'system', actorId = null }) {
-    const lead = await Lead.findById(call.leadId).select('_id name status assignedTo').lean();
+    const lead = await Lead.findById(call.leadId).select('_id name status assignedTo latestCall').lean();
     if (!lead) return { applied: false };
+    // A delayed completion for an older call cannot overwrite the latest call or pipeline.
+    const superseded = lead.latestCall?.evaluatedAt && new Date(lead.latestCall.evaluatedAt) > new Date(call.endedAt || call.createdAt);
 
     const set = {};
-    if (REACHED_DISPOSITIONS.includes(disposition)) {
+    if (!superseded && REACHED_DISPOSITIONS.includes(disposition)) {
       set.lastContactedAt = call.endedAt || new Date();
       set.lastContactChannel = call.provider === 'web_link' ? 'sms' : 'phone';
     }
@@ -1967,6 +2025,7 @@ class AiCallingService {
     const previousStatus = lead.status;
     let newStatus = previousStatus;
     const allowed = targetStatus
+      && !superseded
       && !PROTECTED_LEAD_STATUSES.has(previousStatus)
       && Object.values(LEAD_STATUS).includes(targetStatus)
       && (!outcome.requiresReview || actorType === 'user');
@@ -1974,6 +2033,21 @@ class AiCallingService {
     const weakening = previousStatus === LEAD_STATUS.QUALIFIED && targetStatus === LEAD_STATUS.CONTACTED;
     const manualOverride = actorType === 'system' && await this._statusChangedByHumanSince(lead._id, call.initiatedAt || call.createdAt);
     if (allowed && targetStatus !== previousStatus && !weakening && !manualOverride) newStatus = targetStatus;
+
+    // Make an explicitly collected contact address usable by the existing email
+    // service. Fill only a missing address; never replace a saved or edited one.
+    if (!superseded && !manualOverride) {
+      const emailQuestion = campaign.questionnaire?.questions?.find((q) => q.type === 'email'
+        && (['email', 'lead.email'].includes(q.mapTo) || q.fieldKey === 'email'));
+      const emailAnswer = emailQuestion && call.answers?.find((answer) => answer.questionFieldKey === emailQuestion.fieldKey
+        && answer.validation === 'valid' && (!emailQuestion.confirmCritical || answer.confirmed));
+      if (emailAnswer) {
+        const checked = validateAnswer(emailQuestion, emailAnswer.normalizedValue);
+        if (checked.validation === 'valid') await Lead.updateOne({ _id: lead._id, $or: [{ email: null }, { email: '' }] }, {
+          $set: { email: String(checked.normalizedValue).trim().toLowerCase() },
+        });
+      }
+    }
 
     if (newStatus !== previousStatus) set.status = newStatus;
     if (Object.keys(set).length) {
@@ -2036,11 +2110,38 @@ class AiCallingService {
         const { default: leadSlaService } = await import('../crm/leadSla.service.js');
         await leadSlaService.recordFirstResponse(lead._id, { at: set.lastContactedAt, channel: set.lastContactChannel });
       }
-      if (outcome.action === 'schedule_callback') {
-        const { default: leadFollowUpService } = await import('../crm/leadFollowUp.service.js');
-        await leadFollowUpService.fromAiCall({ call, lead, campaign, outcome });
-      }
     } catch (e) { logger.warn('lead workflow update after AI call failed', { module: 'ai-calling', error: e.message }); }
+
+    // Required lifecycle handoff: do not stamp resultsProcessedAt on failure. The
+    // existing processing lease/reconciler retries this idempotent source upsert.
+    // Create the follow-up before exposing the pipeline stage. Never send email here.
+    const eligible = !superseded && !manualOverride && !PROTECTED_LEAD_STATUSES.has(lead.status)
+      && ((outcome.action === 'mark_qualified' && newStatus === LEAD_STATUS.QUALIFIED)
+        || outcome.action === 'schedule_callback');
+    if (eligible) {
+      const { default: leadFollowUpService } = await import('../crm/leadFollowUp.service.js');
+      // "in 10 minutes" / "tomorrow morning" → a real due time in the lead's timezone (lead's words kept).
+      const resolved = outcome.action === 'schedule_callback'
+        ? await followUpCalling.resolveCallbackFor({ call, campaign, recipient, outcome }).catch(() => null) : null;
+      await leadFollowUpService.fromAiCall({ call, lead, campaign, outcome, resolved });
+    }
+    const negative = !superseded && !manualOverride && !PROTECTED_LEAD_STATUSES.has(lead.status)
+      && ['mark_unqualified', 'mark_not_interested', 'mark_do_not_contact'].includes(outcome.action);
+    if (negative) {
+      const { default: leadFollowUpService } = await import('../crm/leadFollowUp.service.js');
+      await leadFollowUpService.closeAutomaticForLead(lead._id, call._id, lead.assignedTo || campaign.createdBy);
+    }
+    const lifecycle = leadCallLifecycle(call, campaign, outcome);
+    await LeadEvent.updateOne({ dedupeKey: `call:${call._id}:${actorType}:${outcome.qualification}` }, {
+      $setOnInsert: { leadId: lead._id, type: 'call.evaluated', at: call.endedAt || new Date(), actor: actorId,
+        details: { callId: String(call._id), campaignId: String(campaign._id), callStatus: lifecycle.callStatus,
+          qualificationStatus: lifecycle.qualificationStatus, previousStatus, newStatus, reason: outcome.reason,
+          ...(eligible ? { pipelineStage: 'FOLLOW_UP' } : negative ? { pipelineStage: 'LEAD' } : {}) } },
+    }, { upsert: true });
+    await Lead.updateOne({ _id: lead._id, ...(eligible || negative ? { status: newStatus } : {}), $or: [
+      { 'latestCall.evaluatedAt': null }, { 'latestCall.evaluatedAt': { $lte: lifecycle.evaluatedAt } },
+    ] }, { $set: { latestCall: lifecycle, ...(eligible ? { pipelineStage: 'FOLLOW_UP' } : negative ? { pipelineStage: 'LEAD' } : {}) } });
+    emitToOwner(lead.assignedTo || campaign.createdBy, 'lead:follow-up', { type: 'call_evaluated', leadId: String(lead._id) });
 
     if (outcome.action === 'schedule_callback') {
       await notificationService.create({
@@ -2133,7 +2234,7 @@ class AiCallingService {
     // late/odd carrier code on an answered call as a normal hang-up.
     if (call.answeredAt && ['no_answer', 'busy'].includes(normalized)) normalized = 'completed';
 
-    if (['no_answer', 'busy', 'voicemail', 'failed'].includes(normalized)) {
+    if (['no_answer', 'busy', 'voicemail', 'failed', 'cancelled'].includes(normalized)) {
       if (!call.resultsProcessedAt) await this.processCallResults(call._id, { disposition: normalized, source: 'webhook' });
       return { matched: true, state: normalized };
     }
@@ -2700,7 +2801,7 @@ class AiCallingService {
 
   async analytics(actor, { from, to, campaignId } = {}) {
     const match = this._analyticsMatch(actor, { from, to, campaignId });
-    const answeredCond = { $cond: [{ $in: ['$disposition', ['answered_completed', 'answered_partial', 'unresponsive']] }, 1, 0] };
+    const answeredCond = { $cond: [{ $in: ['$disposition', ['answered_completed', 'answered_partial', 'interrupted', 'unresponsive']] }, 1, 0] };
     const [byDisposition, byQualification, byDay, totals, campaigns] = await Promise.all([
       CallRecord.aggregate([{ $match: match }, { $group: { _id: '$disposition', count: { $sum: 1 } } }]),
       CallRecord.aggregate([{ $match: match }, { $group: { _id: '$qualification', count: { $sum: 1 } } }]),
@@ -2997,7 +3098,8 @@ class AiCallingService {
  * conversation); "voicemail" stays valid because a voicemail box answers too.
  */
 export function sanitizeReportedDisposition(disposition, call) {
-  if (!['voicemail', 'no_answer', 'busy', 'failed'].includes(disposition)) return null;
+  if (!['voicemail', 'no_answer', 'busy', 'failed', 'cancelled', 'interrupted'].includes(disposition)) return null;
+  if (disposition === 'interrupted' && !call?.answeredAt) return 'failed';
   if (call?.answeredAt && ['no_answer', 'busy'].includes(disposition)) return null;
   return disposition;
 }

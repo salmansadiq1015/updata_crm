@@ -13,6 +13,10 @@ export const DASHBOARD_GRANULARITIES = Object.freeze([
 
 export const DASHBOARD_TABS = Object.freeze([
   { id: 'overview', labelKey: 'dashboard.analytics.tabs.overview', fallback: 'Overview' },
+  { id: 'assistant', labelKey: 'dashboard.intelligence.assistant', fallback: 'AI assistant', permission: 'ai:sessions' },
+  { id: 'calling', labelKey: 'dashboard.intelligence.calling', fallback: 'AI calling', permission: 'ai-calling:read' },
+  { id: 'incoming', labelKey: 'dashboard.intelligence.incoming', fallback: 'Incoming calls', permission: 'inbound-calls:read' },
+  { id: 'leads', labelKey: 'dashboard.intelligence.leads', fallback: 'Leads & follow-ups', permission: 'lead:read' },
   { id: 'crm', labelKey: 'dashboard.analytics.tabs.crm', fallback: 'CRM', permission: 'crm:read' },
   { id: 'projects', labelKey: 'dashboard.analytics.tabs.projects', fallback: 'Projects', permission: 'projects:read' },
   { id: 'sales', labelKey: 'dashboard.analytics.tabs.sales', fallback: 'Quotes & Orders', permission: 'qop:read' },
@@ -34,7 +38,7 @@ export const KPI_CONFIG = Object.freeze({
     labelKey: 'dashboard.analytics.kpi.customers',
     fallback: 'Customers',
     accent: 'violet',
-    href: '/crm',
+    href: '/crm/customers',
     permission: 'crm:read',
   },
   projects: {
@@ -96,7 +100,7 @@ export const WORK_QUEUE_CONFIG = Object.freeze({
 });
 
 export const FEATURE_MIX_COLORS = Object.freeze([
-  '#8b5cf6',
+  '#0ea5e9',
   '#06b6d4',
   '#22c55e',
   '#f59e0b',
@@ -106,12 +110,12 @@ export const FEATURE_MIX_COLORS = Object.freeze([
 
 export const CHART_COLORS = Object.freeze({
   revenue: '#22d3ee',
-  quoteValue: '#a78bfa',
+  quoteValue: '#38bdf8',
   orderValue: '#34d399',
   cashMovement: '#f59e0b',
   created: '#60a5fa',
   completed: '#22c55e',
-  assignments: '#f472b6',
+  assignments: '#0284c7',
   hours: '#fbbf24',
   failures: '#fb7185',
   successes: '#34d399',

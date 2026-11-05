@@ -1,3 +1,6 @@
+import mongoose from 'mongoose';
+import FileMetadata from '../files/file.model.js';
+import storageService from '../../shared/storage/StorageService.js';
 import ChatMessage from '../mobile/chatMessage.model.js';
 import chatRoomRepository from './chatRoom.repository.js';
 import chatRoomService from './chatRoom.service.js';
@@ -31,16 +34,31 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+async function refreshAttachments(messages) {
+  const ids = messages.map(message => idOf(message.attachmentFileId)).filter(Boolean);
+  if (!ids.length) return messages;
+  const files = await FileMetadata.find({ _id: { $in: ids }, isDeleted: { $ne: true } }).select('key originalName').lean();
+  const urls = new Map(await Promise.all(files.map(async file => {
+    try { return [String(file._id), { url: await storageService.getPresignedUrl(file.key), name: file.originalName }]; }
+    catch { return [String(file._id), null]; }
+  })));
+  return messages.map(message => {
+    const file = urls.get(idOf(message.attachmentFileId));
+    return file ? { ...message, attachmentUrl: file.url, attachmentFileName: file.name } : message;
+  });
+}
+
 const chatMessageService = {
-  async listMessages(roomId, user, { limit = 50, before } = {}) {
+  async listMessages(roomId, user, { limit = 50, before, beforeId } = {}) {
     await chatRoomService.assertMembership(roomId, user);
     const query = { roomId, isDeleted: false };
-    if (before) query.sentAt = { $lt: new Date(before) };
+    if (before && beforeId) query.$or = [{ sentAt: { $lt: new Date(before) } }, { sentAt: new Date(before), _id: { $lt: new mongoose.Types.ObjectId(beforeId) } }];
+    else if (before) query.sentAt = { $lt: new Date(before) };
     const messages = await ChatMessage.find(query)
-      .sort({ sentAt: -1 })
-      .limit(limit)
+      .sort({ sentAt: -1, _id: -1 })
+      .limit(Math.min(Math.max(Number(limit) || 50, 1), 100))
       .lean();
-    return messages.reverse();
+    return refreshAttachments(messages.reverse());
   },
 
   async sendMessage(roomId, data, sender) {
@@ -50,11 +68,27 @@ const chatMessageService = {
     const isBlocked = room.blockedBy?.some((id) => String(id) === senderId);
     if (isBlocked) throw new AuthorizationError('You are blocked in this room');
 
+    if ((data.messageType || 'TEXT') === 'TEXT' && !String(data.content || '').trim()) throw new ValidationError('Message cannot be empty');
+    if ((data.messageType || 'TEXT') !== 'TEXT' && !data.attachmentFileId && !data.attachmentUrl) throw new ValidationError('Attachment is required');
+    const allowedMembers = new Set(memberIdsFromRoom(room));
+    if ((data.mentions || []).some(id => !allowedMembers.has(String(id)))) throw new ValidationError('Mentions must refer to conversation members');
+    if (data.clientMessageId) {
+      const existing = await ChatMessage.findOne({ roomId, senderId, clientMessageId: data.clientMessageId }).lean();
+      if (existing) return existing;
+    }
+    let attachmentUrl = data.attachmentUrl || null;
+    if (data.attachmentFileId) {
+      const file = await FileMetadata.findOne({ _id: data.attachmentFileId, uploadedBy: senderId, isDeleted: { $ne: true } }).lean();
+      if (!file) throw new AuthorizationError('You can only share your own uploaded files');
+      attachmentUrl = await storageService.getPresignedUrl(file.key);
+    } else if ((data.messageType || 'TEXT') !== 'TEXT') {
+      throw new ValidationError('Upload an attachment before sending');
+    }
     let replyToSnippet = null;
     let replyToSenderName = null;
     if (data.replyToId) {
       const replyMsg = await ChatMessage.findById(data.replyToId).lean();
-      if (!replyMsg || String(replyMsg.roomId) !== String(roomId)) {
+      if (!replyMsg || replyMsg.isDeleted || String(replyMsg.roomId) !== String(roomId)) {
         throw new ValidationError('Reply target must be in the same chat room', [
           { field: 'replyToId', message: 'Invalid reply target' },
         ]);
@@ -63,7 +97,9 @@ const chatMessageService = {
       replyToSenderName = replyMsg.senderName || null;
     }
 
-    const message = await ChatMessage.create({
+    let message;
+    try { message = await ChatMessage.create({
+      clientMessageId: data.clientMessageId || undefined,
       roomId,
       projectId: idOf(room.projectId) || null,
       orderId: idOf(room.orderId) || null,
@@ -71,7 +107,7 @@ const chatMessageService = {
       senderName: userNameOf(sender),
       messageType: data.messageType || 'TEXT',
       content: data.content || '',
-      attachmentUrl: data.attachmentUrl || null,
+      attachmentUrl,
       attachmentFileId: data.attachmentFileId || null,
       transcriptStatus: (data.messageType === 'AUDIO' && data.attachmentFileId) ? 'pending' : 'none',
       mentions: data.mentions || [],
@@ -80,7 +116,10 @@ const chatMessageService = {
       replyToSenderName,
       isViewOnce: data.isViewOnce || false,
       sentAt: new Date(),
-    });
+    }); } catch (error) {
+      if (error.code !== 11000 || !data.clientMessageId) throw error;
+      return ChatMessage.findOne({ roomId, senderId, clientMessageId: data.clientMessageId }).lean();
+    }
 
     await chatRoomRepository.updateLastMessage(roomId, {
       messageId: message._id,
@@ -254,8 +293,13 @@ const chatMessageService = {
       await chatAccessService.assertContextAccess({ projectId, orderId }, user);
       if (projectId) query.projectId = projectId;
       if (orderId) query.orderId = orderId;
+      if (!await chatAccessService.canReadLeads(user)) {
+        const { default: ChatRoom } = await import('./chatRoom.model.js');
+        const linkedRooms = await ChatRoom.find({ $or: [{ roomType: 'LEAD' }, { 'leadIds.0': { $exists: true } }] }).select('_id roomType leadIds').lean();
+        query.roomId = { $nin: linkedRooms.filter(room => room.roomType === 'LEAD' || room.leadIds?.length).map(room => room._id) };
+      }
     } else {
-      const rooms = await chatRoomRepository.findRoomsForUser(userIdOf(user));
+      const rooms = await chatRoomService.listRoomsForUser(user);
       const roomIds = rooms.map((room) => room._id);
       if (roomIds.length === 0) return [];
       query.roomId = { $in: roomIds };
@@ -273,7 +317,7 @@ const chatMessageService = {
     await chatRoomService.assertMembership(roomId, user);
     const message = await ChatMessage.findById(messageId);
     if (!message) throw new NotFoundError('Message');
-    if (String(message.roomId) !== String(roomId)) throw new NotFoundError('Message');
+    if (String(message.roomId) !== String(roomId) || message.isDeleted) throw new NotFoundError('Message');
 
     const userId = userIdOf(user);
     const existingIdx = message.reactions.findIndex(
@@ -333,6 +377,8 @@ const chatMessageService = {
     if (String(message.senderId) !== String(requesterId)) {
       throw new AuthorizationError('You can only edit your own messages');
     }
+    if (message.isDeleted) throw new NotFoundError('Message');
+    if (!String(content || '').trim()) throw new ValidationError('Message cannot be empty');
     if (message.messageType !== 'TEXT') throw new Error('Only TEXT messages can be edited');
     message.content = content;
     message.editedAt = new Date();

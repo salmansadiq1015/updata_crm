@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toExtensionRecord, toCrmImportCsv } from '../src/integration/crm-api';
+import { makeLead } from '../src/shared/normalize';
 import { businessCategory, withImportSearchContext } from '../src/shared/business-category';
 import type { SearchRecord } from '../src/shared/types';
 import type { Lead } from '../src/shared/types';
@@ -22,10 +23,22 @@ const lead = (overrides: Partial<Lead> = {}): Lead => ({
 });
 
 describe('toExtensionRecord — the CRM payload no longer drops rich business data', () => {
-  it.each([null, '', '  ', 'Business', 'establishment', 'point_of_interest', 'No reviews', 'No review', 'Online appointments', 'On-site services', 'N°1', 'Nº 1', '4.8 (23)', 'Aucun avis', 'Keine Bewertungen'])('falls back from missing/generic category %s to this lead’s selected Gym task', (category) => {
+  it.each(['add_a_label', 'add-a-label', 'Add a label', '+ Add a label', 'Edit label', 'Ajouter un libellé', null, '', '  ', 'Business', 'establishment', 'point_of_interest', 'No reviews', 'No review', 'Online appointments', 'On-site services', 'N°1', 'Nº 1', '4.8 (23)', 'Aucun avis', 'Keine Bewertungen'])('falls back from missing/generic category %s to this lead’s selected Gym task', (category) => {
     const record = toExtensionRecord(lead({ category, categories: [], discoveryCategories: ['Gym'] }));
     expect(record.category).toBe('Gym');
     expect(record.discoveryCategories).toEqual(['Gym']);
+  });
+
+  it('keeps selected Hotel through new extraction, saved local records and both import formats', () => {
+    const raw = { businessName: 'Gulberg Inn Hotel', category: 'Add a label', categories: ['Add a label'], googleMapsUrl: 'https://www.google.com/maps?query_place_id=hotel-1' };
+    const extracted = makeLead(raw, 'hotel-search', 'Lahore', 'Hotel');
+    expect(extracted.category).toBe('Hotel');
+    const saved = { ...extracted, category: 'Add a label', discoveryCategories: [] };
+    const recovered = withImportSearchContext(saved, { businessType: 'Hotel', location: 'Lahore' } as SearchRecord);
+    expect(toExtensionRecord(recovered)).toMatchObject({ category: 'Hotel', discoveryCategories: ['Hotel'] });
+    expect(toCrmImportCsv([recovered])).toContain('""category"":""Hotel""');
+    expect(businessCategory({ ...saved, discoveryCategories: [], categories: [] })).toBeNull();
+    expect(businessCategory({ ...saved, category: 'Label printing service', discoveryCategories: ['Hotel'] })).toBe('Label printing service');
   });
 
   it('rejects a business name or slogan captured as the category', () => {

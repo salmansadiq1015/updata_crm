@@ -79,6 +79,23 @@ export const ENDPOINTS = {
     takeover: (callRecordId: string) => `/paired-phone/calls/${encodeURIComponent(callRecordId)}/takeover`,
     hangup: (callRecordId: string) => `/paired-phone/calls/${encodeURIComponent(callRecordId)}/hangup`,
   },
+  // Incoming calls answered by the AI over the paired phone (server/src/modules/inboundCalling).
+  inboundCalls: {
+    list: '/inbound-calls',
+    stats: '/inbound-calls/stats',
+    live: '/inbound-calls/live',
+    devices: '/inbound-calls/devices',
+    deviceSims: (deviceId: string) => `/inbound-calls/devices/${encodeURIComponent(deviceId)}/sims`,
+    settings: '/inbound-calls/settings',
+    detail: (id: string) => `/inbound-calls/${encodeURIComponent(id)}`,
+    control: (id: string, kind: 'answer' | 'reject' | 'takeover' | 'hangup') =>
+      `/inbound-calls/${encodeURIComponent(id)}/control/${kind}`,
+    notes: (id: string) => `/inbound-calls/${encodeURIComponent(id)}/notes`,
+    work: (id: string) => `/inbound-calls/${encodeURIComponent(id)}/work`,
+    followUp: (id: string) => `/inbound-calls/${encodeURIComponent(id)}/follow-up`,
+    recommendation: (id: string, recId: string) =>
+      `/inbound-calls/${encodeURIComponent(id)}/recommendations/${encodeURIComponent(recId)}`,
+  },
   // SIM call campaigns: AI-assisted calling from THIS phone's SIM (server/src/modules/simCall).
   simCalls: {
     readiness: '/sim-calls/readiness',

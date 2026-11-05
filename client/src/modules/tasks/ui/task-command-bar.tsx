@@ -58,6 +58,7 @@ type TaskCommandBarProps = {
   currentUserId?: string | null;
   isStale: boolean;
   isFetching: boolean;
+  hasError?: boolean;
   onViewChange: (view: TaskViewType) => void;
   onSearchChange: (value: string) => void;
   onStatusChange: (status: TaskStatus | 'ALL') => void;
@@ -65,7 +66,7 @@ type TaskCommandBarProps = {
   onAssigneeFilterChange?: (value: string) => void;
   department?: string;
   onDepartmentChange?: (value: string) => void;
-  onCreateTask: (title: string) => void;
+  onCreateTask: (title: string) => void | Promise<unknown>;
   pageSize?: number;
   onPageSizeChange?: (size: number) => void;
 };
@@ -138,8 +139,8 @@ export function TaskCommandBar({
   assigneeFilter = 'ALL',
   users = [],
   currentUserId,
-  isStale,
   isFetching,
+  hasError = false,
   onViewChange,
   onSearchChange,
   onStatusChange,
@@ -162,8 +163,8 @@ export function TaskCommandBar({
     <div className="border-b border-border bg-card">
       {/* Top row: quick-add + search + view switcher. Add-first flow (client
           feedback): the button comes first, the title field appears on click. */}
-      <div className="flex items-center gap-2 px-3 py-3">
-        <div className="hidden min-w-0 max-w-2xl flex-1 items-center lg:flex">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-3">
+        <div className="flex min-w-0 max-w-2xl flex-1 items-center">
           <TaskQuickAdd
             onCreate={onCreateTask}
             label={t('tasks.addTask', 'Hinzufügen')}
@@ -171,7 +172,7 @@ export function TaskCommandBar({
           />
         </div>
 
-        <div className="relative ml-auto w-44 shrink-0 xl:w-56">
+        <div className="relative ml-auto w-44 shrink-0 max-sm:w-full xl:w-56">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
@@ -185,7 +186,7 @@ export function TaskCommandBar({
 
         <div
           className="flex items-center gap-1 rounded-md border border-border bg-background p-0.5"
-          role="tablist"
+          role="group"
           aria-label={t('tasks.views', 'Task views')}
         >
           {views.map((view) => {
@@ -198,6 +199,7 @@ export function TaskCommandBar({
                 variant="ghost"
                 size="sm"
                 disabled={view.disabled}
+                aria-pressed={activeView === view.value}
                 className={cn(
                   'h-7 gap-1 rounded px-2 text-xs',
                   activeView === view.value && 'bg-primary text-primary-foreground hover:bg-primary',
@@ -213,7 +215,7 @@ export function TaskCommandBar({
       </div>
 
       {/* Filter row */}
-      <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
+      <div className="flex items-center gap-2 overflow-x-auto border-t border-border px-3 py-2.5 sm:flex-wrap [&>*]:shrink-0">
         {/* Status filter */}
         <Select value={status} onValueChange={(v: string) => onStatusChange(v as TaskStatus | 'ALL')}>
           <SelectTrigger className="h-8 w-40 gap-1.5 border border-border bg-background text-xs font-medium hover:bg-muted [&>svg:last-child]:shrink-0">
@@ -360,7 +362,7 @@ export function TaskCommandBar({
 
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
           {isFetching ? <span>{t('common.syncing', 'Synchronisiert...')}</span> : null}
-          {isStale ? <span className="text-warning">{t('common.stale', 'Stale')}</span> : <span>{t('common.live', 'Live')}</span>}
+          {!isFetching && <span className={hasError ? 'text-warning' : undefined}>{hasError ? t('tasks.syncFailed', 'Update failed') : t('tasks.syncReady', 'Ready')}</span>}
         </div>
       </div>
     </div>

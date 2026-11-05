@@ -14,6 +14,8 @@ import {
   toTelHref,
   toWhatsAppHref,
 } from '../ui/lead-ui-utils';
+import { leadSchema } from '../schemas/lead-schemas';
+import { makeLeadDTO } from './mocks/data';
 import type { LeadAddress } from '../types/lead-types';
 import type { Lead } from '../types/lead-types';
 
@@ -174,6 +176,18 @@ describe('business type + location helpers', () => {
     expect(getLeadBusinessTypeLabel(withType('hotel,restaurant'))).toBe('Hotel');
     expect(getLeadBusinessTypeLabel(withType('IT Company'))).toBe('IT Company');
     expect(getLeadBusinessTypeLabel(withType(null))).toBeNull();
+  });
+
+  it.each(['add_a_label', 'add-a-label', 'Add a label', '+ Add a label', 'Edit label', 'Ajouter un libellé', null])('shows saved Hotel rather than %s from a persisted API response', (businessType) => {
+    const lead = leadSchema.parse(makeLeadDTO({ source: 'extension', sourceMetadata: { businessType, discoveryBusinessTypes: ['Hotel'] } }));
+    expect(getLeadBusinessTypeLabel(lead)).toBe('Hotel');
+  });
+
+  it('never substitutes a Maps action or guesses a type when saved provenance is unavailable', () => {
+    expect(getLeadBusinessTypeLabel(withType('Add a label'))).toBeNull();
+    expect(getLeadBusinessTypeLabel(withType('Label printing service'))).toBe('Label printing service');
+    const lead = leadSchema.parse(makeLeadDTO({ sourceMetadata: { businessType: 'Resort hotel', discoveryBusinessTypes: [{ id: 'hotel', name: 'Hotel' }] } }));
+    expect(getLeadBusinessTypeLabel(lead)).toBe('Resort hotel');
   });
 
   it('area label uses only the neighborhood and never substitutes city or postal code', () => {

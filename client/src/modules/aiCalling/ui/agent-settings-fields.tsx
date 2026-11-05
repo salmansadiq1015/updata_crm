@@ -8,7 +8,7 @@ import { LanguageSelect } from './language-select';
 import { AgentField, inputClass, panelClass } from './calling-agent-primitives';
 
 export const defaultAgentInput = (): CallingAgentInput => ({
-  name: '', title: '', description: '', availability: 'draft', avatarFileId: null,
+  name: '', title: '', description: '', availability: 'draft', avatarFileId: null, agentType: 'custom',
   agentConfig: { agentName: '', organizationName: '', objective: '', disclosure: 'Hi, this is an AI assistant calling on behalf of {company}. Do you have a moment to answer a few questions?', voice: 'alloy', speakingStyle: 'professional', maxCallSeconds: 300, silenceTimeoutSeconds: 10, maxClarificationsPerQuestion: 3, allowBargeIn: true, recordCall: false, shareLeadNotes: false },
   questionnaire: { questions: [] }, statusRules: [], transport: 'cloud_sip', pairedDeviceId: null,
   schedule: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', callWindow: { start: '09:00', end: '18:00' }, daysOfWeek: [1, 2, 3, 4, 5], maxAttemptsPerLead: 2, minMinutesBetweenAttempts: 60, retryDelayMinutes: 120, maxConcurrency: 1, maxCallsPerDay: 200, maxCampaignSpend: 0 },
@@ -21,6 +21,7 @@ export function AgentVoiceFields({ value, onChange }: { value: Partial<AgentConf
     <div className="grid gap-4 sm:grid-cols-2"><AgentField label="Voice"><select className={inputClass} value={value.voice || 'alloy'} onChange={e => patch({ voice: e.target.value })}>{['alloy', 'echo', 'shimmer', 'ash', 'ballad', 'coral', 'sage', 'verse'].map(v => <option key={v} value={v}>{v}</option>)}</select></AgentField><AgentField label="Speaking style"><select className={inputClass} value={value.speakingStyle || 'professional'} onChange={e => patch({ speakingStyle: e.target.value as AgentConfig['speakingStyle'] })}>{['professional', 'friendly', 'concise', 'formal', 'custom'].map(v => <option key={v} value={v}>{v}</option>)}</select></AgentField></div>
     {value.speakingStyle === 'custom' && <AgentField label="Custom speaking instructions"><textarea className={inputClass} maxLength={500} rows={3} value={value.customStyle || ''} onChange={e => patch({ customStyle: e.target.value })} /></AgentField>}
     <AgentField label="Call objective and instructions"><textarea className={inputClass} rows={3} maxLength={1000} value={value.objective || ''} onChange={e => patch({ objective: e.target.value })} /></AgentField>
+    <AgentInstructionsField value={value.instructions || ''} onChange={instructions => patch({ instructions })} />
     <AgentField label="AI disclosure" hint="Spoken before collecting answers. {company} is replaced with the company name."><textarea className={inputClass} rows={3} maxLength={2000} value={value.disclosure || ''} onChange={e => patch({ disclosure: e.target.value })} /></AgentField>
     <AgentField label="Max call duration (seconds)"><input type="number" className={inputClass} min={30} max={1800} value={value.maxCallSeconds ?? 300} onChange={e => patch({ maxCallSeconds: Number(e.target.value) })} /></AgentField>
     <ConversationPolicyFields value={value} onChange={onChange} />
@@ -28,6 +29,13 @@ export function AgentVoiceFields({ value, onChange }: { value: Partial<AgentConf
       ['allowBargeIn', 'Allow interruptions'], ['recordCall', 'Call recording · unavailable on this connection'], ['shareLeadNotes', 'Include CRM notes in call context'],
     ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={Boolean(value[key])} disabled={key === 'recordCall' && !value.recordCall} onChange={e => patch({ [key]: e.target.checked })} />{label}</label>)}</div>
   </div>;
+}
+
+function AgentInstructionsField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const t = useIntelT();
+  return <AgentField label={t('aiFollowUp.instructions.label', 'Conversation instructions')} hint={t('aiFollowUp.instructions.hint', 'How this agent should behave: tone, what it may and may not say, when to escalate. Sent with every call.')}>
+    <textarea className={`${inputClass} resize-y`} rows={5} maxLength={4000} value={value} onChange={e => onChange(e.target.value)} />
+  </AgentField>;
 }
 
 export function AgentLanguageField({ value, onChange }: { value?: string; onChange: (language: string) => void }) {

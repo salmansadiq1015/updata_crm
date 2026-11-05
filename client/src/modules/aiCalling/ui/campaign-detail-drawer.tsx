@@ -2,8 +2,10 @@
 
 import { useState, type ReactElement } from 'react';
 import {
-  X, Pause, Square, RotateCcw, FlaskConical, ListChecks, Phone, Loader2, Download, Mic, MessageSquareText, Pencil, Trash2, Clock3,
+  X, Pause, Square, RotateCcw, FlaskConical, ListChecks, Phone, PhoneForwarded, Loader2, Download, Mic, MessageSquareText, Pencil, Trash2, Clock3,
 } from 'lucide-react';
+import { useIntelT } from '../hooks/use-intel-t';
+import { CampaignFollowUpsPanel } from './campaign-follow-ups-panel';
 import { ConfirmDialog as ConfirmDialogRaw } from '@/shared/components/confirm-dialog';
 import { downloadBlob } from '@/lib/api/download';
 import { showError } from '@/lib/toast';
@@ -30,7 +32,7 @@ const ConfirmDialog = ConfirmDialogRaw as (props: {
   confirmText?: string; cancelText?: string; variant?: string; isLoading?: boolean; onConfirm: () => void;
 }) => ReactElement;
 
-type Tab = 'live' | 'overview' | 'recipients' | 'configuration' | 'simulate' | 'webtest' | 'link';
+type Tab = 'live' | 'overview' | 'recipients' | 'followups' | 'configuration' | 'simulate' | 'webtest' | 'link';
 
 export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaignId: string; onClose: () => void; onEdit?: (campaign: Campaign) => void }) {
   const { isAdmin, hasPermission } = usePermissions();
@@ -39,6 +41,7 @@ export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaign
   const { data: readiness } = useCampaignRunStatus(campaignId, Boolean(campaign && campaign.channel !== 'web_link'));
   const { start, pause, resume, cancel, retry } = useCampaignMutations();
   const [tab, setTab] = useState<Tab>('overview');
+  const t = useIntelT();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [liveCallId, setLiveCallId] = useState<string | null>(null);
@@ -145,6 +148,7 @@ export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaign
               <TabButton active={tab === 'overview'} onClick={() => setTab('overview')} icon={ListChecks} label="Overview" />
               {isLink ? <TabButton active={tab === 'link'} onClick={() => setTab('link')} icon={MessageSquareText} label="SMS link chats" /> : null}
               <TabButton active={tab === 'recipients'} onClick={() => setTab('recipients')} icon={Phone} label="Recipients" />
+              {!isLink && <TabButton active={tab === 'followups'} onClick={() => setTab('followups')} icon={PhoneForwarded} label={t('aiFollowUp.campaign.tab', 'Follow-ups')} />}
               <TabButton active={tab === 'configuration'} onClick={() => setTab('configuration')} icon={ListChecks} label="Configuration" />
               <TabButton active={tab === 'simulate'} onClick={() => setTab('simulate')} icon={FlaskConical} label="Simulate" />
               {!isLink || campaign.linkConfig?.voiceTier === 'premium' ? (
@@ -193,6 +197,7 @@ export function CampaignDetailDrawer({ campaignId, onClose, onEdit }: { campaign
               {tab === 'link' ? <LinkAssistantPanel campaignId={campaignId} /> : null}
               {tab === 'configuration' ? <CampaignConfiguration campaign={campaign} /> : null}
               {tab === 'recipients' ? <RecipientsTab campaignId={campaignId} /> : null}
+              {tab === 'followups' ? <CampaignFollowUpsPanel campaignId={campaignId} /> : null}
               {tab === 'simulate' ? <div className="h-full"><SimulateConsole campaignId={campaignId} /></div> : null}
               {tab === 'webtest' ? <div className="h-full"><WebCallConsole campaignId={campaignId} /></div> : null}
             </div>

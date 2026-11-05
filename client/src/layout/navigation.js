@@ -24,6 +24,7 @@ import {
   LayoutTemplate,
   MapPinned,
   MessageSquare,
+  Mail,
   MonitorSmartphone,
   Percent,
   PlugZap,
@@ -33,6 +34,7 @@ import {
   Ruler,
   ScrollText,
   PhoneCall,
+  PhoneIncoming,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -62,6 +64,7 @@ const originalNavSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
       { type: 'leaf', labelKey: 'deploy.tabs.calendar', href: '/scheduling/calendar', icon: CalendarDays, permission: 'scheduling:read' },
       { type: 'leaf', labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
+      { type: 'leaf', labelKey: 'sidebar.email', href: '/email', icon: Mail, permission: 'email:read' },
       { type: 'leaf', labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
       { type: 'leaf', labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles, permission: 'ai:sessions' },
       { type: 'leaf', labelKey: 'sidebar.employmentManagement', href: '/settings/users', icon: Users, permission: 'users:read' },
@@ -78,6 +81,8 @@ const originalNavSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.leads', href: '/leads', icon: UserPlus, permission: 'lead:read' },
       { type: 'leaf', labelKey: 'sidebar.leadFollowUps', href: '/leads/follow-ups', icon: CalendarClock, permission: 'lead:read' },
       { type: 'leaf', labelKey: 'sidebar.aiCalling', href: '/ai-calling', icon: PhoneCall, permission: 'ai-calling:read' },
+      // ai-calling:read implies inbound-calls:read (shared/auth/permission-implications.mjs), so AI Calling users see it too.
+      { type: 'leaf', labelKey: 'sidebar.incomingCalls', href: '/incoming-calls', icon: PhoneIncoming, permission: 'inbound-calls:read' },
       { type: 'leaf', labelKey: 'sidebar.simCalls', href: '/sim-calls', icon: Smartphone, permission: 'ai-calling:read' },
       { type: 'leaf', labelKey: 'governance.nav.campaignPerformance', href: '/campaign-performance', icon: TrendingUp, permission: 'analytics:attribution:read' },
       { type: 'leaf', labelKey: 'sidebar.smsOps', href: '/sms-ops', icon: LifeBuoy, permission: 'ai-calling:read' },
@@ -162,7 +167,7 @@ const originalNavSectionDefs = [
 
 // Group the existing navigation model without changing permission or role UI contracts.
 const growthRoutes = new Set(['/leads', '/lead-generation', '/leads/follow-ups']);
-const communicationRoutes = new Set(['/ai-calling', '/sim-calls', '/sms-ops']);
+const communicationRoutes = new Set(['/ai-calling', '/incoming-calls', '/sim-calls', '/sms-ops']);
 const insightRoutes = new Set(['/campaign-performance']);
 const originalBusinessItems = originalNavSectionDefs[1].items;
 export const navSectionDefs = [

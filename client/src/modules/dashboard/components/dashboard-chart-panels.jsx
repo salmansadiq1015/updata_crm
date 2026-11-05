@@ -43,8 +43,9 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { getRecentCustomers, RECENT_CUSTOMERS_EVENT } from '@/modules/crm/utils/recent-customers';
-import { CHART_COLORS, FEATURE_MIX_COLORS, WORK_QUEUE_CONFIG } from '@/modules/dashboard/data/dashboard-config';
+import { CHART_COLORS, FEATURE_MIX_COLORS, WORK_QUEUE_CONFIG, DASHBOARD_TABS } from '@/modules/dashboard/data/dashboard-config';
 import {
   formatDashboardCurrency,
   formatDashboardNumber,
@@ -58,8 +59,8 @@ import {
 } from '@/modules/dashboard/utils/dashboard-i18n';
 import { EmptyAnalyticsState, GlassPanel, PanelHeader } from './dashboard-primitives';
 
-const GRID_COLOR = 'rgba(148, 163, 184, 0.16)';
-const AXIS_COLOR = 'rgba(203, 213, 225, 0.68)';
+const GRID_COLOR = 'var(--border)';
+const AXIS_COLOR = 'var(--muted-foreground)';
 
 function getBreakdownTotal(items, field = 'value') {
   return (items || []).reduce((total, item) => total + (Number(item?.[field]) || 0), 0);
@@ -138,11 +139,12 @@ function ResponsiveChart({ children, height = 320 }) {
   );
 }
 
-function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, currency, currencyKeys = [], children }) {
+export function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, currency, currencyKeys = [], children }) {
   const reduceMotion = useReducedMotion();
   const chartData = useMemo(() => localizeDashboardSeries(data, locale, t), [data, locale, t]);
   const hasData = hasSeriesData(chartData, metrics.map((metric) => metric.key));
   const Icon = icon || TrendingUp;
+  const mixedUnits = currencyKeys.length > 0 && metrics.some(item => currencyKeys.includes(item.key)) && metrics.some(item => !currencyKeys.includes(item.key));
 
   return (
     <GlassPanel className="min-w-0 xl:col-span-8">
@@ -161,12 +163,14 @@ function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, cu
               </defs>
               <CartesianGrid stroke={GRID_COLOR} vertical={false} />
               <XAxis dataKey="label" stroke={AXIS_COLOR} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-              <YAxis stroke={AXIS_COLOR} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} width={54} />
+              <YAxis yAxisId="primary" stroke={AXIS_COLOR} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={48} />
+              {mixedUnits && <YAxis yAxisId="currency" orientation="right" stroke={AXIS_COLOR} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={64} />}
               <Tooltip content={<PremiumTooltip locale={locale} currency={currency} currencyKeys={currencyKeys} />} />
               {metrics.map((metric) => (
                 <Area
                   key={metric.key}
                   type="monotone"
+                  yAxisId={mixedUnits && currencyKeys.includes(metric.key) ? 'currency' : 'primary'}
                   dataKey={metric.key}
                   name={metric.name}
                   stroke={metric.color}
@@ -178,6 +182,7 @@ function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, cu
               ))}
             </AreaChart>
           </ResponsiveChart>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">{metrics.map(item => <span key={item.key} className="inline-flex items-center gap-2"><span className="h-0.5 w-4 rounded-full" style={{ background: item.color }} />{item.name}{currencyKeys.includes(item.key) || currency ? ' (CHF)' : ''}</span>)}</div>
           {children}
         </div>
       ) : (
@@ -190,7 +195,7 @@ function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, cu
   );
 }
 
-function BarPanel({
+export function BarPanel({
   title,
   description,
   icon,
@@ -306,7 +311,7 @@ function DonutPanel({ title, description, icon, data, locale, t, labelGroup, val
   );
 }
 
-function StatTiles({ items, locale }) {
+export function StatTiles({ items, locale }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => {
@@ -317,12 +322,12 @@ function StatTiles({ items, locale }) {
               <div className="min-w-0">
                 <p className="truncate text-sm text-muted-foreground">{item.label}</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-                  {item.currency
+                  {item.displayValue ?? (item.currency
                     ? formatDashboardCurrency(item.value, locale)
-                    : `${formatDashboardNumber(item.value, locale)}${item.suffix || ''}`}
+                    : `${formatDashboardNumber(item.value, locale)}${item.suffix || ''}`)}
                 </p>
               </div>
-              <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border', item.className || 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100')}>
+              <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border', item.className || 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200')}>
                 <Icon className="h-5 w-5" />
               </div>
             </div>
@@ -341,10 +346,10 @@ function WorkQueuePanel({ items, t, locale }) {
         {items?.length ? items.map((item) => {
           const config = WORK_QUEUE_CONFIG[item.id] || { fallback: item.id, labelKey: item.id };
           const tone = item.severity === 'danger'
-            ? 'border-rose-300/20 bg-rose-300/10 text-rose-100'
+            ? 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200'
             : item.severity === 'warning'
-            ? 'border-amber-300/20 bg-amber-300/10 text-amber-100'
-            : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100';
+            ? 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200'
+            : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200';
 
           const row = (
             <div className={cn('flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5', config.href && 'transition-colors hover:border-primary/40 hover:bg-accent')}>
@@ -384,8 +389,8 @@ function RecentActivityPanel({ data, t, locale }) {
             <span className={cn(
               'shrink-0 rounded-md border px-2 py-1 text-xs font-semibold',
               entry.result === 'success'
-                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
-                : 'border-rose-300/20 bg-rose-300/10 text-rose-100',
+                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200'
+                : 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200',
             )}
             >
               {entry.timestamp
@@ -474,8 +479,17 @@ function RecentCustomersPanel({ t, locale }) {
 }
 
 function OverviewTab({ data, t, locale }) {
+  const { hasPermission } = usePermissions();
+  const featureMix = data.overview.featureMix.filter(item => {
+    const tab = DASHBOARD_TABS.find(tab => tab.id === item.id);
+    return tab && (!tab.permission || hasPermission(tab.permission));
+  });
   return (
     <div className="space-y-4">
+      {hasPermission('accounting:read') && <div className="grid gap-4 xl:grid-cols-12">
+        <TrendAreaPanel title={t('dashboard.analytics.sales.revenue', 'Revenue trend')} description={t('dashboard.analytics.sales.trendDesc', 'Revenue, quote value, and order value.')} icon={TrendingUp} data={data.overview.financialTrend} metrics={[metric(t, 'revenue', CHART_COLORS.revenue), metric(t, 'quoteValue', CHART_COLORS.quoteValue), metric(t, 'orderValue', CHART_COLORS.orderValue)]} t={t} locale={locale} currency />
+        <DonutPanel title={t('dashboard.analytics.overview.featureMix', 'Workspace activity')} icon={Gauge} data={featureMix} locale={locale} t={t} labelGroup="featureMix" />
+      </div>}
       <div className="grid gap-4 xl:grid-cols-12">
         <TrendAreaPanel
           title={t('dashboard.analytics.overview.operations', 'Operations pulse')}
@@ -504,9 +518,9 @@ function CrmTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.crm.total', 'Total customers'), value: data.crm.total, icon: Users },
-          { label: t('dashboard.analytics.crm.active', 'Active customers'), value: data.crm.active, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
-          { label: t('dashboard.analytics.crm.new', 'New customers'), value: data.crm.newCurrent, icon: TrendingUp, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
-          { label: t('dashboard.analytics.crm.delta', 'Growth'), value: data.crm.delta, icon: Activity, className: 'border-brand-300/20 bg-brand-300/10 text-brand-100' },
+          { label: t('dashboard.analytics.crm.active', 'Active customers'), value: data.crm.active, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
+          { label: t('dashboard.analytics.crm.new', 'New customers'), value: data.crm.newCurrent, icon: TrendingUp, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200' },
+          { label: t('dashboard.analytics.crm.delta', 'Growth'), value: data.crm.delta, icon: Activity, className: 'border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -535,9 +549,9 @@ function ProjectsTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.projects.active', 'Active projects'), value: data.projects.active, icon: FolderKanban },
-          { label: t('dashboard.analytics.projects.completed', 'Completed'), value: data.projects.completed, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
-          { label: t('dashboard.analytics.projects.budget', 'Active budget'), value: data.projects.budget, icon: WalletCards, currency: true, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
-          { label: t('dashboard.analytics.projects.risk', 'Overdue'), value: data.projects.overdue, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+          { label: t('dashboard.analytics.projects.completed', 'Completed'), value: data.projects.completed, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
+          { label: t('dashboard.analytics.projects.budget', 'Active budget'), value: data.projects.budget, icon: WalletCards, currency: true, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200' },
+          { label: t('dashboard.analytics.projects.risk', 'Overdue'), value: data.projects.overdue, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -579,9 +593,9 @@ function SalesTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.sales.revenue', 'Invoice revenue'), value: data.sales.invoices.revenue, icon: TrendingUp, currency: true },
-          { label: t('dashboard.analytics.sales.pipeline', 'Open quote value'), value: data.sales.quotations.openValue, icon: FileText, currency: true, className: 'border-brand-300/20 bg-brand-300/10 text-brand-100' },
-          { label: t('dashboard.analytics.sales.conversion', 'Quote conversion'), value: data.sales.quotations.conversionRate, icon: Gauge, suffix: '%', className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
-          { label: t('dashboard.analytics.sales.overdue', 'Overdue invoices'), value: data.sales.invoices.overdueCount, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+          { label: t('dashboard.analytics.sales.pipeline', 'Open quote value'), value: data.sales.quotations.openValue, icon: FileText, currency: true, className: 'border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200' },
+          { label: t('dashboard.analytics.sales.conversion', 'Quote conversion'), value: data.sales.quotations.conversionRate, icon: Gauge, suffix: '%', className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
+          { label: t('dashboard.analytics.sales.overdue', 'Overdue invoices'), value: data.sales.invoices.overdueCount, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -616,9 +630,9 @@ function TasksTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.tasks.open', 'Open tasks'), value: data.tasks.open, icon: ClipboardList },
-          { label: t('dashboard.analytics.tasks.dueToday', 'Due today'), value: data.tasks.dueToday, icon: CalendarClock, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
-          { label: t('dashboard.analytics.tasks.overdue', 'Overdue'), value: data.tasks.overdue, icon: AlertTriangle, className: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
-          { label: t('dashboard.analytics.tasks.completed', 'Completed'), value: data.tasks.completedCurrent, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
+          { label: t('dashboard.analytics.tasks.dueToday', 'Due today'), value: data.tasks.dueToday, icon: CalendarClock, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200' },
+          { label: t('dashboard.analytics.tasks.overdue', 'Overdue'), value: data.tasks.overdue, icon: AlertTriangle, className: 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200' },
+          { label: t('dashboard.analytics.tasks.completed', 'Completed'), value: data.tasks.completedCurrent, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -650,9 +664,9 @@ function SchedulingTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.scheduling.today', 'Today'), value: data.scheduling.today, icon: CalendarClock },
-          { label: t('dashboard.analytics.scheduling.upcoming', 'Upcoming'), value: data.scheduling.upcoming, icon: Activity, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
-          { label: t('dashboard.analytics.scheduling.unconfirmed', 'Unconfirmed'), value: data.scheduling.unconfirmed, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
-          { label: t('dashboard.analytics.scheduling.hours', 'Planned hours'), value: data.scheduling.hours, icon: Gauge, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
+          { label: t('dashboard.analytics.scheduling.upcoming', 'Upcoming'), value: data.scheduling.upcoming, icon: Activity, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200' },
+          { label: t('dashboard.analytics.scheduling.unconfirmed', 'Unconfirmed'), value: data.scheduling.unconfirmed, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200' },
+          { label: t('dashboard.analytics.scheduling.hours', 'Planned hours'), value: data.scheduling.hours, icon: Gauge, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -684,9 +698,9 @@ function AccountingTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.accounting.apOpen', 'Open payables'), value: data.accounting.openPayables, icon: WalletCards, currency: true },
-          { label: t('dashboard.analytics.accounting.apOverdue', 'Overdue payables'), value: data.accounting.overduePayables, icon: AlertTriangle, currency: true, className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
-          { label: t('dashboard.analytics.accounting.unmatched', 'Unmatched bank'), value: data.accounting.unmatchedBankTransactions, icon: Landmark, className: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
-          { label: t('dashboard.analytics.accounting.journals', 'Journal amount'), value: data.accounting.journalAmount, icon: ReceiptText, currency: true, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
+          { label: t('dashboard.analytics.accounting.apOverdue', 'Overdue payables'), value: data.accounting.overduePayables, icon: AlertTriangle, currency: true, className: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200' },
+          { label: t('dashboard.analytics.accounting.unmatched', 'Unmatched bank'), value: data.accounting.unmatchedBankTransactions, icon: Landmark, className: 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200' },
+          { label: t('dashboard.analytics.accounting.journals', 'Journal amount'), value: data.accounting.journalAmount, icon: ReceiptText, currency: true, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -701,7 +715,7 @@ function AccountingTab({ data, t, locale }) {
             metric(t, 'bankTransactions', CHART_COLORS.created),
           ]}
           locale={locale}
-          currency
+          currencyKeys={['cashMovement']}
         />
         <BarPanel title={t('dashboard.analytics.accounting.payables', 'Payables status')} icon={WalletCards} data={data.accounting.payablesByStatus} locale={locale} t={t} labelGroup="accountingPayableStatus" currency color={CHART_COLORS.hours} />
       </div>
@@ -721,9 +735,9 @@ function SystemTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.system.users', 'Active users'), value: system.users.active, icon: Users },
-          { label: t('dashboard.analytics.system.successes', 'Audit successes'), value: system.audit.successes, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
-          { label: t('dashboard.analytics.system.failures', 'Audit failures'), value: system.audit.failures, icon: AlertTriangle, className: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
-          { label: t('dashboard.analytics.system.failureDelta', 'Failure delta'), value: system.audit.failureDelta, icon: Gauge, suffix: '%', className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+          { label: t('dashboard.analytics.system.successes', 'Audit successes'), value: system.audit.successes, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200' },
+          { label: t('dashboard.analytics.system.failures', 'Audit failures'), value: system.audit.failures, icon: AlertTriangle, className: 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200' },
+          { label: t('dashboard.analytics.system.failureDelta', 'Failure delta'), value: system.audit.failureDelta, icon: Gauge, suffix: '%', className: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -777,7 +791,7 @@ export function DashboardChartPanels({ activeTab, data, t, locale, isFetching })
   return (
     <div className="relative">
       {isFetching && (
-        <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">
+        <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-200">
           {t('dashboard.analytics.refreshing', 'Refreshing')}
         </div>
       )}

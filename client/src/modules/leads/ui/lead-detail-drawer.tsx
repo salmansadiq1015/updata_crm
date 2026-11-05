@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { LeadCallLifecycle } from './lead-call-lifecycle';
 import { Tabs } from 'radix-ui';
 import {
   AlertTriangle,
@@ -868,6 +869,7 @@ function LeadDetailBody({
           </Section>
         </Tabs.Content>
         <Tabs.Content value="overview" className="space-y-5 outline-none">
+      <LeadCallLifecycle value={lead.latestCall} />
       {/* Enrich from website: fills missing contact/social data from the lead's
           site. Needs lead:enrich AND a website (disabled + hinted otherwise). */}
       {canEnrich && (
@@ -904,6 +906,7 @@ function LeadDetailBody({
 
       {/* Pipeline: status + owner, changed in place */}
       <Section title={t('leads.drawer.sectionPipeline', 'Pipeline')}>
+        {lead.pipelineStage === 'FOLLOW_UP' && <Link href="/leads/follow-ups" className="text-xs font-medium text-primary hover:underline">{t('leads.lifecycle.FOLLOW_UP', 'In follow-ups')}</Link>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground" id={`status-label-${lead.id}`}>

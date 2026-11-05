@@ -1,8 +1,9 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { INVENTORY_COSTING_METHODS } from './inventoryAccountingEntry.model.js';
 
-const currency = Joi.string().trim().uppercase().pattern(/^[A-Z]{3}$/).length(3);
+const currency = Joi.string().trim().uppercase().valid(...CURRENCY_CODES);
 const costingMethod = Joi.string().trim().uppercase().valid(...INVENTORY_COSTING_METHODS);
 
 export const inventoryValuationSchema = {

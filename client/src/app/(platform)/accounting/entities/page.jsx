@@ -237,7 +237,7 @@ export default function AccountingEntitiesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ACCOUNTING_CURRENCIES.slice(0, 2).map((currency) => (
+                    {ACCOUNTING_CURRENCIES.map((currency) => (
                       <SelectItem key={currency} value={currency}>{currency}</SelectItem>
                     ))}
                   </SelectContent>

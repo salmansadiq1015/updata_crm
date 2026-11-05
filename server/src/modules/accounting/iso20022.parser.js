@@ -1,3 +1,4 @@
+import { CURRENCY_CODES, currencyDigits, roundCurrency } from '../../shared/data/currencies.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
@@ -5,7 +6,7 @@ const CAMT053_ROOT = 'BkToCstmrStmt';
 const CAMT054_ROOT = 'BkToCstmrDbtCdtNtfctn';
 const PAIN002_ROOT = 'CstmrPmtStsRpt';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const SUPPORTED_CURRENCIES = new Set(['CHF', 'EUR']);
+const SUPPORTED_CURRENCIES = new Set(CURRENCY_CODES);
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -119,7 +120,7 @@ function extractAmount(block, sourceXml) {
 
   const currency = match[1].trim();
   if (!SUPPORTED_CURRENCIES.has(currency)) {
-    fail('Unsupported bank transaction currency', sourceXml, match[0], 'CHF or EUR', currency);
+    fail('Unsupported bank transaction currency', sourceXml, match[0], 'supported ISO 4217 currency', currency);
   }
 
   const amount = Number(match[2]);
@@ -189,7 +190,7 @@ function parseEntries(xml, sourceXml = xml) {
     return {
       transactionDate: parseIsoDate(bookingDate, sourceXml, 'booking date'),
       valueDate: parseIsoDate(valueDate, sourceXml, 'value date'),
-      amount: Math.round(amount * 100) / 100,
+      amount: roundCurrency(amount, currency),
       currency,
       reference: extractReference(entryBlock.xml),
       payerPayeeName,
@@ -310,10 +311,10 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-function normalizePainAmount(value) {
+function normalizePainAmount(value, currency = 'CHF') {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return null;
-  return Math.round(amount * 100) / 100;
+  return roundCurrency(amount, currency);
 }
 
 function assertPainInput(paymentBatch, bankAccount, creditTransfers) {
@@ -339,16 +340,18 @@ function assertPainInput(paymentBatch, bankAccount, creditTransfers) {
     fail('Creditor transfer count must match payment batch invoice count', '', null, String(invoiceCount), String(creditTransfers.length));
   }
 
-  const transferTotal = creditTransfers.reduce((sum, transfer) => sum + (normalizePainAmount(transfer.amount) || 0), 0);
-  const normalizedTransferTotal = Math.round(transferTotal * 100) / 100;
-  const batchTotal = normalizePainAmount(paymentBatch.totalAmount);
+  const transferTotal = creditTransfers.reduce((sum, transfer) => sum + (normalizePainAmount(transfer.amount, transfer.currency || bankAccount.currency || 'CHF') || 0), 0);
+  const batchCurrency = paymentBatch.currency || creditTransfers[0].currency || bankAccount.currency || 'CHF';
+  if (creditTransfers.some(transfer => (transfer.currency || bankAccount.currency || 'CHF') !== batchCurrency)) fail('Payment batches must contain a single currency', '', null, batchCurrency);
+  const normalizedTransferTotal = roundCurrency(transferTotal, batchCurrency);
+  const batchTotal = normalizePainAmount(paymentBatch.totalAmount, batchCurrency);
   if (normalizedTransferTotal !== batchTotal) {
-    fail('Creditor transfer control sum must match payment batch total amount', '', null, batchTotal.toFixed(2), normalizedTransferTotal.toFixed(2));
+    fail('Creditor transfer control sum must match payment batch total amount', '', null, batchTotal.toFixed(currencyDigits(batchCurrency)), normalizedTransferTotal.toFixed(currencyDigits(batchCurrency)));
   }
 
   creditTransfers.forEach((transfer, index) => {
     const position = index + 1;
-    const amount = normalizePainAmount(transfer.amount);
+    const amount = normalizePainAmount(transfer.amount, transfer.currency || bankAccount.currency || 'CHF');
     if (!transfer.creditorName) {
       fail(`Creditor transfer ${position} is missing creditor name`, '', null, 'creditorName');
     }
@@ -359,7 +362,7 @@ function assertPainInput(paymentBatch, bankAccount, creditTransfers) {
       fail(`Creditor transfer ${position} amount must be positive`, '', null, 'positive amount');
     }
     if (!SUPPORTED_CURRENCIES.has(transfer.currency || 'CHF')) {
-      fail(`Creditor transfer ${position} has unsupported currency`, '', null, 'CHF or EUR', transfer.currency);
+      fail(`Creditor transfer ${position} has unsupported currency`, '', null, 'supported ISO 4217 currency', transfer.currency);
     }
   });
 }
@@ -372,7 +375,7 @@ function renderCreditorAgent(transfer) {
 }
 
 function renderCreditTransfer(transfer) {
-  const amount = normalizePainAmount(transfer.amount);
+  const amount = normalizePainAmount(transfer.amount, transfer.currency || 'CHF');
   const currency = transfer.currency || 'CHF';
   const instructionId = transfer.instructionId || transfer.endToEndId;
   const endToEndId = transfer.endToEndId || instructionId;
@@ -383,7 +386,7 @@ function renderCreditTransfer(transfer) {
           <InstrId>${escapeXml(instructionId)}</InstrId>
           <EndToEndId>${escapeXml(endToEndId)}</EndToEndId>
         </PmtId>
-        <Amt><InstdAmt Ccy="${escapeXml(currency)}">${amount.toFixed(2)}</InstdAmt></Amt>
+        <Amt><InstdAmt Ccy="${escapeXml(currency)}">${amount.toFixed(currencyDigits(currency))}</InstdAmt></Amt>
         ${renderCreditorAgent(transfer)}
         <Cdtr><Nm>${escapeXml(transfer.creditorName)}</Nm></Cdtr>
         <CdtrAcct><Id><IBAN>${escapeXml(transfer.creditorIban)}</IBAN></Id></CdtrAcct>
@@ -397,6 +400,7 @@ export function generatePain001(paymentBatch, bankAccount, creditTransfers = [])
   const now = new Date();
   const creationDateTime = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
   const requestedDate = now.toISOString().slice(0, 10);
+  const currency = paymentBatch.currency || creditTransfers[0].currency || bankAccount.currency || 'CHF';
   const totalAmount = Number(paymentBatch.totalAmount);
   const invoiceCount = Number(paymentBatch.invoiceCount);
   const msgId = `MSG-${paymentBatch.batchNumber}-${Date.now()}`;
@@ -409,7 +413,7 @@ export function generatePain001(paymentBatch, bankAccount, creditTransfers = [])
       <MsgId>${escapeXml(msgId)}</MsgId>
       <CreDtTm>${creationDateTime}</CreDtTm>
       <NbOfTxs>${invoiceCount}</NbOfTxs>
-      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>
+      <CtrlSum>${totalAmount.toFixed(currencyDigits(currency))}</CtrlSum>
       <InitgPty><Nm>${escapeXml(bankAccount.name)}</Nm></InitgPty>
     </GrpHdr>
     <PmtInf>
@@ -417,8 +421,8 @@ export function generatePain001(paymentBatch, bankAccount, creditTransfers = [])
       <PmtMtd>TRF</PmtMtd>
       <BtchBookg>true</BtchBookg>
       <NbOfTxs>${invoiceCount}</NbOfTxs>
-      <CtrlSum>${totalAmount.toFixed(2)}</CtrlSum>
-      <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>
+      <CtrlSum>${totalAmount.toFixed(currencyDigits(currency))}</CtrlSum>
+      ${currency === 'EUR' ? '<PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>' : ''}
       <ReqdExctnDt>${requestedDate}</ReqdExctnDt>
       <Dbtr><Nm>${escapeXml(bankAccount.name)}</Nm></Dbtr>
       <DbtrAcct><Id><IBAN>${escapeXml(bankAccount.iban)}</IBAN></Id><Ccy>${escapeXml(bankAccount.currency || 'CHF')}</Ccy></DbtrAcct>

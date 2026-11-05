@@ -30,6 +30,7 @@ export const LEAD_SOURCE = Object.freeze({
   MANUAL: 'manual',
   WIDGET: 'widget',
   IMPORT: 'import',
+  INCOMING_CALL: 'incoming_call',
 });
 
 // Website-enrichment lifecycle for a single lead. 'none' until the first run,
@@ -137,6 +138,21 @@ const leadSchema = new mongoose.Schema(
       type: String,
       enum: Object.values(LEAD_STATUS),
       default: LEAD_STATUS.NEW,
+    },
+    // Orthogonal projections; status remains the existing human-controlled CRM status.
+    pipelineStage: { type: String, enum: ['LEAD', 'FOLLOW_UP'], default: 'LEAD' },
+    latestCall: {
+      type: new mongoose.Schema({
+        callId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord' },
+        campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallCampaign' },
+        callStatus: String,
+        qualificationStatus: String,
+        outcome: String,
+        evaluatedAt: Date,
+        missingFields: [String],
+        recommendedAction: { type: String, default: null },
+      }, { _id: false }),
+      default: null,
     },
     address: {
       street: { type: String, trim: true, maxlength: 255, default: null },
@@ -378,6 +394,7 @@ leadSchema.index({
   'address.geography.areaId': 1,
 }, { name: 'lead_canonical_geography_filters' });
 leadSchema.index({ normalizedPhone: 1 }); // dedup ladder
+leadSchema.index({ normalizedName: 1, isDeleted: 1 }, { name: 'lead_import_name_lookup' });
 leadSchema.index({ 'sourceMetadata.googlePlaceId': 1 }, { name: 'lead_google_place_lookup' });
 // One live business per canonical identity, regardless of its import source.
 leadSchema.index({ businessIdentityKeys: 1 }, BUSINESS_IDENTITY_INDEX);

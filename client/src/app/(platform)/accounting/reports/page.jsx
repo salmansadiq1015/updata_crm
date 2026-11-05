@@ -1,5 +1,7 @@
 'use client';
 
+import { CurrencyPicker } from '@/modules/accounting/components/currency-picker';
+import { useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 import { useMemo, useState } from 'react';
 import {
   BookOpen,
@@ -259,7 +261,7 @@ export default function AccountingReportsPage() {
   const initialRange = useMemo(() => currentYearRange(), []);
   const [activeReport, setActiveReport] = useState('profit-loss');
   const [filters, setFilters] = useState(initialRange);
-  const [currency, setCurrency] = useState('CHF');
+  const { currency, setCurrency } = useAccountingCurrency();
   const [scopeFilters, setScopeFilters] = useState({ companyId: 'ALL', branchId: 'ALL' });
   const [ledgerFilters, setLedgerFilters] = useState({ accountId: 'ALL', referenceType: 'ALL' });
   const [ledgerCursorStack, setLedgerCursorStack] = useState([null]);
@@ -352,13 +354,7 @@ export default function AccountingReportsPage() {
             value={filters.endDate}
             onChange={(event) => updateDateFilter('endDate', event.target.value)}
           />
-          <Select value={currency} onValueChange={(value) => { setCurrency(value); resetLedgerCursor(); }}>
-            <SelectTrigger className="h-9 w-28 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="CHF">CHF</SelectItem>
-              <SelectItem value="EUR">EUR</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="w-36"><CurrencyPicker label="Report currency" value={currency} onValueChange={(value) => { setCurrency(value); resetLedgerCursor(); }} /></div>
           <Select value={scopeFilters.companyId} onValueChange={(value) => updateScopeFilter('companyId', value)}>
             <SelectTrigger className="h-9 w-48 text-xs"><SelectValue placeholder={de ? 'Firma' : 'Company'} /></SelectTrigger>
             <SelectContent>

@@ -9,6 +9,7 @@ import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
 const ALLOWED_FILTERS = {
   bankAccountId: 'objectId',
+  currency: 'exact',
   transactionDateFrom: 'dateFrom',
   transactionDateTo: 'dateTo',
   reconciliationStatus: 'exact',
@@ -23,6 +24,33 @@ function toObjectId(value) {
 }
 
 class BankTransactionRepository {
+  async analytics({ bankAccountId, currency = 'CHF', dateFrom, dateTo }) {
+    const match = { currency, transactionDate: { $gte: new Date(dateFrom), $lte: new Date(dateTo) } };
+    if (bankAccountId) match.bankAccountId = toObjectId(bankAccountId);
+    const money = {
+      count: { $sum: 1 },
+      inflows: { $sum: { $cond: [{ $gt: ['$amount', 0] }, '$amount', 0] } },
+      outflows: { $sum: { $cond: [{ $lt: ['$amount', 0] }, { $abs: '$amount' }, 0] } },
+      net: { $sum: '$amount' },
+    };
+    const [result] = await BankTransaction.aggregate([
+      { $match: match },
+      { $facet: {
+        totals: [{ $group: { _id: null, ...money, unmatched: { $sum: { $cond: [{ $eq: ['$reconciliationStatus', 'UNMATCHED'] }, 1, 0] } } } }],
+        daily: [{ $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$transactionDate', timezone: 'UTC' } }, ...money } }, { $sort: { _id: 1 } }],
+        statuses: [{ $group: { _id: '$reconciliationStatus', ...money } }],
+        counterparties: [{ $group: { _id: { $ifNull: ['$payerPayeeName', ''] }, ...money } }, { $sort: { outflows: -1, inflows: -1 } }, { $limit: 6 }],
+      } },
+    ]);
+    return {
+      currency, dateFrom, dateTo,
+      totals: result?.totals?.[0] || { count: 0, inflows: 0, outflows: 0, net: 0, unmatched: 0 },
+      daily: (result?.daily || []).map(({ _id, ...row }) => ({ date: _id, ...row })),
+      statuses: (result?.statuses || []).map(({ _id, ...row }) => ({ status: _id, ...row })),
+      counterparties: (result?.counterparties || []).map(({ _id, ...row }) => ({ name: _id, ...row })),
+    };
+  }
+
   async create(data, options = {}) {
     const txn = new BankTransaction(data);
     return txn.save({ session: options.session });
@@ -46,6 +74,7 @@ class BankTransactionRepository {
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
     const mappedFilters = {};
+    if (filters.currency) mappedFilters.currency = filters.currency;
     if (filters.bankAccountId) mappedFilters.bankAccountId = filters.bankAccountId;
     if (filters.transactionDateFrom) mappedFilters.transactionDateFrom = filters.transactionDateFrom;
     if (filters.transactionDateTo) mappedFilters.transactionDateTo = filters.transactionDateTo;
@@ -107,8 +136,9 @@ class BankTransactionRepository {
     }).lean();
   }
 
-  async getReconciliationSummary({ bankAccountId, dateFrom, dateTo } = {}) {
+  async getReconciliationSummary({ bankAccountId, currency, dateFrom, dateTo } = {}) {
     const match = {};
+    if (currency) match.currency = currency;
     if (bankAccountId) match.bankAccountId = toObjectId(bankAccountId);
     if (dateFrom || dateTo) {
       match.transactionDate = {};
@@ -134,11 +164,12 @@ class BankTransactionRepository {
     ]);
   }
 
-  async findMatchedInvoiceTransactions({ bankAccountId, dateFrom, dateTo } = {}) {
+  async findMatchedInvoiceTransactions({ bankAccountId, currency, dateFrom, dateTo } = {}) {
     const filter = {
       reconciliationStatus: { $in: ['AUTO_MATCHED', 'MANUALLY_MATCHED'] },
       matchedInvoiceId: { $ne: null },
     };
+    if (currency) filter.currency = currency;
     if (bankAccountId) filter.bankAccountId = bankAccountId;
     if (dateFrom || dateTo) {
       filter.transactionDate = {};

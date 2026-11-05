@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
@@ -9,12 +10,14 @@ export const runReconciliationSchema = {
 
 export const unmatchedSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     bankAccountId: objectId,
   }),
 };
 
 export const reportSchema = {
   query: Joi.object({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     bankAccountId: objectId,
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),

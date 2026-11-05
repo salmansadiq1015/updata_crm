@@ -209,7 +209,7 @@ function rangeMatch(field, filters, previous = false) {
   };
 }
 
-function dateBucketExpression(field, granularity) {
+export function dateBucketExpression(field, granularity) {
   const format = granularity === 'month'
     ? '%Y-%m'
     : granularity === 'week'

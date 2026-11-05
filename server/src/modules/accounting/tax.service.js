@@ -1,3 +1,4 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import taxRepository from './tax.repository.js';
 import auditService from '../auth/audit.service.js';
 import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
@@ -40,9 +41,9 @@ function legacyTaxCode(rate, direction = 'BOTH') {
   };
 }
 
-function lineBaseAmount(line = {}) {
-  if (line.lineTotal !== undefined) return roundMoney(line.lineTotal);
-  return roundMoney(Number(line.quantity || 0) * Number(line.unitPrice || 0));
+function lineBaseAmount(line = {}, currency = 'CHF') {
+  if (line.lineTotal !== undefined) return roundCurrency(line.lineTotal, currency);
+  return roundCurrency(Number(line.quantity || 0) * Number(line.unitPrice || 0), currency);
 }
 
 function directionMatches(taxCode, direction) {
@@ -187,12 +188,13 @@ class TaxService {
   async calculateDocument({ lineItems = [], documentDate = new Date(), currency = 'CHF', direction = 'INPUT', exemptionCode = null } = {}) {
     const normalizedDirection = normalizeCode(direction || 'INPUT');
     const normalizedCurrency = normalizeCurrency(currency);
+    const roundMoney = value => roundCurrency(value, normalizedCurrency);
     const exemption = await this.resolveExemption(exemptionCode, documentDate);
     const lines = [];
     const breakdown = new Map();
 
     for (const [index, line] of lineItems.entries()) {
-      const taxableAmount = lineBaseAmount(line);
+      const taxableAmount = lineBaseAmount(line, normalizedCurrency);
       const taxCode = exemption
         ? legacyTaxCode(0, normalizedDirection)
         : await this.resolveTaxCode(line, normalizedDirection, documentDate);

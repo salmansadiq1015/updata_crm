@@ -33,8 +33,8 @@ export function AiAssistantButton({ className, variant = 'floating' }) {
         aria-label={label}
         title={label}
         className={cn(
-          'relative flex h-14 w-14 shrink-0 items-center justify-center',
-          'bg-gradient-to-br from-brand-700 via-brand-600 to-brand-red text-white',
+          'relative me-3 flex h-10 w-10 rounded-full shrink-0 items-center justify-center',
+          'bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 text-white',
           'transition-all duration-200 hover:brightness-110 active:brightness-95',
           hasActiveRun && 'animate-pulse',
           className
@@ -49,7 +49,7 @@ export function AiAssistantButton({ className, variant = 'floating' }) {
         />
         <Sparkles
           className={cn(
-            'absolute right-2.5 top-2.5 h-3.5 w-3.5 rounded-full bg-slate-950/60 p-0.5 text-white/90',
+            'absolute right-1 top-1 h-3.5 w-3.5 rounded-full bg-slate-950/60 p-0.5 text-white/90',
             'transition-all duration-300',
             isPanelOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
           )}
@@ -68,10 +68,10 @@ export function AiAssistantButton({ className, variant = 'floating' }) {
       aria-label={t('ai.panel.open', 'Open AI Assistant')}
       className={cn(
         'fixed bottom-6 right-6 z-40',
-        'flex h-14 w-14 items-center justify-center rounded-2xl',
-        'border border-white/15 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-red text-white',
-        'shadow-[0_20px_60px_color-mix(in_oklab,var(--brand-red)_22%,transparent),0_0_0_6px_color-mix(in_oklab,var(--brand-600)_12%,transparent)]',
-        'transition-all duration-200 hover:scale-105 hover:shadow-[0_24px_70px_color-mix(in_oklab,var(--brand-red)_28%,transparent),0_0_0_8px_color-mix(in_oklab,var(--brand-600)_15%,transparent)] active:scale-95',
+        'flex h-14 w-14 items-center justify-center rounded-full',
+        'border border-white/15 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 text-white',
+        'shadow-[0_20px_60px_color-mix(in_oklab,var(--brand-500)_22%,transparent),0_0_0_6px_color-mix(in_oklab,var(--brand-600)_12%,transparent)]',
+        'transition-all duration-200 hover:scale-105 hover:shadow-[0_24px_70px_color-mix(in_oklab,var(--brand-500)_28%,transparent),0_0_0_8px_color-mix(in_oklab,var(--brand-600)_15%,transparent)] active:scale-95',
         hasActiveRun && 'animate-pulse ring-4 ring-brand-400/25',
         isPanelOpen && 'opacity-0 pointer-events-none',
         className

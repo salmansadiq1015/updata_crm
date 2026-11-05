@@ -51,7 +51,7 @@ export const heartbeat = { body: Joi.object({
   board: Joi.object({
     connected: Joi.boolean().required(), port: short(120).allow(null, ''), bdaddr: Joi.alternatives(bdaddr, Joi.valid(null)),
     firmware: short(40).allow(null), idf: short(40).allow(null), chipRevision: Joi.number().integer().min(0).max(255).allow(null),
-    keyProvisioned: Joi.boolean(), sessionNonce: Joi.alternatives(nonce, Joi.valid(null)),
+    keyProvisioned: Joi.boolean(), canAnswer: Joi.boolean(), sessionNonce: Joi.alternatives(nonce, Joi.valid(null)),
   }).required(),
   state: deviceState,
   stats: Joi.object().pattern(/^[a-zA-Z]{1,40}$/, Joi.number()).max(40),

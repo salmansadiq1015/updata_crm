@@ -16,6 +16,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { FOLLOW_UP_WINDOW_DAYS } from '../api/followUpsApi';
 import { FollowUpRow } from '../components/FollowUpRow';
 import { useFollowUps } from '../hooks/useFollowUps';
+import { useFollowUpAiAction, type FollowUpAiAction } from '../hooks/useFollowUpAiAction';
 import type { FollowUp, FollowUpScope } from '../types';
 import { groupFollowUps, type FollowUpGroups } from '../utils/grouping';
 
@@ -46,6 +47,14 @@ export function FollowUpsScreen({ navigation }: RootScreenProps<'FollowUps'>) {
   const call = useCallback(
     (item: FollowUp) => navigation.navigate('CallSession', { leadId: item.leadId }),
     [navigation],
+  );
+  const aiAction = useFollowUpAiAction();
+  const { mutate: runAiAction } = aiAction;
+  const onAiAction = useCallback(
+    (item: FollowUp, action: FollowUpAiAction) => {
+      if (item.followUpId) runAiAction({ followUpId: item.followUpId, action });
+    },
+    [runAiAction],
   );
 
   const header = (
@@ -110,7 +119,14 @@ export function FollowUpsScreen({ navigation }: RootScreenProps<'FollowUps'>) {
             </AppText>
           )}
           renderItem={({ item, section }) => (
-            <FollowUpRow item={item} overdue={section.key === 'overdue'} onOpen={open} onCall={call} />
+            <FollowUpRow
+              item={item}
+              overdue={section.key === 'overdue'}
+              onOpen={open}
+              onCall={call}
+              onAiAction={onAiAction}
+              aiBusy={aiAction.isPending}
+            />
           )}
           refreshControl={
             pull.onRefresh ? (

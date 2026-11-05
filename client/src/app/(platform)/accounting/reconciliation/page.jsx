@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 
 import { useState } from 'react';
 import { Play, Search, Tag } from 'lucide-react';
@@ -48,6 +49,7 @@ function ReportTile({ label, value, amount, loading }) {
 export default function ReconciliationPage() {
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
+  const { currency } = useAccountingCurrency();
   const [bankAccountId, setBankAccountId] = useState('ALL');
   const [cursorStack, setCursorStack] = useState([null]);
   const [selectedTx, setSelectedTx] = useState(null);
@@ -130,31 +132,31 @@ export default function ReconciliationPage() {
         <ReportTile
           label={de ? 'Auto abgeglichen' : 'Auto matched'}
           value={report?.autoMatched?.count ?? 0}
-          amount={formatMoney(report?.autoMatched?.incomingTotal || report?.autoMatched?.total || 0)}
+          amount={formatMoney(report?.autoMatched?.incomingTotal || report?.autoMatched?.total || 0, currency)}
           loading={reportLoading}
         />
         <ReportTile
           label={de ? 'Teilzahlungen' : 'Partial payments'}
           value={report?.partiallyMatched?.count ?? 0}
-          amount={formatMoney(report?.partiallyMatched?.total || 0)}
+          amount={formatMoney(report?.partiallyMatched?.total || 0, currency)}
           loading={reportLoading}
         />
         <ReportTile
           label={de ? 'Manuell' : 'Manual'}
           value={report?.manuallyMatched?.count ?? 0}
-          amount={formatMoney(report?.manuallyMatched?.incomingTotal || report?.manuallyMatched?.total || 0)}
+          amount={formatMoney(report?.manuallyMatched?.incomingTotal || report?.manuallyMatched?.total || 0, currency)}
           loading={reportLoading}
         />
         <ReportTile
           label={de ? 'Kategorisiert' : 'Categorized'}
           value={report?.categorized?.count ?? 0}
-          amount={formatMoney(report?.categorized?.total || 0)}
+          amount={formatMoney(report?.categorized?.total || 0, currency)}
           loading={reportLoading}
         />
         <ReportTile
           label={de ? 'Offen' : 'Unmatched'}
           value={report?.unmatched?.count ?? 0}
-          amount={formatMoney(report?.unmatched?.total || 0)}
+          amount={formatMoney(report?.unmatched?.total || 0, currency)}
           loading={reportLoading}
         />
       </div>
@@ -239,7 +241,7 @@ export default function ReconciliationPage() {
                         <span className="block text-xs text-muted-foreground">{suggestion.customerName}</span>
                       </span>
                       <span className="text-right">
-                        <span className="block text-sm font-semibold">{formatMoney(suggestion.invoiceAmount)}</span>
+                        <span className="block text-sm font-semibold">{formatMoney(suggestion.invoiceAmount, selectedTx.currency)}</span>
                         <span className="block text-xs text-emerald-600">{suggestion.score}%</span>
                       </span>
                     </button>

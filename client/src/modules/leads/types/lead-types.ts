@@ -141,6 +141,8 @@ export type LeadEnrichment = {
 };
 
 export type Lead = {
+  latestCall?: import('../schemas/lead-call-lifecycle').LeadCallLifecycle | null;
+  pipelineStage?: string;
   id: string;
   leadNumber: string | null;
   name: string;

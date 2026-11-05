@@ -1,3 +1,4 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import apInvoiceRepository from './apInvoice.repository.js';
 import paymentBatchRepository from './paymentBatch.repository.js';
@@ -32,9 +33,6 @@ const OPEN_AP_STATUSES = ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'];
 const AGING_BUCKET_KEYS = ['current', '1_30', '31_60', '61_90', '90_plus'];
 const EXPORTABLE_BATCH_STATUSES = ['CREATED', 'EXPORTED'];
 
-function roundMoney(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
 
 function uniqueIds(ids) {
   return [...new Set(ids.map((id) => String(id)))];
@@ -47,20 +45,20 @@ function emptyAgingBuckets() {
   }, {});
 }
 
-function normalizeAgingRows(rows) {
+function normalizeAgingRows(rows, currency) {
   const buckets = emptyAgingBuckets();
   let invoiceCount = 0;
 
   for (const row of rows) {
     if (row?._id && Object.prototype.hasOwnProperty.call(buckets, row._id)) {
-      buckets[row._id] = Math.round((row.totalOutstanding || 0) * 100) / 100;
+      buckets[row._id] = roundCurrency(row.totalOutstanding, currency);
       invoiceCount += row.count || 0;
     }
   }
 
   return {
     buckets: { ...buckets, over_90: buckets['90_plus'] },
-    totalOutstanding: Math.round(Object.values(buckets).reduce((sum, value) => sum + value, 0) * 100) / 100,
+    totalOutstanding: roundCurrency(Object.values(buckets).reduce((sum, value) => sum + value, 0), currency),
     invoiceCount,
   };
 }
@@ -98,7 +96,7 @@ class ApInvoiceService {
     }
 
     // Calculate totals from line items
-    const { subtotal, vatAmount, totalAmount } = this._calculateTotals(data.lineItems);
+    const { subtotal, vatAmount, totalAmount } = this._calculateTotals(data.lineItems, data.currency || 'CHF');
 
     const invoice = await apInvoiceRepository.create({
       ...data,
@@ -184,7 +182,7 @@ class ApInvoiceService {
     // Recalculate totals if line items changed
     let totals = {};
     if (data.lineItems) {
-      totals = this._calculateTotals(data.lineItems);
+      totals = this._calculateTotals(data.lineItems, data.currency || existing.currency);
       totals.outstandingAmount = totals.totalAmount - (existing.paidAmount || 0);
     }
 
@@ -352,14 +350,14 @@ class ApInvoiceService {
     return apInvoiceRepository.findOpenPayables(params);
   }
 
-  async getAgingReport() {
+  async getAgingReport({ currency } = {}) {
     const ApInvoice = (await import('./apInvoice.model.js')).default;
     const now = new Date();
 
     const rows = await ApInvoice.aggregate([
       {
         $match: {
-          isDeleted: false,
+          isDeleted: false, ...(currency && { currency }),
           status: { $in: OPEN_AP_STATUSES },
           outstandingAmount: { $gt: 0 },
         },
@@ -395,15 +393,15 @@ class ApInvoiceService {
       },
     ]);
 
-    return normalizeAgingRows(rows);
+    return normalizeAgingRows(rows, currency);
   }
 
-  async getSummary() {
+  async getSummary({ currency } = {}) {
     const ApInvoice = (await import('./apInvoice.model.js')).default;
     const now = new Date();
 
     const result = await ApInvoice.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: { isDeleted: false, ...(currency && { currency }) } },
       {
         $group: {
           _id: '$status',
@@ -434,7 +432,7 @@ class ApInvoiceService {
     const overdueRows = await ApInvoice.aggregate([
       {
         $match: {
-          isDeleted: false,
+          isDeleted: false, ...(currency && { currency }),
           status: { $in: OPEN_AP_STATUSES },
           dueDate: { $lt: now },
           outstandingAmount: { $gt: 0 },
@@ -452,9 +450,9 @@ class ApInvoiceService {
 
     return {
       byStatus: result,
-      openAmount: Math.round(openAmount * 100) / 100,
+      openAmount: roundCurrency(openAmount, currency),
       openCount,
-      overdueAmount: Math.round((overdue.overdueAmount || 0) * 100) / 100,
+      overdueAmount: roundCurrency(overdue.overdueAmount, currency),
       overdueCount: overdue.overdueCount || 0,
     };
   }
@@ -470,6 +468,7 @@ class ApInvoiceService {
     let batch;
     let batchNumber;
     let totalAmount = 0;
+    let batchCurrency = 'CHF';
 
     try {
       await session.withTransaction(async () => {
@@ -480,11 +479,13 @@ class ApInvoiceService {
           throw new NotFoundError('ApInvoice', missingId);
         }
 
+        batchCurrency = invoices[0].currency || 'CHF';
+        if (invoices.some(invoice => (invoice.currency || 'CHF') !== batchCurrency)) throw new ConflictError('Payment batches must contain a single currency');
         for (const invoice of invoices) {
           if (invoice.status !== 'APPROVED') {
             throw new ConflictError(`Invoice ${invoice.apInvoiceNumber} is not in APPROVED status`);
           }
-          if (roundMoney(invoice.outstandingAmount) <= 0) {
+          if (roundCurrency(invoice.outstandingAmount, invoice.currency) <= 0) {
             throw new ConflictError(`Invoice ${invoice.apInvoiceNumber} has no outstanding amount`);
           }
           if (invoice.paymentBatchId) {
@@ -493,10 +494,11 @@ class ApInvoiceService {
         }
 
         batchNumber = await accountingCounterService.getNextPaymentBatchNumber({ session });
-        totalAmount = roundMoney(invoices.reduce((sum, inv) => sum + roundMoney(inv.outstandingAmount), 0));
+        totalAmount = roundCurrency(invoices.reduce((sum, inv) => sum + roundCurrency(inv.outstandingAmount, batchCurrency), 0), batchCurrency);
 
         batch = await paymentBatchRepository.create({
           batchNumber,
+          currency: batchCurrency,
           totalAmount,
           invoiceCount: invoices.length,
           invoiceIds: uniqueInvoiceIds,
@@ -571,7 +573,7 @@ class ApInvoiceService {
         throw new ConflictError(`Invoice ${invoice.apInvoiceNumber} is not in APPROVED status`);
       }
 
-      const amount = roundMoney(invoice.outstandingAmount);
+      const amount = roundCurrency(invoice.outstandingAmount, invoice.currency);
       if (amount <= 0) {
         throw new ConflictError(`Invoice ${invoice.apInvoiceNumber} has no outstanding amount`);
       }
@@ -629,7 +631,8 @@ class ApInvoiceService {
     };
   }
 
-  _calculateTotals(lineItems) {
+  _calculateTotals(lineItems, currency = 'CHF') {
+    const roundMoney = value => roundCurrency(value, currency);
     if (!lineItems || !lineItems.length) {
       return { subtotal: 0, vatAmount: 0, totalAmount: 0 };
     }
@@ -640,20 +643,21 @@ class ApInvoiceService {
     for (const item of lineItems) {
       const lineTotal = roundMoney((item.quantity || 0) * (item.unitPrice || 0));
       item.lineTotal = lineTotal;
-      this._validateSplitAllocationSum(item, lineTotal);
+      this._validateSplitAllocationSum(item, lineTotal, currency);
       item.taxAmount = roundMoney(lineTotal * ((item.vatRate || 0) / 100));
       subtotal += lineTotal;
       vatAmount += item.taxAmount;
     }
 
     return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      vatAmount: Math.round(vatAmount * 100) / 100,
-      totalAmount: Math.round((subtotal + vatAmount) * 100) / 100,
+      subtotal: roundMoney(subtotal),
+      vatAmount: roundMoney(vatAmount),
+      totalAmount: roundMoney(subtotal + vatAmount),
     };
   }
 
-  _validateSplitAllocationSum(item, lineTotal) {
+  _validateSplitAllocationSum(item, lineTotal, currency = 'CHF') {
+    const roundMoney = value => roundCurrency(value, currency);
     if (!Array.isArray(item.allocations) || item.allocations.length === 0) return;
     if (item.allocations.length > 10) {
       throw new ValidationError('A supplier invoice line can be split across at most 10 allocations');
@@ -671,6 +675,7 @@ class ApInvoiceService {
   }
 
   async _validateCompleteAllocations(invoice) {
+    const roundMoney = value => roundCurrency(value, invoice.currency);
     const lineItems = invoice.lineItems || [];
     if (!lineItems.length) {
       throw new ConflictError('Invoice cannot be approved without line items');
@@ -682,7 +687,7 @@ class ApInvoiceService {
       const allocations = Array.isArray(item.allocations) ? item.allocations : [];
 
       if (allocations.length) {
-        this._validateSplitAllocationSum(item, lineTotal);
+        this._validateSplitAllocationSum(item, lineTotal, invoice.currency);
         for (const allocation of allocations) {
           const accountId = getReferenceId(allocation.accountId);
           if (!accountId) {

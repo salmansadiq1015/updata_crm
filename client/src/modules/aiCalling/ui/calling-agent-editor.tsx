@@ -4,14 +4,28 @@ import { ArrowRight, Camera, CheckCircle2, Images, Loader2 } from 'lucide-react'
 import { useAgentMutations } from '../hooks/use-calling-agents';
 import type { Lead } from '@/modules/leads/types/lead-types';
 import { CampaignLeadPicker } from './campaign-lead-picker';
-import type { CallingAgentInput } from '../types/ai-calling-types';
+import { AGENT_TYPES, type AgentType, type AgentUsage, type CallingAgentInput } from '../types/ai-calling-types';
+import { useAgentTemplates } from '../hooks/use-follow-up-calling';
+import { useIntelT } from '../hooks/use-intel-t';
 import { AgentImageGallery } from './agent-image-gallery';
 import { AgentExecutionFields, AgentLanguageField, AgentVoiceFields, defaultAgentInput } from './agent-settings-fields';
 import { QuestionEditor, QualificationRulesEditor } from './question-configuration';
 import { AgentAvatar, AgentDialog, AgentField, AgentTabs, inputClass, primaryClass, readableError, secondaryClass } from './calling-agent-primitives';
 
-export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void; avatarUrl?: string | null; onAvatarChange: (url: string | null) => void }) {
+export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange, showUsage = true }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void; avatarUrl?: string | null; onAvatarChange: (url: string | null) => void; showUsage?: boolean }) {
   const [gallery, setGallery] = useState(false);
+  const t = useIntelT();
+  const templates = useAgentTemplates();
+  const type = value.agentType || 'custom';
+  const template = templates.data?.find(x => x.type === type);
+  // Picking a type fills the objective/instructions only while they are still empty.
+  const chooseType = (next: AgentType) => {
+    const tpl = templates.data?.find(x => x.type === next);
+    const config = { ...(value.agentConfig || {}) };
+    if (tpl && !config.objective?.trim()) config.objective = tpl.objective;
+    if (tpl && !config.instructions?.trim()) config.instructions = tpl.instructions;
+    onChange({ ...value, agentType: next, agentConfig: config });
+  };
   return <div className="space-y-6">
     <div className="flex flex-col gap-5 rounded-2xl border border-sky-300/15 bg-card p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
       <button type="button" aria-label="Change agent avatar" onClick={() => setGallery(true)} className="group relative w-fit shrink-0 rounded-2xl ring-4 ring-sky-400/5 transition hover:ring-sky-400/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-400">
@@ -30,6 +44,10 @@ export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange
     <div className="grid gap-x-5 gap-y-6 sm:grid-cols-2">
       <AgentField label="Agent name *"><input className={inputClass} required maxLength={120} autoComplete="off" value={value.name} placeholder="Sarah Sales" onChange={e => onChange({ ...value, name: e.target.value })} /></AgentField>
       <AgentField label="Title / role"><input className={inputClass} maxLength={160} value={value.title || ''} placeholder="Sales Qualification Agent" onChange={e => onChange({ ...value, title: e.target.value })} /></AgentField>
+      <div className="sm:col-span-2"><AgentField label={t('aiFollowUp.agentType.label', 'Agent type')} hint={template?.objective || t('aiFollowUp.agentType.hint', 'A starting template for the objective and instructions. You can create several agents of the same type and change everything.')}>
+        <select aria-label={t('aiFollowUp.agentType.label', 'Agent type')} className={inputClass} value={type} onChange={e => chooseType(e.target.value as AgentType)}>{AGENT_TYPES.map(k => <option key={k} value={k}>{t(`aiFollowUp.type.${k}`, k.replaceAll('_', ' '))}</option>)}</select>
+      </AgentField></div>
+      {showUsage && <div className="sm:col-span-2"><AgentField label={t('inbound.usage.label', 'Used for')} hint={t('inbound.usage.hint', 'Incoming-only agents answer calls to your connected phones and cannot run campaigns.')}><select aria-label={t('inbound.usage.label', 'Used for')} className={inputClass} value={value.usage || 'outbound'} onChange={e => onChange({ ...value, usage: e.target.value as AgentUsage })}>{(['outbound', 'inbound', 'both'] as const).map(u => <option key={u} value={u}>{t(`inbound.usage.${u}`, u)}</option>)}</select></AgentField></div>}
       <div className="sm:col-span-2"><AgentLanguageField value={value.agentConfig?.language} onChange={language => onChange({ ...value, agentConfig: { ...value.agentConfig, language } })} /></div>
       <div className="sm:col-span-2"><AgentField label="Description"><textarea rows={4} className={`${inputClass} resize-y`} maxLength={1000} value={value.description || ''} placeholder="Describe what this agent helps your team accomplish." onChange={e => onChange({ ...value, description: e.target.value })} /></AgentField></div>
     </div>

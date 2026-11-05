@@ -1,3 +1,4 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import { arPaymentRepository, arPaymentAllocationRepository } from './arPayment.repository.js';
 import journalEntryService from './journalEntry.service.js';
@@ -83,29 +84,29 @@ function emptyAgingBuckets() {
   }, {});
 }
 
-function normalizeAgingRows(rows) {
+function normalizeAgingRows(rows, currency) {
   const buckets = emptyAgingBuckets();
   let invoiceCount = 0;
 
   for (const row of rows) {
     if (row?._id && Object.prototype.hasOwnProperty.call(buckets, row._id)) {
-      buckets[row._id] = Math.round((row.totalOutstanding || 0) * 100) / 100;
+      buckets[row._id] = roundCurrency(row.totalOutstanding, currency);
       invoiceCount += row.count || 0;
     }
   }
 
   return {
     buckets: { ...buckets, over_90: buckets['90_plus'] },
-    totalOutstanding: Math.round(Object.values(buckets).reduce((sum, value) => sum + value, 0) * 100) / 100,
+    totalOutstanding: roundCurrency(Object.values(buckets).reduce((sum, value) => sum + value, 0), currency),
     invoiceCount,
   };
 }
 
-function buildAgingPipeline(now = new Date()) {
+function buildAgingPipeline(now = new Date(), currency) {
   return [
     {
       $match: {
-        isDeleted: false,
+        isDeleted: false, ...(currency && { currency }),
         status: { $in: OPEN_AR_STATUSES },
         amountDue: { $gt: 0 },
       },
@@ -362,6 +363,7 @@ class ArReceivablesService {
         const validStatuses = statuses.filter((status) => OPEN_AR_STATUSES.includes(status));
         filter.status = validStatuses.length ? { $in: validStatuses } : filters.status;
       }
+      if (filters.currency) filter.currency = filters.currency;
       if (filters.customerId) filter.customerId = filters.customerId;
       if (filters.dueDateFrom || filters.dueDateTo) {
         filter.dueDate = {};
@@ -407,13 +409,13 @@ class ArReceivablesService {
     }
   }
 
-  async getAgingReport() {
+  async getAgingReport({ currency } = {}) {
     try {
       const Invoice = (await import('../qop/invoice.model.js')).default;
       const now = new Date();
 
-      const rows = await Invoice.aggregate(buildAgingPipeline(now));
-      return normalizeAgingRows(rows);
+      const rows = await Invoice.aggregate(buildAgingPipeline(now, currency));
+      return normalizeAgingRows(rows, currency);
     } catch {
       logger.warn('QOP Invoice model not available for aging report');
       const buckets = emptyAgingBuckets();
@@ -421,7 +423,7 @@ class ArReceivablesService {
     }
   }
 
-  async getSummary() {
+  async getSummary({ currency } = {}) {
     try {
       const Invoice = (await import('../qop/invoice.model.js')).default;
       const now = new Date();
@@ -429,7 +431,7 @@ class ArReceivablesService {
       const [summary] = await Invoice.aggregate([
         {
           $match: {
-            isDeleted: false,
+            isDeleted: false, ...(currency && { currency }),
             status: { $in: OPEN_AR_STATUSES },
             amountDue: { $gt: 0 },
           },
@@ -467,9 +469,9 @@ class ArReceivablesService {
         },
       ]);
 
-      const totalOutstanding = roundMoney(summary?.totalOutstanding || 0);
+      const totalOutstanding = roundCurrency(summary?.totalOutstanding, currency);
       const openCount = summary?.openCount || 0;
-      const overdueAmount = roundMoney(summary?.overdueAmount || 0);
+      const overdueAmount = roundCurrency(summary?.overdueAmount, currency);
       const overdueCount = summary?.overdueCount || 0;
       const avgDaysOutstanding = openCount ? Math.round((summary?.totalDaysOutstanding || 0) / openCount) : 0;
 

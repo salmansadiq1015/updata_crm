@@ -30,4 +30,19 @@ describe('notificationTarget', () => {
     expect(notificationTarget(notification({ deepLink: '/tasks?taskId=unsafe' }))).toBeNull();
     expect(notificationTarget(notification({ deepLink: '/crm/leads/not-an-id' }))).toBeNull();
   });
+
+  it('routes incoming-call notifications to the call details', () => {
+    expect(
+      notificationTarget(notification({ relatedEntityType: 'InboundCall', relatedEntityId: ID })),
+    ).toEqual({ screen: 'IncomingCallDetail', params: { id: ID } });
+    expect(notificationTarget(notification({ deepLink: `/incoming-calls?call=${ID}` }))).toEqual({
+      screen: 'IncomingCallDetail',
+      params: { id: ID },
+    });
+    expect(notificationTarget(notification({ deepLink: `updata://incoming-calls/${ID}` }))).toEqual({
+      screen: 'IncomingCallDetail',
+      params: { id: ID },
+    });
+    expect(notificationTarget(notification({ deepLink: '/incoming-calls?call=nope' }))).toBeNull();
+  });
 });

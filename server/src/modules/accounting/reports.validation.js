@@ -1,8 +1,9 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { cursorPagination, objectId } from '../../shared/validation/commonSchemas.js';
 import { REFERENCE_TYPES } from './journalEntry.validation.js';
 
-const currency = Joi.string().valid('CHF', 'EUR').default('CHF');
+const currency = Joi.string().trim().uppercase().valid(...CURRENCY_CODES).default('CHF');
 const reportScope = {
   currency,
   companyId: objectId,

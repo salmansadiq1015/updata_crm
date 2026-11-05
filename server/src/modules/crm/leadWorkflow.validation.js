@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { QUALIFICATION_FIELD_KEYS } from './leadQualification.constants.js';
-import { FOLLOW_UP_CHANNELS } from './leadFollowUp.model.js';
+import { FOLLOW_UP_CHANNELS, FOLLOW_UP_TYPES, FOLLOW_UP_PRIORITIES } from './leadFollowUp.model.js';
 import { ASSIGNMENT_STRATEGIES } from './leadAssignmentPolicy.model.js';
 import { TIMELINE_TYPES, TIMELINE_CHANNELS } from './leadTimeline.service.js';
 import { isValidTimezone } from './leadWorkflowTime.js';
@@ -63,6 +63,10 @@ export const listFollowUps = {
     ownerId: objectId,
     q: Joi.string().trim().max(200).allow(''),
     channel: Joi.string().valid(...FOLLOW_UP_CHANNELS),
+    qualification: Joi.string().valid('QUALIFIED', 'PARTIALLY_QUALIFIED', 'NOT_QUALIFIED', 'UNQUALIFIED', 'CALLBACK_REQUIRED', 'NOT_INTERESTED', 'UNRESPONSIVE', 'CONTACTED', 'NEW'),
+    order: Joi.string().valid('asc', 'desc'),
+    management: Joi.string().valid('ai', 'human', 'ai_scheduled', 'ai_active', 'ai_completed', 'ai_failed', 'attention'),
+    agentId: objectId,
   }),
 };
 
@@ -80,6 +84,9 @@ export const createFollowUp = {
     timezone: ianaTimezone.allow(null),
     channel: Joi.string().valid(...FOLLOW_UP_CHANNELS).allow(null),
     note: Joi.string().trim().max(2000).allow('', null),
+    taskType: Joi.string().valid(...FOLLOW_UP_TYPES).allow(null),
+    priority: Joi.string().valid(...FOLLOW_UP_PRIORITIES),
+    reminderMinutes: Joi.number().integer().min(0).max(10080).allow(null),
   }),
 };
 

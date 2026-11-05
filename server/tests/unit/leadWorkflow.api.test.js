@@ -461,6 +461,45 @@ describe('follow-up inbox', () => {
     await request(server).get(FU).query({ tz: 'Mars/Base' }).set(auth(tokenA)).expect(400);
   });
 
+  it('counts distinct visible leads and actual email delivery, and filters/sorts lifecycle results', async () => {
+    const lead = await makeLead({ email: 'qualified@example.com', latestCall: { qualificationStatus: 'QUALIFIED', callStatus: 'CALL_COMPLETED' } });
+    const other = await makeLead({ latestCall: { qualificationStatus: 'PARTIALLY_QUALIFIED' } });
+    const now = Date.now();
+    for (const [leadId, offset] of [[lead._id, HOUR], [lead._id, 2 * HOUR], [other._id, 3 * HOUR]]) {
+      await LeadFollowUp.create({ leadId, ownerId: userA._id, status: 'open', source: { type: 'manual' }, dueAt: new Date(now + offset), nextDueAt: new Date(now + offset) });
+    }
+    for (const status of ['accepted', 'sent', 'delivered', 'failed', 'undelivered']) {
+      await MessageRecipient.create({ campaignId: new mongoose.Types.ObjectId(), leadId: lead._id, channel: 'email', destination: lead.email,
+        destinationHash: `metric-${status}`, status, eligibility: { eligible: true, reasons: [] }, createdBy: userA._id,
+        sentAt: ['sent', 'delivered'].includes(status) ? new Date() : null, deliveredAt: status === 'delivered' ? new Date() : null });
+    }
+    const summary = await request(server).get(`${FU}/summary`).set(auth(tokenA)).expect(200);
+    expect(summary.body.data).toMatchObject({ totalLeads: 2, qualifiedLeads: 1, pending: 3, emailsSent: 2, emailsDelivered: 1, emailsFailed: 2 });
+    const filtered = await request(server).get(FU).query({ qualification: 'QUALIFIED', order: 'desc', limit: 1, q: lead.email }).set(auth(tokenA)).expect(200);
+    expect(filtered.body.data).toHaveLength(1);
+    expect(filtered.body.data[0].lead.latestCall.qualificationStatus).toBe('QUALIFIED');
+    const next = await request(server).get(FU).query({ qualification: 'QUALIFIED', order: 'desc', limit: 1, q: lead.email, cursor: filtered.body.pagination.nextCursor }).set(auth(tokenA)).expect(200);
+    expect(Date.parse(filtered.body.data[0].nextDueAt)).toBeGreaterThan(Date.parse(next.body.data[0].nextDueAt));
+    expect(next.body.pagination.hasNext).toBe(false);
+  });
+
+  it('persists scheduling options and sends a planned reminder only once per due time', async () => {
+    const lead = await makeLead();
+    const dueAt = new Date(Date.now() + 30 * MIN);
+    const created = await request(server).post(FU).set(auth(tokenA)).send({
+      leadId: String(lead._id), dueAt: dueAt.toISOString(), channel: 'email', taskType: 'EMAIL', priority: 'HIGH', reminderMinutes: 60,
+    }).expect(201);
+    expect(created.body.data).toMatchObject({ taskType: 'EMAIL', priority: 'HIGH', reminderMinutes: 60 });
+    await leadSlaService.sweep();
+    await leadSlaService.sweep();
+    expect(await Notification.countDocuments({ type: 'lead.follow_up_reminder' })).toBe(1);
+    const stored = await LeadFollowUp.findById(created.body.data.id).lean();
+    expect(stored.reminderNotifiedFor.toISOString()).toBe(dueAt.toISOString());
+    await request(server).post(`${FU}/${created.body.data.id}/snooze`).set(auth(tokenA)).send({ until: new Date(Date.now() + 45 * MIN).toISOString() }).expect(200);
+    await leadSlaService.sweep();
+    expect(await Notification.countDocuments({ type: 'lead.follow_up_reminder' })).toBe(2);
+  });
+
   it('searches literal lead names, numbers and notes before pagination and combines channel/owner filters', async () => {
     const lead = await makeLead({ name: 'Acme (Europe)' });
     const other = await makeLead({ name: 'Other company' });

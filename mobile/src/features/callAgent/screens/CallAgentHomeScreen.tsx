@@ -6,6 +6,7 @@ import {
   ListOrdered,
   MessageSquare,
   PhoneCall,
+  PhoneIncoming,
   Smartphone,
   Bluetooth,
 } from 'lucide-react-native';
@@ -129,6 +130,13 @@ export function CallAgentHomeScreen({ navigation }: MainTabScreenProps<'CallAgen
             title={t('pairedPhone.tile')}
             hint={t('pairedPhone.tileHint')}
             onPress={() => navigation.navigate('PairedPhones')}
+          />
+          <ActionTile
+            icon={PhoneIncoming}
+            tone="primary"
+            title={t('incomingCalls.tile')}
+            hint={t('incomingCalls.tileHint')}
+            onPress={() => navigation.navigate('IncomingCalls')}
           />
           <ActionTile
             icon={ListOrdered}

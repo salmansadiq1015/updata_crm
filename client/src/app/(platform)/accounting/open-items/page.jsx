@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 
 import { useState } from 'react';
 import { FileText, Merge, Search } from 'lucide-react';
@@ -25,6 +26,7 @@ function selectedByType(items, selectedIds, type) {
 export default function OpenItemsPage() {
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
+  const { currency } = useAccountingCurrency();
   const [entityType, setEntityType] = useState('ALL');
   const [search, setSearch] = useState('');
   const [cursorStack, setCursorStack] = useState([null]);
@@ -110,7 +112,7 @@ export default function OpenItemsPage() {
         ].map((tile) => (
           <div key={tile.label} className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</p>
-            <p className="mt-1 text-xl font-bold tabular-nums">{formatMoney(tile.value)}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums">{formatMoney(tile.value, currency)}</p>
             {tile.count != null && <p className="text-xs text-muted-foreground">{tile.count} {de ? 'Posten' : 'items'}</p>}
           </div>
         ))}
@@ -159,7 +161,7 @@ export default function OpenItemsPage() {
                   <td className="px-3 py-3 font-medium">{item.entityName || '-'}</td>
                   <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{item.reference || '-'}</td>
                   <td className="px-3 py-3">{formatDate(item.dueDate)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums font-semibold">{formatMoney(item.outstandingAmount)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums font-semibold">{formatMoney(item.outstandingAmount, item.currency || currency)}</td>
                   <td className="px-3 py-3 text-right">
                     <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleStatement(item)}>
                       <FileText className="h-3.5 w-3.5 mr-1" />

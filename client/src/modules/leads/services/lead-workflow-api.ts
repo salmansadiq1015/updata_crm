@@ -1,4 +1,5 @@
 import apiClient from '@/lib/api/client';
+import { readLeadCallLifecycle } from '../schemas/lead-call-lifecycle';
 import type {
   AnswerCorrectionInput,
   AnswerHistoryEntry,
@@ -7,6 +8,10 @@ import type {
   ContactSuppression,
   CreateFollowUpInput,
   FollowUp,
+  FollowUpAgentOption,
+  FollowUpAiAction,
+  FollowUpAutomation,
+  FollowUpAutomationSettings,
   FollowUpListParams,
   FollowUpPage,
   FollowUpSummary,
@@ -16,6 +21,7 @@ import type {
   TranscriptRef,
   TranscriptTurn,
 } from '../types/lead-workflow-types';
+import { FOLLOW_UP_AUTOMATION_STATES } from '../types/lead-workflow-types';
 
 /**
  * Lead workflow API: unified timeline, answer history/corrections, follow-up
@@ -34,6 +40,10 @@ export const LEAD_WORKFLOW_ENDPOINTS = {
   FOLLOW_UP_ACTION: (id: string, action: 'complete' | 'snooze' | 'reassign' | 'cancel') => `/crm/follow-ups/${id}/${action}`,
   FOLLOW_UP_CONTACT_CHECK: (id: string) => `/crm/follow-ups/${id}/contact-check`,
   POLICY: '/crm/lead-assignment-policy',
+  /** AI follow-up calling (server aiCalling/followUpCalling.routes.js). */
+  FOLLOW_UP_AI_ACTION: (id: string, action: FollowUpAiAction['action']) => `/ai-calling/follow-ups/${id}/${action}`,
+  FOLLOW_UP_AI_SETTINGS: '/ai-calling/settings/follow-up',
+  AI_AGENTS: '/ai-calling/agents',
 } as const;
 
 type Rec = Record<string, unknown>;
@@ -123,6 +133,64 @@ function parseSuppression(raw: unknown): ContactSuppression | null {
   };
 }
 
+const AUTOMATION_STATES = new Set<string>(FOLLOW_UP_AUTOMATION_STATES);
+
+export function parseAutomation(raw: unknown): FollowUpAutomation | null {
+  if (!isRec(raw)) return null;
+  const tr = isRec(raw.timeResolution) && str(raw.timeResolution.kind) ? raw.timeResolution : null;
+  const call = isRec(raw.call) ? raw.call : null;
+  const agent = isRec(raw.agent) && str(raw.agent.id) ? raw.agent : null;
+  const state = str(raw.state);
+  return {
+    mode: raw.mode === 'ai' ? 'ai' : 'human',
+    agentId: str(raw.agentId),
+    state: state && AUTOMATION_STATES.has(state) ? state as FollowUpAutomation['state'] : null,
+    reason: str(raw.reason),
+    outcome: str(raw.outcome),
+    round: num(raw.round) ?? 1,
+    attempts: num(raw.attempts) ?? 0,
+    campaignId: str(raw.campaignId),
+    callRecordId: str(raw.callRecordId),
+    previousCallId: str(raw.previousCallId),
+    notBefore: str(raw.notBefore),
+    lastError: str(raw.lastError),
+    instructions: str(raw.instructions),
+    timeResolution: tr ? { kind: str(tr.kind) as string, approximate: tr.approximate === true, requestedText: str(tr.requestedText), shiftedFrom: str(tr.shiftedFrom) } : null,
+    stateChangedAt: str(raw.stateChangedAt),
+    history: (Array.isArray(raw.history) ? raw.history : []).filter(isRec).filter((h) => str(h.state))
+      .map((h) => ({ state: h.state as string, at: str(h.at), reason: str(h.reason) })),
+    call: call ? {
+      state: str(call.state), disposition: str(call.disposition), qualification: str(call.qualification),
+      durationSeconds: num(call.durationSeconds) ?? 0, answeredAt: str(call.answeredAt), endedAt: str(call.endedAt), summary: str(call.summary),
+    } : null,
+    agent: agent ? {
+      id: agent.id as string, name: str(agent.name) ?? '', title: str(agent.title), agentType: str(agent.agentType),
+      avatarPresetId: str(agent.avatarPresetId), availability: str(agent.availability),
+    } : null,
+  };
+}
+
+export function parseAgentOption(raw: unknown): FollowUpAgentOption | null {
+  if (!isRec(raw)) return null;
+  const id = str(raw._id) ?? str(raw.id);
+  if (!id) return null;
+  const fu = isRec(raw.followUp) ? raw.followUp : {};
+  return {
+    id,
+    name: str(raw.name) ?? '',
+    title: str(raw.title),
+    agentType: str(raw.agentType),
+    availability: str(raw.availability),
+    avatarUrl: str(raw.avatarUrl),
+    followUp: { enabled: fu.enabled === true, autoCall: fu.autoCall === true, manualCall: fu.manualCall !== false },
+  };
+}
+
+export function parseAutomationSettings(raw: unknown): FollowUpAutomationSettings {
+  const d = isRec(raw) ? raw : {};
+  return { enabled: d.enabled === true, forcedOffByEnv: d.forcedOffByEnv === true, pausedReason: str(d.pausedReason), voicePaused: d.voicePaused === true };
+}
+
 export function parseFollowUp(raw: unknown): FollowUp | null {
   if (!isRec(raw) || !str(raw.id)) return null;
   const lead = isRec(raw.lead) ? raw.lead : {};
@@ -133,7 +201,10 @@ export function parseFollowUp(raw: unknown): FollowUp | null {
   return {
     id: raw.id as string,
     leadId: str(raw.leadId) ?? '',
-    lead: { id: str(lead.id) ?? str(raw.leadId) ?? '', name: str(lead.name) ?? '', leadNumber: str(lead.leadNumber), status: str(lead.status) },
+    lead: { id: str(lead.id) ?? str(raw.leadId) ?? '', name: str(lead.name) ?? '', leadNumber: str(lead.leadNumber), status: str(lead.status),
+      email: str(lead.email), phone: str(lead.phone), pipelineStage: str(lead.pipelineStage) ?? 'LEAD',
+      lastContactedAt: str(lead.lastContactedAt), lastContactChannel: str(lead.lastContactChannel),
+      latestCall: readLeadCallLifecycle(lead.latestCall) },
     owner: { id: str(owner.id) ?? '', name: str(owner.name) },
     createdBy: str(raw.createdBy),
     dueAt: str(raw.dueAt),
@@ -143,6 +214,7 @@ export function parseFollowUp(raw: unknown): FollowUp | null {
     note: str(raw.note),
     status,
     bucket,
+    taskType: str(raw.taskType), priority: str(raw.priority) ?? 'NORMAL', reminderMinutes: num(raw.reminderMinutes),
     snoozedUntil: str(raw.snoozedUntil),
     snoozeCount: num(raw.snoozeCount) ?? 0,
     completedAt: str(raw.completedAt),
@@ -153,10 +225,15 @@ export function parseFollowUp(raw: unknown): FollowUp | null {
       type: str(source.type) ?? 'manual',
       communicationId: str(source.communicationId),
       callRecordId: str(source.callRecordId),
+      campaignId: str(source.campaignId),
+      callingAgentId: str(source.callingAgentId),
+      qualification: str(source.qualification),
+      recommendedAction: str(source.recommendedAction),
       contactLogId: str(source.contactLogId),
       requestedTimeText: str(source.requestedTimeText),
     },
     suppression: parseSuppression(raw.suppression),
+    automation: parseAutomation(raw.automation),
     createdAt: str(raw.createdAt),
   };
 }
@@ -245,6 +322,10 @@ export const leadWorkflowApi = {
     if (params.q) query.q = params.q;
     if (params.channel) query.channel = params.channel;
     if (params.ownerId) query.ownerId = params.ownerId;
+    if (params.qualification) query.qualification = params.qualification;
+    if (params.order) query.order = params.order;
+    if (params.management) query.management = params.management;
+    if (params.agentId) query.agentId = params.agentId;
     if (cursor) query.cursor = cursor;
     return page((await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UPS, { params: query })) as Envelope, parseFollowUp);
   },
@@ -252,7 +333,39 @@ export const leadWorkflowApi = {
   async followUpSummary(scope: string, tz: string): Promise<FollowUpSummary> {
     const response = (await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UP_SUMMARY, { params: { scope, tz } })) as Envelope;
     const d = isRec(response.data) ? response.data : {};
-    return { overdue: num(d.overdue) ?? 0, today: num(d.today) ?? 0, upcoming: num(d.upcoming) ?? 0, done: num(d.done) ?? 0, timezone: str(d.timezone) ?? tz };
+    return { overdue: num(d.overdue) ?? 0, today: num(d.today) ?? 0, upcoming: num(d.upcoming) ?? 0, done: num(d.done) ?? 0, timezone: str(d.timezone) ?? tz,
+      totalLeads: num(d.totalLeads) ?? 0, qualifiedLeads: num(d.qualifiedLeads) ?? 0, pending: num(d.pending) ?? 0, completed: num(d.completed) ?? 0,
+      emailsSent: num(d.emailsSent) ?? 0, emailsDelivered: num(d.emailsDelivered) ?? 0, emailsFailed: num(d.emailsFailed) ?? 0,
+      aiManaged: num(d.aiManaged) ?? 0, aiScheduled: num(d.aiScheduled) ?? 0, aiInProgress: num(d.aiInProgress) ?? 0,
+      aiCompleted: num(d.aiCompleted) ?? 0, aiFailed: num(d.aiFailed) ?? 0, attention: num(d.attention) ?? 0 };
+  },
+
+  async followUp(id: string): Promise<FollowUp | null> {
+    return parseFollowUp(((await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UP(id))) as Envelope).data);
+  },
+
+  /** AI follow-up controls; every action returns the updated follow-up row. Errors (400/409) carry the server message. */
+  async followUpAiAction({ id, action, body }: FollowUpAiAction): Promise<FollowUp | null> {
+    return parseFollowUp(((await apiClient.post(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UP_AI_ACTION(id, action), body ?? {})) as Envelope).data);
+  },
+
+  async followUpAutomationSettings(): Promise<FollowUpAutomationSettings> {
+    return parseAutomationSettings(((await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.FOLLOW_UP_AI_SETTINGS)) as Envelope).data);
+  },
+
+  /** The viewer's outbound AI agents (all pages, sorted by name). */
+  async followUpAgents(): Promise<FollowUpAgentOption[]> {
+    const out: FollowUpAgentOption[] = [];
+    for (let pageNo = 1; pageNo <= 10; pageNo += 1) {
+      const response = (await apiClient.get(LEAD_WORKFLOW_ENDPOINTS.AI_AGENTS, { params: { usage: 'outbound', page: pageNo, limit: 100, sort: 'name' } })) as {
+        data?: unknown; pagination?: { pages?: number } | null;
+      };
+      const agents = isRec(response.data) && Array.isArray(response.data.agents) ? response.data.agents : null;
+      if (!agents) throw new Error('The AI agent list could not be read. Refresh and try again.');
+      out.push(...agents.map(parseAgentOption).filter((a): a is FollowUpAgentOption => a !== null));
+      if (!(num(response.pagination?.pages) && (response.pagination?.pages as number) > pageNo)) break;
+    }
+    return [...new Map(out.map((a) => [a.id, a])).values()].filter((a) => a.availability !== 'archived');
   },
 
   async createFollowUp(input: CreateFollowUpInput): Promise<FollowUp | null> {

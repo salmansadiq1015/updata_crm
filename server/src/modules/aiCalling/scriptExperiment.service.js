@@ -22,7 +22,7 @@ import { activeVersionId, agentConfigHash, pickAgentConfig } from './scriptVersi
  */
 
 const TEST_PROVIDERS = ['livekit_web', 'web_link_preview'];
-const REACHED = new Set(['answered_completed', 'answered_partial', 'declined', 'callback_requested', 'do_not_contact']);
+const REACHED = new Set(['answered_completed', 'answered_partial', 'interrupted', 'declined', 'callback_requested', 'do_not_contact']);
 const UNFINISHED_CAMPAIGNS = ['draft', 'scheduled', 'queued', 'running', 'paused'];
 const MAX_CALLS = 20_000;
 

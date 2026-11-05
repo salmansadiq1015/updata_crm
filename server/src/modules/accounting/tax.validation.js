@@ -1,9 +1,10 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { TAX_DIRECTIONS, TAX_SCOPES, TAX_TYPES } from './taxCode.model.js';
 import { TAX_TRANSACTION_DIRECTIONS, TAX_TRANSACTION_SOURCE_TYPES } from './taxTransaction.model.js';
 
-const currency = Joi.string().trim().uppercase().pattern(/^[A-Z]{3}$/).length(3);
+const currency = Joi.string().trim().uppercase().valid(...CURRENCY_CODES);
 
 export const listTaxCodesSchema = {
   query: Joi.object({

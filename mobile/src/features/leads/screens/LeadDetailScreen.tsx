@@ -1,4 +1,5 @@
 import { LeadSmsHistory } from '@/features/messaging/LeadSmsHistory';
+import { LeadActivityTimeline } from '../components/LeadActivityTimeline';
 import {
   Bot,
   Building2,
@@ -328,6 +329,28 @@ function LeadDetail({
         onSimCampaign={(campaignId) => navigation.navigate('SimSmsCampaignDetail', { campaignId })}
       />
       <QualificationSummary leadId={lead.id} />
+      {lead.latestCall ? (
+        <AppCard className="gap-2">
+          <AppText variant="label">
+            {t('leads.activity.latestCall', { defaultValue: 'Latest call outcome' })}
+          </AppText>
+          <AppText>
+            {[lead.latestCall.callStatus, lead.latestCall.qualificationStatus]
+              .filter(Boolean)
+              .map((value) =>
+                t(`leads.lifecycle.${value}`, { defaultValue: value!.replace(/_/g, ' ').toLowerCase() }),
+              )
+              .join(' · ')}
+          </AppText>
+          {!!lead.latestCall.missingFields.length && (
+            <AppText variant="caption" tone="muted">
+              {t('leads.activity.missing', { defaultValue: 'Required answers to review' })}:{' '}
+              {lead.latestCall.missingFields.join(', ')}
+            </AppText>
+          )}
+        </AppCard>
+      ) : null}
+      <LeadActivityTimeline leadId={lead.id} />
       <LeadLinkSessions leadId={lead.id} />
 
       <AppButton

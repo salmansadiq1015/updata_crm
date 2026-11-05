@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
@@ -43,7 +44,7 @@ export const createQuotationSchema = {
     salutation: Joi.string().max(255).allow(''),
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso().required(),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     lineItems: Joi.array().items(lineItemSchema).min(1).max(50),
     globalDiscountPercent: Joi.number().min(0).max(100),
     paymentTerms: Joi.string().max(1000).allow(''),
@@ -72,7 +73,7 @@ export const updateQuotationSchema = {
     salutation: Joi.string().max(255).allow(''),
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso(),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     lineItems: Joi.array().items(lineItemSchema).min(1).max(50),
     globalDiscountPercent: Joi.number().min(0).max(100),
     paymentTerms: Joi.string().max(1000).allow(''),
@@ -91,7 +92,7 @@ export const listQuotationsSchema = {
     customerId: objectId,
     departmentId: Joi.alternatives().try(objectId, Joi.array().items(objectId)),
     assignedUserId: objectId,
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),
     amountMin: Joi.number(),

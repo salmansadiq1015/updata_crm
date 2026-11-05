@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
@@ -66,7 +67,7 @@ export const confirmOcrSchema = {
       dueDate: Joi.date().iso().allow(null),
       total: Joi.number().min(0),
       vat: Joi.number().min(0),
-      currency: Joi.string().valid('CHF', 'EUR').default('CHF'),
+      currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES).default('CHF'),
       supplierIban: Joi.string().trim().max(34).allow('', null),
       supplierBic: Joi.string().trim().max(11).allow('', null),
       lineItems: Joi.array().items(Joi.object({

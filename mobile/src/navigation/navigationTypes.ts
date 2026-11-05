@@ -57,6 +57,11 @@ export type RootStackParamList = {
   MobileReadiness: undefined;
   // Paired phone (ESP32 gateway) status; not deep-linkable.
   PairedPhones: undefined;
+  // Incoming calls answered by the AI over the paired phone. The dashboard and a call's
+  // details are deep-linkable (they only show data); the live view is reached by a tap.
+  IncomingCalls: undefined;
+  IncomingCallLive: { id: string };
+  IncomingCallDetail: { id: string };
   SmsQueue: { leadIds: string[]; linkCampaignId?: string; linkPurpose?: 'initial' | 'reminder' };
   CallCampaignCreate: { leadIds: string[] };
   CallCampaignDetail: { campaignId: string };

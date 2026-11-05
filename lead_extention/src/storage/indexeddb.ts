@@ -57,6 +57,24 @@ export async function getRecord<T>(store: StoreName, id: string): Promise<T | un
   return transaction<T | undefined>(db, store, 'readonly', (objectStore) => objectStore.get(id));
 }
 
+/** Fetch an ordered selection in one readonly transaction. */
+export async function getRecords<T>(store: StoreName, ids: string[]): Promise<Array<T | undefined>> {
+  if (!ids.length) return [];
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const objectStore = tx.objectStore(store);
+    const values: Array<T | undefined> = new Array(ids.length);
+    ids.forEach((id, index) => {
+      const request = objectStore.get(id);
+      request.onsuccess = () => { values[index] = request.result as T | undefined; };
+    });
+    tx.oncomplete = () => resolve(values);
+    tx.onerror = () => reject(tx.error ?? new Error('Unable to read selected records'));
+    tx.onabort = () => reject(tx.error ?? new Error('Reading selected records was aborted'));
+  });
+}
+
 export async function getAll<T>(store: StoreName): Promise<T[]> {
   const db = await openDatabase();
   return transaction<T[]>(db, store, 'readonly', (objectStore) => objectStore.getAll());

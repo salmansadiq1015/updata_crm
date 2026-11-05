@@ -4,15 +4,12 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
-  Bot,
   CalendarPlus,
   CheckSquare,
   FileText,
   FolderKanban,
   MessageSquare,
-  ShieldCheck,
   Users,
   Wrench,
   Building2,
@@ -73,7 +70,7 @@ function ContextRow({ icon: Icon, label, value, href }) {
   return href ? <Link href={href} className="block">{content}</Link> : content;
 }
 
-export function ChatContextPanel({ room, currentUserId }) {
+export function ChatContextPanel({ room, currentUserId, onManageLeads }) {
   const { t } = useLanguage();
 
   if (!room) {
@@ -93,7 +90,7 @@ export function ChatContextPanel({ room, currentUserId }) {
   const members = room.members ?? [];
 
   return (
-    <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-border/60 bg-card/85 p-4 xl:block">
+    <aside className="mt-5">
       <div className="space-y-4">
         <section className="rounded-3xl border border-border/60 bg-background/55 p-4">
           <div className="flex items-start gap-3">
@@ -114,6 +111,7 @@ export function ChatContextPanel({ room, currentUserId }) {
           </div>
         </section>
 
+        <section className="space-y-2"><div className="flex items-center justify-between"><p className="text-xs font-semibold text-muted-foreground">{t('chat.workspace.linkedLeads', 'Linked leads')}</p>{onManageLeads && <Button size="sm" variant="outline" onClick={onManageLeads}>{t('chat.workspace.manageLeads', 'Manage leads')}</Button>}</div>{(room.leadIds || []).map(lead => <ContextRow key={lead._id} icon={Users} label={lead.leadNumber} value={lead.name} href={`/leads/${lead._id}`} />)}</section>
         <section className="space-y-2">
           <p className="px-1 text-xs font-semibold uppercase text-muted-foreground">{t('chat.linkedRecords', 'Linked records')}</p>
           <ContextRow
@@ -139,22 +137,17 @@ export function ChatContextPanel({ room, currentUserId }) {
         <section className="space-y-2">
           <p className="px-1 text-xs font-semibold uppercase text-muted-foreground">{t('chat.conversationActions', 'Actions')}</p>
           <ActionLink
-            href={`/ai?chatRoomId=${room._id}&intent=summary`}
-            icon={Bot}
-            label={t('chat.askAiSummary', 'Ask AI for summary')}
-          />
-          <ActionLink
-            href={`/tasks?chatRoomId=${room._id}`}
+            href={'/tasks'}
             icon={CheckSquare}
-            label={t('chat.createTaskFromChat', 'Create task')}
+            label={t('chat.workspace.openTasks', 'Open tasks')}
           />
           <ActionLink
-            href={`/scheduling/calendar?chatRoomId=${room._id}`}
+            href={'/scheduling/calendar'}
             icon={CalendarPlus}
-            label={t('chat.createAppointmentFromChat', 'Schedule appointment')}
+            label={t('chat.workspace.openCalendar', 'Open calendar')}
           />
           <ActionLink
-            href={`/documents?chatRoomId=${room._id}`}
+            href={'/documents'}
             icon={FileText}
             label={t('chat.openDocuments', 'Open documents')}
           />
@@ -166,7 +159,7 @@ export function ChatContextPanel({ room, currentUserId }) {
             <Badge variant="secondary" className="rounded-full">{members.length}</Badge>
           </div>
           <div className="space-y-2">
-            {members.slice(0, 8).map((member) => {
+            {members.map((member) => {
               const user = member.userId;
               const name = getUserDisplayName(user) || t('chat.member', 'Member');
               return (
@@ -183,31 +176,10 @@ export function ChatContextPanel({ room, currentUserId }) {
                 </div>
               );
             })}
-            {members.length > 8 && (
-              <p className="text-xs text-muted-foreground">
-                {t('chat.moreMembers', '+{count} more', { count: members.length - 8 })}
-              </p>
-            )}
+
           </div>
         </section>
 
-        <section className="rounded-3xl border border-border/60 bg-background/55 p-4">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            <p className="text-sm font-semibold">{t('chat.auditTrail', 'Audit trail')}</p>
-          </div>
-          <Separator className="my-3" />
-          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="font-medium text-foreground">{t('chat.readReceipts', 'Read receipts')}</p>
-              <p className="mt-1">{t('chat.enabled', 'Enabled')}</p>
-            </div>
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="font-medium text-foreground">{t('chat.history', 'History')}</p>
-              <p className="mt-1">{t('chat.retained', 'Retained')}</p>
-            </div>
-          </div>
-        </section>
       </div>
     </aside>
   );

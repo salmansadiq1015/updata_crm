@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
@@ -19,8 +20,8 @@ export const createJournalSchema = {
     description: Joi.string().required().trim().max(500),
     debitAccountId: objectId.required(),
     creditAccountId: objectId.required(),
-    amount: Joi.number().min(0.01).required(),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    amount: Joi.number().min(0.0001).required(),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     companyId: objectId,
     branchId: objectId,
     referenceType: Joi.string().valid(...REFERENCE_TYPES).default('MANUAL'),
@@ -36,7 +37,7 @@ export const listJournalSchema = {
     entryDateFrom: Joi.date().iso(),
     entryDateTo: Joi.date().iso(),
     referenceType: Joi.string().valid(...REFERENCE_TYPES),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     accountId: objectId,
     companyId: objectId,
     branchId: objectId,

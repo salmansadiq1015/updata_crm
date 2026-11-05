@@ -362,24 +362,24 @@ export function useBankMutations() {
   const { t } = useLanguage();
   const createBankAccount = useMutation({
     mutationFn: bankService.create,
-    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); success(t, 'bankAccountAdded', 'Bank account added'); },
+    onSuccess: () => { inv(qc, ['accounting']); success(t, 'bankAccountAdded', 'Bank account added'); },
   });
   const updateBankAccount = useMutation({
     mutationFn: ({ id, data }) => bankService.update(id, data),
-    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); success(t, 'bankAccountUpdated', 'Bank account updated'); },
+    onSuccess: () => { inv(qc, ['accounting']); success(t, 'bankAccountUpdated', 'Bank account updated'); },
   });
   const importStatement = useMutation({
     mutationFn: bankService.importStatement,
-    onSuccess: () => { inv(qc, ['accounting', 'bank-transactions']); success(t, 'statementImported', 'Statement imported'); },
+    onSuccess: () => { inv(qc, ['accounting']); success(t, 'statementImported', 'Statement imported'); },
   });
   const importPaymentStatus = useMutation({
     mutationFn: bankService.importPaymentStatus,
-    onSuccess: () => { inv(qc, ['accounting', 'ap-invoices']); success(t, 'paymentStatusImported', 'Payment status imported'); },
+    onSuccess: () => { inv(qc, ['accounting']); success(t, 'paymentStatusImported', 'Payment status imported'); },
   });
   const retrieveStatements = useMutation({
     mutationFn: bankService.retrieve,
     onSuccess: () => {
-      inv(qc, ['accounting', 'bank-transactions'], ['accounting', 'bank-accounts'], ['accounting', 'cash-balances'], ['accounting', 'cash-forecast']);
+      inv(qc, ['accounting']);
       success(t, 'bankRetrievalCompleted', 'Bank retrieval completed');
     },
   });
@@ -406,6 +406,8 @@ export function useReconciliationMutations() {
   const { t } = useLanguage();
   const invalidate = () => inv(
     qc,
+    ['accounting', 'bank-analytics'],
+    ['accounting', 'dashboard'],
     ['accounting', 'reconciliation-unmatched'],
     ['accounting', 'reconciliation-report'],
     ['accounting', 'bank-transactions'],

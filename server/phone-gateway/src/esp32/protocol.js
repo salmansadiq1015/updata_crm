@@ -30,6 +30,7 @@ export const T = Object.freeze({
   AUDIO_DISCONNECT: 0x23,
   DTMF: 0x24,
   VOLUME: 0x25,
+  ANSWER: 0x26, // firmware 0.1.4+: answer the ringing incoming call
   PROVISION_KEY: 0x30,
   AUDIO_DOWN: 0x40,
   // device → host
@@ -58,6 +59,17 @@ export const RESULT = Object.freeze({
   11: 'no_presence',
 });
 
+/** HELLO_ACK capability bits. */
+export const CAP = Object.freeze({
+  HFP_HF: 1 << 0,
+  VOICE_OVER_HCI: 1 << 1,
+  CVSD: 1 << 2,
+  MSBC: 1 << 3,
+  DIAL_AUTH: 1 << 4,
+  PRESENCE_BUTTON: 1 << 5,
+  ANSWER: 1 << 6, // firmware 0.1.4+: T.ANSWER and host-owned watchdog
+});
+
 export const DEV_STATE = Object.freeze(['booting', 'usb_ready', 'bt_ready', 'phone_connected', 'hfp_ready', 'call_active', 'audio_ready', 'call_ended', 'fault']);
 export const HFP_STATE = Object.freeze(['disconnected', 'connecting', 'connected', 'slc']);
 export const AUDIO_STATE = Object.freeze(['off', 'connecting', 'on']);
@@ -72,6 +84,7 @@ export const EVENT = Object.freeze({
   6: 'dial_result',
   7: 'host_lost_hangup',
   8: 'boot',
+  9: 'call_waiting', // firmware 0.1.4+: +CCWA, a second call while one is up
 });
 
 export function crc16(buf, start = 0, end = buf.length) {
@@ -200,6 +213,10 @@ export const build = {
     return Buffer.concat([u32(callRef), u32(counter), Buffer.from([num.length]), num, mac]);
   },
   hangup: (callRef) => u32(callRef),
+  answer: (callRef) => {
+    if (!Number.isInteger(callRef) || callRef <= 0 || callRef > 0xffffffff) throw new RangeError('callRef must be a nonzero u32');
+    return u32(callRef);
+  },
   dtmf: (callRef, digit) => Buffer.concat([u32(callRef), Buffer.from(String(digit), 'ascii').subarray(0, 1)]),
   volume: (speaker, mic) => Buffer.from([speaker & 15, mic & 15]),
   provisionKey: (key) => {
@@ -262,11 +279,13 @@ export const parse = {
     peer: formatBdaddr(p.subarray(8, 14)),
     callRef: p.readUInt32LE(14),
     agFeatures: p.readUInt32LE(18),
+    // firmware 0.1.4+: bit0 = the current call is host-owned (only those end on host loss)
+    hostOwned: p.length > 22 ? Boolean(p[22] & 1) : null,
   }),
   [T.EVENT](p) {
     const name = EVENT[p[0]] || `event_${p[0]}`;
     const data = p.subarray(1);
-    if (name === 'clip') return { name, number: data.toString('ascii') };
+    if (name === 'clip' || name === 'call_waiting') return { name, number: data.toString('ascii') };
     if (name === 'volume') return { name, target: data[0] === 0 ? 'speaker' : 'mic', level: data[1] };
     if (name === 'auth') return { name, ok: data[0] === 0, status: data[0], peer: formatBdaddr(data.subarray(1, 7)) };
     if (name === 'dial_result') return { name, callRef: data.readUInt32LE(0), ok: data[4] === 0, cme: data[4] };

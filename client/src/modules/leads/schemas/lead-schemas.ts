@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { readLeadSla } from './lead-sla-schema';
+import { readLeadCallLifecycle } from './lead-call-lifecycle';
 import { parseLeadScore } from '../services/lead-quality-api';
 import type {
   GeoPoint,
@@ -276,6 +277,8 @@ export const leadSchema = z.unknown().transform((value): Lead => {
     normalizedName: readStringOrNull(raw.normalizedName),
     type: readType(raw.type),
     status: readStatus(raw.status),
+    latestCall: readLeadCallLifecycle(raw.latestCall),
+    pipelineStage: readString(raw.pipelineStage, 'LEAD'),
     address: toAddress(raw.address),
     phone: readStringOrNull(raw.phone),
     mobile: readStringOrNull(raw.mobile),

@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 
 export const BATCH_STATUSES = ['CREATED', 'EXPORTED', 'CONFIRMED', 'REJECTED'];
@@ -20,6 +21,7 @@ const paymentBatchSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    currency: { type: String, enum: CURRENCY_CODES, default: 'CHF' },
     totalAmount: { type: Number, default: 0 },
     invoiceCount: { type: Number, default: 0 },
     status: {

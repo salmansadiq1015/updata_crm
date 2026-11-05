@@ -112,7 +112,7 @@ export function formatAddressOneLine(address: LeadAddress): string {
 export function humanizeBusinessType(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const first = raw.split(/[,|]/)[0]?.replace(/\s+/g, ' ').trim();
-  if (!first) return null;
+  if (!first || /^(?:\+\s*)?(?:add (?:a )?label|edit (?:a )?label|your labels?|suggest an edit|write (?:a )?review|claim this business|ajouter un libell[eé]|ajouter une [eé]tiquette|modifier le libell[eé]|label hinzuf[uü]gen|etikett hinzuf[uü]gen|(?:a[nñ]adir|agregar) (?:una )?etiqueta)[.!…]*$/iu.test(first.replace(/[_-]+/g, ' '))) return null;
   // Already a cased human label ("IT Company", "Indian restaurant") → keep as-is;
   // a machine token / all-lowercase label is tidy-cased ("fast_food" → "Fast Food").
   if (/[A-Z]/.test(first)) return first;
@@ -124,7 +124,12 @@ export function humanizeBusinessType(raw: string | null | undefined): string | n
 }
 
 export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): string | null {
-  return humanizeBusinessType(lead.sourceMetadata?.businessType);
+  const category = humanizeBusinessType(lead.sourceMetadata?.businessType);
+  if (category) return category;
+  // The API normalizes both extension string entries and server-discovery
+  // objects into { id, name }. Use saved provenance, never today's search form.
+  return (lead.sourceMetadata?.discoveryBusinessTypes ?? [])
+    .map((type) => humanizeBusinessType(type.name || type.id)).find(Boolean) ?? null;
 }
 
 /** Neighborhood/area for the list column — never substitute the separate city

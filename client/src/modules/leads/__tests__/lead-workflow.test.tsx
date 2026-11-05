@@ -51,6 +51,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('@/modules/tasks/hooks/use-workspace-users', () => ({
   useWorkspaceUsers: () => ({ data: [{ id: 'u-me', firstName: 'Me' }, { id: 'u-ben', firstName: 'Ben' }] }),
 }));
+vi.mock('../ui/lead-outreach-composer', () => ({
+  LeadOutreachComposer: ({ leads }: { leads: { email: string }[] }) => <div role="dialog" aria-label="Email composer">{leads[0].email}</div>,
+}));
 
 import { LeadConversationHistory } from '../ui/lead-conversation-history';
 import { QualificationFieldHistory } from '../ui/qualification-field-history';
@@ -204,6 +207,38 @@ describe('FollowUpInbox', () => {
     status: 'open', bucket: 'overdue', snoozeCount: 0, source: { type: 'communication' }, suppression: { suppressed: false, reasons: [], limited: false }, ...over,
   });
 
+  it('checks email suppression and opens the existing composer with the authorized lead', async () => {
+    auth.permissions = ['lead:read', 'lead:write', 'crm:write'];
+    const channels: string[] = [];
+    server.use(
+      http.get(`${FU}/summary`, () => HttpResponse.json(ok({ overdue: 1 }))),
+      http.get(FU, () => HttpResponse.json({ ...ok([row({ lead: { id: 'l1', name: 'Acme AG', email: 'lead@example.com', latestCall: { qualificationStatus: 'QUALIFIED', callStatus: 'CALL_COMPLETED', missingFields: [] } } })]), pagination: { hasNext: false } })),
+      http.get(`${FU}/:id/contact-check`, ({ request }) => { channels.push(new URL(request.url).searchParams.get('channel') || ''); return HttpResponse.json(ok({ suppressed: false })); }),
+      http.get(`${L}/l1`, () => HttpResponse.json(ok({ _id: 'l1', name: 'Acme AG', email: 'lead@example.com' }))),
+    );
+    const user = userEvent.setup();
+    renderUi(<FollowUpInbox />);
+    await user.click(await screen.findByRole('button', { name: 'Email' }));
+    expect(await screen.findByRole('dialog', { name: 'Email composer' })).toHaveTextContent('lead@example.com');
+    expect(channels).toEqual(['email']);
+  });
+
+  it('requires confirmation before bulk completion and uses the authorized follow-up actions', async () => {
+    const completed: string[] = [];
+    server.use(
+      http.get(`${FU}/summary`, () => HttpResponse.json(ok({ overdue: 1 }))),
+      http.get(FU, () => HttpResponse.json({ ...ok([row({})]), pagination: { hasNext: false } })),
+      http.post(`${FU}/:id/complete`, ({ params }) => { completed.push(String(params.id)); return HttpResponse.json(ok(row({ status: 'done' }))); }),
+    );
+    const user = userEvent.setup();
+    renderUi(<FollowUpInbox />);
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Acme AG' }));
+    await user.click(screen.getByRole('button', { name: 'Complete selected' }));
+    expect(completed).toEqual([]);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(completed).toEqual(['f1']));
+  });
+
   it('shows due times in both zones, blocks suppressed leads and completes follow-ups', async () => {
     let completed: unknown = null;
     server.use(
@@ -244,7 +279,7 @@ describe('FollowUpInbox', () => {
     renderUi(<FollowUpInbox />);
     expect(await screen.findByText('Acme AG')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New follow-up' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Done', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument();
     const done = screen.getByRole('tab', { name: /Done/ });
     expect(done).toHaveTextContent('3');
@@ -265,9 +300,9 @@ describe('FollowUpInbox', () => {
     );
     renderUi(<FollowUpInbox />);
     const other = (await screen.findByText('Acme AG')).closest('li') as HTMLElement;
-    expect(within(other).queryByRole('button', { name: 'Done', exact: true })).not.toBeInTheDocument();
+    expect(within(other).queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
     const own = screen.getByText('My assigned follow-up').closest('li') as HTMLElement;
-    expect(within(own).getByRole('button', { name: 'Done', exact: true })).toBeEnabled();
+    expect(within(own).getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 
   it('re-checks suppression at action time and refuses to open the lead when blocked', async () => {

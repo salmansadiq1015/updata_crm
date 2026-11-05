@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { parse as parseCsvSync } from 'csv-parse/sync';
 import { Parser as Json2CsvParser } from '@json2csv/plainjs';
 import PDFDocument from 'pdfkit';
@@ -7,7 +8,7 @@ import counterService from './counter.service.js';
 import { resolveLeadAddress } from './leadLocation.js';
 import { bulkImport } from './lead.validation.js';
 import { extensionBusinessType, isLegacyExtensionLead } from './leadExtensionProvenance.js';
-import { googleIdentityKeys, mapsUrls } from './leadIdentity.js';
+import { googleIdentityKeys, branchIdentityKeys, mapsUrls, sameBusinessIdentity } from './leadIdentity.js';
 import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -740,41 +741,202 @@ class LeadImportExportService {
    * authenticated controller argument rather than the browser payload.
    */
   async importExtensionLeads(records = [], createdBy, meta = {}) {
+    const outcome = records.length > 1
+      ? await this._importExtensionBatch(records, createdBy, meta)
+      : await this._importExtensionSingle(records, createdBy, meta);
+    const { total, created, existing, failed } = outcome;
+    const summary = { total, created, existing, failed };
+    // Observability is never allowed to change a completed import into a 500.
+    // The caller needs the per-row result even if metrics/audit infrastructure
+    // is temporarily unavailable.
+    this._recordMetrics({ ...summary, skipped: 0, duplicates: summary.existing });
+    void Promise.resolve().then(() => auditService.logEvent({
+      eventType: 'lead.extension_import', userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: summary.failed ? 'partial' : 'success', details: { ...summary, requestId: meta.requestId }, module: 'lead',
+    })).catch((error) => logger.warn('Lead extension-import audit failed (non-blocking)', {
+      module: 'crm', action: 'lead.extension_import', requestId: meta.requestId,
+      error: { message: error.message },
+    }));
+    return outcome;
+  }
+
+  async _prepareExtensionLead(record) {
+    const placeId = cleanString(record.placeIdentifier);
+    const name = cleanString(record.businessName)?.slice(0, 255);
+    if (!name) throw new Error('Business name is required');
+    // Normalise messy Maps fields; junk degrades to null, not a failed row.
+    const phoneValue = normalizeLeadPhone(record.phone);
+    const websiteValue = normalizeLeadWebsite(record.website);
+    const latitude = inRangeOrNull(record.latitude, -90, 90);
+    const longitude = inRangeOrNull(record.longitude, -180, 180);
+    // The user's selected search location (e.g. "Lahore") — the last-resort
+    // fallback for a city/country the scrape and coordinates could not give.
+    const searchLocation = cleanString(record.searchLocation)?.slice(0, 255) || null;
+    // Coordinate-aware address: a postal-code/junk city or missing country is
+    // reverse-geocoded; whatever is still missing is filled from the selected
+    // search location; and a non-Swiss lead is never forced to CH.
+    const address = await resolveLeadAddress({
+      street: cleanString(record.street) || cleanString(record.address),
+      area: record.area,
+      city: record.city,
+      postalCode: record.postalCode,
+      canton: record.state,
+      state: record.state,
+      region: record.region ?? record.state,
+      country: record.country,
+      formatted: cleanString(record.formattedAddress) || cleanString(record.address),
+      latitude,
+      longitude,
+      fallbackLocation: searchLocation,
+      resolveArea: true,
+    });
+    const email = Array.isArray(record.emails)
+      ? (record.emails.map(normalizeLeadEmail).find(Boolean) || null)
+      : normalizeLeadEmail(record.emails);
+    return {
+      name,
+      type: LEAD_TYPE.BUSINESS,
+      status: LEAD_STATUS.NEW,
+      address,
+      phone: phoneValue,
+      email,
+      website: websiteValue,
+      location: latitude !== null && longitude !== null ? { type: 'Point', coordinates: [longitude, latitude] } : null,
+      providerMeta: {
+        rating: inRangeOrNull(record.rating, 0, 5),
+        reviewCount: normalizeReviewCount(record.reviewCount),
+        priceLevel: cleanString(record.priceLevel) || null,
+        ratingDistribution: normalizeRatingDistribution(record.ratingDistribution),
+        businessStatus: cleanString(record.businessStatus)?.slice(0, 60) || null,
+        openingHours: normalizeOpeningHours(record.openingHours),
+        photos: normalizeLeadPhotos(record.photos),
+        mapsUrl: normalizeMapsUrl(record.googleMapsUrl),
+      },
+      source: LEAD_SOURCE.EXTENSION,
+      sourceMetadata: {
+        importMethod: 'extension',
+        googlePlaceId: placeId || null,
+        identityAliases: googleIdentityKeys({ placeIdentifier: placeId, googleMapsUrl: record.googleMapsUrl }),
+        businessType: extensionBusinessType(record),
+        discoveryBusinessTypes: record.discoveryCategories ?? [],
+        searchLocation,
+        discoveredAt: record.discoveredAt || null,
+      },
+      tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],
+      notes: cleanString(record.address) ? `Google Maps address: ${record.address}` : null,
+    };
+  }
+
+  /** One duplicate lookup phase, one number reservation and one unordered insert. */
+  async _importExtensionBatch(records, createdBy, meta) {
+    const results = new Array(records.length);
+    const candidates = [];
+    const failed = (index, error) => {
+      results[index] = { clientId: String(records[index].clientId ?? ''), status: 'failed', message: error?.message || 'Lead could not be imported' };
+    };
+    await this._runBounded(records, DEDUP_CONCURRENCY, async (record, index) => {
+      try { candidates.push({ index, record, doc: await this._prepareExtensionLead(record) }); }
+      catch (error) { failed(index, error); }
+    });
+    candidates.sort((a, b) => a.index - b.index);
+    const complete = () => ({
+      total: records.length,
+      created: results.filter((row) => row.status === 'created').length,
+      existing: results.filter((row) => row.status === 'existing').length,
+      failed: results.filter((row) => row.status === 'failed').length,
+      results,
+    });
+    if (!candidates.length) return complete();
+    let matches;
+    try { matches = await leadRepository.findImportDuplicatesBatch(candidates.map((row) => row.doc)); }
+    catch (error) { candidates.forEach((row) => failed(row.index, error)); return complete(); }
+
+    const toCreate = [];
+    const repeats = [];
+    const enrich = [];
+    const owners = new Map();
+    const keysFor = (doc) => [...googleIdentityKeys(doc), ...branchIdentityKeys(doc)];
+    const outcomeFor = (row, lead, status) => {
+      results[row.index] = { clientId: String(row.record.clientId ?? ''), status, leadId: String(lead._id), leadNumber: lead.leadNumber };
+    };
+    candidates.forEach((row, index) => {
+      const existing = matches[index]?.[0]?.lead;
+      if (existing) {
+        outcomeFor(row, existing, 'existing');
+        enrich.push({ row, lead: existing });
+        return;
+      }
+      const keys = keysFor(row.doc);
+      const prior = keys.flatMap((key) => owners.get(key) || []).find((owner) => sameBusinessIdentity(row.doc, owner.doc));
+      if (prior) { repeats.push({ row, prior }); return; }
+      row.doc._id = new mongoose.Types.ObjectId();
+      toCreate.push(row);
+      for (const key of keys) owners.set(key, [...(owners.get(key) || []), row]);
+    });
+
+    if (toCreate.length) {
+      try {
+        const numbers = await counterService.getNextLeadNumberBlock(toCreate.length);
+        const docs = toCreate.map((row, index) => ({ ...row.doc, leadNumber: numbers[index], createdBy }));
+        const inserted = await leadService.bulkCreate(docs);
+        const byId = new Map((inserted.created || []).map((doc) => [String(doc._id), doc]));
+        const errors = new Map((inserted.errors || []).map((error) => [error.index, error]));
+        const raced = [];
+        toCreate.forEach((row, index) => {
+          const lead = byId.get(String(row.doc._id));
+          if (lead) { row.saved = lead; outcomeFor(row, lead, 'created'); }
+          else if (errors.get(index)?.code === 11000) raced.push(row);
+          else failed(row.index, errors.get(index) || new Error('Database did not confirm this lead was inserted'));
+        });
+        // A concurrent import may win the unique-identity race. Resolve all
+        // conflicting rows together; never reinterpret an unconfirmed write as success.
+        if (raced.length) {
+          const winners = await leadRepository.findImportDuplicatesBatch(raced.map((row) => row.doc));
+          raced.forEach((row, index) => {
+            const lead = winners[index]?.[0]?.lead;
+            if (lead) { row.saved = lead; outcomeFor(row, lead, 'existing'); enrich.push({ row, lead }); }
+            else failed(row.index, new Error('Lead conflicted with an existing database record'));
+          });
+        }
+      } catch (error) {
+        // Keep confirmed outcomes if a post-insert conflict lookup failed.
+        toCreate.filter((row) => !results[row.index]).forEach((row) => failed(row.index, error));
+      }
+    }
+    for (const { row, prior } of repeats) {
+      if (prior.saved) { outcomeFor(row, prior.saved, 'existing'); enrich.push({ row, lead: prior.saved }); }
+      else failed(row.index, new Error(results[prior.index]?.message || 'Matching record could not be imported'));
+    }
+    // Re-add still fills missing provider details. Different leads enrich in
+    // parallel; repeated rows for one lead stay ordered and cannot overwrite
+    // each other's freshly added details with a stale snapshot.
+    const groups = new Map();
+    for (const item of enrich) {
+      const id = String(item.lead._id);
+      groups.set(id, [...(groups.get(id) || []), item]);
+    }
+    await this._runBounded([...groups.values()], DEDUP_CONCURRENCY, async (items) => {
+      for (const [index, { row, lead }] of items.entries()) {
+        await this._enrichExistingProviderMeta(lead._id, row.record, meta, row.doc.address, index === 0 ? lead : null)
+          .catch((error) => logger.warn('Lead provider-meta enrich on re-import failed (non-blocking)', {
+            module: 'crm', action: 'lead.extension_import.enrich', leadId: String(lead._id), error: { message: error?.message },
+          }));
+      }
+    });
+    return complete();
+  }
+
+  async _importExtensionSingle(records = [], createdBy, meta = {}) {
     const summary = { total: records.length, created: 0, existing: 0, failed: 0 };
     const results = [];
     for (const record of records) {
       const clientId = String(record.clientId ?? '');
       let resolvedAddress;
       try {
-        const placeId = cleanString(record.placeIdentifier);
-        const name = cleanString(record.businessName)?.slice(0, 255);
-        if (!name) throw new Error('Business name is required');
-        // Normalise messy Maps fields; junk degrades to null, not a failed row.
-        const phoneValue = normalizeLeadPhone(record.phone);
-        const websiteValue = normalizeLeadWebsite(record.website);
-        const latitude = inRangeOrNull(record.latitude, -90, 90);
-        const longitude = inRangeOrNull(record.longitude, -180, 180);
-        // The user's selected search location (e.g. "Lahore") — the last-resort
-        // fallback for a city/country the scrape and coordinates could not give.
-        const searchLocation = cleanString(record.searchLocation)?.slice(0, 255) || null;
-        // Coordinate-aware address: a postal-code/junk city or missing country is
-        // reverse-geocoded; whatever is still missing is filled from the selected
-        // search location; and a non-Swiss lead is never forced to CH.
-        const address = await resolveLeadAddress({
-          street: cleanString(record.street) || cleanString(record.address),
-          area: record.area,
-          city: record.city,
-          postalCode: record.postalCode,
-          canton: record.state,
-          state: record.state,
-          region: record.region ?? record.state,
-          country: record.country,
-          formatted: cleanString(record.formattedAddress) || cleanString(record.address),
-          latitude,
-          longitude,
-          fallbackLocation: searchLocation,
-          resolveArea: true,
-        });
+        const data = await this._prepareExtensionLead(record);
+        const { name, address, phone: phoneValue, website: websiteValue } = data;
+        const placeId = data.sourceMetadata.googlePlaceId;
         resolvedAddress = address;
         const matches = await leadService.findDuplicates({
           name,
@@ -803,40 +965,7 @@ class LeadImportExportService {
           results.push({ clientId, status: 'existing', leadId: String(existing._id), leadNumber: existing.leadNumber });
           continue;
         }
-        const email = Array.isArray(record.emails)
-          ? (record.emails.map(normalizeLeadEmail).find(Boolean) || null)
-          : normalizeLeadEmail(record.emails);
-        const lead = await leadService.create({
-          name,
-          type: LEAD_TYPE.BUSINESS,
-          status: LEAD_STATUS.NEW,
-          address,
-          phone: phoneValue,
-          email,
-          website: websiteValue,
-          location: latitude !== null && longitude !== null ? { type: 'Point', coordinates: [longitude, latitude] } : null,
-          providerMeta: {
-            rating: inRangeOrNull(record.rating, 0, 5),
-            reviewCount: normalizeReviewCount(record.reviewCount),
-            priceLevel: cleanString(record.priceLevel) || null,
-            ratingDistribution: normalizeRatingDistribution(record.ratingDistribution),
-            businessStatus: cleanString(record.businessStatus)?.slice(0, 60) || null,
-            openingHours: normalizeOpeningHours(record.openingHours),
-            photos: normalizeLeadPhotos(record.photos),
-            mapsUrl: normalizeMapsUrl(record.googleMapsUrl),
-          },
-          source: LEAD_SOURCE.EXTENSION,
-          sourceMetadata: {
-            importMethod: 'extension',
-            googlePlaceId: placeId || null,
-            businessType: extensionBusinessType(record),
-            discoveryBusinessTypes: record.discoveryCategories ?? [],
-            searchLocation,
-            discoveredAt: record.discoveredAt || null,
-          },
-          tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],
-          notes: cleanString(record.address) ? `Google Maps address: ${record.address}` : null,
-        }, createdBy, meta);
+        const lead = await leadService.create(data, createdBy, meta);
         summary.created += 1;
         results.push({ clientId, status: 'created', leadId: String(lead._id), leadNumber: lead.leadNumber });
       } catch (error) {
@@ -858,18 +987,6 @@ class LeadImportExportService {
         results.push({ clientId, status: 'failed', message: error instanceof Error ? error.message : 'Lead could not be imported' });
       }
     }
-    // Observability is never allowed to change a completed import into a 500.
-    // The caller needs the per-row result even if metrics/audit infrastructure
-    // is temporarily unavailable.
-    this._recordMetrics({ ...summary, skipped: 0, duplicates: summary.existing });
-    void Promise.resolve().then(() => auditService.logEvent({
-      eventType: 'lead.extension_import', userId: createdBy,
-      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
-      result: summary.failed ? 'partial' : 'success', details: { ...summary, requestId: meta.requestId }, module: 'lead',
-    })).catch((error) => logger.warn('Lead extension-import audit failed (non-blocking)', {
-      module: 'crm', action: 'lead.extension_import', requestId: meta.requestId,
-      error: { message: error.message },
-    }));
     return { ...summary, results };
   }
 
@@ -883,8 +1000,8 @@ class LeadImportExportService {
    * leaves untouched providerMeta fields (and the rest of the lead) intact.
    * Returns true when at least one field was filled.
    */
-  async _enrichExistingProviderMeta(existingId, record, meta = {}, address = {}) {
-    const current = await leadRepository.getProviderMeta(existingId);
+  async _enrichExistingProviderMeta(existingId, record, meta = {}, address = {}, snapshot = null) {
+    const current = snapshot ?? await leadRepository.getProviderMeta(existingId);
     if (!current) return false;
     const have = current.providerMeta ?? {};
     const isEmpty = (value) => value === null || value === undefined;
@@ -910,7 +1027,10 @@ class LeadImportExportService {
     }
     // Correct only records already identified as extension imports. A manual or
     // provider lead encountered as a duplicate retains its original provenance.
-    if (current.sourceMetadata?.importMethod === 'extension' || isLegacyExtensionLead(current)) {
+    if (current.source === LEAD_SOURCE.EXTENSION || current.sourceMetadata?.importMethod === 'extension' || isLegacyExtensionLead(current)) {
+      if (!current.sourceMetadata?.discoveryBusinessTypes?.length && record.discoveryCategories?.length) {
+        set['sourceMetadata.discoveryBusinessTypes'] = record.discoveryCategories;
+      }
       if (current.source !== LEAD_SOURCE.EXTENSION) set.source = LEAD_SOURCE.EXTENSION;
       if (!current.sourceMetadata?.importMethod) set['sourceMetadata.importMethod'] = 'extension';
     }

@@ -23,7 +23,16 @@ import logger from '../logger/index.js';
  * seeded with the coarse `projects:write` continue to satisfy them.
  */
 export const PERMISSION_IMPLICATIONS = Object.freeze({
-  'ai-calling:admin': ['ai-calling:read', 'ai-calling:write'],
+  'email:manage': ['email:read'],
+  'email:write': ['email:read'],
+  'email:send': ['email:read', 'email:write'],
+  'email:ai': ['email:read'],
+  'ai-calling:admin': ['ai-calling:read', 'ai-calling:write', 'inbound-calls:read', 'inbound-calls:write', 'inbound-calls:admin'],
+  // Incoming calls use the same agents and phones as AI calling.
+  'ai-calling:read': ['inbound-calls:read'],
+  'ai-calling:write': ['inbound-calls:read', 'inbound-calls:write'],
+  'inbound-calls:admin': ['inbound-calls:read', 'inbound-calls:write'],
+  'inbound-calls:write': ['inbound-calls:read'],
   'projects:read': [
     'project:read',
     'project:documents:read',
@@ -88,19 +97,26 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     // AI voice calling: anyone who can write CRM data can build/run call campaigns.
     'ai-calling:read',
     'ai-calling:write',
+    'inbound-calls:read',
+    'inbound-calls:write',
   ],
   // Reading leads/CRM data is enough to view call campaigns, history and analytics.
   'crm:read': [
     'ai-calling:read',
+    'inbound-calls:read',
   ],
   'lead:read': [
     'ai-calling:read',
+    'inbound-calls:read',
   ],
   // Full CRM administration covers the sensitive call operations (reconcile).
   'crm:admin': [
     'ai-calling:read',
     'ai-calling:write',
     'ai-calling:admin',
+    'inbound-calls:read',
+    'inbound-calls:write',
+    'inbound-calls:admin',
     'analytics:attribution:read',
     'lead:assign-policy',
   ],

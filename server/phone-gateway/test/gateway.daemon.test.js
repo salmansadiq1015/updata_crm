@@ -248,3 +248,54 @@ function fakeRtc() {
     AudioFrame: class { constructor(data) { this.data = data; } },
   };
 }
+
+// ---- board health: reset reasons and restart loops ------------------------------------------------
+test('an abnormal ESP32 restart is logged with its reason and reported to the CRM as a device error', async () => {
+  const { GatewayDaemon } = await import('../src/gateway/daemon.js');
+  const logs = [];
+  const d = new GatewayDaemon({ crm: { apiBase: 'x' }, outbox: {}, log: (event, data) => logs.push({ event, ...data }), keepAwake: { set() {} }, openDevice: async () => { throw new Error('unused'); } });
+  d.scheduleHeartbeat = () => {};
+  d.onBoardBoot(1);
+  assert.equal(d.lastError, null);
+  d.onBoardBoot(9);
+  assert.equal(d.lastError.code, 'BOARD_RESET_BROWNOUT');
+  d.onBoardBoot(4);
+  assert.equal(d.lastError.code, 'BOARD_RESET_PANIC');
+  assert.deepEqual(logs.filter((l) => l.event === 'board_boot').map((l) => l.resetReason), ['POWERON', 'BROWNOUT', 'PANIC']);
+});
+
+test('HELLO unanswered twice: a restart loop is told apart from an unplugged board', async () => {
+  const { GatewayDaemon } = await import('../src/gateway/daemon.js');
+  const checks = [];
+  const make = (banners) => {
+    const d = new GatewayDaemon({ crm: { apiBase: 'x' }, outbox: {}, log: () => {}, keepAwake: { set() {} }, openDevice: async () => { throw new Error('unused'); },
+      portLabel: '/dev/cu.test', checkBootLoop: async (p) => { checks.push(p); return { banners, reasons: banners ? ['rst:0x3 (SW_RESET)'] : [] }; } });
+    d.scheduleHeartbeat = () => {};
+    return d;
+  };
+  const err = Object.assign(new Error('no reply'), { code: 'no_reply' });
+  const looping = make(16);
+  await looping.diagnoseNoReply(err);
+  assert.equal(checks.length, 0, 'one miss is not enough to sniff the port');
+  await looping.diagnoseNoReply(err);
+  assert.equal(looping.lastError.code, 'BOARD_BOOT_LOOP');
+  assert.match(looping.lastError.message, /16 restarts/);
+  const quiet = make(0);
+  await quiet.diagnoseNoReply(err); await quiet.diagnoseNoReply(err);
+  assert.equal(quiet.lastError, null);
+  await quiet.diagnoseNoReply(Object.assign(new Error('x'), { code: 'closed' }));
+  assert.equal(checks.length, 2);
+});
+
+test('keeps the computer awake while incoming AI answering is on, even with no call or campaign', async () => {
+  const { GatewayDaemon } = await import('../src/gateway/daemon.js');
+  const awake = [];
+  let inbound = true;
+  const crm = { apiBase: 'x', heartbeat: async () => ({ voicePaused: false, activeCampaigns: 0, inboundAnswering: inbound, commands: [], readiness: { ok: true } }) };
+  const d = new GatewayDaemon({ crm, outbox: {}, log: () => {}, keepAwake: { set: (v) => awake.push(v) }, openDevice: async () => { throw new Error('unused'); } });
+  d.scheduleHeartbeat = () => {};
+  await d.heartbeat();
+  inbound = false;
+  await d.heartbeat();
+  assert.deepEqual(awake, [true, false]);
+});

@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 
 export const ACCOUNTING_ENTITY_TYPES = ['COMPANY', 'BRANCH'];
@@ -37,7 +38,7 @@ const accountingEntitySchema = new mongoose.Schema(
     },
     baseCurrency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     taxIdentifier: {

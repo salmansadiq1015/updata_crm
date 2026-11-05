@@ -1,6 +1,7 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 export function defaultInventoryFilters() {
   return {
-    currency: 'CHF',
+    currency: getAccountingCurrency(),
     costingMethod: 'WEIGHTED_AVERAGE',
     startDate: '',
     endDate: '',

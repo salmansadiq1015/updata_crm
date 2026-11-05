@@ -73,7 +73,7 @@ export function ChatSidebarItem({ room, isActive, currentUserId, onClick }) {
       >
         <div className="relative shrink-0">
           <Avatar className="h-11 w-11 ring-1 ring-border/50">
-            <AvatarFallback style={{ backgroundColor: stableColor(displayName) }} className="text-sm font-semibold text-white">
+            <AvatarFallback style={{ backgroundColor: room.roomType === 'LEAD' ? 'var(--primary)' : stableColor(displayName) }} className="text-sm font-semibold text-white">
               {room.roomType === 'DM' ? getInitials(displayName) : <RoomTypeIcon room={room} className="h-5 w-5" />}
             </AvatarFallback>
           </Avatar>

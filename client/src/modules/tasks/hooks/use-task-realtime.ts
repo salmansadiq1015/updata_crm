@@ -12,9 +12,23 @@ const isNewer = (incomingVersion: number, currentVersion: number) => incomingVer
 
 const taskMatchesParams = (task: Task, params: Omit<TaskListParams, 'cursor'> | undefined) => {
   if (!params) return false;
+  if (params.active && !['OPEN', 'IN_PROGRESS', 'ON_HOLD'].includes(task.status)) return false;
+  if (params.completedThisWeek) {
+    const now = new Date();
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7);
+    if (task.status !== 'COMPLETED' || !task.completedAt || new Date(task.completedAt) < monday) return false;
+  }
   if (params.listId && task.listId !== params.listId) return false;
   if (params.status && task.status !== params.status) return false;
   if (params.priority && task.priority !== params.priority) return false;
+  if (params.assigneeId && task.assigneeId !== params.assigneeId) return false;
+  if (params.departmentId && (task.departmentId?.id ?? task.departmentId?._id ?? task.departmentId) !== params.departmentId) return false;
+  if (params.inPool && !task.inPool) return false;
+  if (params.overdue && (!task.dueDate || new Date(task.dueDate) >= new Date() || ['COMPLETED', 'CANCELLED'].includes(task.status))) return false;
+  if (params.dueToday) {
+    const due = task.dueDate && new Date(task.dueDate);
+    if (!due || due.toDateString() !== new Date().toDateString()) return false;
+  }
   if (params.hasParent === false && task.parentTaskId) return false;
   if (params.hasParent === true && !task.parentTaskId) return false;
   if (params.q) {
@@ -84,6 +98,9 @@ export function useTaskRealtime() {
   useEffect(() => {
     const applyEvent = (payload: TaskRealtimeEvent) => {
       const event = normalizeRealtimeEvent(payload);
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
+      queryClient.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
       const windows = queryClient.getQueriesData<InfiniteData<TaskPage>>({ queryKey: taskWorkspaceKeys.windows() });
       for (const [queryKey, oldData] of windows) {
         const params = queryKey[3] as Omit<TaskListParams, 'cursor'> | undefined;

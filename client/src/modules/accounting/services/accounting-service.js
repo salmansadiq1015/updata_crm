@@ -195,8 +195,8 @@ export const apService = {
   create:        (data)        => apiClient.post(E.AP_INVOICES, data),
   update:        (id, data)    => apiClient.put(E.AP_INVOICE_BY_ID(id), data),
   openPayables:  ()            => apiClient.get(E.AP_OPEN_PAYABLES),
-  aging:         ()            => apiClient.get(E.AP_AGING),
-  summary:       ()            => apiClient.get(E.AP_SUMMARY),
+  aging:         (params)      => apiClient.get(E.AP_AGING, params ? { params } : undefined),
+  summary:       (params)      => apiClient.get(E.AP_SUMMARY, params ? { params } : undefined),
   approve:       (id)          => apiClient.post(E.AP_APPROVE(id)),
   secondApprove: (id)          => apiClient.post(E.AP_SECOND_APPROVE(id)),
   dispute:       (id, reason)  => apiClient.post(E.AP_DISPUTE(id), { reason }),
@@ -207,8 +207,8 @@ export const apService = {
 
 export const arService = {
   receivables:    (params = {}) => apiClient.get(E.AR_RECEIVABLES, { params }).then((r) => mapEnvelope(r, normalizeArReceivable)),
-  aging:          ()            => apiClient.get(E.AR_AGING),
-  summary:        ()            => apiClient.get(E.AR_SUMMARY),
+  aging:          (params)      => apiClient.get(E.AR_AGING, params ? { params } : undefined),
+  summary:        (params)      => apiClient.get(E.AR_SUMMARY, params ? { params } : undefined),
   export:         (params = {}) => apiClient.post(E.AR_EXPORT, params),
   writeOff:       (id, reason)  => apiClient.post(E.AR_WRITE_OFF(id), { reason }),
   payments:       (params = {}) => apiClient.get(E.AR_PAYMENTS, { params }),
@@ -239,6 +239,7 @@ export const arService = {
 };
 
 export const bankService = {
+  analytics: (params) => apiClient.get(`${E.BANK_ACCOUNTS}/analytics`, { params }),
   list:           (params = {}) => apiClient.get(E.BANK_ACCOUNTS, { params }).then((r) => mapEnvelope(r, normalizeBankAccount)),
   getById:        (id)          => apiClient.get(E.BANK_ACCOUNT_BY_ID(id)),
   create:         (data)        => apiClient.post(E.BANK_ACCOUNTS, data),

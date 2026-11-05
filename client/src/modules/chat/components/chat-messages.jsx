@@ -1,11 +1,10 @@
 'use client';
 
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { useRef, useLayoutEffect, useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown, MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { formatDate } from '@/lib/formatters';
 import { ChatMessage } from './chat-message';
 
 const FIVE_MIN = 5 * 60 * 1000;
@@ -16,21 +15,23 @@ function getDayKey(ts) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-function getDayLabel(ts, language) {
+function getDayLabel(ts, locale, t) {
   if (!ts) return '';
   const d = new Date(ts);
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (getDayKey(d) === getDayKey(now)) return language === 'de' ? 'Heute' : 'Today';
-  if (getDayKey(d) === getDayKey(yesterday)) return language === 'de' ? 'Gestern' : 'Yesterday';
-  return formatDate(d);
+  if (getDayKey(d) === getDayKey(now)) return t('chat.workspace.today', 'Today');
+  if (getDayKey(d) === getDayKey(yesterday)) return t('chat.workspace.yesterday', 'Yesterday');
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
 
-export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
-  const { language, t } = useLanguage();
+export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit, hasOlder, onLoadOlder, isFetchingOlder, olderError }) {
+  const { locale, t } = useLanguage();
   const bottomRef = useRef(null);
-  const prevLenRef = useRef(0);
+  const viewportRef = useRef(null);
+  const previousLast = useRef(null);
+  const prependHeight = useRef(null);
   const [showFab, setShowFab] = useState(false);
 
   const items = useMemo(() => {
@@ -42,11 +43,11 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
 
     messages.forEach((msg, idx) => {
       const ts = msg.sentAt || msg.created_at || msg.createdAt;
-      const senderId = msg.senderId || msg.sender_id;
+      const senderId = String(msg.senderId?._id || msg.senderId || msg.sender_id);
       const dayKey = getDayKey(ts);
 
       if (dayKey !== lastDayKey) {
-        result.push({ type: 'sep', key: `sep-${dayKey}-${idx}`, label: getDayLabel(ts, language) });
+        result.push({ type: 'sep', key: `sep-${dayKey}-${idx}`, label: getDayLabel(ts, locale, t) });
         lastDayKey = dayKey;
         lastSenderId = null;
         lastTs = null;
@@ -55,7 +56,7 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
       const sameGroup = senderId === lastSenderId && lastTs && ts && Math.abs(new Date(ts) - new Date(lastTs)) < FIVE_MIN;
 
       const nextMsg = messages[idx + 1];
-      const nextSenderId = nextMsg?.senderId || nextMsg?.sender_id;
+      const nextSenderId = String(nextMsg?.senderId?._id || nextMsg?.senderId || nextMsg?.sender_id);
       const nextTs = nextMsg?.sentAt || nextMsg?.created_at || nextMsg?.createdAt;
       const isLast = idx === messages.length - 1 ||
         nextSenderId !== senderId ||
@@ -74,21 +75,23 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
       lastTs = ts;
     });
     return result;
-  }, [messages, language, currentUserId]);
+  }, [messages, locale, t, currentUserId]);
 
-  useEffect(() => {
-    const newLen = messages.length;
-    if (newLen > prevLenRef.current && !showFab) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-    prevLenRef.current = newLen;
-  }, [messages.length, showFab]);
-
-  useEffect(() => {
-    if (!isLoading && messages.length > 0) {
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    if (prependHeight.current !== null) {
+      viewport.scrollTop += viewport.scrollHeight - prependHeight.current;
+      prependHeight.current = null;
+    } else if (!previousLast.current || (!showFab && previousLast.current !== messages.at(-1)?._id)) {
       bottomRef.current?.scrollIntoView({ behavior: 'instant' });
     }
-  }, [isLoading, messages.length]);
+    previousLast.current = messages.at(-1)?._id;
+  }, [messages, showFab]);
+  async function loadOlder() {
+    prependHeight.current = viewportRef.current?.scrollHeight ?? null;
+    try { await onLoadOlder(); } catch { prependHeight.current = null; }
+  }
 
   const handleScroll = useCallback(e => {
     const el = e.currentTarget;
@@ -125,11 +128,13 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-muted/10">
+    <div className="chat-message-list relative min-h-0 flex-1 overflow-hidden bg-muted/10">
       <div
+        ref={viewportRef}
         className="h-full overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-border"
         onScroll={handleScroll}
       >
+        {hasOlder && <div className="py-3 text-center"><Button variant="outline" size="sm" disabled={isFetchingOlder} onClick={loadOlder}>{t('chat.workspace.loadOlder', 'Load earlier messages')}</Button>{olderError && <p role="alert" className="mt-2 text-xs text-destructive">{t('chat.workspace.loadFailed', 'Unable to load messages. Try again.')}</p>}</div>}
         {items.map(item =>
           item.type === 'sep' ? (
             <div key={item.key} className="flex items-center justify-center py-2">
@@ -160,6 +165,7 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
         <div className="absolute bottom-3 right-4">
           <Button
             size="icon"
+            aria-label={t("chat.workspace.jumpLatest", "Latest messages")}
             className="h-9 w-9 rounded-full shadow-lg bg-primary hover:bg-primary/90"
             onClick={() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setShowFab(false); }}
           >

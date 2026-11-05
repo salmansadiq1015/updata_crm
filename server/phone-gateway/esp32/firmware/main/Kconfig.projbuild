@@ -21,7 +21,10 @@ menu "Updata HFP bridge"
         default 30
 
     config UPDATA_HOST_TIMEOUT_MS
-        int "End an active call when the host has been silent this long (ms)"
+        int "End a host-dialed or host-answered call when the host has been silent this long (ms)"
         default 5000
+        help
+            Calls a person owns (left ringing for a person, answered on the handset, or handed
+            over to the handset) are never ended by this watchdog.
 
 endmenu

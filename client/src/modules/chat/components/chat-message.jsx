@@ -141,8 +141,8 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           className={cn(
             'relative px-3 py-1.5 rounded-2xl shadow-sm',
             isMine
-              ? 'bg-[#005c4b] text-white rounded-tr-sm'
-              : 'bg-card dark:bg-[#202c33] text-foreground rounded-tl-sm border border-border/20'
+              ? 'bg-gradient-to-br from-sky-400 to-sky-600 text-slate-950 rounded-tr-sm'
+              : 'bg-card text-foreground rounded-tl-sm border border-border/20'
           )}
         >
           {/* Reply quote */}
@@ -154,6 +154,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           )}
 
           {renderContent()}
+          {!isDeleted && message.messageType !== 'TEXT' && message.content && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>}
 
           {/* On-demand translation (text + transcribed voice) */}
           {!isDeleted && (message.content?.trim() || message.transcript) && (
@@ -167,7 +168,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
                   type="button"
                   onClick={handleTranslate}
                   disabled={translating}
-                  className={cn('inline-flex items-center gap-1 text-[11px] opacity-70 hover:opacity-100', isMine ? 'text-white' : 'text-muted-foreground')}
+                  className={cn('inline-flex items-center gap-1 text-[11px] opacity-70 hover:opacity-100', isMine ? 'text-slate-950' : 'text-muted-foreground')}
                 >
                   {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Languages className="h-3 w-3" />}
                   {t('chat.translate', 'Übersetzen')}
@@ -203,14 +204,14 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
       </div>
 
       {/* Context menu (hover) — keep mounted while menu is open so the portal stays alive */}
-      {(hovered || menuOpen) && !isDeleted && (
-        <div className={cn('flex items-center self-center gap-0.5', isMine ? 'mr-1' : 'ml-1')}>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm" onClick={() => onReply?.(message)}>
+      {!isDeleted && (onReply || onReact || onEdit || onDelete) && (
+        <div className={cn('flex items-center self-center gap-0.5 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100', (hovered || menuOpen) && 'md:opacity-100', isMine ? 'me-1' : 'ms-1')}>
+          <Button disabled={!onReply} aria-label={t("chat.reply", "Reply")} variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm" onClick={() => onReply?.(message)}>
             <Reply className="h-3.5 w-3.5" />
           </Button>
           <DropdownMenu open={menuOpen} onOpenChange={(open) => { setMenuOpen(open); if (!open) setHovered(false); }}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm">
+              <Button aria-label={t("chat.workspace.moreActions", "More actions")} variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -218,12 +219,12 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
               <DropdownMenuItem onClick={() => { setMenuOpen(false); setPickerOpen(true); }}>
                 <Smile className="h-3.5 w-3.5 mr-2" /> {t('chat.react', 'React')}
               </DropdownMenuItem>
-              {isMine && message.messageType === 'TEXT' && (
+              {isMine && onEdit && message.messageType === 'TEXT' && (
                 <DropdownMenuItem onClick={() => { setMenuOpen(false); onEdit?.(message); }}>
                   <Pencil className="h-3.5 w-3.5 mr-2" /> {t('common.edit', 'Edit')}
                 </DropdownMenuItem>
               )}
-              {isMine && (
+              {isMine && onEdit && onDelete && (
                 <DropdownMenuItem onClick={() => { setMenuOpen(false); onDelete?.(message._id); }} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> {t('common.delete', 'Delete')}
                 </DropdownMenuItem>

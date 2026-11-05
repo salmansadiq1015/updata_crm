@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 
 export const CONNECTION_TYPES = ['MANUAL', 'EBICS', 'SFTP'];
@@ -21,7 +22,7 @@ const bankAccountSchema = new mongoose.Schema(
     bankName: { type: String, trim: true, maxlength: 200 },
     currency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     currentBalance: { type: Number, default: 0 },
@@ -35,6 +36,7 @@ const bankAccountSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    categoryRules: [{ keyword: { type: String, required: true, trim: true, maxlength: 200 }, direction: { type: String, enum: ['IN', 'OUT'], required: true }, accountId: { type: mongoose.Schema.Types.ObjectId, ref: 'Account', required: true } }],
     autoRetrieveEnabled: { type: Boolean, default: false },
     autoRetrieveSchedule: { type: String, trim: true, maxlength: 50 },
     status: {

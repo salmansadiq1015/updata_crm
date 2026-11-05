@@ -17,6 +17,11 @@ const IncomingTransferHost = lazy(() =>
   import('@/modules/aiCalling/ui/incoming-transfer-host').then((m) => ({ default: m.IncomingTransferHost }))
 );
 
+// "A caller wants to speak to a person" (incoming calls answered by the AI) on any page.
+const InboundHandoffAlertHost = lazy(() =>
+  import('@/modules/inboundCalls/ui/handoff-alert-host').then((m) => ({ default: m.InboundHandoffAlertHost }))
+);
+
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
 );
@@ -84,6 +89,7 @@ export default function PlatformLayout({ children }) {
 
       <Suspense fallback={null}>
         <IncomingTransferHost />
+        <InboundHandoffAlertHost />
       </Suspense>
 
       {/* AI Assistant panel — button lives in the header; not on the AI page,

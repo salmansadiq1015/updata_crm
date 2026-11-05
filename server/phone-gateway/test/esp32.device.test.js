@@ -146,6 +146,24 @@ test('PING replies cannot hide a firmware session invalidated by the host watchd
   c.end();
 });
 
+test('one lost STATUS ACK on the serial line is tolerated; two in a row mean the session is lost', async () => {
+  const c = await connected();
+  c.fake.state.session = true;
+  const retries = [];
+  c.dev.on('probe_retry', (r) => retries.push(r));
+  let lostReason = null;
+  c.dev.once('lost', (r) => { lostReason = r; });
+  c.fake.state.dropStatusAcks = 1;
+  await sleep(1200);
+  assert.equal(lostReason, null, 'a single dropped ACK must not drop the board');
+  assert.ok(retries.length >= 1);
+  assert.equal(c.dev.closed, false);
+  c.fake.state.dropStatusAcks = 50; // now every check is lost
+  const lost = await new Promise((r) => { if (lostReason) r(lostReason); else c.dev.once('lost', r); });
+  assert.match(lost, /control session.*ack_timeout/);
+  c.end();
+});
+
 test('device stops answering: lost after lostAfterMs', async () => {
   const c = await connected();
   c.fake.state.session = true;

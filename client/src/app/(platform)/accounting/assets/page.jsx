@@ -1,4 +1,5 @@
 'use client';
+import { useAccountingFilters } from '@/modules/accounting/state/accounting-currency';
 
 import { useMemo, useState } from 'react';
 import {
@@ -204,7 +205,7 @@ function ActionDialog({ target, de, pending, depreciationForm, disposalForm, onD
 export default function FixedAssetsPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const [filters, setFilters] = useState(defaultFixedAssetFilters());
+  const [filters, setFilters] = useAccountingFilters(defaultFixedAssetFilters());
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [assetForm, setAssetForm] = useState(defaultFixedAssetForm());
   const [actionTarget, setActionTarget] = useState(null);

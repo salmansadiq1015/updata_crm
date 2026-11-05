@@ -1,3 +1,4 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import arReceivablesService from './arReceivables.service.js';
 import apInvoiceService from './apInvoice.service.js';
 import cashManagementService from './cashManagement.service.js';
@@ -5,9 +6,7 @@ import accountingReportsService from './reports.service.js';
 
 const DEFAULT_CURRENCY = 'CHF';
 
-function roundMoney(value) {
-  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
-}
+function roundMoney(value, currency = 'CHF') { return roundCurrency(value, currency); }
 
 function defaultPeriod({ startDate, endDate } = {}) {
   const now = new Date();
@@ -47,7 +46,7 @@ function sumBalancesByCurrency(balances, currency) {
     balances
       .filter((balance) => !balance.currency || balance.currency === currency)
       .reduce((sum, balance) => sum + Number(balance.balance || 0), 0),
-  );
+    currency);
 }
 
 class AccountingDashboardService {
@@ -57,12 +56,12 @@ class AccountingDashboardService {
     const forecastDays = Number(query.forecastDays || 90);
 
     const entries = await Promise.allSettled([
-      arReceivablesService.getSummary(),
-      arReceivablesService.getAgingReport(),
-      apInvoiceService.getSummary(),
-      apInvoiceService.getAgingReport(),
+      arReceivablesService.getSummary({ currency }),
+      arReceivablesService.getAgingReport({ currency }),
+      apInvoiceService.getSummary({ currency }),
+      apInvoiceService.getAgingReport({ currency }),
       cashManagementService.getBalances(),
-      cashManagementService.getForecast({ days: forecastDays }),
+      cashManagementService.getForecast({ days: forecastDays, currency }),
       accountingReportsService.getProfitLoss({
         startDate: period.startDate,
         endDate: period.endDate,
@@ -107,17 +106,17 @@ class AccountingDashboardService {
       currency,
       period,
       kpis: {
-        openReceivables: roundMoney(arSummary.totalOutstanding ?? arSummary.openAmount),
-        overdueReceivables: roundMoney(arSummary.overdueAmount),
-        openPayables: roundMoney(apSummary.openAmount),
-        overduePayables: roundMoney(apSummary.overdueAmount),
+        openReceivables: roundMoney(arSummary.totalOutstanding ?? arSummary.openAmount, currency),
+        overdueReceivables: roundMoney(arSummary.overdueAmount, currency),
+        openPayables: roundMoney(apSummary.openAmount, currency),
+        overduePayables: roundMoney(apSummary.overdueAmount, currency),
         bankBalance,
-        cashPosition: roundMoney(forecastCurrentBalance),
-        projectedCashPosition: roundMoney(latestProjection?.netPosition ?? forecastCurrentBalance),
-        monthlyRevenue: roundMoney(profitLoss.revenue),
-        monthlyExpenses: roundMoney(profitLoss.expenses),
-        netProfit: roundMoney(profitLoss.netProfit),
-        profitMargin: roundMoney(profitLoss.margin),
+        cashPosition: roundMoney(forecastCurrentBalance, currency),
+        projectedCashPosition: roundMoney(latestProjection?.netPosition ?? forecastCurrentBalance, currency),
+        monthlyRevenue: roundMoney(profitLoss.revenue, currency),
+        monthlyExpenses: roundMoney(profitLoss.expenses, currency),
+        netProfit: roundMoney(profitLoss.netProfit, currency),
+        profitMargin: roundMoney(profitLoss.margin, 'CHF'),
         grossProfit: null,
         ebitda: null,
       },

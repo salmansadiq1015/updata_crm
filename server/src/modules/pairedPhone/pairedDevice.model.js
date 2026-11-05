@@ -48,6 +48,8 @@ const pairedDeviceSchema = new mongoose.Schema({
     idf: { type: String, maxlength: 40, default: null },
     chipRevision: { type: Number, default: null },
     keyProvisioned: { type: Boolean, default: false },
+    // Firmware supports ANSWER (incoming calls). null = gateway too old to say.
+    canAnswer: { type: Boolean, default: null },
   },
   // Last device STATE as reported by the gateway (see USB-AUDIO-PROTOCOL.md).
   state: {
@@ -102,6 +104,17 @@ const pairedDeviceSchema = new mongoose.Schema({
     firmware: { type: String, maxlength: 40, default: null },
   },
 
+  // SIM cards in the phone, as reported by the Updata Android app running on it (HFP does not
+  // expose them). Empty = unknown. Used for per-SIM routing and display only.
+  sims: {
+    type: [new mongoose.Schema({
+      slot: { type: Number, min: 0, max: 4, required: true },
+      label: { type: String, trim: true, maxlength: 80, default: '' },
+      carrier: { type: String, trim: true, maxlength: 80, default: '' },
+    }, { _id: false })],
+    default: [],
+  },
+  simsReportedAt: { type: Date, default: null },
   limits: { type: limitsSchema, default: () => ({}) },
   setup: {
     autoConnect: { type: Boolean, default: true },

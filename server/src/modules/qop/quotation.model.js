@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
@@ -115,7 +116,7 @@ const quotationSchema = new mongoose.Schema(
     validUntil: { type: Date, required: true },
     currency: {
       type: String,
-      enum: ['CHF', 'EUR'],
+      enum: CURRENCY_CODES,
       default: 'CHF',
     },
     lineItems: [lineItemSchema],

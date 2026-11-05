@@ -25,7 +25,7 @@ export function UserSearchDialog({ open, onClose }) {
   const debouncedSearch = useDebounce(searchTerm.toLowerCase().trim(), 300);
   const startDm = useStartDm();
 
-  const { data, isLoading } = useChatUsers({ enabled: open });
+  const { data, isLoading, isError, refetch } = useChatUsers({ enabled: open, search: debouncedSearch });
 
   const users = Array.isArray(data) ? data : [];
 
@@ -37,9 +37,8 @@ export function UserSearchDialog({ open, onClose }) {
       })
     : users;
 
-  function handleSelect(user) {
-    startDm.mutate(user._id);
-    onClose();
+  async function handleSelect(user) {
+    try { await startDm.mutateAsync(user._id); onClose(); } catch { /* Keep the picker open so the request can be retried. */ }
   }
 
   function getInitials(user) {
@@ -62,6 +61,7 @@ export function UserSearchDialog({ open, onClose }) {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
 
+          {(isError || startDm.isError) && <p role="alert" className="text-sm text-destructive">{t('chat.workspace.loadFailed', 'Unable to open chat. Try again.')} <button type="button" onClick={() => refetch()} className="underline">{t('common.retry', 'Retry')}</button></p>}
           <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
             {isLoading ? (
               <div className="space-y-3 py-1">
@@ -83,6 +83,7 @@ export function UserSearchDialog({ open, onClose }) {
                   <li key={user._id}>
                     <button
                       type="button"
+                      disabled={startDm.isPending}
                       onClick={() => handleSelect(user)}
                       className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >

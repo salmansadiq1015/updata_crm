@@ -117,8 +117,11 @@ export function WebCallConsole({
   agentName = 'AI agent',
   disabledReason,
   onStatusChange,
+  startSession,
 }: {
   campaignId: string;
+  /** Starts the browser call instead of the campaign web test (e.g. an incoming-agent test). */
+  startSession?: () => Promise<{ callId: string; recordId?: string | null; url: string; token: string }>;
   agentName?: string;
   disabledReason?: string;
   onStatusChange?: (status: WebCallStatus) => void;
@@ -258,7 +261,7 @@ export function WebCallConsole({
     meter().resume(); // inside the click, so the browser allows audio analysis
 
     try {
-      const session = await aiCallingApi.startWebTest(campaignId);
+      const session = startSession ? await startSession() : await aiCallingApi.startWebTest(campaignId);
       if (generationRef.current !== generation) return;
       setCallId(session.callId);
       recordIdRef.current = session.recordId || null;

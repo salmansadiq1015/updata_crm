@@ -104,7 +104,7 @@ export function LandingNavbar() {
   const productLinks = [
     { label: t('experience.leads.nav'), href: `${homeAnchor}#crm` },
     { label: t('landing.nav.leadGeneration'), href: `${homeAnchor}#lead-generation` },
-    { label: t('experience.calling.nav'), href: `${homeAnchor}#ai-calling` },
+    { label: 'AI Calling Agent', href: '/calling-engine' },
     { label: t('landing.nav.ai'), href: `${homeAnchor}#intelligence` },
   ];
   const solutionLinks = [
@@ -146,6 +146,7 @@ export function LandingNavbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ))}
+          <Link href="/calling-engine" aria-current={pathname === '/calling-engine' ? 'page' : undefined} className={cn('rounded-lg px-3 py-2 text-[13px] font-medium hover:bg-white/5 hover:text-white', pathname === '/calling-engine' ? 'bg-blue-200/10 text-blue-200' : 'text-slate-300')}>AI Calling Agent</Link>
           {navLinks.slice(4).map(link => <a key={link.href} href={link.href} className="rounded-lg px-3 py-2 text-[13px] font-medium text-slate-300 hover:bg-white/5 hover:text-white">{link.label}</a>)}
         </nav>
 

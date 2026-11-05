@@ -14,7 +14,7 @@ const arPaymentAllocationSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: 0.01,
+      min: 0.0001,
     },
     allocatedBy: {
       type: mongoose.Schema.Types.ObjectId,

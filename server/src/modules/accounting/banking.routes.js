@@ -4,7 +4,7 @@ import bankingController from './banking.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
-  createBankAccountSchema, updateBankAccountSchema, listBankAccountsSchema,
+  createBankAccountSchema, updateBankAccountSchema, listBankAccountsSchema, bankingAnalyticsSchema,
   listTransactionsSchema, transactionIdParamSchema,
   bankAccountIdParamSchema, retrieveStatementsSchema,
 } from './banking.validation.js';
@@ -16,6 +16,7 @@ const upload = multer({
 });
 
 // Named routes BEFORE /:id
+router.get('/analytics', authenticate, requirePermission('accounting:bank:read'), validate(bankingAnalyticsSchema), (req, res, next) => bankingController.analytics(req, res, next));
 router.get('/transactions', authenticate, requirePermission('accounting:bank:read'), validate(listTransactionsSchema), (req, res, next) => bankingController.getTransactions(req, res, next));
 router.get('/transactions/:id', authenticate, requirePermission('accounting:bank:read'), validate(transactionIdParamSchema), (req, res, next) => bankingController.getTransaction(req, res, next));
 router.post('/import', authenticate, requirePermission('accounting:bank:manage'), upload.single('file'), (req, res, next) => bankingController.importStatement(req, res, next));

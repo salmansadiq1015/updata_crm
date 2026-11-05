@@ -119,6 +119,11 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'ai-calling', action: 'write', description: 'Create, configure, start and manage AI calling campaigns' },
   { module: 'ai-calling', action: 'admin', description: 'Reconcile call state and perform sensitive AI calling operations' },
 
+  // Incoming calls (implied by ai-calling + crm permissions — see PERMISSION_IMPLICATIONS)
+  { module: 'inbound-calls', action: 'read', description: 'View incoming calls, transcripts, analytics and settings' },
+  { module: 'inbound-calls', action: 'write', description: 'Configure incoming-call AI answering, rules and act on incoming calls' },
+  { module: 'inbound-calls', action: 'admin', description: 'See every user\'s incoming calls' },
+
   // Projects
   { module: 'projects', action: 'read', description: 'View projects' },
   { module: 'projects', action: 'write', description: 'Create and update projects' },
@@ -238,6 +243,7 @@ export const PERMISSION_DEFINITIONS = [
   // Integrations
   { module: 'integrations', action: 'admin', description: 'Manage integration providers and health checks' },
   { module: 'integrations', action: 'widget:manage', description: 'Manage public website widget submissions and config' },
+  ...['read', 'write', 'send', 'manage', 'ai'].map(action => ({ module: 'email', action, description: `Email workspace: ${action}` })),
   { module: 'integrations', action: 'calendar', description: 'Connect and manage calendar sync integrations' },
 
   // AI Assistant

@@ -29,6 +29,7 @@ enum proto_type {
     T_AUDIO_DISCONNECT = 0x23,
     T_DTMF = 0x24,
     T_VOLUME = 0x25,
+    T_ANSWER = 0x26,  // u32 callRef (nonzero): answer the ringing incoming call (ATA)
     T_PROVISION_KEY = 0x30,
     T_AUDIO_DOWN = 0x40,
     // device -> host
@@ -66,6 +67,7 @@ enum proto_event {
     EV_DIAL_RESULT = 6,
     EV_HOST_LOST_HANGUP = 7,
     EV_BOOT = 8,
+    EV_CALL_WAITING = 9,  // +CCWA: a second call while one is up; data = number (like CLIP)
 };
 
 typedef struct {

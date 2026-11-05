@@ -1,8 +1,10 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 export const listReceivablesSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     customerId: objectId,
     status: Joi.string(),
     dueDateFrom: Joi.date().iso(),
@@ -15,11 +17,11 @@ export const listReceivablesSchema = {
 };
 
 export const agingSchema = {
-  query: Joi.object({}),
+  query: Joi.object({ currency: Joi.string().valid(...CURRENCY_CODES) }),
 };
 
 export const summarySchema = {
-  query: Joi.object({}),
+  query: Joi.object({ currency: Joi.string().valid(...CURRENCY_CODES) }),
 };
 
 export const exportSchema = {
@@ -60,6 +62,7 @@ export const allocatePaymentSchema = {
 
 export const listPaymentsSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     customerId: objectId,
     source: Joi.string().valid('MANUAL', 'BANK_IMPORT'),
     paymentDateFrom: Joi.date().iso(),
@@ -77,6 +80,7 @@ export const customerCreditBalanceSchema = {
 
 export const dunningOverdueSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     customerId: objectId,
   }),
 };

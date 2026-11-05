@@ -37,6 +37,8 @@ export class ToolApi {
     return json.data ?? json;
   }
 
+  emailContext() { return this._post('/email-context'); }
+  emailFollowUp(payload) { return this._post('/email-follow-up', payload); }
   language(payload) { return this._postEvent('/language', payload); }
   behavior(payload) { return this._postEvent('/behavior', payload); }
   answered() { return this._post('/answered'); }

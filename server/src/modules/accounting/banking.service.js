@@ -12,7 +12,7 @@ import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 
 const ACCOUNTS_TTL = { l1Ttl: 30, l2Ttl: 120 };
-const SUPPORTED_STATEMENT_FORMATS = ['camt053', 'camt054'];
+const SUPPORTED_STATEMENT_FORMATS = ['camt053', 'camt054', 'csv'];
 const PAIN002_ACCEPTED_STATUSES = new Set(['ACCP', 'ACSC', 'ACSP', 'ACWC']);
 const PAIN002_REJECTED_STATUSES = new Set(['RJCT']);
 const AUTOMATED_CONNECTION_TYPES = new Set(['EBICS', 'SFTP']);
@@ -62,7 +62,12 @@ function getStatementDirectory(account) {
 }
 
 class BankingService {
+  async analytics(params) {
+    return bankTransactionRepository.analytics(params);
+  }
+
   async createBankAccount(data, userId, meta = {}) {
+    this._validateAutomation(data);
     const account = await bankAccountRepository.create(data);
 
     await this._invalidateAccountsCache();
@@ -109,6 +114,7 @@ class BankingService {
     const existing = await bankAccountRepository.findById(id);
     if (!existing) throw new NotFoundError('BankAccount', id);
 
+    this._validateAutomation({ ...existing, ...data });
     const updated = await bankAccountRepository.updateById(id, data);
 
     await this._invalidateAccountsCache();
@@ -150,7 +156,10 @@ class BankingService {
     const xml = fileBuffer.toString('utf8');
 
     let parsed;
-    if (format === 'camt054') {
+    if (format === 'csv') {
+      const { parseBankStatementCsv } = await import('./bankStatementCsv.parser.js');
+      parsed = parseBankStatementCsv(fileBuffer, account);
+    } else if (format === 'camt054') {
       parsed = iso20022.parseCamt054(xml);
     } else {
       parsed = iso20022.parseCamt053(xml);
@@ -443,8 +452,19 @@ class BankingService {
     return currentStatus === 'CREATED' ? 'EXPORTED' : currentStatus;
   }
 
+  _validateAutomation(account) {
+    if (account.autoRetrieveEnabled && (!AUTOMATED_CONNECTION_TYPES.has(account.connectionType) || !account.connectionConfig?.statementDirectory?.trim())) {
+      throw new AppError('Scheduled retrieval requires an EBICS/SFTP gateway and server inbox directory', 400, ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
   async _invalidateAccountsCache() {
-    await cacheManager.del('accounting:bank:accounts');
+    await Promise.all([
+      cacheManager.del('accounting:bank:accounts'),
+      cacheManager.del('accounting:cash:balances'),
+      cacheManager.invalidatePattern('accounting:cash:forecast:*'),
+      cacheManager.invalidatePattern('accounting:dashboard:*'),
+    ]);
   }
 }
 

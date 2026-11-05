@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
@@ -44,7 +45,7 @@ export const createInvoiceSchema = {
     language: Joi.string().valid('de', 'fr', 'it', 'en').default('de'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema).default([]),
-    currency: Joi.string().valid('CHF', 'EUR').default('CHF'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES).default('CHF'),
     globalDiscountPercent: Joi.number().min(0).max(100).default(0),
     dueDate: Joi.date().iso().required(),
     paymentTermsDays: Joi.number().integer().min(0).default(30),
@@ -99,7 +100,7 @@ export const updateInvoiceSchema = {
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema),
-    currency: Joi.string().valid('CHF', 'EUR'),
+    currency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     globalDiscountPercent: Joi.number().min(0).max(100),
     dueDate: Joi.date().iso(),
     paymentTermsDays: Joi.number().integer().min(0),

@@ -162,6 +162,8 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       toast.error(message);
     },
     onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
       queryClient.setQueriesData<InfiniteData<TaskPage>>(
         { queryKey: taskWorkspaceKeys.windows() },
         (oldData) => updateTaskInPages(oldData, task.id, () => task),
@@ -199,6 +201,8 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       toast.error(message);
     },
     onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
       queryClient.setQueriesData<InfiniteData<TaskPage>>(
         { queryKey: taskWorkspaceKeys.windows() },
         (oldData) => updateTaskInPages(oldData, task.id, () => task),
@@ -220,6 +224,8 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       return taskApi.create(params);
     },
     onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
       const matchesActiveWindow =
         (!activeParams.listId || task.listId === activeParams.listId) &&
         (!activeParams.status || task.status === activeParams.status) &&
@@ -258,6 +264,8 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       toast.error(message);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
       queryClient.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
     },
   });
@@ -277,6 +285,8 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
       });
     },
     onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-time'] });
       queryClient.invalidateQueries({ queryKey: taskWorkspaceKeys.root });
       setSelectedTaskId(task.id);
       toast.success('Task duplicated');

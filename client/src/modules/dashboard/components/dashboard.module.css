@@ -1,0 +1,46 @@
+.dashboard {
+  min-width: 0;
+  background: radial-gradient(ellipse 70% 24rem at 25% 0, color-mix(in srgb, var(--primary) 5%, transparent), transparent), var(--background);
+}
+.dashboard :global(.updata-dashboard-panel) { border-radius: 20px; min-width: 0; box-shadow: var(--elevation-card); }
+.dashboard :global(.dashboard-metric) { background: color-mix(in srgb, var(--card) 92%, transparent); }
+.dashboard :global(.dashboard-metric):hover { border-color: color-mix(in srgb, var(--primary) 25%, var(--border)); }
+.dashboard :global(.dashboard-metric) > div > div { gap: 16px; }
+.dashboard :global(.dashboard-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.dashboard :global(.dashboard-intelligence-summary) {
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
+  border-radius: 24px;
+  background: linear-gradient(125deg, color-mix(in srgb, var(--primary) 4%, var(--card)), var(--card) 75%);
+}
+.dashboard :global(.dashboard-intelligence-card) {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  transition: border-color 180ms, box-shadow 180ms, background-color 180ms;
+}
+.dashboard :global(.dashboard-intelligence-card):hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 6%, transparent); }
+.dashboard :global(.dashboard-intelligence-card):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.dashboard :global(.dashboard-feature-overview) { padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; }
+.dashboard :global(.dashboard-workspace-link) { transition: border-color 180ms, background-color 180ms; }
+.dashboard :global(.dashboard-workspace-link):hover { background: var(--accent); border-color: color-mix(in srgb, var(--primary) 25%, var(--border)); }
+.dashboard :global([data-slot="tabs-list"]) { height: auto; min-height: 44px; align-items: stretch; padding: 0; }
+.dashboard :global([data-slot="tabs-trigger"]) { flex: none; border: 0; box-shadow: none; }
+.dashboard :global([data-slot="tabs-trigger"][data-state="active"]) { background: transparent; color: var(--primary); }
+.dashboard :global([data-slot="tabs-trigger"]::after) { bottom: -4px; height: 2px; background: var(--primary-gradient); }
+.dashboard :global(.recharts-wrapper) { font-variant-numeric: tabular-nums; }
+@media (max-width: 639px) {
+  .dashboard :global(.dashboard-intelligence-summary), .dashboard :global(.dashboard-feature-overview) { padding: 16px; border-radius: 20px; }
+  .dashboard :global(.dashboard-intelligence-card) { padding: 12px; }
+}

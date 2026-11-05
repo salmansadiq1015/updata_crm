@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  ArrowLeft,
+  Info,
   Bot,
   CalendarPlus,
   CheckSquare,
@@ -51,6 +53,7 @@ import {
 
 export function ChatHeader({
   room,
+  canWrite = true,
   currentUserId,
   isBlocked,
   onBlock,
@@ -59,6 +62,8 @@ export function ChatHeader({
   onDelete,
   onRefreshCode,
   onSearch,
+  onDetails,
+  onSummary,
 }) {
   const { t } = useLanguage();
   const onlineIds = usePresenceStore((state) => state.onlineIds);
@@ -77,7 +82,7 @@ export function ChatHeader({
   }
 
   const isDm = room.roomType === 'DM';
-  const isGroup = room.roomType === 'GROUP';
+  const isGroup = ['GROUP', 'LEAD'].includes(room.roomType);
   const isAdmin = isGroup && room.admins?.some((admin) => String(admin._id || admin) === String(currentUserId));
   const displayName = getRoomDisplayName(room, currentUserId, t);
   const subtitle = getRoomSubtitle(room, currentUserId, onlineIds, t);
@@ -102,10 +107,11 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="flex min-h-[72px] shrink-0 items-center gap-3 border-b border-border/60 bg-card/90 px-4">
+      <div className="chat-panel-header flex min-h-[72px] shrink-0 items-center gap-3 border-b border-border/60 bg-card/90 px-4">
+        <Button asChild variant="ghost" size="icon" className="md:hidden" aria-label={t('common.back', 'Back')}><Link href="/field-ops/chat"><ArrowLeft className="size-4 rtl:rotate-180" /></Link></Button>
         <div className="relative shrink-0">
           <Avatar className="h-11 w-11 rounded-2xl ring-1 ring-border/60">
-            <AvatarFallback style={{ backgroundColor: stableColor(displayName) }} className="rounded-2xl text-sm font-semibold text-white">
+            <AvatarFallback style={{ backgroundColor: room.roomType === 'LEAD' ? 'var(--primary)' : stableColor(displayName) }} className="rounded-2xl text-sm font-semibold text-white">
               {isGroup ? <Users className="h-5 w-5" /> : getInitials(displayName)}
             </AvatarFallback>
           </Avatar>
@@ -156,33 +162,30 @@ export function ChatHeader({
           <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={onSearch} aria-label={t('chat.advancedSearch', 'Search conversations')}>
             <Search className="h-4 w-4" />
           </Button>
-          <Button asChild variant="ghost" size="icon" className="hidden h-9 w-9 rounded-xl sm:inline-flex" aria-label={t('chat.askAiSummary', 'Ask AI for summary')}>
-            <Link href={`/ai?chatRoomId=${room._id}&intent=summary`}>
-              <Bot className="h-4 w-4" />
-            </Link>
-          </Button>
+          {onSummary && <Button variant="ghost" size="icon" onClick={onSummary} aria-label={t('chat.askAiSummary', 'Ask AI for summary')}><Bot className="size-4" /></Button>}
+          <Button variant="ghost" size="icon" onClick={onDetails} aria-label={t('chat.workspace.details', 'Conversation details')}><Info className="size-4" /></Button>
 
-          <DropdownMenu>
+          {canWrite && <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" aria-label={t("chat.workspace.moreActions", "More actions")}>
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem asChild>
-                <Link href={`/tasks?chatRoomId=${room._id}`}>
+                <Link href={'/tasks'}>
                   <CheckSquare className="mr-2 h-3.5 w-3.5" />
-                  {t('chat.createTaskFromChat', 'Create task')}
+                  {t('chat.workspace.openTasks', 'Open tasks')}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href={`/scheduling/calendar?chatRoomId=${room._id}`}>
+                <Link href={'/scheduling/calendar'}>
                   <CalendarPlus className="mr-2 h-3.5 w-3.5" />
-                  {t('chat.createAppointmentFromChat', 'Schedule appointment')}
+                  {t('chat.workspace.openCalendar', 'Open calendar')}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href={`/documents?chatRoomId=${room._id}`}>
+                <Link href={'/documents'}>
                   <FileText className="mr-2 h-3.5 w-3.5" />
                   {t('chat.openDocuments', 'Open documents')}
                 </Link>
@@ -216,7 +219,7 @@ export function ChatHeader({
                       {t('chat.copyJoinCode', 'Copy Join Code')} ({room.joinCode})
                     </DropdownMenuItem>
                   )}
-                  {isAdmin && (
+                  {isAdmin && room.roomType === 'GROUP' && (
                     <DropdownMenuItem onClick={() => onRefreshCode?.(room._id)}>
                       <RefreshCw className="mr-2 h-3.5 w-3.5" />
                       {t('chat.refreshCode', 'Refresh Code')}
@@ -236,7 +239,7 @@ export function ChatHeader({
                 </>
               )}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
         </div>
       </div>
 

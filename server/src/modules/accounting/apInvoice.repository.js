@@ -1,3 +1,4 @@
+import { CURRENCIES } from '../../shared/data/currencies.js';
 import mongoose from 'mongoose';
 import ApInvoice from './apInvoice.model.js';
 import {
@@ -8,6 +9,7 @@ import {
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
 const ALLOWED_FILTERS = {
+  currency: 'exact',
   status: 'exact',
   supplierId: 'objectId',
   dueDateFrom: 'dateFrom',
@@ -83,8 +85,9 @@ class ApInvoiceRepository {
       .setOptions({ includeDeleted: true });
   }
 
-  async findOpenForAutoMatch({ reference, amount, payeeName }) {
+  async findOpenForAutoMatch({ reference, amount, payeeName, currency }) {
     const openFilter = {
+      ...(currency && { currency }),
       isDeleted: false,
       status: { $in: ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'] },
       outstandingAmount: { $gt: 0 },
@@ -147,6 +150,7 @@ class ApInvoiceRepository {
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
     const mappedFilters = {};
+    if (filters.currency) mappedFilters.currency = filters.currency;
     if (filters.status) mappedFilters.status = filters.status;
     if (filters.supplierId) mappedFilters.supplierId = filters.supplierId;
     if (filters.dueDateFrom) mappedFilters.dueDateFrom = filters.dueDateFrom;
@@ -234,6 +238,7 @@ class ApInvoiceRepository {
 
   async applyPaymentDelta(id, amount, options = {}) {
     const invoiceId = typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id;
+    const digits = { $switch: { branches: [0, 3, 4].map(unit => ({ case: { $in: ['$currency', CURRENCIES.filter(row => row.digits === unit).map(row => row.code)] }, then: unit })), default: 2 } };
 
     return ApInvoice.collection.updateOne(
       {
@@ -245,11 +250,11 @@ class ApInvoiceRepository {
       [
         {
           $set: {
-            paidAmount: { $round: [{ $add: ['$paidAmount', amount] }, 2] },
-            outstandingAmount: { $round: [{ $subtract: ['$outstandingAmount', amount] }, 2] },
+            paidAmount: { $round: [{ $add: ['$paidAmount', amount] }, digits] },
+            outstandingAmount: { $round: [{ $subtract: ['$outstandingAmount', amount] }, digits] },
             status: {
               $cond: [
-                { $lte: [{ $round: [{ $subtract: ['$outstandingAmount', amount] }, 2] }, 0] },
+                { $lte: [{ $round: [{ $subtract: ['$outstandingAmount', amount] }, digits] }, 0] },
                 'PAID',
                 'PARTIALLY_PAID',
               ],
@@ -289,6 +294,16 @@ class ApInvoiceRepository {
       .setOptions({ includeDeleted: true });
 
     return buildCursorResponse(docs, limit, sortBy);
+  }
+
+  async findForCashForecast(dateFrom, dateTo, currency) {
+    return ApInvoice.find({
+      isDeleted: false,
+      status: { $in: ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'] },
+      outstandingAmount: { $gt: 0 },
+      currency,
+      dueDate: { $gte: new Date(dateFrom), $lte: new Date(dateTo) },
+    }).select('dueDate outstandingAmount totalAmount currency').lean();
   }
 
   async findForPaymentBatch(dueDateFrom, dueDateTo) {

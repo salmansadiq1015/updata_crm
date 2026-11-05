@@ -88,7 +88,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
               type="submit"
               size="icon"
               disabled={text.trim().length < MIN_AGENT_INPUT_LENGTH || isBusy}
-              className="h-11 w-11 shrink-0 bg-gradient-to-br from-brand-600 to-brand-red text-white shadow-[0_12px_30px_rgba(208,10,25,0.18)] hover:from-brand-400 hover:to-brand-400"
+              className="h-11 w-11 shrink-0 bg-primary-gradient text-primary-foreground shadow-[var(--primary-shadow)]"
               aria-label={t('ai.panel.sendCommand', 'Send command')}
             >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}

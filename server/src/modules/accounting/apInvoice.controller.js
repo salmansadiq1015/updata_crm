@@ -74,14 +74,14 @@ class ApInvoiceController {
 
   async getAging(req, res, next) {
     try {
-      const data = await apInvoiceService.getAgingReport();
+      const data = await apInvoiceService.getAgingReport(req._validatedQuery || req.query);
       return res.success({ data });
     } catch (err) { next(err); }
   }
 
   async getSummary(req, res, next) {
     try {
-      const data = await apInvoiceService.getSummary();
+      const data = await apInvoiceService.getSummary(req._validatedQuery || req.query);
       return res.success({ data });
     } catch (err) { next(err); }
   }

@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 import {
   ACCOUNTING_CURRENCIES,
   DEFAULT_ACCOUNTING_CURRENCY,
@@ -23,7 +24,7 @@ function normalizeSource(value) {
 
 export function defaultExchangeRateForm() {
   return {
-    baseCurrency: DEFAULT_ACCOUNTING_CURRENCY,
+    baseCurrency: getAccountingCurrency(),
     quoteCurrency: DEFAULT_QUOTE_CURRENCY,
     rate: '',
     rateDate: todayInput(),
@@ -34,7 +35,7 @@ export function defaultExchangeRateForm() {
 
 export function defaultExchangeRateFilters() {
   return {
-    baseCurrency: DEFAULT_ACCOUNTING_CURRENCY,
+    baseCurrency: getAccountingCurrency(),
     quoteCurrency: 'ALL',
     startDate: '',
     endDate: '',
@@ -44,7 +45,7 @@ export function defaultExchangeRateFilters() {
 export function defaultConversionForm() {
   return {
     amount: DEFAULT_CONVERSION_AMOUNT,
-    fromCurrency: DEFAULT_ACCOUNTING_CURRENCY,
+    fromCurrency: getAccountingCurrency(),
     toCurrency: DEFAULT_QUOTE_CURRENCY,
     asOfDate: todayInput(),
   };
@@ -52,7 +53,7 @@ export function defaultConversionForm() {
 
 export function defaultFxRevaluationForm() {
   return {
-    baseCurrency: DEFAULT_ACCOUNTING_CURRENCY,
+    baseCurrency: getAccountingCurrency(),
     revaluationDate: todayInput(),
     sourceTypes: ['AR_INVOICE', 'AP_BILL'],
   };

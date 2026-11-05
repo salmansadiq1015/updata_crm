@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { COMPANY_NAME } from '@/shared/constants/application';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import type { Lead } from '../types/lead-types';
 import {
   messagingApi, type Campaign, type MessageTemplate, type OutreachChannel, type OutreachPurpose,
@@ -19,7 +20,7 @@ import {
 import {
   Alert, AlertDescription, Button, Dialog, DialogBody, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle, Input, Label, Select, SelectContent,
-  SelectItem, SelectTrigger, SelectValue, Textarea,
+  SelectItem, SelectTrigger, SelectValue, Textarea, useLanguage,
 } from './lead-ui-kit';
 import { buildWhatsAppComponents, whatsappTemplateSlots } from './whatsapp-template-mapping';
 
@@ -39,13 +40,14 @@ const channelMeta = {
   whatsapp: { label: 'WhatsApp', icon: MessageCircle, description: 'Approved Meta templates', tone: 'from-emerald-500/15 to-teal-500/5 text-emerald-500' },
 } as const;
 
-const variables = ['firstName', 'lastName', 'fullName', 'businessName', 'email', 'phone', 'city', 'country', 'category', 'rating', 'assignedUserName', 'companyName', 'senderName'];
+const variables = ['firstName', 'lastName', 'fullName', 'businessName', 'email', 'phone', 'city', 'country', 'category', 'rating', 'assignedUserName', 'companyName', 'senderName', 'qualificationStatus', 'callSummary', 'customField'];
 
 const variableLabels: Record<string, string> = {
   firstName: 'First name', lastName: 'Last name', fullName: 'Full name',
   businessName: 'Business name', email: 'Email address', phone: 'Phone number',
   city: 'City', country: 'Country', category: 'Business category', rating: 'Rating',
   assignedUserName: 'Assigned user', companyName: 'Your company name', senderName: 'Sender name',
+  qualificationStatus: 'Qualification status', callSummary: 'Call summary', customField: 'Custom field',
 };
 
 const campaignVariables = new Set(['companyName', 'senderName']);
@@ -83,6 +85,7 @@ function leadPreviewVariables(lead?: Lead) {
     phone: lead.mobile || lead.phone || '', city: lead.address?.city || '', country: lead.address?.country || '',
     category: lead.sourceMetadata?.businessType || '', rating: lead.providerMeta?.rating?.toString() || '',
     assignedUserName: '',
+    qualificationStatus: lead.latestCall?.qualificationStatus || '',
   };
 }
 
@@ -370,6 +373,7 @@ export function LeadOutreachComposer({
 function ComposerBody({
   leads, defaultChannel, filterSelection, totalMatching, onClose, onComplete,
 }: Omit<Props, 'open' | 'onOpenChange'> & { defaultChannel: OutreachChannel; onClose: () => void }) {
+  const { t } = useLanguage();
   const { hasPermission } = usePermissions();
   const currentUser = useAuthStore((state: { user?: { firstName?: string; lastName?: string } | null }) => state.user);
   const canVerifyConsent = hasPermission(PERMISSIONS.CRM_ADMIN);
@@ -384,6 +388,7 @@ function ComposerBody({
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
+  const [showRichEditor, setShowRichEditor] = useState(false);
   const [fallbackValues, setFallbackValues] = useState<Record<string, string>>(() => ({
     companyName: COMPANY_NAME,
     senderName: defaultSenderName,
@@ -738,6 +743,13 @@ function ComposerBody({
                   </>
                 ) : (
                   <div className="space-y-4">
+                    {channel === 'email' && <div className="space-y-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowRichEditor((value) => !value)} aria-expanded={showRichEditor}>{t('leads.outreach.richText', 'Rich-text formatting')}</Button>
+                      {showRichEditor && <div role="group" aria-label={t('leads.outreach.richTextEditor', 'Email rich-text editor')}><RichTextEditor value={bodyHtml} onChange={(html: string) => {
+                        setBodyHtml(html);
+                        setBody(new DOMParser().parseFromString(html.replace(/<\/p>/g, '</p>\n'), 'text/html').body.textContent?.slice(0, 10000) || '');
+                      }} maxLength={10000} minHeight={200} showImage={false} /></div>}
+                    </div>}
                     <div><div className="flex flex-wrap items-center justify-between gap-2"><Label htmlFor={`${formId}-message`}>{channel === 'email' ? 'Plain-text fallback' : 'Message'}</Label>{channel === 'sms' && <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{sms.length} characters · ~{sms.segments} segment{sms.segments === 1 ? '' : 's'}</span>}</div><Textarea aria-label="Message" id={`${formId}-message`} className="mt-1.5 min-h-36 resize-y leading-6" value={body} onChange={(event) => setBody(event.target.value)} maxLength={10000} placeholder="Write a clear, personal message…" /></div>
                     {channel === 'email' && (
                       <div className="overflow-hidden rounded-xl border border-border/80 bg-muted/[0.08]">

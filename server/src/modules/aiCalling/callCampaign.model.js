@@ -64,6 +64,8 @@ export const agentConfigSchema = new mongoose.Schema({
   speakingStyle: { type: String, enum: SPEAKING_STYLES, default: 'professional' },
   customStyle: { type: String, trim: true, maxlength: 500, default: '' },
   objective: { type: String, trim: true, maxlength: 1000, default: '' },
+  // Free-text conversation instructions (agent type template or admin-written).
+  instructions: { type: String, trim: true, maxlength: 4000, default: '' },
   maxCallSeconds: { type: Number, default: 300, min: 30, max: 1800 },
   silenceTimeoutSeconds: { type: Number, default: 10, min: 2, max: 60 },
   maxClarificationsPerQuestion: { type: Number, default: 2, min: 0, max: 5 },
@@ -128,6 +130,10 @@ const linkConfigSchema = new mongoose.Schema({
 
 const campaignSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallingAgent', default: null },
+  // 'follow_up' = a single follow-up conversation (followUpCalling.service.js): one lead,
+  // launched automatically or by "Call now" from a LeadFollowUp. Same dial pipeline.
+  kind: { type: String, enum: ['standard', 'follow_up'], default: 'standard' },
+  followUpId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadFollowUp', default: null },
   agentSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
   launchKey: { type: String, default: undefined, maxlength: 100 },
   launchRequestHash: { type: String, default: null },
@@ -213,6 +219,7 @@ const campaignSchema = new mongoose.Schema({
 
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
 campaignSchema.index({ createdBy: 1, agentId: 1, createdAt: -1 });
+campaignSchema.index({ followUpId: 1 }, { name: 'campaign_follow_up', partialFilterExpression: { followUpId: { $type: 'objectId' } } });
 campaignSchema.index({ createdBy: 1, agentId: 1, launchKey: 1 }, {
   unique: true, partialFilterExpression: { launchKey: { $type: 'string' }, agentId: { $type: 'objectId' } }, name: 'agent_launch_idempotency',
 });

@@ -1,10 +1,10 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { FileAudio, Check, CircleUserRound, MessageSquareText, PhoneCall, Bot } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Reveal, SectionIntro, DemoLabel } from './motion-primitives';
-import { AuthAwareLink } from './auth-aware-link';
 
 const bars = [14, 24, 18, 36, 46, 28, 38, 20, 44, 32, 18, 40, 26, 46, 34, 20, 30, 42, 22, 16];
 
@@ -24,7 +24,7 @@ export function AICallingSection() {
                 </Reveal>
               ))}
             </div>
-            <AuthAwareLink href="/ai-calling" className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-lg border border-blue-200/20 px-4 text-sm font-medium text-blue-200 transition-colors hover:bg-blue-200/5"><PhoneCall aria-hidden="true" className="size-4" />{t('experience.calling.nav')}</AuthAwareLink>
+            <Link href="/calling-engine" className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-lg border border-blue-200/20 px-4 text-sm font-medium text-blue-200 transition-colors hover:bg-blue-200/5"><PhoneCall aria-hidden="true" className="size-4" />{t('experience.calling.nav')}</Link>
           </div>
           <Reveal className="relative min-w-0">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#080e1a] p-4 sm:p-6">

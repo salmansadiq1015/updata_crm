@@ -1,7 +1,8 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId, cursorPagination, iban } from '../../shared/validation/commonSchemas.js';
 
-const CURRENCIES = ['CHF', 'EUR'];
+const CURRENCIES = CURRENCY_CODES;
 const CONNECTION_TYPES = ['MANUAL', 'EBICS', 'SFTP'];
 const RECONCILIATION_STATUSES = ['UNMATCHED', 'AUTO_MATCHED', 'MANUALLY_MATCHED', 'CATEGORIZED'];
 
@@ -18,6 +19,7 @@ export const createBankAccountSchema = {
       processedDirectory: Joi.string().trim().max(1000),
       failedDirectory: Joi.string().trim().max(1000),
     }).unknown(true),
+    categoryRules: Joi.array().max(50).items(Joi.object({ keyword: Joi.string().trim().min(2).max(200).required(), direction: Joi.string().valid('IN', 'OUT').required(), accountId: objectId.required(), _id: objectId })),
     autoRetrieveEnabled: Joi.boolean(),
     autoRetrieveSchedule: Joi.string().trim().max(50).allow('', null),
   }),
@@ -37,6 +39,7 @@ export const updateBankAccountSchema = {
       processedDirectory: Joi.string().trim().max(1000),
       failedDirectory: Joi.string().trim().max(1000),
     }).unknown(true),
+    categoryRules: Joi.array().max(50).items(Joi.object({ keyword: Joi.string().trim().min(2).max(200).required(), direction: Joi.string().valid('IN', 'OUT').required(), accountId: objectId.required(), _id: objectId })),
     autoRetrieveEnabled: Joi.boolean(),
     autoRetrieveSchedule: Joi.string().trim().max(50).allow('', null),
     status: Joi.string().valid('ACTIVE', 'INACTIVE'),
@@ -53,6 +56,7 @@ export const importStatementSchema = {
 
 export const listTransactionsSchema = {
   query: cursorPagination.keys({
+    currency: Joi.string().valid(...CURRENCY_CODES),
     bankAccountId: objectId,
     transactionDateFrom: Joi.date().iso(),
     transactionDateTo: Joi.date().iso(),
@@ -72,5 +76,14 @@ export const bankAccountIdParamSchema = {
 export const retrieveStatementsSchema = {
   body: Joi.object({
     bankAccountId: objectId.required(),
+  }),
+};
+
+export const bankingAnalyticsSchema = {
+  query: Joi.object({
+    bankAccountId: objectId,
+    currency: Joi.string().valid(...CURRENCIES).default('CHF'),
+    dateFrom: Joi.date().iso().required(),
+    dateTo: Joi.date().iso().min(Joi.ref('dateFrom')).required(),
   }),
 };

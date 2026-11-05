@@ -52,6 +52,8 @@ export function getRoomDisplayName(room, currentUserId, t) {
     return getUserDisplayName(other?.userId) || translate(t, 'chat.directMessage', 'Direct Message');
   }
 
+  if (room.roomType === 'LEAD') return room.name || (room.leadIds || []).map(lead => lead.name).filter(Boolean).join(', ') || translate(t, 'chat.workspace.leadChat', 'Lead conversation');
+
   if (room.roomType === 'GROUP') return room.name || translate(t, 'chat.group', 'Group');
 
   if (room.roomType === 'TEAM') return room.name || translate(t, 'chat.teamChannel', 'Team channel');
@@ -72,6 +74,7 @@ export function getRoomDisplayName(room, currentUserId, t) {
 
 export function getRoomKindLabel(room, t) {
   if (!room) return translate(t, 'chat.conversation', 'Conversation');
+  if (room.roomType === 'LEAD') return translate(t, 'chat.workspace.leadChat', 'Lead conversation');
   if (room.roomType === 'DM') return translate(t, 'chat.direct', 'Direct');
   if (room.roomType === 'GROUP') {
     return room.projectId || room.orderId
@@ -114,13 +117,15 @@ export function getRoomStats(rooms = []) {
     (stats, room) => {
       stats.total += 1;
       stats.unread += room.unreadCount ?? 0;
+      if (room.unreadCount > 0) stats.unreadRooms += 1;
+      if (room.roomType === 'LEAD' || room.leadIds?.length) stats.leads += 1;
       if (room.roomType === 'DM') stats.direct += 1;
       if (room.roomType === 'GROUP') stats.groups += 1;
       if (room.roomType === 'PROJECT' || room.projectId) stats.projects += 1;
       if (room.roomType === 'TEAM' || room.roomType === 'DEPARTMENT') stats.channels += 1;
       return stats;
     },
-    { total: 0, unread: 0, direct: 0, groups: 0, projects: 0, channels: 0 }
+    { total: 0, unread: 0, unreadRooms: 0, leads: 0, direct: 0, groups: 0, projects: 0, channels: 0 }
   );
 }
 
@@ -130,6 +135,8 @@ export function filterRooms(rooms, filter, search, currentUserId, t) {
   return (rooms ?? []).filter((room) => {
     const matchesFilter =
       filter === 'All' ||
+      (filter === 'Unread' && room.unreadCount > 0) ||
+      (filter === 'Leads' && (room.roomType === 'LEAD' || room.leadIds?.length)) ||
       (filter === 'Direct' && room.roomType === 'DM') ||
       (filter === 'Groups' && room.roomType === 'GROUP') ||
       (filter === 'Projects' && (room.roomType === 'PROJECT' || room.projectId || room.orderId)) ||
@@ -147,6 +154,7 @@ export function filterRooms(rooms, filter, search, currentUserId, t) {
       room.project?.projectNumber,
       room.order?.orderNumber,
       room.customer?.name,
+      ...(room.leadIds || []).flatMap(lead => [lead.name, lead.leadNumber]),
     ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query));

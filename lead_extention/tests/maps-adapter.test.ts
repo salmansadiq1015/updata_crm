@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MapsAdapter } from '../src/content/maps-adapter';
 
 type AdapterInternals = {
+  categoryFromElement(root: Element): string | null;
   parseRating(value: string): number | null;
   parseReviewCount(value: string): number | null;
   starLevelFromLabel(label: string): 1 | 2 | 3 | 4 | 5 | null;
@@ -22,6 +23,14 @@ type AdapterInternals = {
 const adapter = new MapsAdapter() as unknown as AdapterInternals;
 
 describe('Google Maps extraction parsing', () => {
+  it('skips Maps action labels and continues to a real category', () => {
+    const nodes = (values: string[]) => values.map((textContent) => ({ textContent }));
+    const root = { querySelectorAll: () => nodes(['Add a label', 'Hotel · 3-star hotel']) } as unknown as Element;
+    expect(adapter.categoryFromElement(root)).toBe('Hotel');
+    const actionsOnly = { querySelectorAll: () => nodes(['Add a label', 'Edit label']) } as unknown as Element;
+    expect(adapter.categoryFromElement(actionsOnly)).toBeNull();
+  });
+
   it('parses localized ratings and compact or localized review counts', () => {
     expect(adapter.parseRating('4,7 étoiles')).toBe(4.7);
     expect(adapter.parseReviewCount('1.2K reviews')).toBe(1_200);

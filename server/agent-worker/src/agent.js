@@ -1,3 +1,4 @@
+import { createEmailTools } from './emailTools.js';
 import { createLanguageUpdater } from './sessionLanguage.js';
 import { createBehaviorPublisher } from './behaviorPublisher.js';
 /**
@@ -52,6 +53,7 @@ import { billingUsage } from './billingUsage.js';
 import { contextOptions, createContextBudget, compactItems } from './contextManagement.js';
 import { createResponseUsage } from './responseUsage.js';
 import { closeVoiceSession } from './sessionCleanup.js';
+import { isInbound, createInboundTools, inboundInstructions, INBOUND_FIRST_STEP } from './inbound.js';
 export { transcription, turnDetection } from './transcription.js';
 
 const safeJson = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
@@ -183,11 +185,15 @@ export default defineAgent({
     }
     catch { await fail({ code: 'VOICE_CONFIG_INVALID', message: 'The voice provider configuration is invalid. Review AI Provider Configuration.' }); return; }
     log('call ready', { callId, roomJoinMs: joinedRoom.value.ms, contextMs: loaded.value.ms });
+    // Incoming phone call: the caller is already waiting on the line. Connect the voice provider
+    // BEFORE the gateway answers and only then report ready, so the greeting starts the moment the
+    // call audio opens (otherwise the caller hears seconds of silence after the answer).
+    const prestartInbound = isPstn && isInbound(meta, context);
     // A gateway must not dial while the worker is still loading its call context.
-    await ctx.room.localParticipant.setAttributes({ 'updata.agent_ready': 'true' });
+    if (!prestartInbound) await ctx.room.localParticipant.setAttributes({ 'updata.agent_ready': 'true' });
 
     // ---- Wait for a real answer before saying anything (PSTN only).
-    if (isPstn) {
+    if (isPstn && !prestartInbound) {
       const result = await waitForSipAnswer(ctx.room, `sip-${callId}`, RING_TIMEOUT_MS);
       if (result !== 'answered') {
         log('call not answered', { callId, result });
@@ -196,15 +202,17 @@ export default defineAgent({
         return;
       }
     }
-    if (isPstn) {
+    if (isPstn && !prestartInbound) {
       answeredAt = Date.now();
       await api.answered().catch((e) => warn('answered tool call failed', { callId, error: e?.message }));
       log('customer joined; realtime session ready', { callId, ms: Date.now() - startedAt });
     }
 
     const config = context.agentConfig || {};
+    // Incoming call: the caller rang us. Receptionist mode (free conversation + silent capture tools).
+    const inboundCall = isInbound(meta, context);
     let currentLanguage = context.conversationLanguage?.current || config.language;
-    const baseInstructions = [
+    const baseInstructions = inboundCall ? inboundInstructions(context) : [
       context.systemPrompt,
       `Disclosure to deliver first in the conversation language (translate faithfully; preserve the AI identity, company and consent request): "${context.disclosure}"`,
       'If you hear an automated voicemail greeting instead of a person, call reached_voicemail immediately and say nothing.',
@@ -215,7 +223,7 @@ export default defineAgent({
       instructionFingerprint: createHash('sha256').update(baseInstructions).digest('hex'),
       dynamicLeadCharacters: context.dynamicLeadInstruction?.length || 0 };
     let pendingAction = context.nextAction;
-    let pending = actionToInstruction(pendingAction);
+    let pending = inboundCall ? INBOUND_FIRST_STEP : actionToInstruction(pendingAction);
     let agent = null;
     const applyLanguage = createLanguageUpdater({ revision: context.languageRevision || 0, update: async language => {
       if (ending || currentLanguage === language) return;
@@ -410,7 +418,18 @@ export default defineAgent({
       }),
     };
 
+    if (inboundCall) {
+      // Keep the shared language tool; replace the questionnaire tools with the receptionist set.
+      for (const name of Object.keys(tools)) if (name !== 'report_language') delete tools[name];
+      Object.assign(tools, createInboundTools({
+        llm, z, api, guarded, heard, finish,
+        setNotes: (notes) => { callNotes = notes; },
+        requestIds: (kind, text) => responseId(kind, String(text).slice(0, 60), heard.turns()),
+      }));
+    }
+
     const initialContext = new llm.ChatContext();
+    if (!inboundCall) Object.assign(tools, createEmailTools({ llm, api, guarded }));
     const toolSchema = JSON.stringify(Object.entries(tools).map(([name, t]) => ({ name, description: t.description, parameters: llm.toJsonSchema(t.parameters) })));
     inputDiagnostics.toolSchemaCharacters = toolSchema.length;
     inputDiagnostics.toolSchemaFingerprint = createHash('sha256').update(toolSchema).digest('hex');
@@ -431,7 +450,7 @@ export default defineAgent({
     }
     try {
       selection = await establishProvider({ config: providerConfig,
-        deadlineAt: answeredAt + Math.min(Number(config.maxCallSeconds) || 300, providerConfig.maxSessionSeconds) * 1000,
+        deadlineAt: (answeredAt || Date.now()) + Math.min(Number(config.maxCallSeconds) || 300, providerConfig.maxSessionSeconds) * 1000,
         createAdapter: candidate => new LiveKitVoiceAdapter({ ...candidate, config: providerConfig, instructions: baseInstructions, tools, chatCtx: initialContext, callConfig: config, meta, isPstn, maxOutputTokens: limits.maxResponseOutputTokens, transcriptionContext: context.transcriptionContext }),
         onAttempt: recordProviderAttempt,
       });
@@ -470,6 +489,16 @@ export default defineAgent({
       onSilence: async () => {
         const silenceEpoch = speechEpoch;
         quality.onSilence();
+        if (inboundCall) {
+          introRepeats += 1;
+          if (introRepeats > (config.maxRepetitionAttempts ?? 3)) {
+            if (config.automaticCallTermination !== false) await closeSilentCall('The caller has stayed silent.');
+            return;
+          }
+          if (ending || speechEpoch !== silenceEpoch || userSpeaking || ['thinking', 'speaking'].includes(agentState)) return;
+          session.generateReply({ instructions: `Speak only in ${currentLanguage}. The caller is silent. Briefly check whether they are still there or need anything else. Do not repeat the greeting.` });
+          return;
+        }
         if (pendingAction?.type === 'disclose') {
           introRepeats += 1;
           if (introRepeats > (config.maxRepetitionAttempts ?? 3)) {
@@ -495,6 +524,7 @@ export default defineAgent({
       userSpeaking = ev.newState === 'speaking';
       if (userSpeaking) {
         speechEpoch += 1; silenceWatchdog.cancel();
+        if (inboundCall) introRepeats = 0;
         void behavior({ type: 'response_started' });
         if (agentState === 'speaking') void behavior({ type: 'interruption' });
       }
@@ -575,6 +605,19 @@ export default defineAgent({
       return;
     }
     if (failed) return;
+    if (prestartInbound) {
+      await ctx.room.localParticipant.setAttributes({ 'updata.agent_ready': 'true' });
+      log('incoming call: voice session ready before answer', { callId, ms: Date.now() - startedAt });
+      const result = await waitForSipAnswer(ctx.room, `sip-${callId}`, RING_TIMEOUT_MS);
+      if (result !== 'answered') {
+        log('incoming call not answered by the gateway', { callId, result });
+        await endCall('no_answer');
+        await hangUp();
+        return;
+      }
+      answeredAt = Date.now();
+      await api.answered().catch((e) => warn('answered tool call failed', { callId, error: e?.message }));
+    }
     // Kick off: tell the model to deliver the disclosure / first action. On a phone call,
     // let the callee's "Hello?" finish first (see openCall in callControl.js).
     const opener = () => {
@@ -583,7 +626,7 @@ export default defineAgent({
       gate.reset(); // a "Hello?" before the disclosure is not agreement to continue
       return session.generateReply({ instructions: `Start the call now. ${pending}` });
     };
-    if (isPstn) {
+    if (isPstn && !inboundCall) {
       let userState = 'listening';
       session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => { userState = ev.newState; });
       openCall(session, { userState: () => userState, agentState: () => agentState, generate: opener })

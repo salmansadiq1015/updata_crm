@@ -173,6 +173,10 @@ function normalizeAnalyticsResponse(payload = {}) {
 }
 
 export const dashboardService = {
+  async getIntelligence(filters = {}) {
+    const res = await apiClient.get(ENDPOINTS.DASHBOARD.INTELLIGENCE, { params: sanitizeAnalyticsFilters(filters) });
+    return res.data;
+  },
   async getStats() {
     try {
       const res = await apiClient.get(ENDPOINTS.DASHBOARD.STATS);

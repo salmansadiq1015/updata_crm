@@ -57,6 +57,9 @@ const callRecordSchema = new mongoose.Schema({
   campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallCampaign', required: true, index: true },
   recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'CampaignRecipient', required: true, index: true },
   leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', required: true, index: true },
+  // Follow-up call (campaign kind 'follow_up'): the follow-up it executes and the call it continues.
+  followUpId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadFollowUp', default: null },
+  previousCallId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },
 
   // Stable internal id used as the idempotency anchor for this attempt and as
   // the handle the voice agent worker authenticates against.

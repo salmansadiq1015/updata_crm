@@ -80,6 +80,17 @@ export const queryKeys = {
     voice: ['paired-phone', 'voice-settings'] as const,
     activeCalls: (campaignId: string) => ['paired-phone', 'active-calls', campaignId] as const,
   },
+  incomingCalls: {
+    all: ['incoming-calls'] as const,
+    settings: ['incoming-calls', 'settings'] as const,
+    stats: (from: string) => ['incoming-calls', 'stats', from] as const,
+    live: ['incoming-calls', 'live'] as const,
+    lists: ['incoming-calls', 'list'] as const,
+    list: (filter: string) => ['incoming-calls', 'list', filter] as const,
+    details: ['incoming-calls', 'detail'] as const,
+    detail: (id: string) => ['incoming-calls', 'detail', id] as const,
+    devices: ['incoming-calls', 'devices'] as const,
+  },
   notifications: {
     all: ['notifications'] as const,
     feed: ['notifications', 'feed'] as const,

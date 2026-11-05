@@ -86,7 +86,7 @@ const CLOSED = new Set([
   'closed temporarily', 'temporarily closed',
 ]);
 const NO_OBJECTION = /^(none|no|nein|keine|aucune?|non|n\/a|-|—)$/i;
-const CONNECTED_CALL_DISPOSITIONS = new Set(['answered_completed', 'answered_partial', 'callback_requested', 'declined', 'do_not_contact']);
+const CONNECTED_CALL_DISPOSITIONS = new Set(['answered_completed', 'answered_partial', 'interrupted', 'callback_requested', 'declined', 'do_not_contact']);
 const POSITIVE_COMM_DISPOSITIONS = new Set(['interested', 'callback_requested']);
 // Communication dispositions that describe the lead's answer (transport-only
 // results such as sent / no_answer / voicemail say nothing about intent).

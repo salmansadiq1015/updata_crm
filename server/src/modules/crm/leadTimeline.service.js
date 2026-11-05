@@ -5,6 +5,7 @@ import ContactLogEntry from './contactLog.model.js';
 import LeadFollowUp from './leadFollowUp.model.js';
 import LeadEvent from './leadEvent.model.js';
 import CallRecord from '../aiCalling/callRecord.model.js';
+import InboundCall from '../inboundCalling/inboundCall.model.js';
 import SimSmsMessage from '../simSms/simSmsMessage.model.js';
 import SimCallEvent from '../simCall/simCallEvent.model.js';
 import MessageRecipient from '../messaging/messageRecipient.model.js';
@@ -36,7 +37,7 @@ import { QUALIFICATION_FIELD_BY_KEY } from './leadQualification.constants.js';
  */
 
 export const TIMELINE_TYPES = Object.freeze([
-  'communication', 'contact_log', 'ai_call', 'sms_message', 'sim_call_event',
+  'communication', 'contact_log', 'ai_call', 'incoming_call', 'sms_message', 'sim_call_event',
   'provider_message', 'qualification', 'follow_up', 'workflow',
 ]);
 export const TIMELINE_CHANNELS = Object.freeze(['phone', 'sms', 'email', 'whatsapp', 'other']);
@@ -121,6 +122,7 @@ class LeadTimelineService {
     add('communication', this._communications);
     add('contact_log', this._contactLogs);
     add('ai_call', this._aiCalls);
+    add('incoming_call', this._incomingCalls);
     add('sms_message', this._smsMessages);
     add('sim_call_event', this._simCallEvents);
     add('provider_message', this._providerMessages);
@@ -253,6 +255,48 @@ class LeadTimelineService {
     });
   }
 
+  /** Incoming phone calls (inboundCalling module): AI-, human-handled and missed. Same transcript privacy as AI calls. */
+  async _incomingCalls(ctx) {
+    if (this._skip(ctx, ['phone'])) return [];
+    const filter = { leadId: { $in: ctx.leadIds }, isTest: { $ne: true }, ...cursorCondition(ctx.cursor, 'incoming_call', 'createdAt') };
+    const docs = await InboundCall.find(filter).sort({ createdAt: -1, _id: -1 }).limit(ctx.limit)
+      .select('leadId createdBy status outcome answeredBy handling.agentName handling.mode durationSeconds createdAt endedAt summary.text intents.primary qualification.result transcript callback.requested handoff.requested deviceName simSlot')
+      .lean();
+    return docs.map((d) => {
+      const mayRead = ctx.viewer.canSeeAllTranscripts || String(d.createdBy) === String(ctx.viewer.id);
+      const turns = d.transcript || [];
+      return this._base(ctx, 'incoming_call', d, d.createdAt, {
+        channel: 'phone',
+        direction: 'inbound',
+        title: d.answeredBy === 'ai' ? `Incoming call answered by ${d.handling?.agentName || 'AI agent'}` : d.answeredBy === 'human' ? 'Incoming call answered on the phone' : 'Incoming call',
+        status: d.outcome || d.status,
+        summary: clip(d.summary?.text, 600),
+        body: null,
+        actorId: str(d.createdBy),
+        links: { inboundCallId: String(d._id) },
+        transcript: {
+          available: turns.length > 0,
+          expired: false,
+          restricted: !mayRead && turns.length > 0,
+          turnCount: turns.length,
+          excerpt: mayRead ? turns.slice(0, TRANSCRIPT_EXCERPT_TURNS).map((t, index) => ({ index, role: t.role === 'caller' ? 'customer' : t.role, text: clip(t.text, 500), at: iso(t.at) })) : [],
+        },
+        meta: {
+          state: d.status,
+          disposition: d.outcome ?? null,
+          qualification: d.qualification?.result ?? null,
+          inquiry: d.intents?.primary ?? null,
+          answeredBy: d.answeredBy ?? null,
+          durationSeconds: d.durationSeconds || null,
+          callbackRequested: Boolean(d.callback?.requested),
+          humanRequested: Boolean(d.handoff?.requested),
+          device: d.deviceName || null,
+          simSlot: d.simSlot ?? null,
+        },
+      });
+    });
+  }
+
   async _smsMessages(ctx) {
     if (this._skip(ctx, ['sms'])) return [];
     const filter = { leadId: { $in: ctx.leadIds }, status: { $in: SIM_SMS_VISIBLE }, ...cursorCondition(ctx.cursor, 'sms_message', 'createdAt') };
@@ -283,7 +327,11 @@ class LeadTimelineService {
       direction: null,
       title: d.type,
       status: null,
-      summary: null,
+      summary: d.type === 'call.evaluated' ? [
+        d.details?.qualificationStatus?.replace(/_/g, ' '),
+        d.details?.previousStatus !== d.details?.newStatus ? `${d.details?.previousStatus} → ${d.details?.newStatus}` : null,
+        d.details?.pipelineStage?.replace(/_/g, ' '),
+      ].filter(Boolean).join(' · ') : null,
       body: null,
       actorId: str(d.actor),
       links: { campaignId: str(d.campaignId), taskId: str(d.taskId) },
@@ -299,7 +347,7 @@ class LeadTimelineService {
       ...cursorCondition(ctx.cursor, 'provider_message', 'createdAt'),
     };
     const docs = await MessageRecipient.find(filter).sort({ createdAt: -1, _id: -1 }).limit(ctx.limit)
-      .select('leadId campaignId channel status rendered.subject rendered.bodyText provider sentAt deliveredAt readAt failedAt error createdBy createdAt')
+      .select('leadId campaignId channel destination status rendered.subject rendered.bodyText provider providerMessageId sentAt deliveredAt readAt failedAt error createdBy createdAt')
       .populate('campaignId', 'name').lean();
     return docs.map((d) => this._base(ctx, 'provider_message', d, d.createdAt, {
       channel: d.channel,
@@ -312,8 +360,11 @@ class LeadTimelineService {
       links: { campaignId: str(d.campaignId), messageRecipientId: String(d._id) },
       meta: {
         provider: d.provider ?? null, campaignName: d.campaignId?.name ?? null,
+        recipientEmail: d.channel === 'email' ? d.destination : null,
+        providerMessageId: d.providerMessageId ?? null,
         sentAt: iso(d.sentAt), deliveredAt: iso(d.deliveredAt), readAt: iso(d.readAt), failedAt: iso(d.failedAt),
         errorCode: d.error?.code ?? null,
+        failureReason: d.error?.message ?? null,
       },
     }));
   }

@@ -1,3 +1,4 @@
+import { GlobalAccountingCurrency } from '@/modules/accounting/components/currency-picker';
 import { AccountingBackBar } from '@/modules/accounting/components/accounting-navigation';
 
 export default function AccountingLayout({ children }) {
@@ -7,6 +8,7 @@ export default function AccountingLayout({ children }) {
       <div className="accounting-premium__mesh" aria-hidden="true" />
       <div className="relative z-10 mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
         <AccountingBackBar />
+        <GlobalAccountingCurrency />
         {children}
       </div>
     </section>

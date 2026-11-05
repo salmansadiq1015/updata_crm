@@ -1,5 +1,7 @@
 'use client';
 
+import { CurrencyPicker } from '@/modules/accounting/components/currency-picker';
+import { useAccountingCurrency } from '@/modules/accounting/state/accounting-currency';
 import { useMemo, useState } from 'react';
 import { Banknote, CalendarDays, Pencil, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -97,11 +99,12 @@ function ManualBalanceDialog({ open, onClose, accounts, de }) {
 export default function CashManagementPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
+  const { currency, setCurrency } = useAccountingCurrency();
   const [manualOpen, setManualOpen] = useState(false);
   const [selectedDays, setSelectedDays] = useState(30);
   const [scenario, setScenario] = useState({ delayAmount: '', delayBeyondDays: '30' });
   const { data: balances = [], isLoading: balancesLoading } = useCashBalances();
-  const { data: forecast, isLoading: forecastLoading } = useCashForecast({ days: 90 });
+  const { data: forecast, isLoading: forecastLoading } = useCashForecast({ days: 90, currency });
   const { data: accounts = [] } = useBankAccounts();
   const periods = useMemo(() => aggregatePeriods(forecast?.projections || []), [forecast?.projections]);
   const selectedRows = (forecast?.projections || [])
@@ -109,7 +112,7 @@ export default function CashManagementPage() {
     .filter((row) => Number(row.inflows || 0) !== 0 || Number(row.outflows || 0) !== 0);
   const delayAmount = Math.max(0, Number(scenario.delayAmount || 0));
   const delayBeyondDays = Number(scenario.delayBeyondDays || 0);
-  const totalBalance = balances.reduce((total, account) => total + Number(account.balance || 0), 0);
+  const totalBalance = balances.filter(a => a.currency === currency).reduce((total, account) => total + Number(account.balance || 0), 0);
 
   return (
     <div className="flex flex-col gap-5 max-w-7xl mx-auto">
@@ -126,6 +129,7 @@ export default function CashManagementPage() {
         </Button>
       </div>
 
+      <div className="flex items-center gap-3 text-xs text-muted-foreground"><label htmlFor="cash-currency">{de ? 'Prognosewährung' : 'Forecast currency'}</label><div className="w-36"><CurrencyPicker id="cash-currency" label={de ? 'Prognosewährung' : 'Forecast currency'} value={currency} onValueChange={setCurrency} /></div><span>{de ? 'Keine Währungsumrechnung' : 'No currency conversion'}</span></div>
       <div className="grid gap-4 md:grid-cols-3">
         {balancesLoading || forecastLoading ? (
           Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)
@@ -136,28 +140,28 @@ export default function CashManagementPage() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Bankguthaben' : 'Bank Balance'}</span>
                 <Banknote className="h-5 w-5 text-sky-500" />
               </div>
-              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(totalBalance)}</p>
+              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(totalBalance, currency)}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Nächste 30 Tage' : 'Next 30 Days'}</span>
                 <CalendarDays className="h-5 w-5 text-brand-500" />
               </div>
-              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[2]?.netPosition)}</p>
+              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[2]?.netPosition, currency)}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? '90-Tage Position' : '90-Day Position'}</span>
                 {(periods[4]?.netPosition || 0) >= totalBalance ? <TrendingUp className="h-5 w-5 text-emerald-500" /> : <TrendingDown className="h-5 w-5 text-red-500" />}
               </div>
-              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[4]?.netPosition)}</p>
+              <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[4]?.netPosition, currency)}</p>
             </div>
           </>
         )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-xl border border-border overflow-hidden">
+        <div className="rounded-xl border border-border overflow-x-auto">
           <div className="border-b border-border bg-muted/30 px-3 py-2.5">
             <h2 className="text-sm font-semibold">{de ? 'Kontosalden' : 'Account Balances'}</h2>
           </div>
@@ -220,16 +224,16 @@ export default function CashManagementPage() {
                   key={period.days}
                   type="button"
                   onClick={() => setSelectedDays(period.days)}
-                  className={`grid grid-cols-[4rem_1fr_8rem] items-center gap-3 rounded-lg p-2 text-left text-sm hover:bg-muted/40 ${selectedDays === period.days ? 'bg-muted/50' : ''}`}
+                  className={`grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-2 text-left text-sm hover:bg-muted/40 ${selectedDays === period.days ? 'bg-muted/50' : ''}`}
                 >
                   <span className="text-xs text-muted-foreground">{period.days}d</span>
                   <div className="h-3 rounded-full bg-red-500/20 overflow-hidden">
                     <div className="h-full bg-emerald-500" style={{ width: `${inflowWidth}%` }} />
                   </div>
                   <span className="text-right font-semibold tabular-nums">
-                    {formatMoney(scenarioNet)}
+                    {formatMoney(scenarioNet, currency)}
                     {delayAmount > 0 && scenarioNet !== period.netPosition && (
-                      <span className="block text-[10px] font-normal text-emerald-600">+{formatMoney(delayAmount)}</span>
+                      <span className="block text-[10px] font-normal text-emerald-600">+{formatMoney(delayAmount, currency)}</span>
                     )}
                   </span>
                 </button>
@@ -239,7 +243,7 @@ export default function CashManagementPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-x-auto">
         <div className="border-b border-border bg-muted/30 px-3 py-2.5">
           <h2 className="text-sm font-semibold">
             {de ? `Details ${selectedDays} Tage` : `${selectedDays}-Day Detail`}
@@ -258,9 +262,9 @@ export default function CashManagementPage() {
             {selectedRows.slice(0, 20).map((row) => (
               <tr key={row.date} className="border-t border-border/50">
                 <td className="px-3 py-2">{formatDate(row.date)}</td>
-                <td className="px-3 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(row.inflows)}</td>
-                <td className="px-3 py-2 text-right text-red-600 tabular-nums">{formatMoney(row.outflows)}</td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoney(row.netPosition)}</td>
+                <td className="px-3 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(row.inflows, currency)}</td>
+                <td className="px-3 py-2 text-right text-red-600 tabular-nums">{formatMoney(row.outflows, currency)}</td>
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoney(row.netPosition, currency)}</td>
               </tr>
             ))}
             {selectedRows.length === 0 && (

@@ -1,4 +1,5 @@
 import { useAuth } from './use-auth';
+import { satisfiesPermission } from '@/shared/auth/permission-implications.mjs';
 
 export function usePermissions() {
   const { user } = useAuth();
@@ -23,14 +24,16 @@ export function usePermissions() {
   // grant all access — the backend enforces real permissions on every API call.
   const noPermissionsLoaded = usablePermissions.length === 0 && !!user;
 
+  const heldKeys = usablePermissions.map((p) => {
+    if (typeof p === 'string') return p;
+    if (p.key) return p.key;
+    return `${p.module}:${p.action}`;
+  });
+
+  // Held directly OR implied by a held coarse permission — the same rule the API applies.
   const hasPermission = (perm) => {
     if (adminRole || noPermissionsLoaded) return true;
-    return usablePermissions.some((p) => {
-      if (typeof p === 'string') return p === perm;
-      if (p.key) return p.key === perm;
-      if (p.module && p.action) return `${p.module}:${p.action}` === perm;
-      return false;
-    });
+    return satisfiesPermission(heldKeys, perm);
   };
 
   const hasAnyPermission = (perms) => perms.some((p) => hasPermission(p));

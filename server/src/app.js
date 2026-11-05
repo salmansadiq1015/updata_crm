@@ -1,3 +1,4 @@
+import emailWorkspaceRoutes from './modules/email/email.routes.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
@@ -67,6 +68,7 @@ import extensionRoutes from './modules/extension/extension.routes.js';
 import messagingRoutes, { messagingWebhookRoutes } from './modules/messaging/messaging.routes.js';
 import aiCallingRoutes, { agentToolRoutes, aiCallingWebhookRoutes } from './modules/aiCalling/aiCalling.routes.js';
 import pairedPhoneRoutes, { gatewayRoutes as pairedPhoneGatewayRoutes } from './modules/pairedPhone/pairedPhone.routes.js';
+import inboundCallRoutes, { inboundGatewayRoutes, inboundAgentRoutes } from './modules/inboundCalling/inboundCall.routes.js';
 import linkAssistantRoutes from './modules/linkAssistant/linkAssistant.routes.js';
 import linkAssistantPublicRoutes from './modules/linkAssistant/linkAssistant.public.routes.js';
 import simSmsRoutes from './modules/simSms/simSms.routes.js';
@@ -134,6 +136,8 @@ export function createApp() {
     if (req.path.startsWith('/socket.io')) return next();
     // AI-calling worker + provider webhooks have dedicated limiters (mounted below).
     if (req.path.startsWith('/api/v1/ai-calling/agent/') || req.path.startsWith('/api/v1/webhooks/ai-calling/')) return next();
+    // The incoming-call voice agent has the same dedicated limiter.
+    if (req.path.startsWith('/api/v1/inbound-calls/agent/')) return next();
     // The paired-phone gateway has its own per-device limiter (mounted below).
     if (req.path.startsWith('/api/v1/paired-phone/gateway/')) return next();
     // The SMS link assistant's public page has its own per-IP / per-link limiters.
@@ -164,6 +168,7 @@ export function createApp() {
   app.get("/metrics", metricsEndpoint);
 
   // API v1 routes
+  app.use("/api/v1/email", emailWorkspaceRoutes);
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/users", userRoutes);
   app.use("/api/v1/roles", roleRoutes);
@@ -183,8 +188,13 @@ export function createApp() {
   app.use("/api/v1/webhooks/ai-calling", providerWebhookLimiter, aiCallingWebhookRoutes);
   // Paired-phone calling (owner's phone via the ESP32 Bluetooth gateway): owner API + gateway API.
   app.use("/api/v1/paired-phone/gateway/pair", gatewayPairLimiter);
+  // Incoming calls on the paired phone: ring/events from the gateway (device token).
+  app.use("/api/v1/paired-phone/gateway/inbound", gatewayLimiter, inboundGatewayRoutes);
   app.use("/api/v1/paired-phone/gateway", gatewayLimiter, pairedPhoneGatewayRoutes);
   app.use("/api/v1/paired-phone", pairedPhoneRoutes);
+  // Incoming Calls workspace (owner API) + the voice agent's per-call tool API.
+  app.use("/api/v1/inbound-calls/agent", agentToolLimiter, inboundAgentRoutes);
+  app.use("/api/v1/inbound-calls", inboundCallRoutes);
   // AI SMS agent over the user's own phone SIM (Android private build).
   app.use("/api/v1/sim-sms", simSmsRoutes);
   app.use("/api/v1/sim-calls", simCallRoutes);

@@ -45,6 +45,7 @@ const bankTransactionSchema = new mongoose.Schema(
 // --- Indexes ---
 bankTransactionSchema.index({ bankAccountId: 1 });
 bankTransactionSchema.index({ transactionDate: 1 });
+bankTransactionSchema.index({ currency: 1, transactionDate: 1, bankAccountId: 1 });
 bankTransactionSchema.index({ reference: 1 });
 bankTransactionSchema.index({ bankAccountId: 1, statementId: 1 });
 

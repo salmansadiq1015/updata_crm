@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, Bell, Bot, CalendarClock, ChevronDown, ClipboardCheck, GitMerge, Loader2,
-  Mail, MessageCircle, MessageSquare, Phone, PhoneCall, ScrollText, StickyNote, Workflow,
+  Mail, MessageCircle, MessageSquare, Phone, PhoneCall, PhoneIncoming, ScrollText, StickyNote, Workflow,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useLeadTimeline } from '../hooks/use-lead-workflow';
 import type { TimelineChannel, TimelineEntry, TimelineEntryType, TimelineFilters } from '../types/lead-workflow-types';
@@ -40,7 +41,7 @@ const CHANNEL_ICON: Record<TimelineChannel, ComponentType<{ className?: string }
   phone: Phone, sms: MessageSquare, email: Mail, whatsapp: MessageCircle, other: StickyNote,
 };
 const TYPE_ICON: Partial<Record<TimelineEntryType, ComponentType<{ className?: string }>>> = {
-  ai_call: Bot, qualification: ClipboardCheck, follow_up: CalendarClock, workflow: Workflow, sim_call_event: PhoneCall,
+  ai_call: Bot, qualification: ClipboardCheck, follow_up: CalendarClock, workflow: Workflow, sim_call_event: PhoneCall, incoming_call: PhoneIncoming,
 };
 
 const TYPE_FALLBACK: Record<TimelineEntryType, string> = {
@@ -49,6 +50,7 @@ const TYPE_FALLBACK: Record<TimelineEntryType, string> = {
   ai_call: 'AI call',
   sms_message: 'AI SMS conversation',
   sim_call_event: 'SIM call campaign',
+  incoming_call: 'Incoming call',
   provider_message: 'Campaign message',
   qualification: 'Answer changed',
   follow_up: 'Follow-up',
@@ -65,6 +67,7 @@ const ROUTE_FALLBACK: Record<string, string> = {
 };
 
 const WORKFLOW_FALLBACK: Record<string, string> = {
+  'call.evaluated': 'Call qualification evaluated',
   'assignment.auto': 'Assigned automatically',
   'assignment.manual': 'Assigned',
   'assignment.cleared': 'Unassigned',
@@ -94,6 +97,12 @@ export function entryTitle(entry: TimelineEntry, t: TranslateFn): string {
     return t('leads.history.answerChanged', '{field} changed', { field: t(`leads.qualification.field.${String(entry.meta.fieldKey)}`, entry.title) });
   }
   if (entry.type === 'follow_up') return t('leads.history.type.follow_up', TYPE_FALLBACK.follow_up);
+  if (entry.type === 'incoming_call') {
+    const by = entry.meta.answeredBy;
+    return by === 'ai' ? t('leads.history.incoming.byAi', 'Incoming call answered by the AI agent')
+      : by === 'human' ? t('leads.history.incoming.byHuman', 'Incoming call answered on the phone')
+        : t('leads.history.incoming.unanswered', 'Incoming call (not answered)');
+  }
   return entry.title || t(`leads.history.type.${entry.type}`, TYPE_FALLBACK[entry.type]);
 }
 
@@ -135,6 +144,30 @@ function QualificationDetails({ entry, t, onOpenTranscript }: {
             ? t('leads.history.openTranscriptAtTurn', 'Open transcript at turn {turn}', { turn: meta.transcriptRef.turnIndex + 1 })
             : t('leads.history.openTranscript', 'Open transcript')}
         </button>
+      )}
+    </div>
+  );
+}
+
+/** Incoming call (inboundCalling): outcome, qualification, inquiry and a link to the full call. */
+function IncomingCallDetails({ entry, t }: { entry: TimelineEntry; t: TranslateFn }) {
+  const meta = entry.meta as { qualification?: string | null; inquiry?: string | null; durationSeconds?: number | null; callbackRequested?: boolean; humanRequested?: boolean; device?: string | null; simSlot?: number | null };
+  const callId = entry.links.inboundCallId;
+  const facts = [
+    meta.qualification ? t(`inbound.qualification.${meta.qualification}`, meta.qualification.replace(/_/g, ' ').toLowerCase()) : null,
+    meta.inquiry ? t(`inbound.inquiry.${meta.inquiry}`, meta.inquiry.replace(/_/g, ' ').toLowerCase()) : null,
+    meta.durationSeconds ? t('leads.history.duration', 'Duration {seconds}s', { seconds: Number(meta.durationSeconds) }) : null,
+    meta.callbackRequested ? t('leads.history.incoming.callback', 'Callback requested') : null,
+    meta.humanRequested ? t('leads.history.incoming.human', 'Asked for a person') : null,
+    [meta.device, meta.simSlot != null ? `SIM ${Number(meta.simSlot) + 1}` : null].filter(Boolean).join(' · ') || null,
+  ].filter(Boolean);
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      {facts.length > 0 && <p>{facts.join(' · ')}</p>}
+      {callId && (
+        <Link href={`/incoming-calls?call=${encodeURIComponent(callId)}`} className="inline-flex items-center gap-1 text-blue-700 underline underline-offset-4 dark:text-cyan-300">
+          <PhoneIncoming className="h-3 w-3" aria-hidden="true" />{t('leads.history.incoming.open', 'Open incoming call')}
+        </Link>
       )}
     </div>
   );
@@ -188,6 +221,9 @@ function TimelineItem({ entry, locale, t, focused, onOpenTranscript }: {
               {entry.type === 'qualification' && <QualificationDetails entry={entry} t={t} onOpenTranscript={onOpenTranscript} />}
               {entry.summary && entry.type !== 'qualification' && <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]" dir="auto">{entry.summary}</p>}
               {entry.body && entry.body !== entry.summary && <p className="whitespace-pre-wrap rounded-lg bg-muted/40 px-2 py-1 text-sm [overflow-wrap:anywhere]" dir="auto">{entry.body}</p>}
+              {entry.type === 'provider_message' && <dl className="space-y-1 text-xs text-muted-foreground">
+                {(['recipientEmail', 'providerMessageId', 'sentAt', 'deliveredAt', 'failureReason'] as const).map((key) => meta[key] ? <div key={key} className="flex flex-wrap gap-1"><dt>{t(`leads.history.${key}`, ({ recipientEmail: 'Recipient', providerMessageId: 'Provider message ID', sentAt: 'Sent', deliveredAt: 'Delivered', failureReason: 'Failure reason' })[key])}:</dt><dd className="break-all">{key.endsWith('At') ? formatLeadDateTime(String(meta[key]), locale) : String(meta[key])}</dd></div> : null)}
+              </dl>}
               {entry.type === 'follow_up' && (
                 <p className="text-xs text-muted-foreground">
                   {t('leads.history.followUpDue', 'Due {date}', { date: formatLeadDateTime(String(meta.nextDueAt ?? meta.dueAt ?? ''), locale) })}
@@ -213,6 +249,7 @@ function TimelineItem({ entry, locale, t, focused, onOpenTranscript }: {
                   {t('leads.history.openFullTranscript', 'Open full transcript ({count} turns)', { count: entry.transcript.turnCount })}
                 </button>
               )}
+              {entry.type === 'incoming_call' && <IncomingCallDetails entry={entry} t={t} />}
               {entry.type === 'ai_call' && (
                 <p className="text-xs text-muted-foreground">
                   {meta.durationSeconds != null

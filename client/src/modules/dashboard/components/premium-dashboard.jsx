@@ -7,22 +7,23 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
+  Bot,
+  PhoneCall,
+  PhoneIncoming,
+  UserPlus,
   CalendarClock,
   Check,
   ClipboardList,
-  DatabaseZap,
   Eye,
   EyeOff,
   FileText,
   FolderKanban,
   Gauge,
-  Globe,
   LayoutDashboard,
   RefreshCw,
   ScrollText,
   Settings2,
   Shield,
-  Sparkles,
   TrendingUp,
   Users,
   WalletCards,
@@ -48,14 +49,15 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useDashboardAnalytics, getDefaultGranularity } from '@/modules/dashboard/hooks/use-dashboard-analytics';
+import { useDashboardAnalytics, useDashboardIntelligence, getDefaultGranularity } from '@/modules/dashboard/hooks/use-dashboard-analytics';
 import {
   DASHBOARD_GRANULARITIES,
   DASHBOARD_RANGES,
   DASHBOARD_TABS,
   KPI_CONFIG,
 } from '@/modules/dashboard/data/dashboard-config';
-import { DashboardGreeting } from './dashboard-greeting';
+import { IntelligenceSummary, FeatureOverview } from './dashboard-workspaces';
+import styles from './dashboard.module.css';
 import {
   formatDashboardMetric,
   formatDelta,
@@ -75,7 +77,14 @@ const DashboardChartPanels = dynamic(
   },
 );
 
+const IntelligenceTab = dynamic(
+  () => import('./dashboard-intelligence').then(mod => mod.IntelligenceTab),
+  { ssr: false, loading: () => <DashboardChartSkeleton /> },
+);
+const INTELLIGENCE_TABS = new Set(['assistant', 'calling', 'incoming', 'leads']);
+
 const TAB_ICONS = Object.freeze({
+  assistant: Bot, calling: PhoneCall, incoming: PhoneIncoming, leads: UserPlus,
   overview: LayoutDashboard,
   crm: Users,
   projects: FolderKanban,
@@ -95,32 +104,7 @@ const KPI_ICONS = Object.freeze({
   outstanding: WalletCards,
 });
 
-const ACCENT_CLASSES = Object.freeze({
-  cyan: {
-    icon: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.14)]',
-    line: 'from-cyan-300/70 via-cyan-300/20 to-transparent',
-  },
-  violet: {
-    icon: 'border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200 shadow-[0_0_30px_rgba(167,139,250,0.14)]',
-    line: 'from-brand-300/70 via-brand-300/20 to-transparent',
-  },
-  blue: {
-    icon: 'border-blue-300/20 bg-blue-300/10 text-blue-700 dark:text-blue-200 shadow-[0_0_30px_rgba(96,165,250,0.14)]',
-    line: 'from-blue-300/70 via-blue-300/20 to-transparent',
-  },
-  emerald: {
-    icon: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200 shadow-[0_0_30px_rgba(52,211,153,0.14)]',
-    line: 'from-emerald-300/70 via-emerald-300/20 to-transparent',
-  },
-  amber: {
-    icon: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200 shadow-[0_0_30px_rgba(251,191,36,0.14)]',
-    line: 'from-amber-300/70 via-amber-300/20 to-transparent',
-  },
-  rose: {
-    icon: 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200 shadow-[0_0_30px_rgba(251,113,133,0.14)]',
-    line: 'from-rose-300/70 via-rose-300/20 to-transparent',
-  },
-});
+const METRIC_ACCENT = 'border-primary/10 bg-primary/5 text-primary';
 
 const QUICK_ACTIONS = Object.freeze([
   { labelKey: 'dashboard.manageUsers', fallback: 'Manage Users', href: '/settings/users', icon: Users, permission: 'users:read' },
@@ -132,23 +116,22 @@ const QUICK_ACTIONS = Object.freeze([
 function MetricCard({ item, locale, t }) {
   const config = KPI_CONFIG[item.id] || KPI_CONFIG.projects;
   const Icon = KPI_ICONS[item.id] || BarChart3;
-  const accent = ACCENT_CLASSES[config.accent] || ACCENT_CLASSES.cyan;
+
   const isPositive = Number(item.delta) >= 0;
 
   const card = (
-    <GlassPanel className={cn('group min-h-36 transition-transform duration-200 hover:-translate-y-0.5', config.href && 'cursor-pointer')}>
-      <div className={cn('absolute inset-x-0 top-0 h-px bg-gradient-to-r', accent.line)} />
+    <GlassPanel className={cn('dashboard-metric group min-h-32 transition-colors duration-200', config.href && 'cursor-pointer')}>
       <div className="flex h-full flex-col justify-between gap-5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-muted-foreground">
               {t(config.labelKey, config.fallback)}
             </p>
-            <p className="mt-3 text-3xl font-semibold tracking-normal text-foreground tabular-nums">
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {formatDashboardMetric(item.value, item.format, locale)}
             </p>
           </div>
-          <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border', accent.icon)}>
+          <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border', METRIC_ACCENT)}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
@@ -343,6 +326,7 @@ export function PremiumDashboard() {
 
   const filters = useMemo(() => ({ range, granularity }), [granularity, range]);
   const { data, isLoading, isError, error, refetch, isFetching } = useDashboardAnalytics(filters);
+  const intelligence = useDashboardIntelligence(filters);
 
   // KPIs available to this user (permission-based)
   const permittedKpis = useMemo(
@@ -365,7 +349,7 @@ export function PremiumDashboard() {
     [hasPermission],
   );
   const visibleTabs = useMemo(
-    () => permittedTabs.filter((tab) => !hiddenTabs.includes(tab.id)),
+    () => permittedTabs.filter((tab) => tab.id === 'overview' || !hiddenTabs.includes(tab.id)),
     [permittedTabs, hiddenTabs],
   );
 
@@ -400,196 +384,57 @@ export function PremiumDashboard() {
     ? new Date(data.updatedAt).toLocaleTimeString(localeCode, { hour: '2-digit', minute: '2-digit' })
     : null;
 
+  const refreshAll = () => { void refetch(); void intelligence.refetch(); };
   return (
-    <section className="relative -m-4 min-h-[calc(100dvh-4rem)] overflow-hidden bg-background text-foreground sm:-m-6">
-
-      <div className="relative z-10 mx-auto flex max-w-[1800px] flex-col gap-5 p-4 sm:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 space-y-3">
-            <div className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 text-xs font-semibold uppercase text-cyan-700 dark:text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.1)]">
-              <Sparkles className="h-3.5 w-3.5" />
-              {t('dashboard.analytics.badge', 'Executive analytics')}
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                {t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}
-              </h1>
-              <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                {t('dashboard.analytics.subtitle', 'Live business performance across customers, projects, sales, tasks, scheduling, accounting, and system activity.')}
-              </p>
-            </div>
+    <section className={cn(styles.dashboard, 'relative -m-4 min-h-[calc(100dvh-4rem)] text-foreground sm:-m-6')}>
+      <div className="mx-auto flex max-w-[1800px] min-w-0 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+        <header className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center">
+          <div className="min-w-0">
+            <p className="mb-2 text-xs font-medium tracking-wide text-primary">{t('dashboard.intelligence.workspace')}</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{t('dashboard.intelligence.subtitle')}</p>
           </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={range} onValueChange={handleRangeChange}>
-                <SelectTrigger
-                  aria-label={t('dashboard.analytics.range', 'Analytics range')}
-                  className="h-11 min-w-36 border-border bg-card text-foreground shadow-none hover:bg-accent"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DASHBOARD_RANGES.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {t(option.labelKey, option.fallback)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger aria-label={t('dashboard.analytics.range')} className="h-10 w-32 rounded-full bg-card shadow-none"><SelectValue /></SelectTrigger>
+                <SelectContent>{DASHBOARD_RANGES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
               </Select>
-
               <Select value={granularity} onValueChange={setGranularity}>
-                <SelectTrigger
-                  aria-label={t('dashboard.analytics.granularity', 'Analytics granularity')}
-                  className="h-11 min-w-36 border-border bg-card text-foreground shadow-none hover:bg-accent"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DASHBOARD_GRANULARITIES.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {t(option.labelKey, option.fallback)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger aria-label={t('dashboard.analytics.granularity')} className="h-10 w-28 rounded-full bg-card shadow-none"><SelectValue /></SelectTrigger>
+                <SelectContent>{DASHBOARD_GRANULARITIES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-
-            <div className="flex gap-2">
               <Popover open={configOpen} onOpenChange={setConfigOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    aria-label={t('dashboard.config.title', 'Dashboard konfigurieren')}
-                    className="h-11 border-border bg-card px-4 text-foreground hover:bg-accent hover:text-foreground"
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    <span className="sm:hidden">{t('dashboard.config.title', 'Konfigurieren')}</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-auto p-4">
-                  <DashboardConfigPopover
-                    hiddenKpis={hiddenKpis}
-                    hiddenTabs={hiddenTabs}
-                    availableKpis={permittedKpis}
-                    availableTabs={permittedTabs}
-                    onSave={handleSaveConfig}
-                    t={t}
-                  />
-                </PopoverContent>
+                <PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={t('dashboard.config.title')}><Settings2 className="size-4" /></Button></PopoverTrigger>
+                <PopoverContent align="end" className="max-h-[75dvh] w-auto overflow-y-auto p-4"><DashboardConfigPopover hiddenKpis={hiddenKpis} hiddenTabs={hiddenTabs} availableKpis={permittedKpis} availableTabs={permittedTabs} onSave={handleSaveConfig} t={t} /></PopoverContent>
               </Popover>
-
-              <Button
-                type="button"
-                variant="outline"
-                aria-label={t('dashboard.analytics.refresh', 'Refresh analytics')}
-                onClick={() => refetch()}
-                className="h-11 border-border bg-card px-4 text-foreground hover:bg-accent hover:text-foreground"
-              >
-                <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-                <span className="sm:hidden">{t('dashboard.analytics.refresh', 'Refresh')}</span>
-              </Button>
+              <Button variant="outline" size="icon" aria-label={t('dashboard.analytics.refresh')} onClick={refreshAll} disabled={isFetching || intelligence.isFetching}><RefreshCw className={cn('size-4', (isFetching || intelligence.isFetching) && 'animate-spin')} /></Button>
             </div>
+            {updatedAt && <span className="text-xs text-muted-foreground xl:text-end">{t('dashboard.analytics.updatedAt')} {updatedAt}</span>}
           </div>
-        </div>
+        </header>
 
-        {/* Day summary + shortcuts (client feedback — role start page) */}
-        <DashboardGreeting />
+        <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="min-w-0 gap-6">
+          <div className="dashboard-tab-navigation min-w-0 overflow-x-auto border-b border-border pb-1">
+            <TabsList variant="line" aria-label={t('dashboard.config.tabs')} className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-none bg-transparent p-0">
+              {visibleTabs.map(tab => { const Icon = TAB_ICONS[tab.id] || BarChart3; return <TabsTrigger key={tab.id} value={tab.id} className="h-11 gap-2 rounded-none px-3 text-[13px]"><Icon className="size-4" />{t(tab.labelKey, tab.fallback)}</TabsTrigger>; })}
+            </TabsList>
+          </div>
+          <TabsContent value={safeActiveTab} className="m-0 min-w-0 space-y-5">
+            {INTELLIGENCE_TABS.has(safeActiveTab) ? <IntelligenceTab name={safeActiveTab} query={intelligence} t={t} locale={localeCode} /> : <>
+              <WarningStrip warnings={data?.warnings} t={t} />
+              {safeActiveTab === 'overview' && <>
+                <IntelligenceSummary query={intelligence} t={t} locale={localeCode} onSelect={id => { if (!visibleTabs.some(tab => tab.id === id)) setConfigOpen(true); else setActiveTab(id); }} />
+                {isLoading ? <MetricSkeletonGrid count={visibleKpiIds.length || 3} /> : !isError && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data?.overview?.kpis?.filter(item => visibleKpiIds.includes(item.id)).map(item => <MetricCard key={item.id} item={item} locale={localeCode} t={t} />)}</div>}
+              </>}
+              {isError ? <DashboardError error={error} onRetry={refreshAll} t={t} /> : isLoading ? <DashboardChartSkeleton /> : <DashboardChartPanels activeTab={safeActiveTab} data={data} t={t} locale={localeCode} isFetching={isFetching} />}
+              {safeActiveTab === 'overview' && <FeatureOverview data={data} intelligence={intelligence.data} t={t} locale={localeCode} />}
+            </>}
+          </TabsContent>
+        </Tabs>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
-            <Globe className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-200" />
-            {t('dashboard.scope.system', 'Systemweit')}
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
-            <DatabaseZap className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-200" />
-            {t('dashboard.analytics.optimizedApi', 'Single cached analytics API')}
-          </span>
-          {updatedAt && (
-            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
-              {t('dashboard.analytics.updatedAt', 'Updated')} {updatedAt}
-            </span>
-          )}
-        </div>
-
-        <WarningStrip warnings={data?.warnings} t={t} />
-
-        {isError ? (
-          <DashboardError error={error} onRetry={() => refetch()} t={t} />
-        ) : (
-          <>
-            {isLoading ? (
-              <MetricSkeletonGrid count={visibleKpiIds.length || 3} />
-            ) : (
-              visibleKpiIds.length > 0 && (
-                <div className={cn(
-                  'grid gap-4 sm:grid-cols-2',
-                  visibleKpiIds.length > 2 && 'xl:grid-cols-3',
-                )}>
-                  {data?.overview?.kpis
-                    ?.filter((item) => visibleKpiIds.includes(item.id))
-                    .map((item) => (
-                      <MetricCard key={item.id} item={item} locale={localeCode} t={t} />
-                    ))}
-                </div>
-              )
-            )}
-
-            <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="gap-4">
-              <div className="overflow-x-auto pb-1">
-                <TabsList className="min-h-12 min-w-max gap-1 rounded-lg border border-border bg-card p-1 text-muted-foreground shadow-sm">
-                  {visibleTabs.map((tab) => {
-                    const Icon = TAB_ICONS[tab.id] || BarChart3;
-                    return (
-                      <TabsTrigger
-                        key={tab.id}
-                        value={tab.id}
-                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-brand-400/70 data-active:bg-primary data-active:text-white data-active:hover:text-white data-active:ring-1 data-active:ring-brand-400/60 data-active:shadow-sm"
-                      >
-                        <Icon className="h-4 w-4" />
-                        {t(tab.labelKey, tab.fallback)}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-              </div>
-
-              <TabsContent value={safeActiveTab} className="mt-0">
-                {isLoading ? (
-                  <DashboardChartSkeleton />
-                ) : (
-                  <DashboardChartPanels
-                    activeTab={safeActiveTab}
-                    data={data}
-                    t={t}
-                    locale={localeCode}
-                    isFetching={isFetching}
-                  />
-                )}
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {visibleQuickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link key={action.href} href={action.href} className="group block">
-                <GlassPanel className="transition-transform duration-200 group-hover:-translate-y-0.5">
-                  <div className="flex min-h-16 items-center gap-3 p-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200 shadow-[0_0_26px_rgba(78,116,219,0.1)]">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span className="min-w-0 truncate text-sm font-semibold text-foreground">
-                      {t(action.labelKey, action.fallback)}
-                    </span>
-                  </div>
-                </GlassPanel>
-              </Link>
-            );
-          })}
+        <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-border pt-5">
+          {visibleQuickActions.map(action => { const Icon = action.icon; return <Link href={action.href} key={action.href} className="inline-flex items-center gap-2 text-xs text-muted-foreground transition hover:text-primary"><Icon className="size-3.5" />{t(action.labelKey, action.fallback)}</Link>; })}
         </div>
       </div>
     </section>

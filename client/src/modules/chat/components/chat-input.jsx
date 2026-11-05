@@ -25,8 +25,12 @@ function FileTypeIcon({ type, className }) {
 
 export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, roomId, room, currentUserId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }, ref) {
   const { t } = useLanguage();
-  const [text, setText] = useState('');
-  const [draftSourceId, setDraftSourceId] = useState(null);
+  const draftKey = `chat-draft:${currentUserId}:${roomId}`;
+  const [text, setText] = useState(() => { try { return sessionStorage.getItem(draftKey) || ''; } catch { return ''; } });
+  const sending = useRef(false);
+  const retryPayload = useRef(null);
+  useEffect(() => { if (!editTarget) { try { sessionStorage.setItem(draftKey, text); } catch { /* Storage may be unavailable. */ } } }, [text, draftKey, editTarget]);
+  const [editDraft, setEditDraft] = useState(null);
   const [attachment, setAttachment] = useState(null); // { url, fileId, messageType, name, size, preview }
   const [showRecorder, setShowRecorder] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -42,7 +46,10 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
     clearUploadState,
   } = useChatAttachmentUpload();
   const editTargetId = editTarget?._id || null;
-  const inputValue = editTarget && draftSourceId !== editTargetId ? (editTarget.content || '') : text;
+  const inputValue = editTarget ? (editDraft?.id === editTargetId ? editDraft.text : editTarget.content || '') : text;
+  const updateDraft = useCallback(value => {
+    if (editTargetId) setEditDraft({ id: editTargetId, text: value }); else setText(value);
+  }, [editTargetId]);
   const {
     suggestions: mentionSuggestions,
     registerMention,
@@ -69,7 +76,7 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
   }, [clearUploadState]);
 
   const handleSend = useCallback(async () => {
-    if (!canSend) return;
+    if (!canSend || sending.current) return;
     const content = inputValue.trim();
     const payload = editTarget
       ? { content, messageType: 'TEXT' }
@@ -81,16 +88,25 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
           replyToId: replyTarget?._id,
           mentions: getMentionIds(content),
         };
-    await onSend(payload);
-    setText('');
-    setDraftSourceId(null);
+    const fingerprint = JSON.stringify(payload);
+    if (retryPayload.current?.fingerprint !== fingerprint) retryPayload.current = { fingerprint, id: crypto.randomUUID() };
+    sending.current = true;
+    let success;
+    try { success = await onSend({ ...payload, clientMessageId: retryPayload.current.id }); } catch { success = false; } finally { sending.current = false; }
+    if (success === false) return;
+    retryPayload.current = null;
+    if (!editTarget) {
+      setText('');
+      try { sessionStorage.removeItem(draftKey); } catch { /* Storage may be unavailable. */ }
+    }
+    setEditDraft(null);
     clearAttachment();
     clearMentions();
     textareaRef.current?.focus();
-  }, [canSend, inputValue, attachment, replyTarget, editTarget, onSend, clearAttachment, clearMentions, getMentionIds]);
+  }, [canSend, inputValue, attachment, replyTarget, editTarget, onSend, clearAttachment, clearMentions, getMentionIds, draftKey]);
 
   const handleKeyDown = useCallback(e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       handleSend();
     }
@@ -126,24 +142,16 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
 
   const handleAudioComplete = useCallback(result => {
     setShowRecorder(false);
-    onSend({
-      messageType: 'AUDIO',
-      content: '',
-      attachmentUrl: result.attachmentUrl,
-      attachmentFileId: result.attachmentFileId,
-      replyToId: replyTarget?._id,
-      mentions: [],
-    });
-  }, [replyTarget, onSend]);
+    setAttachment({ url: result.attachmentUrl, fileId: result.attachmentFileId, messageType: 'AUDIO', name: t('chat.voiceMessage', 'Voice message') });
+  }, [t]);
 
   const handleMentionSelect = useCallback((member) => {
-    setText(
+    updateDraft(
       inputValue.replace(/(^|\s)@([^\s@]{0,40})$/, (_, prefix) => `${prefix}@${member.name} `)
     );
-    setDraftSourceId(editTargetId);
     registerMention(member);
     textareaRef.current?.focus();
-  }, [editTargetId, inputValue, registerMention]);
+  }, [inputValue, registerMention, updateDraft]);
 
   if (isBlocked) {
     return (
@@ -155,11 +163,11 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
   }
 
   return (
-    <div className="border-t border-border/40 bg-card">
+    <div className="chat-composer border-t border-border/40 bg-card">
       {editTarget && (
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-xs text-primary">
           <span className="font-medium">{t('chat.editingMessage', 'Editing message')}</span>
-          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => { onClearEdit?.(); setText(''); setDraftSourceId(null); }}>
+          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => { onClearEdit?.(); setEditDraft(null); }}>
             <X className="h-3 w-3" />
           </Button>
         </div>
@@ -236,8 +244,8 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
             variant="ghost" size="icon"
             className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
             onClick={() => { setUploadError(''); fileInputRef.current?.click(); }}
-            disabled={uploading}
-            title={t('chat.attachFile', 'Attach file (max 25 MB)')}
+            disabled={uploading || isLoading}
+            aria-label={t('chat.attachFile', 'Attach file (max 25 MB)')}
           >
             {uploading
               ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -282,9 +290,12 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
             <Textarea
               ref={textareaRef}
               value={inputValue}
-              onChange={e => { setText(e.target.value); setDraftSourceId(editTargetId); onKeystroke(); }}
+              onChange={e => { updateDraft(e.target.value); onKeystroke(); }}
               onKeyDown={handleKeyDown}
               placeholder={t('chat.typeMessage')}
+              aria-label={t('chat.typeMessage')}
+              maxLength={5000}
+              disabled={isLoading}
               rows={1}
               className={cn(
                 'min-h-10 max-h-32 resize-none rounded-2xl border-0 bg-muted/60 py-2.5 pr-9 pl-3',
@@ -295,6 +306,7 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
             <Button
               variant="ghost" size="icon"
               className="absolute right-1.5 bottom-1 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+              aria-label={t('chat.emoji', 'Emoji')}
               onClick={() => setShowPicker(v => !v)}
             >
               <Smile className="h-4 w-4" />
@@ -306,6 +318,7 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
               size="icon"
               className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleSend}
+              aria-label={t('chat.send', 'Send message')}
               disabled={isLoading}
             >
               <ArrowUp className="h-4 w-4" />
@@ -314,8 +327,9 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
             <Button
               variant="ghost" size="icon"
               className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+              aria-label={t('chat.voiceMessage', 'Voice message')}
               onClick={() => setShowRecorder(true)}
-              disabled={uploading}
+              disabled={uploading || isLoading}
             >
               <Mic className="h-4 w-4" />
             </Button>
@@ -327,9 +341,8 @@ export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, room
         <div className="px-3 pb-2">
           <ChatEmojiPicker
             onSelect={emoji => {
-              setText(`${inputValue}${emoji}`);
-              setDraftSourceId(editTargetId);
-              setShowPicker(false);
+              updateDraft(`${inputValue}${emoji}`);
+                        setShowPicker(false);
               textareaRef.current?.focus();
             }}
             onClose={() => setShowPicker(false)}

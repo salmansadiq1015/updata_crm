@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Script } from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -9,7 +10,8 @@ import path from 'node:path';
 const temp = await mkdtemp(path.join(os.tmpdir(), 'maps-regression-'));
 try {
   const bundle = await readFile(new URL('../dist/content/maps.js', import.meta.url), 'utf8');
-  assert(!/^\s*import\s/m.test(bundle), 'content script must remain a classic script');
+  // Parse as an actual classic script: minified import{...} must fail too.
+  new Script(bundle, { filename: 'content/maps.js' });
   const fixture = path.join(temp, 'fixture.html');
   await writeFile(fixture, `<!doctype html><html><body>
     <div role="feed" style="height:280px;width:500px;overflow:auto;position:relative"><div id="space" style="height:5000px"></div><div id="cards"></div></div>
@@ -57,7 +59,14 @@ try {
           if (!command('GET_SCROLL_STATE').endConfirmed) throw Error('Missed localized end: ' + marker);
           end.remove();
         }
-        cards.querySelector('article').insertAdjacentHTML('beforeend', '<button data-item-id="category">Software company</button>');
+        cards.querySelector('article').insertAdjacentHTML('beforeend', '<button class="DkEaL">Add a label</button>');
+        if (command('COLLECT_VISIBLE').records[0].category !== null) throw Error('Maps action was used as category');
+        cards.querySelector('article').insertAdjacentHTML('beforeend', '<button data-item-id="category">Hotel</button>');
+        if (command('COLLECT_VISIBLE').records[0].category !== 'Hotel') throw Error('Action obscured explicit Hotel category');
+        cards.querySelector('article [data-item-id="category"]').remove();
+        cards.querySelector('article').insertAdjacentHTML('beforeend', '<span class="DkEaL">Hotel</span>');
+        if (command('COLLECT_VISIBLE').records[0].category !== 'Hotel') throw Error('First Maps action obscured later category');
+        cards.querySelector('article').innerHTML += '<button data-item-id="category">Software company</button>';
         if (command('COLLECT_VISIBLE').records[0].category !== 'Software company') throw Error('Lost explicit category');
         document.querySelector('#report').textContent = 'MAPS_REGRESSION_PASS ' + JSON.stringify({ records: records.length, maxStep, category: 'Software company' });
       } catch (error) { document.querySelector('#report').textContent = 'MAPS_REGRESSION_FAIL ' + error.stack; }

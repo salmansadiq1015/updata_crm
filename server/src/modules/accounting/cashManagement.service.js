@@ -1,3 +1,4 @@
+import { roundCurrency } from '../../shared/data/currencies.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import fiscalPeriodService from './fiscalPeriod.service.js';
 import auditService from '../auth/audit.service.js';
@@ -37,28 +38,30 @@ class CashManagementService {
    * Generate cash flow forecast for the specified number of days.
    * Combines AR inflows (invoices due) and AP outflows (payables due).
    */
-  async getForecast({ days = 90 } = {}) {
-    const cacheKey = `accounting:cash:forecast:${days}`;
+  async getForecast({ days = 90, currency = 'CHF' } = {}) {
+    const cacheKey = `accounting:cash:forecast:${currency}:${days}`;
 
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
         // Get current bank balances
         const bankAccountRepository = (await import('./bankAccount.repository.js')).default;
-        const accounts = await bankAccountRepository.findAll();
+        const accounts = (await bankAccountRepository.findAll()).filter(account => account.currency === currency);
         const currentBalance = accounts.reduce((sum, acct) => sum + (acct.currentBalance || 0), 0);
 
         const now = new Date();
-        const endDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+        now.setUTCHours(0, 0, 0, 0);
+        const endDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 - 1);
 
         // Get AR invoices due (inflows)
         let arInvoices = [];
         try {
           const Invoice = (await import('../qop/invoice.model.js')).default;
           arInvoices = await Invoice.find({
+            currency,
             status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
             dueDate: { $gte: now, $lte: endDate },
-          }).select('dueDate amountDue totalGross').lean();
+          }).select('dueDate amountDue totalGross currency').lean();
         } catch {
           logger.warn('QOP Invoice model not available for cash forecast', {
             module: 'accounting',
@@ -70,10 +73,12 @@ class CashManagementService {
         let apInvoices = [];
         try {
           const apInvoiceRepository = (await import('./apInvoice.repository.js')).default;
-          apInvoices = await apInvoiceRepository.findForPaymentBatch(
+          apInvoices = await apInvoiceRepository.findForCashForecast(
             now.toISOString(),
             endDate.toISOString(),
+            currency,
           );
+          apInvoices = apInvoices.filter(invoice => invoice.currency === currency);
         } catch {
           logger.warn('AP invoice repository not available for cash forecast', {
             module: 'accounting',
@@ -92,25 +97,26 @@ class CashManagementService {
           // Sum inflows for this day
           const inflows = arInvoices
             .filter((inv) => new Date(inv.dueDate).toISOString().split('T')[0] === dateStr)
-            .reduce((sum, inv) => sum + (inv.amountDue || inv.totalGross || 0), 0);
+            .reduce((sum, inv) => sum + (inv.amountDue ?? inv.totalGross ?? 0), 0);
 
           // Sum outflows for this day
           const outflows = apInvoices
             .filter((inv) => new Date(inv.dueDate).toISOString().split('T')[0] === dateStr)
-            .reduce((sum, inv) => sum + (inv.outstandingAmount || inv.totalAmount || 0), 0);
+            .reduce((sum, inv) => sum + (inv.outstandingAmount ?? inv.totalAmount ?? 0), 0);
 
           runningBalance = runningBalance + inflows - outflows;
 
           projections.push({
             date: dateStr,
-            inflows: Math.round(inflows * 100) / 100,
-            outflows: Math.round(outflows * 100) / 100,
-            netPosition: Math.round(runningBalance * 100) / 100,
+            inflows: roundCurrency(inflows, currency),
+            outflows: roundCurrency(outflows, currency),
+            netPosition: roundCurrency(runningBalance, currency),
           });
         }
 
         return {
-          currentBalance: Math.round(currentBalance * 100) / 100,
+          currency,
+          currentBalance: roundCurrency(currentBalance, currency),
           projections,
         };
       },
@@ -130,6 +136,7 @@ class CashManagementService {
     // Invalidate caches
     await cacheManager.del('accounting:cash:balances');
     await cacheManager.del('accounting:bank:accounts');
+    await cacheManager.invalidatePattern('accounting:cash:forecast:*');
 
     auditService.logEvent({
       eventType: 'accounting.cash.manual_balance',

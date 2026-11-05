@@ -1,3 +1,4 @@
+import { getAccountingCurrency } from '../state/accounting-currency';
 import { DEFAULT_ACCOUNTING_CURRENCY } from '../constants/accounting-constants';
 
 function todayInput() {
@@ -22,7 +23,7 @@ function numberOrZero(value) {
 export function defaultBudgetFilters() {
   return {
     status: 'ALL',
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
     search: '',
   };
 }
@@ -33,7 +34,7 @@ export function defaultBudgetForm() {
     description: '',
     startDate: yearStart(),
     endDate: yearEnd(),
-    currency: DEFAULT_ACCOUNTING_CURRENCY,
+    currency: getAccountingCurrency(),
     lines: [defaultBudgetLine()],
   };
 }

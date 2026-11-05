@@ -14,7 +14,7 @@
 
 import { EventEmitter } from 'node:events';
 
-import { FrameDecoder, SeqTracker, T, PROTO_MAJOR, CODEC_RATE, build, encodeFrame, parse } from './protocol.js';
+import { CAP, FrameDecoder, SeqTracker, T, PROTO_MAJOR, CODEC_RATE, build, encodeFrame, parse } from './protocol.js';
 import { bufferFromPcm, pcmFromBuffer } from './pcm.js';
 import { callStateOf } from './callScript.js';
 
@@ -119,6 +119,20 @@ export class Esp32Device extends EventEmitter {
 
   hangup(callRef) {
     return this.command(T.HANGUP, build.hangup(callRef)); // caller decides; bad_state means "already idle"
+  }
+
+  /**
+   * Answer the ringing incoming call (firmware 0.1.4+). Resolves with the ACK like hangup(): the
+   * caller decides; `unknown_type` means the firmware predates answering, `bad_state` that the
+   * phone is not (or no longer) ringing.
+   */
+  answer(callRef) {
+    return this.command(T.ANSWER, build.answer(callRef));
+  }
+
+  /** True when the firmware advertises T.ANSWER (HELLO_ACK capability bit). */
+  get supportsAnswer() {
+    return Boolean(this.info && (this.info.capabilities & CAP.ANSWER));
   }
 
   audioConnect() {
@@ -359,8 +373,16 @@ export class Esp32Device extends EventEmitter {
       this._send(T.PING, build.ping(this.now() & 0xffffffff));
       if (!this.probing) {
         this.probing = true;
-        this.statusRequest().catch(error => {
-          if (!this.closed) this._lost(`USB control session check failed: ${error.code || error.message}`);
+        this.statusRequest().then(() => { this.probeTimeouts = 0; }, error => {
+          if (this.closed) return;
+          // One lost frame on the serial line (no ACK) must not tear down a healthy session — the
+          // protocol is designed so a dropped frame costs one frame. Two misses in a row, an
+          // explicit refusal (no_session…) or silence (lostAfterMs, above) still mean "lost".
+          if (error.code === 'ack_timeout' && this.now() - this.lastRx <= this.lostAfterMs && (this.probeTimeouts = (this.probeTimeouts || 0) + 1) < 2) {
+            this.emit('probe_retry', { code: error.code });
+            return;
+          }
+          this._lost(`USB control session check failed: ${error.code || error.message}`);
         }).finally(() => { this.probing = false; });
       }
     }

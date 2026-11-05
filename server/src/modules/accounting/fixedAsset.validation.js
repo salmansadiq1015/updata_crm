@@ -1,8 +1,9 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { FIXED_ASSET_METHODS, FIXED_ASSET_STATUSES } from './fixedAsset.model.js';
 
-const currency = Joi.string().trim().uppercase().pattern(/^[A-Z]{3}$/).length(3);
+const currency = Joi.string().trim().uppercase().valid(...CURRENCY_CODES);
 
 const accountFields = {
   assetAccountId: objectId.allow(null),

@@ -1,3 +1,4 @@
+import { CURRENCY_CODES } from '../../shared/data/currencies.js';
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 import { ACCOUNTING_ENTITY_STATUSES, ACCOUNTING_ENTITY_TYPES } from './accountingEntity.model.js';
@@ -24,7 +25,7 @@ export const createAccountingEntitySchema = {
     legalName: Joi.string().trim().max(220).allow('', null),
     type: Joi.string().valid(...ACCOUNTING_ENTITY_TYPES).required(),
     parentId: objectId.allow(null),
-    baseCurrency: Joi.string().valid('CHF', 'EUR').default('CHF'),
+    baseCurrency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES).default('CHF'),
     taxIdentifier: Joi.string().trim().max(80).allow('', null),
     fiscalYearStartMonth: Joi.number().integer().min(1).max(12).default(1),
     status: Joi.string().valid(...ACCOUNTING_ENTITY_STATUSES).default('ACTIVE'),
@@ -38,7 +39,7 @@ export const updateAccountingEntitySchema = {
     name: Joi.string().trim().max(160),
     legalName: Joi.string().trim().max(220).allow('', null),
     parentId: objectId.allow(null),
-    baseCurrency: Joi.string().valid('CHF', 'EUR'),
+    baseCurrency: Joi.string().trim().uppercase().valid(...CURRENCY_CODES),
     taxIdentifier: Joi.string().trim().max(80).allow('', null),
     fiscalYearStartMonth: Joi.number().integer().min(1).max(12),
     status: Joi.string().valid(...ACCOUNTING_ENTITY_STATUSES),

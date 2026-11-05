@@ -1,6 +1,12 @@
+import { taskTimeTranslations } from './task-time-translations';
+import { chatWorkspaceTranslations } from './chat-workspace-translations';
+import { taskWorkspaceTranslations } from './task-workspace-translations';
+import { dashboardIntelligenceTranslations } from './dashboard-intelligence-translations';
 import { sidebarSettingsTranslations } from './sidebar-settings-translations';
 import { companyTranslations } from './company-translations';
 import { callingExperienceTranslations } from './calling-experience-translations';
+import { inboundCallsTranslations } from './inbound-calls-translations';
+import { aiFollowUpTranslations } from './ai-follow-up-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
 import { callingIntelligenceTranslations } from './calling-intelligence-translations';
 import { callingQualityTranslations } from './calling-quality-translations';
@@ -1228,6 +1234,8 @@ const baseTranslations = {
     ...sidebarSettingsTranslations.de,
     ...companyTranslations.de,
     ...callingExperienceTranslations.de,
+    ...inboundCallsTranslations.de,
+    ...aiFollowUpTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
     // Navbar
@@ -1424,6 +1432,10 @@ const baseTranslations = {
     'dashboard.activity.accountActivated': 'Konto aktiviert',
     'dashboard.activity.empty': 'Keine aktuellen Aktivitäten.',
     ...dashboardAnalyticsTranslations.de,
+    ...dashboardIntelligenceTranslations.de,
+    ...taskWorkspaceTranslations.de,
+    ...taskTimeTranslations.de,
+    ...chatWorkspaceTranslations.de,
     ...callingIntelligenceTranslations.de,
     ...callingQualityTranslations.de,
     ...platformGovernanceTranslations.de,
@@ -2132,6 +2144,7 @@ const baseTranslations = {
     'catalog.igh.config.syncPlaceholder': '0 3 * * 0 (jeden Sonntag 3 Uhr)',
     'catalog.igh.config.syncDescription': 'Standard-Cron-Syntax. Leer lassen, um automatische Synchronisation zu deaktivieren.',
 
+    'sidebar.email': 'Email',
     'sidebar.notifications': 'Benachrichtigungen',
     'sidebar.ai': 'KI-Assistent',
     'sidebar.aiMain': 'Assistenten-Chat',
@@ -6278,6 +6291,8 @@ const baseTranslations = {
     ...sidebarSettingsTranslations.en,
     ...companyTranslations.en,
     ...callingExperienceTranslations.en,
+    ...inboundCallsTranslations.en,
+    ...aiFollowUpTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
     // Navbar
@@ -6474,6 +6489,10 @@ const baseTranslations = {
     'dashboard.activity.accountActivated': 'Account activated',
     'dashboard.activity.empty': 'No recent activity.',
     ...dashboardAnalyticsTranslations.en,
+    ...dashboardIntelligenceTranslations.en,
+    ...taskWorkspaceTranslations.en,
+    ...taskTimeTranslations.en,
+    ...chatWorkspaceTranslations.en,
     ...callingIntelligenceTranslations.en,
     ...callingQualityTranslations.en,
     ...platformGovernanceTranslations.en,
@@ -7186,6 +7205,7 @@ const baseTranslations = {
     'catalog.igh.config.syncPlaceholder': '0 3 * * 0 (every Sunday 3am)',
     'catalog.igh.config.syncDescription': 'Standard cron syntax. Leave blank to disable automatic sync.',
 
+    'sidebar.email': 'Email',
     'sidebar.notifications': 'Notifications',
     'sidebar.ai': 'AI Assistant',
     'sidebar.aiMain': 'Assistant Chat',
@@ -11336,7 +11356,13 @@ const baseTranslations = {
     ...sidebarSettingsTranslations.fr,
     ...companyTranslations.fr,
     ...callingExperienceTranslations.fr,
+    ...inboundCallsTranslations.fr,
+    ...aiFollowUpTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
+    ...dashboardIntelligenceTranslations.fr,
+    ...taskWorkspaceTranslations.fr,
+    ...taskTimeTranslations.fr,
+    ...chatWorkspaceTranslations.fr,
     ...callingIntelligenceTranslations.fr,
     ...callingQualityTranslations.fr,
     ...platformGovernanceTranslations.fr,
@@ -11408,6 +11434,7 @@ const baseTranslations = {
     'sidebar.accounting': 'Comptabilite',
     'sidebar.tasks': 'Taches',
     'sidebar.catalog': 'Catalogue',
+    'sidebar.email': 'Email',
     'sidebar.notifications': 'Notifications',
     'sidebar.ai': 'Assistant IA',
     'sidebar.aiMain': 'Chat assistant',
@@ -11487,7 +11514,13 @@ const baseTranslations = {
     ...sidebarSettingsTranslations.ar,
     ...companyTranslations.ar,
     ...callingExperienceTranslations.ar,
+    ...inboundCallsTranslations.ar,
+    ...aiFollowUpTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
+    ...dashboardIntelligenceTranslations.ar,
+    ...taskWorkspaceTranslations.ar,
+    ...taskTimeTranslations.ar,
+    ...chatWorkspaceTranslations.ar,
     ...callingIntelligenceTranslations.ar,
     ...callingQualityTranslations.ar,
     ...platformGovernanceTranslations.ar,
@@ -11559,6 +11592,7 @@ const baseTranslations = {
     'sidebar.accounting': 'المحاسبة',
     'sidebar.tasks': 'المهام',
     'sidebar.catalog': 'الكتالوج',
+    'sidebar.email': 'Email',
     'sidebar.notifications': 'الاشعارات',
     'sidebar.ai': 'مساعد الذكاء الاصطناعي',
     'sidebar.aiMain': 'دردشة المساعد',

@@ -86,6 +86,7 @@ export const agentConfig = Joi.object({
   speakingStyle: Joi.string().valid(...SPEAKING_STYLES).default('professional'),
   customStyle: Joi.string().trim().max(500).allow('').default(''),
   objective: Joi.string().trim().max(1000).allow('').default(''),
+  instructions: Joi.string().trim().max(4000).allow('').default(''),
   maxCallSeconds: Joi.number().integer().min(30).max(1800).default(300),
   silenceTimeoutSeconds: Joi.number().integer().min(2).max(60).default(10),
   maxClarificationsPerQuestion: Joi.number().integer().min(0).max(5).default(2),
@@ -219,7 +220,7 @@ export const providerAttempt = { params: Joi.object({ callId: Joi.string().max(1
 
 export const campaignId = { params: Joi.object({ id: objectId.required() }) };
 export const startCampaign = { params: Joi.object({ id: objectId.required() }), body: Joi.object({ scheduledAt: Joi.date().iso().greater('now').allow(null), sequential: Joi.boolean(), startNow: Joi.boolean() }).custom((value, helpers) => value.startNow && value.scheduledAt ? helpers.message({ custom: 'Choose Start calling now or a future scheduled start' }) : value).default({}) };
-export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link'), agentId: objectId }) };
+export const listCampaigns = { query: Joi.object({ page, limit, status: Joi.string().valid(...CAMPAIGN_STATUSES), channel: Joi.string().valid('voice', 'web_link'), agentId: objectId, kind: Joi.string().valid('standard', 'follow_up', 'all').default('standard') }) };
 export const listRecipients = { params: Joi.object({ id: objectId.required() }), query: Joi.object({ page, limit: Joi.number().integer().min(1).max(200).default(50), state: Joi.string().valid(...RECIPIENT_STATES) }) };
 export const removeRecipients = { params: Joi.object({ id: objectId.required() }), body: Joi.object({
   recipientIds: Joi.array().items(objectId).min(1).max(500).required(),

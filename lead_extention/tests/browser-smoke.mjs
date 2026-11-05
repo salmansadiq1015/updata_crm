@@ -103,7 +103,7 @@ try {
   const hiddenType = await evaluate(extensionSession, `(async () => { document.querySelector('.password-toggle').click(); const started = Date.now(); while (document.querySelector('#login-password').type !== 'password' && Date.now() - started < 2000) await new Promise((resolve) => setTimeout(resolve, 20)); return document.querySelector('#login-password').type; })()`);
   assert(hiddenType === 'password', 'Password eye hides the password again');
 
-  const darkTheme = await evaluate(extensionSession, `(async () => { document.querySelector('.auth-theme').click(); const started = Date.now(); while (!document.querySelector('.app-shell').classList.contains('dark') && Date.now() - started < 2000) await new Promise((resolve) => setTimeout(resolve, 20)); return document.querySelector('.app-shell').classList.contains('dark'); })()`);
+  const darkTheme = await evaluate(extensionSession, `(async () => { if (!document.querySelector('.app-shell').classList.contains('dark')) document.querySelector('.auth-theme').click(); const started = Date.now(); while (!document.querySelector('.app-shell').classList.contains('dark') && Date.now() - started < 2000) await new Promise((resolve) => setTimeout(resolve, 20)); return document.querySelector('.app-shell').classList.contains('dark'); })()`);
   assert(darkTheme, 'Theme micro-interaction switches to dark mode');
   await cdp.send('Page.reload', { ignoreCache: true }, extensionSession);
   await waitFor(extensionSession, 'document.querySelector("#login-email")');
@@ -347,7 +347,7 @@ try {
   }
 
   const campaignRun = await evaluate(extensionSession, `(async () => {
-    const start = [...document.querySelectorAll('button.primary-action')].find((button) => button.textContent.includes('Start campaign'));
+    const start = [...document.querySelectorAll('button.primary-action')].find((button) => button.textContent.includes('Analyze Area'));
     if (!start) return { ok: false, error: 'Start campaign button not found' };
     start.click();
     const seen = [];
@@ -379,7 +379,7 @@ try {
   await waitFor(extensionSession, 'document.querySelector("#business-types")');
   const pausedLifecycle = await evaluate(extensionSession, `(async () => {
     const previousId = ${JSON.stringify(campaignRun.latest.searchId)};
-    const start = [...document.querySelectorAll('button.primary-action')].find((button) => !button.disabled && button.textContent.includes('campaign'));
+    const start = [...document.querySelectorAll('button.primary-action')].find((button) => !button.disabled && /Analyze/i.test(button.textContent));
     if (!start) return { ok: false, error: 'New campaign button not found' };
     start.click();
     let latest = null;

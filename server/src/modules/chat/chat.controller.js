@@ -42,8 +42,7 @@ class ChatController {
 
   async getRoom(req, res, next) {
     try {
-      await chatRoomService.assertMembership(req.params.roomId, req.user);
-      const room = await chatRoomService.getRoomById(req.params.roomId);
+      const room = await chatRoomService.assertMembership(req.params.roomId, req.user);
       return res.success({ data: room });
     } catch (err) { next(err); }
   }

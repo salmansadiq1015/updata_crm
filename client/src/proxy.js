@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { PUBLIC_PAGE_PATHS } from '@/lib/seo/site-config';
 
 const publicPaths = ['/login', '/reset-password', '/forgot-password', '/activate'];
 // Only these document routes are public. Prefix matches must not expose a
 // private route such as /security-admin or a future nested management screen.
-const companyPaths = new Set(['/about', '/contact', '/support', '/privacy', '/terms', '/security', '/calling-engine']);
+const publicDocumentPaths = new Set(PUBLIC_PAGE_PATHS);
 
 const EMBED_PARENT_ORIGINS = [
   'https://appnity.ch',
@@ -30,6 +31,9 @@ function applyEmbedHeaders(response, pathname) {
     response.headers.set('Content-Security-Policy', buildFrameAncestorsCsp(ancestors));
   }
   response.headers.delete('X-Frame-Options');
+  // Let crawlers see noindex on auth/private responses. Blocking these routes
+  // in robots.txt would stop them from observing this directive.
+  if (!publicDocumentPaths.has(pathname)) response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   return response;
 }
 
@@ -40,7 +44,7 @@ function nextWithEmbedHeaders(request) {
 export function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === '/' || companyPaths.has(pathname)) {
+  if (publicDocumentPaths.has(pathname)) {
     return nextWithEmbedHeaders(request);
   }
 

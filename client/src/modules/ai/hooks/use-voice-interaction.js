@@ -8,7 +8,7 @@ const LOW_CONFIDENCE_THRESHOLD = 0.6;
 const LOW_CONFIDENCE_DELAY_MS = 2000;
 const EXIT_COMMANDS = new Set(['stop', 'cancel', 'nevermind']);
 
-export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeEnabled = false }) {
+export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeEnabled = false, ttsLang = '' }) {
   const [voiceState, setVoiceState] = useState('idle');
   const [transcript, setTranscript] = useState({ partial: '', final: '', confidence: null });
 
@@ -17,6 +17,8 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
   const ttsQueueRef = useRef([]);
   const isSpeakingRef = useRef(false);
   const handsFreeRef = useRef(handsFreeModeEnabled);
+  const ttsLangRef = useRef(ttsLang);
+  useEffect(() => { ttsLangRef.current = ttsLang; }, [ttsLang]);
   const onTranscriptRef = useRef(onTranscriptFinal);
   const onErrorRef = useRef(onError);
   const startListeningRef = useRef(null);
@@ -49,6 +51,8 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
     }
     const chunk = ttsQueueRef.current.shift();
     const utterance = new SpeechSynthesisUtterance(chunk);
+    // Without a language the browser reads German text with an English voice.
+    if (ttsLangRef.current) utterance.lang = ttsLangRef.current;
     utterance.onend = () => playNextRef.current?.();
     utterance.onerror = () => playNextRef.current?.();
     isSpeakingRef.current = true;

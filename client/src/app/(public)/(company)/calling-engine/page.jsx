@@ -1,3 +1,4 @@
+import { getCanonicalUrl } from '@/lib/seo/site-config';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowDown, ArrowRight, AudioLines, BookOpen, CalendarClock, Check, ChevronDown, CircleUserRound, ClipboardCheck, Globe2, Layers3, MessageSquareText, PhoneCall, PhoneIncoming, Route, UserRoundCheck, BellRing, Settings2, ShieldCheck, Sparkles, Target, UsersRound } from 'lucide-react';
@@ -6,9 +7,11 @@ import { CallingParticleOrb, IncomingCallPreview } from '@/components/landing/ca
 import styles from '@/components/landing/calling-engine-experience.module.css';
 
 export const metadata = {
+  alternates: { canonical: getCanonicalUrl('/calling-engine') },
   title: 'AI Calling Agent & Calling Engine — Updata',
   description: 'Meet the Updata Calling Engine. Answer incoming calls with an AI receptionist, organize outbound outreach and turn every conversation into clear CRM outcomes.',
   openGraph: {
+    url: getCanonicalUrl('/calling-engine'),
     title: 'AI Calling Agent & Calling Engine — Updata',
     description: 'A more connected way to manage business conversations. Explore AI calling capabilities and a simple setup overview.',
     images: [{ url: '/landing/calling-engine-hero.webp', width: 1536, height: 1024, alt: 'Updata AI voice engine concept' }],

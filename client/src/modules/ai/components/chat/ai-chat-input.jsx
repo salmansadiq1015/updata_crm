@@ -12,6 +12,7 @@ import { AiRecordingTimer } from '../recorder/ai-recording-timer';
 import { AiWaveform } from '../recorder/ai-waveform';
 import { AiEntityList } from '../entity/ai-entity-list';
 import { AiVoiceTranscriptPreview } from '../voice/ai-voice-transcript-preview';
+import { LiveVoiceButton } from '../../voice-live/live-voice-button';
 import {
   buildVoiceCorrectionPayload,
   getSessionTranscript,
@@ -129,6 +130,8 @@ export function AiChatInput({
   variant = 'default',
   onVoiceConfirmed,
   prefill,
+  liveVoice = true,
+  liveThreadId = null,
 }) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -269,6 +272,7 @@ export function AiChatInput({
               disabled={isDispatching || isListening || isVoiceProcessing}
             />
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              {liveVoice ? <LiveVoiceButton threadId={liveThreadId} /> : null}
               {isSTTSupported !== false && (
                 <Button
                   size="icon"

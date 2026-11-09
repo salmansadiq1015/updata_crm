@@ -6,6 +6,7 @@ import { sidebarSettingsTranslations } from './sidebar-settings-translations';
 import { companyTranslations } from './company-translations';
 import { callingExperienceTranslations } from './calling-experience-translations';
 import { inboundCallsTranslations } from './inbound-calls-translations';
+import { liveVoiceTranslations } from './live-voice-translations';
 import { aiFollowUpTranslations } from './ai-follow-up-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
 import { callingIntelligenceTranslations } from './calling-intelligence-translations';
@@ -1235,6 +1236,7 @@ const baseTranslations = {
     ...companyTranslations.de,
     ...callingExperienceTranslations.de,
     ...inboundCallsTranslations.de,
+    ...liveVoiceTranslations.de,
     ...aiFollowUpTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
@@ -6292,6 +6294,7 @@ const baseTranslations = {
     ...companyTranslations.en,
     ...callingExperienceTranslations.en,
     ...inboundCallsTranslations.en,
+    ...liveVoiceTranslations.en,
     ...aiFollowUpTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
@@ -11357,6 +11360,7 @@ const baseTranslations = {
     ...companyTranslations.fr,
     ...callingExperienceTranslations.fr,
     ...inboundCallsTranslations.fr,
+    ...liveVoiceTranslations.fr,
     ...aiFollowUpTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
     ...dashboardIntelligenceTranslations.fr,
@@ -11515,6 +11519,7 @@ const baseTranslations = {
     ...companyTranslations.ar,
     ...callingExperienceTranslations.ar,
     ...inboundCallsTranslations.ar,
+    ...liveVoiceTranslations.ar,
     ...aiFollowUpTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
     ...dashboardIntelligenceTranslations.ar,

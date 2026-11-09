@@ -777,6 +777,10 @@ export const ENDPOINTS = Object.freeze({
     AGENT_THREAD:           (threadId) => `/ai/agent/thread/${threadId}`,
     AGENT_THREAD_ARCHIVE:   (threadId) => `/ai/agent/thread/${threadId}/archive`,
     AGENT_THREAD_DELETE:    (threadId) => `/ai/agent/thread/${threadId}`,
+    // Live voice assistant (realtime)
+    VOICE_AGENT_STATUS:     '/ai/voice-agent/status',
+    VOICE_AGENT_SESSION:    '/ai/voice-agent/session',
+    VOICE_AGENT_TOOL:       '/ai/voice-agent/tool',
     // Admin / config
     VOCABULARY:             '/ai/vocabulary',
     VOCABULARY_BY_ID:       (id) => `/ai/vocabulary/${id}`,

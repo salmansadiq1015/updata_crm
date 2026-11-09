@@ -28,6 +28,7 @@ import { AiChatThread } from '../chat/ai-chat-thread';
 import { AiVoiceStatusBar } from '../voice/ai-voice-status-bar';
 import { AiHelpOverlay } from '../ai-help-overlay';
 import { buildAiRouteContext } from '../../utils/ai-route-context';
+import { useLiveVoiceStore } from '../../voice-live/live-voice-store';
 import {
   AGENT_STATUSES,
   SESSION_TYPES,
@@ -202,6 +203,12 @@ export function AiPanelChat({ onClose }) {
     setCurrentThreadId(id);
     setLocalRuns([]);
   }, []);
+
+  // After a live voice conversation that did work, show its thread here too.
+  useEffect(() => useLiveVoiceStore.subscribe((state, prev) => {
+    const ended = state.lastEnded;
+    if (ended && ended !== prev.lastEnded && ended.threadId) handleThreadSelected(ended.threadId);
+  }), [handleThreadSelected]);
 
   const chat = useAiChat({
     selectedThreadId,
@@ -426,6 +433,7 @@ export function AiPanelChat({ onClose }) {
         compact
         variant="panel"
         onVoiceConfirmed={handleVoiceConfirmed}
+        liveThreadId={currentThreadId}
       />
 
       {showHelp && <AiHelpOverlay onClose={() => setShowHelp(false)} />}

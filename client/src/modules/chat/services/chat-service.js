@@ -21,7 +21,7 @@ export const chatService = {
   getOrCreateDmRoom: (targetUserId)            => apiClient.post(ENDPOINTS.CHAT.DM_ROOM, { targetUserId }).then(r => r.data),
   getOrCreateProjectRoom: (projectId)          => apiClient.post(ENDPOINTS.CHAT.PROJECT_ROOM, { projectId }).then(r => r.data),
   getRoom: (roomId)                            => apiClient.get(ENDPOINTS.CHAT.ROOM_BY_ID(roomId)).then(r => r.data),
-  listMessages: (roomId, params)               => apiClient.get(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), { params }).then(r => r.data || []),
+  listMessages: (roomId, params, { signal } = {}) => apiClient.get(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), { params, signal }).then(r => r.data || []),
   searchMessages: (params)                     => apiClient.get(ENDPOINTS.CHAT.SEARCH, { params }).then(r => r.data || []),
   sendMessage: (roomId, data)                  => apiClient.post(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), data).then(r => r.data),
   translateMessage: (roomId, msgId, lang)      => apiClient.post(ENDPOINTS.CHAT.MESSAGE_TRANSLATE(roomId, msgId), { lang }).then(r => r.data),

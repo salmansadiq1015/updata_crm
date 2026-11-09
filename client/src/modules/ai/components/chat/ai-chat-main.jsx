@@ -10,6 +10,10 @@ import { AiChatWelcome } from './ai-chat-welcome';
 import { AiChatThread } from './ai-chat-thread';
 import { AiChatInput } from './ai-chat-input';
 import { AiVoiceStatusBar } from '../voice/ai-voice-status-bar';
+import { LiveVoiceButton } from '../../voice-live/live-voice-button';
+import { showSuccess } from '@/lib/toast';
+
+import { speakableOutput } from '../../utils/speakable-output';
 
 export function AiChatMain({
   selectedThreadId,
@@ -26,6 +30,7 @@ export function AiChatMain({
   isConfirming,
   recorder,
   voiceSession,
+  onThreadSelected,
 }) {
   const { t } = useLanguage();
 
@@ -53,7 +58,20 @@ export function AiChatMain({
     dispatch(typeof input === 'string' ? input : JSON.stringify(input), correlationId);
   }, [threadRuns, pendingRuns, dispatch]);
 
-  // Auto-play TTS when AI run completes (hands-free or autoPlay on)
+  // A confirmed voice recording is run by the server as an agent run in its
+  // own thread; open that thread so the answer is visible here.
+  const handleVoiceConfirmed = useCallback(({ session }) => {
+    const result = session?.result || session?.data?.result || null;
+    if (result?.threadId && onThreadSelected) {
+      onThreadSelected(result.threadId);
+      return;
+    }
+    if (result?.message) showSuccess(result.message);
+  }, [onThreadSelected]);
+
+  // Auto-play TTS when AI run settles (hands-free or autoPlay on). Every
+  // settled state speaks — a failure or a question must not leave hands-free
+  // stuck waiting.
   const prevRunKeyRef = useRef(null);
   useEffect(() => {
     if (!latestRun) return;
@@ -61,17 +79,16 @@ export function AiChatMain({
     if (key === prevRunKeyRef.current) return;
     prevRunKeyRef.current = key;
 
-    if (latestRun.status === 'COMPLETED' && (voice.autoPlay || voice.handsFreeModeEnabled)) {
-      const output = latestRun.output;
-      const text =
-        output?.message && typeof output.message === 'string'
-          ? output.message
-          : output
-          ? JSON.stringify(output, null, 2)
-          : '';
-      if (text) voice.speak(text);
+    if (!(voice.autoPlay || voice.handsFreeModeEnabled)) return;
+    let text = '';
+    if (latestRun.status === 'COMPLETED' || latestRun.status === 'AWAITING_CONFIRMATION') {
+      text = speakableOutput(latestRun.output);
+    } else if (latestRun.status === 'FAILED') {
+      text = t('ai.voice.runFailed', 'That did not work. Please try again.');
     }
-  }, [latestRun, voice]);
+    if (text) voice.speak(text);
+    else if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(latestRun.status)) voice.resumeHandsFree?.();
+  }, [latestRun, voice, t]);
 
   const copyProps = { copyState: copy.copyState, onCopy: copy.copy };
   const ttsProps = {
@@ -101,6 +118,7 @@ export function AiChatMain({
           </Button>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <LiveVoiceButton variant="pill" threadId={selectedThreadId} className="h-8 py-1 text-xs" />
           <AiVoiceStatusBar
             voiceState={voice.voiceState}
             isHandsFree={voice.handsFreeModeEnabled}
@@ -130,7 +148,7 @@ export function AiChatMain({
           </div>
         ) : (
           <div className="flex h-full flex-col">
-            <AiChatWelcome onSuggestionClick={handleSuggestion} />
+            <AiChatWelcome onSuggestionClick={handleSuggestion} liveThreadId={selectedThreadId} />
           </div>
         )}
       </div>
@@ -147,6 +165,8 @@ export function AiChatMain({
         onStartListening={voice.startListening}
         onStopListening={voice.stopListening}
         isSTTSupported={voice.isSTTSupported}
+        onVoiceConfirmed={handleVoiceConfirmed}
+        liveThreadId={selectedThreadId}
       />
     </div>
   );

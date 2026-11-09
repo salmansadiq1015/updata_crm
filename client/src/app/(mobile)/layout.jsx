@@ -19,6 +19,9 @@ const AiAssistantButton = lazy(() =>
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
 );
+const LiveVoiceHost = lazy(() =>
+  import('@/modules/ai/voice-live/live-voice-host').then((m) => ({ default: m.LiveVoiceHost }))
+);
 
 export default function MobileLayout({ children }) {
   const router = useRouter();
@@ -65,6 +68,7 @@ export default function MobileLayout({ children }) {
       <Suspense fallback={null}>
         <AiAssistantButton className="bottom-24 right-4" />
         <AiAssistantPanel />
+        <LiveVoiceHost />
       </Suspense>
       <BottomNav />
       <InstallPrompt />

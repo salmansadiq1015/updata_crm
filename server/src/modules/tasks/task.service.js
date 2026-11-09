@@ -109,6 +109,14 @@ class TaskService {
     return createdTask;
   }
 
+  // Chat needs fresh access/context fields, not populated task details or counts.
+  async getChatContext(id, userId, { isAdmin = false } = {}) {
+    const task = await taskRepository.findChatContext(id);
+    if (!task) throw new NotFoundError('Task', id);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER', { isAdmin });
+    return task;
+  }
+
   async getById(id, userId, { isAdmin = false } = {}) {
     const cacheKey = `tasks:task:${id}`;
     const task = await cacheManager.getOrSet(

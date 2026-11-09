@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { LiveVoiceButton } from '../../voice-live/live-voice-button';
 
 /**
  * What the assistant is actually good for, as of the agents that exist.
@@ -34,7 +35,7 @@ function getGreetingKey() {
   return 'ai.welcome.goodEvening';
 }
 
-export function AiChatWelcome({ onSuggestionClick }) {
+export function AiChatWelcome({ onSuggestionClick, liveThreadId = null }) {
   const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const firstName =
@@ -73,6 +74,14 @@ export function AiChatWelcome({ onSuggestionClick }) {
         >
           {t('ai.welcome.prompt')}
         </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.3 }}
+          className="flex justify-center pt-2"
+        >
+          <LiveVoiceButton variant="pill" threadId={liveThreadId} />
+        </motion.div>
       </div>
 
       <motion.div

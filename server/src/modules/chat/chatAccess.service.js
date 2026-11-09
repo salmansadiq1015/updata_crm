@@ -218,12 +218,15 @@ const chatAccessService = {
 
   async hydrateRoomMembers(roomId, memberIds) {
     const ids = uniqueIds(memberIds);
-    for (const userId of ids) {
-      await ChatRoom.updateOne(
-        { _id: roomId, 'members.userId': { $ne: userId } },
-        { $push: { members: { userId } } },
-      );
-    }
+    if (!ids.length) return;
+    // One database round trip; each conditional push remains atomic so concurrent
+    // resolvers cannot duplicate members or overwrite their original joinedAt.
+    await ChatRoom.bulkWrite(ids.map(userId => ({
+      updateOne: {
+        filter: { _id: roomId, 'members.userId': { $ne: userId } },
+        update: { $push: { members: { userId, joinedAt: new Date() } } },
+      },
+    })), { ordered: false });
   },
 
   async assertRequestedMembersAllowed(context, memberIds = [], user) {

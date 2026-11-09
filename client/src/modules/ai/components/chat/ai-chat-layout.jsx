@@ -7,6 +7,7 @@ import { AiChatSidebar } from './ai-chat-sidebar';
 import { AiChatMain } from './ai-chat-main';
 import { generateId } from '@/lib/utils/ids';
 import { buildAiRouteContext } from '../../utils/ai-route-context';
+import { useLiveVoiceStore } from '../../voice-live/live-voice-store';
 
 function newThreadId() {
   return generateId();
@@ -65,6 +66,12 @@ export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } 
     onThreadDeleted: handleThreadDeleted,
   });
 
+  // After a live voice conversation that did work, show its thread here.
+  useEffect(() => useLiveVoiceStore.subscribe((state, prev) => {
+    const ended = state.lastEnded;
+    if (ended && ended !== prev.lastEnded && ended.threadId) handleThreadSelected(ended.threadId);
+  }), [handleThreadSelected]);
+
   // Deep links like /ai?chatRoomId=…&intent=summary fire their prompt once.
   const initialPromptSent = useRef(false);
   const { dispatch } = chat;
@@ -106,6 +113,7 @@ export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } 
         isConfirming={chat.isConfirming}
         recorder={chat.recorder}
         voiceSession={chat.voiceSession}
+        onThreadSelected={handleThreadSelected}
       />
     </div>
   );

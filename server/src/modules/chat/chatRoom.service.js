@@ -10,11 +10,16 @@ function userIdOf(user) {
   return String(user?._id ?? user);
 }
 
+function missingMemberIds(room, memberIds) {
+  const existing = new Set((room.members || []).map(member => String(member.userId?._id ?? member.userId)));
+  return memberIds.filter(id => !existing.has(String(id)));
+}
+
 const chatRoomService = {
   async getOrCreateProjectRoom(projectId, user) {
     const participantIds = await chatAccessService.assertContextAccess({ projectId }, user);
     const room = await chatRoomRepository.findOrCreateProjectRoom(projectId, userIdOf(user), participantIds);
-    await chatAccessService.hydrateRoomMembers(room._id, participantIds);
+    await chatAccessService.hydrateRoomMembers(room._id, missingMemberIds(room, participantIds));
     return chatRoomRepository.findById(room._id);
   },
 
@@ -34,7 +39,7 @@ const chatRoomService = {
       task.createdBy ? String(task.createdBy._id || task.createdBy) : null,
     ].filter(Boolean);
     const room = await chatRoomRepository.findOrCreateTaskRoom(task._id, userIdOf(user), memberIds, task.title);
-    await chatAccessService.hydrateRoomMembers(room._id, [...new Set([...memberIds, userIdOf(user)])]);
+    await chatAccessService.hydrateRoomMembers(room._id, missingMemberIds(room, [...new Set([...memberIds, userIdOf(user)])]));
     return chatRoomRepository.findById(room._id);
   },
 

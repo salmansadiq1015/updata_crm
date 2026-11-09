@@ -6,6 +6,7 @@ import aiAnalyticsRoutes from './aiAnalytics.routes.js';
 import agentRoutes from './agent/agent.routes.js';
 import agentGovernanceRoutes from './governance/agentGovernance.routes.js';
 import aiDocumentRoutes from './aiDocument.routes.js';
+import voiceAgentRoutes from './voiceAgent/voiceAgent.routes.js';
 
 const router = Router();
 
@@ -29,5 +30,8 @@ router.use('/governance', agentGovernanceRoutes);
 
 // Voice → template → PDF (AI-005)
 router.use('/documents', aiDocumentRoutes);
+
+// Live voice assistant (realtime voice ↔ ERP tools)
+router.use('/voice-agent', voiceAgentRoutes);
 
 export default router;

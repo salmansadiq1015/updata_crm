@@ -1,3 +1,4 @@
+import { getCanonicalUrl } from '@/lib/seo/site-config';
 import { LandingNavbar } from '@/components/landing/landing-navbar';
 import { HeroSection } from '@/components/landing/hero-section';
 import { CapabilityStrip } from '@/components/landing/capability-strip';
@@ -17,10 +18,12 @@ import { AICallingSection } from '@/components/landing/ai-calling-section';
 import { PlatformIntelligence, PlatformAssurance } from '@/components/landing/platform-assurance';
 
 export const metadata = {
+  alternates: { canonical: getCanonicalUrl('/') },
   title: 'Updata ERP — One Intelligent Workspace for Your Business',
   description: 'Discover leads, manage customers, coordinate teams, run projects and streamline business operations with Updata ERP.',
   keywords: ['ERP', 'CRM', 'lead generation', 'project management', 'business operations', 'AI assistant'],
   openGraph: {
+    url: getCanonicalUrl('/'),
     title: 'Updata ERP — One Intelligent Workspace for Your Business',
     description: 'Discover leads, manage customers, coordinate teams, run projects and streamline business operations with Updata ERP.',
     type: 'website',

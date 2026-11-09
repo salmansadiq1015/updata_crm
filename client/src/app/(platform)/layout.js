@@ -22,6 +22,11 @@ const InboundHandoffAlertHost = lazy(() =>
   import('@/modules/inboundCalls/ui/handoff-alert-host').then((m) => ({ default: m.InboundHandoffAlertHost }))
 );
 
+// Live voice conversation (the orb) — layout-level so it survives navigation.
+const LiveVoiceHost = lazy(() =>
+  import('@/modules/ai/voice-live/live-voice-host').then((m) => ({ default: m.LiveVoiceHost }))
+);
+
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
 );
@@ -90,6 +95,7 @@ export default function PlatformLayout({ children }) {
       <Suspense fallback={null}>
         <IncomingTransferHost />
         <InboundHandoffAlertHost />
+        <LiveVoiceHost />
       </Suspense>
 
       {/* AI Assistant panel — button lives in the header; not on the AI page,

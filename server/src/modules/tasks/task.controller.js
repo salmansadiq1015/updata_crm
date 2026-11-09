@@ -35,15 +35,18 @@ class TaskController {
   async resolveChat(req, res, next) {
     try {
       const isAdmin = req.user.role?.name === 'Admin';
-      const task = await taskService.getById(req.params.id, req.user._id, { isAdmin });
+      const task = await taskService.getChatContext(req.params.id, req.user._id, { isAdmin });
       const chatRoomService = (await import('../chat/chatRoom.service.js')).default;
-      const room = await chatRoomService.getOrCreateTaskRoom(task, req.user);
+      const resolved = await chatRoomService.getOrCreateTaskRoom(task, req.user);
+      // Returning full room details must enforce the same access as GET /chat/rooms/:id.
+      const room = await chatRoomService.assertMembership(resolved._id, req.user);
       return res.success({
         data: {
           roomId: String(room._id),
+          room,
           roomType: room.roomType,
           name: room.name || task.title,
-          projectId: room.projectId ? String(room.projectId) : null,
+          projectId: room.projectId ? String(room.projectId._id || room.projectId) : null,
         },
       });
     } catch (err) { next(err); }

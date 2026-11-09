@@ -57,7 +57,7 @@ export function ChatPanel({ roomId }) {
     refreshJoinCode,
   } = useChatMutations(roomId);
   const { data: room, isError: roomError, refetch: refetchRoom } = useChatRoom(roomId);
-  const { data: rooms = [] } = useChatRooms();
+  const { data: rooms = [] } = useChatRooms({ enabled: searchOpen });
 
   const isBlocked = room?.blockedBy?.includes(String(currentUserId));
 

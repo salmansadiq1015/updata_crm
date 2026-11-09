@@ -177,7 +177,12 @@ class AgentService {
       }
     }
 
-    const previousFollowUp = await this._loadPreviousFollowUp(userId, meta.threadId);
+    // A caller that knows the message starts a new request (the live voice
+    // agent decides this per turn) must not have it read as the answer to an
+    // earlier open question in the same thread.
+    const previousFollowUp = meta.ignoreFollowUp
+      ? null
+      : await this._loadPreviousFollowUp(userId, meta.threadId);
     const classification = previousFollowUp
       ? { intent: previousFollowUp.action, llmPlan: null }
       : await this._classifyIntent(sanitized);

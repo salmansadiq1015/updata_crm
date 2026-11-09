@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/lib/query/keys';
 import { chatService } from '../services/chat-service';
-import { onSocketConnect } from '@/lib/socket/client';
+import { getSocket, onSocketConnect } from '@/lib/socket/client';
 import { useAuth } from '@/shared/hooks/use-auth';
 
 export function mergeChatMessages(older = [], newer = []) {
@@ -21,15 +21,18 @@ export function useChatMessages(roomId) {
   const key = queryKeys.chat.messages(roomId);
   const query = useQuery({
     queryKey: key,
-    queryFn: async () => {
-      const latest = await chatService.listMessages(roomId, { limit: 50 });
+    queryFn: async ({ signal }) => {
+      const latest = await chatService.listMessages(roomId, { limit: 50 }, { signal });
       const previous = queryClient.getQueryData(key) || [];
       // Keep loaded history while refreshing the latest page after reconnect/polling.
       const first = latest[0];
       const older = first ? previous.filter(message => new Date(message.sentAt) < new Date(first.sentAt) || (message.sentAt === first.sentAt && String(message._id) < String(first._id))) : [];
       return mergeChatMessages(older, latest);
     },
-    enabled: !!roomId, staleTime: 0, refetchInterval: 15_000,
+    enabled: !!roomId,
+    staleTime: 15_000,
+    // Sockets deliver live changes; keep a slower safety refresh while connected.
+    refetchInterval: () => getSocket()?.connected ? 60_000 : 15_000,
   });
   const older = useMutation({
     mutationFn: async () => {
@@ -49,11 +52,21 @@ export function useChatMessages(roomId) {
     const unsubscribe = onSocketConnect(socket => {
       cleanup?.();
       socket.emit('join room', { roomId });
-      queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(roomId) });
+      // Joining during the initial fetch must not cancel and restart that request.
+      if (queryClient.getQueryState(queryKeys.chat.messages(roomId))?.fetchStatus !== 'fetching') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(roomId) });
+      }
       const belongs = event => String(event.roomId || event.message?.roomId || '') === String(roomId);
       const refreshRooms = () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
-        queryClient.invalidateQueries({ queryKey: queryKeys.chat.room(roomId) });
+      };
+      const onRoomUpdated = event => {
+        refreshRooms();
+        // Message/read events do not change the membership or room context.
+        // Only refresh details for metadata changes to this conversation.
+        if (belongs(event) && !event.lastMessageAt) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.chat.room(roomId) });
+        }
       };
       const onNew = event => {
         if (!belongs(event)) return;
@@ -81,7 +94,7 @@ export function useChatMessages(roomId) {
         refreshRooms();
       };
       const onRoomDeleted = event => { if (belongs(event)) { refreshRooms(); router.push('/field-ops/chat'); } };
-      const listeners = { 'chat:new_message': onNew, 'chat:message_updated': onNew, 'chat:reaction_updated': onReaction, 'chat:message_deleted': onDeleted, 'chat:message_edited': onEdited, 'chat:typing': onTyping, 'chat:stop typing': onStop, 'chat:read': onRead, 'chat:room_updated': refreshRooms, 'chat:room_deleted': onRoomDeleted };
+      const listeners = { 'chat:new_message': onNew, 'chat:message_updated': onNew, 'chat:reaction_updated': onReaction, 'chat:message_deleted': onDeleted, 'chat:message_edited': onEdited, 'chat:typing': onTyping, 'chat:stop typing': onStop, 'chat:read': onRead, 'chat:room_updated': onRoomUpdated, 'chat:room_deleted': onRoomDeleted };
       Object.entries(listeners).forEach(([event, handler]) => socket.on(event, handler));
       const timer = setInterval(() => setTypingState(previous => ({ ...previous, users: previous.users.filter(item => Date.now() - item.at < 8000) })), 2000);
       cleanup = () => { clearInterval(timer); Object.entries(listeners).forEach(([event, handler]) => socket.off(event, handler)); socket.emit('leave room', { roomId }); };

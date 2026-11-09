@@ -189,3 +189,84 @@ describe('communication chat access', () => {
     );
   });
 });
+
+describe('chat resolution performance', () => {
+  test('batch membership hydration is idempotent under concurrent requests', async () => {
+    const { manager, technician, outsider, project } = await createFixture();
+    const { default: ChatRoom } = await import('../../src/modules/chat/chatRoom.model.js');
+    const room = await chatRoomService.getOrCreateProjectRoom(project._id, manager);
+    const before = room.members.find(member => String(member.userId._id) === String(manager._id)).joinedAt;
+    const bulk = jest.spyOn(ChatRoom, 'bulkWrite');
+    const single = jest.spyOn(ChatRoom, 'updateOne');
+    const ids = [manager._id, technician._id, outsider._id, outsider._id];
+    await Promise.all([chatAccessService.hydrateRoomMembers(room._id, ids), chatAccessService.hydrateRoomMembers(room._id, ids)]);
+    const updated = await ChatRoom.findById(room._id).lean();
+    expect(updated.members).toHaveLength(3);
+    expect(new Set(updated.members.map(member => String(member.userId))).size).toBe(3);
+    expect(updated.members.find(member => String(member.userId) === String(manager._id)).joinedAt).toEqual(before);
+    expect(bulk).toHaveBeenCalledTimes(2);
+    expect(single).not.toHaveBeenCalled();
+  });
+  test('chat context skips task-detail aggregation and preserves locked-task access', async () => {
+    const { manager, outsider } = await createFixture();
+    const { default: taskService } = await import('../../src/modules/tasks/task.service.js');
+    const { default: repository } = await import('../../src/modules/tasks/task.repository.js');
+    const task = await Task.create({ title: 'Private conversation', listId: objectId(), createdBy: manager._id, assigneeId: manager._id, locked: true, lockedBy: manager._id });
+    const details = jest.spyOn(repository, 'findById');
+    const subtasks = jest.spyOn(repository, 'findByParentId');
+    const context = await taskService.getChatContext(task._id, manager._id, { isAdmin: true });
+    expect(context.title).toBe(task.title);
+    expect(details).not.toHaveBeenCalled();
+    expect(subtasks).not.toHaveBeenCalled();
+    await expect(taskService.getChatContext(task._id, outsider._id)).rejects.toMatchObject({ statusCode: 403 });
+    await Task.updateOne({ _id: task._id }, { $set: { isDeleted: true } });
+    await expect(taskService.getChatContext(task._id, manager._id, { isAdmin: true })).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+
+test('room API returns the authorized room without reading it twice', async () => {
+  const { manager, project } = await createFixture();
+  const { default: controller } = await import('../../src/modules/chat/chat.controller.js');
+  const { default: repository } = await import('../../src/modules/chat/chatRoom.repository.js');
+  const room = await chatRoomService.getOrCreateProjectRoom(project._id, manager);
+  const read = jest.spyOn(repository, 'findById');
+  const success = jest.fn();
+  const next = jest.fn();
+  await controller.getRoom({ params: { roomId: room._id }, user: manager }, { success }, next);
+  expect(next).not.toHaveBeenCalled();
+  expect(success).toHaveBeenCalledWith({ data: expect.objectContaining({ _id: room._id }) });
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
+test('task resolver returns an authorized room and skips redundant member writes on reopen', async () => {
+  const { manager } = await createFixture();
+  const { default: controller } = await import('../../src/modules/tasks/task.controller.js');
+  const { default: ChatRoom } = await import('../../src/modules/chat/chatRoom.model.js');
+  const task = await Task.create({ title: 'Salman Task', listId: objectId(), createdBy: manager._id, assigneeId: manager._id });
+  const bulk = jest.spyOn(ChatRoom, 'bulkWrite');
+  const success = jest.fn();
+  const next = jest.fn();
+  const request = { params: { id: task._id }, user: manager };
+  await controller.resolveChat(request, { success }, next);
+  await controller.resolveChat(request, { success }, next);
+  expect(next).not.toHaveBeenCalled();
+  expect(success).toHaveBeenCalledTimes(2);
+  const first = success.mock.calls[0][0].data;
+  const second = success.mock.calls[1][0].data;
+  expect(first.roomId).toBe(second.roomId);
+  expect(String(first.room._id)).toBe(first.roomId);
+  expect(first.room.members.some(member => String(member.userId._id) === String(manager._id))).toBe(true);
+  expect(bulk).not.toHaveBeenCalled();
+});
+
+test('project task resolution returns the project id rather than a populated-object string', async () => {
+  const { manager, project } = await createFixture();
+  const { default: controller } = await import('../../src/modules/tasks/task.controller.js');
+  const task = await Task.findOne({ projectId: project._id }).lean();
+  const success = jest.fn();
+  const next = jest.fn();
+  await controller.resolveChat({ params: { id: task._id }, user: manager }, { success }, next);
+  expect(next).not.toHaveBeenCalled();
+  expect(success.mock.calls[0][0].data).toMatchObject({ projectId: String(project._id), roomType: 'PROJECT' });
+});

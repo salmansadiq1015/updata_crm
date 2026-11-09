@@ -1,3 +1,4 @@
+import { getSiteOrigin } from "@/lib/seo/site-config";
 import { cookies } from "next/headers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
@@ -7,6 +8,7 @@ import { LOCALE_COOKIE, normalizeLocale, directionFor } from "@/lib/i18n/locale-
 import "./globals.css";
 
 export const metadata = {
+  metadataBase: new URL(getSiteOrigin()),
   title: APP_PRODUCT_NAME,
   description: APP_DESCRIPTION,
 };

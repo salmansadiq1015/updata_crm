@@ -18,8 +18,8 @@ export const taskService = {
     return res.data;
   },
 
-  async resolveChat(taskId) {
-    const res = await apiClient.get(ENDPOINTS.TASKS.CHAT(taskId));
+  async resolveChat(taskId, { signal } = {}) {
+    const res = await apiClient.get(ENDPOINTS.TASKS.CHAT(taskId), { signal, timeout: 15_000 });
     return res.data;
   },
 

@@ -53,6 +53,12 @@ class TaskRepository {
     return task.save();
   }
 
+  async findChatContext(id) {
+    return Task.findById(id)
+      .select('title projectId assigneeId assigneeIds createdBy listId locked lockedBy poolHelperId')
+      .lean();
+  }
+
   async findById(id) {
     return Task.findById(id)
       .populate(POPULATE_FIELDS)

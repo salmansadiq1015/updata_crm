@@ -59,6 +59,7 @@ import { registerSimSmsSweepJob } from './simSmsSweep.job.js';
 import { registerSmsOpsSweepJob } from './smsOpsSweep.job.js';
 import { registerSimCallSweepJob } from './simCallSweep.job.js';
 import { registerLeadSlaSweepJob } from './leadSlaSweep.job.js';
+import { registerWorkflowAutomationJob } from './workflowAutomation.job.js';
 import { registerFollowUpCallingJob } from './followUpCalling.job.js';
 import { registerLeadQualityJobs } from './leadQuality.job.js';
 import { OUTBOUND_CALL_QUEUE } from '../modules/aiCalling/aiCalling.constants.js';
@@ -740,6 +741,8 @@ export function registerJobs() {
   registerLeadSlaSweepJob(queueManager);
   // AI follow-up calling — launches due AI follow-up calls (persisted, restart-safe).
   registerFollowUpCallingJob(queueManager);
+  // Workflow Automation — run advances, campaign enrollment, minute sweep (persisted, restart-safe).
+  registerWorkflowAutomationJob(queueManager);
   // Lead quality — event-driven/bulk scoring, duplicate detection, merge recovery.
   registerLeadQualityJobs(queueManager);
 

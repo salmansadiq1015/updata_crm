@@ -14,6 +14,8 @@ export const TASK_SOURCE_TYPES = [
   // work in every other respect; what it is not is a commitment somebody made,
   // which is why closing a project does not wait on it.
   'AI_AGENT',
+  // Created by a Workflow Automation run (source.refId = the WorkflowRun).
+  'WORKFLOW',
 ];
 
 const taskSchema = new mongoose.Schema(

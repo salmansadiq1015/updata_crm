@@ -118,6 +118,10 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'ai-calling', action: 'read', description: 'View AI calling campaigns, call history and analytics' },
   { module: 'ai-calling', action: 'write', description: 'Create, configure, start and manage AI calling campaigns' },
   { module: 'ai-calling', action: 'admin', description: 'Reconcile call state and perform sensitive AI calling operations' },
+  { module: 'workflow', action: 'read', description: 'View workflow automations, executions, event history and analytics' },
+  { module: 'workflow', action: 'write', description: 'Create and edit workflow automation drafts, validate and test them' },
+  { module: 'workflow', action: 'publish', description: 'Publish, pause, archive and roll back workflow automations' },
+  { module: 'workflow', action: 'execute', description: 'Run workflow campaigns and control individual executions' },
 
   // Incoming calls (implied by ai-calling + crm permissions — see PERMISSION_IMPLICATIONS)
   { module: 'inbound-calls', action: 'read', description: 'View incoming calls, transcripts, analytics and settings' },

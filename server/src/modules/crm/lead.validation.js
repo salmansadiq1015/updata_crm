@@ -188,6 +188,7 @@ export const createLead = {
     assignedTo: objectId.allow(null),
     notes: Joi.string().max(5000).allow('', null),
     tags: Joi.array().items(Joi.string().trim().max(50)).default([]),
+    customFields: Joi.object().pattern(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/, Joi.string().max(500).allow('')).max(50),
   }),
 };
 
@@ -207,6 +208,7 @@ export const updateLead = {
     assignedTo: objectId.allow(null),
     notes: Joi.string().max(5000).allow('', null),
     tags: Joi.array().items(Joi.string().trim().max(50)),
+    customFields: Joi.object().pattern(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/, Joi.string().max(500).allow('')).max(50).allow(null),
   }).min(1),
 };
 

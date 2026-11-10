@@ -12,6 +12,8 @@ export const LEAD_EVENT_TYPES = Object.freeze([
   'sla.started', 'sla.breached', 'sla.escalated', 'sla.met', 'sla.late',
   'follow_up.overdue', 'follow_up.escalated',
   'call.evaluated',
+  // Workflow Automation (modules/workflowAutomation): enrollment, CRM actions, outcomes.
+  'automation.enrolled', 'automation.action', 'automation.completed', 'automation.failed', 'automation.stopped',
 ]);
 
 const leadEventSchema = new mongoose.Schema({

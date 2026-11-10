@@ -17,6 +17,7 @@ import { registerIntegrationsEvents } from './modules/integrations/integrations.
 import { registerAiEvents } from './modules/ai/ai.events.js';
 import { registerAgentHandoffs } from './modules/ai/governance/agentHandoffs.js';
 import { registerDiscoverySocket } from './modules/businessDiscovery/discovery.events.js';
+import { registerWorkflowEvents } from './modules/workflowAutomation/workflow.events.js';
 
 // Imported after seed data is ready so unrelated models do not queue their
 // collection/index initialization ahead of bootstrap queries.
@@ -36,6 +37,7 @@ export function registerEventHandlers() {
   registerIntegrationsEvents();
   registerAiEvents();
   registerAgentHandoffs();
+  registerWorkflowEvents();
 }
 
 export { createApp, registerJobs, initializeSocketServer, registerDiscoverySocket };

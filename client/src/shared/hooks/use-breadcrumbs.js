@@ -43,6 +43,14 @@ const labelMap = {
   departments: { key: 'sidebar.departments', fallback: 'Abteilungen' },
   templates: { key: 'sidebar.templates', fallback: 'Vorlagen' },
   integrations: { key: 'sidebar.integrations', fallback: 'Integrationen' },
+  // Workflow Automation
+  automation: { key: 'workflow.nav.group', fallback: 'Automation' },
+  workflows: { key: 'workflow.nav.workflows', fallback: 'Workflows' },
+  campaigns: { key: 'workflow.nav.campaigns', fallback: 'Campaigns' },
+  executions: { key: 'workflow.nav.executions', fallback: 'Executions' },
+  events: { key: 'workflow.nav.events', fallback: 'Event history' },
+  analytics: { key: 'workflow.nav.analytics', fallback: 'Analytics' },
+  new: { key: 'workflow.nav.create', fallback: 'Create workflow' },
 };
 
 export function useBreadcrumbs() {

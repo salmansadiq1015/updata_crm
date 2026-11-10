@@ -341,6 +341,11 @@ export function buildCampaignMonitoring(campaign, now = new Date()) {
   };
 }
 
+// Workflow Automation signals (fire-and-forget; never affects messaging state).
+function publishMessageSignal(type, payload) {
+  try { eventBus.publish(type, payload, { source: 'messaging' }); } catch { /* best effort */ }
+}
+
 class MessagingService {
   async createCampaign(input, actor, meta = {}) {
     const { idempotencyKey, ...request } = input;
@@ -1435,7 +1440,12 @@ class MessagingService {
     } else {
       update.status = 'failed'; update.failedAt = new Date(); update.error = { code: result.errorCode, message: result.errorMessage };
     }
-    await MessageRecipient.updateOne({ _id: recipientId, status: 'submitting' }, { $set: update });
+    const applied = await MessageRecipient.updateOne({ _id: recipientId, status: 'submitting' }, { $set: update });
+    if (applied.modifiedCount && claimed.leadId) {
+      publishMessageSignal(EVENT_TYPES.MESSAGE_STATUS_CHANGED, {
+        recipientId: String(recipientId), campaignId: String(campaign._id), leadId: String(claimed.leadId), channel: claimed.channel, status: update.status,
+      });
+    }
     // Provider-accepted outbound message = the lead's first response for the SLA (best effort).
     if (result.outcome === 'accepted' && claimed.leadId) {
       import('../crm/leadSla.service.js').then(({ default: sla }) => sla.recordFirstResponse(claimed.leadId, { at: update.acceptedAt, channel: claimed.channel })).catch(() => {});
@@ -1975,6 +1985,11 @@ class MessagingService {
       }
       await recipient.save();
       await refreshCampaignSummary(recipient.campaignId);
+      if (recipient.leadId) {
+        publishMessageSignal(EVENT_TYPES.MESSAGE_STATUS_CHANGED, {
+          recipientId: String(recipient._id), campaignId: String(recipient.campaignId), leadId: String(recipient.leadId), channel: recipient.channel, status: recipient.status,
+        });
+      }
     }
     await markProcessed();
     return { accepted: true, matched: true, status: recipient.status };
@@ -2022,6 +2037,13 @@ class MessagingService {
     }
     event.processedAt = new Date();
     await event.save();
+    if (lead) {
+      publishMessageSignal(EVENT_TYPES.MESSAGE_RECEIVED, {
+        leadId: String(lead._id), channel, provider, messageId: String(messageId || ''), optOut: isOptOut,
+        text: String(text || '').slice(0, 500), recipientId: latestRecipient?._id ? String(latestRecipient._id) : null,
+        campaignId: latestRecipient?.campaignId ? String(latestRecipient.campaignId) : null,
+      });
+    }
     return { received: true, optOut: isOptOut };
   }
 
@@ -2041,6 +2063,7 @@ class MessagingService {
       { upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     auditService.logEvent({ eventType: 'messaging.consent.opted_out', userId: null, ipAddress: 'public_unsubscribe', result: 'success', module: 'messaging', details: { leadId: lead._id, channel: 'email' } });
+    publishMessageSignal(EVENT_TYPES.LEAD_OPTED_OUT, { leadId: String(lead._id), channel: 'email', source: 'email_unsubscribe' });
     return { unsubscribed: true };
   }
 
@@ -2439,6 +2462,7 @@ class MessagingService {
       );
     }
     auditService.logEvent({ eventType: 'messaging.consent.changed', userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent, result: 'success', module: 'messaging', details: { leadId, channel: input.channel, status: input.status } });
+    if (['denied', 'revoked'].includes(input.status)) publishMessageSignal(EVENT_TYPES.LEAD_OPTED_OUT, { leadId: String(lead._id), channel: input.channel, source: 'consent_change' });
     return consent;
   }
 

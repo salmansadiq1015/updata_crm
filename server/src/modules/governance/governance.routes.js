@@ -17,7 +17,7 @@ const revealLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: 30,
   message: 'Too many contact reveals, please wait a minute',
-  keyGenerator: (req, res) => (req.user?._id ? `pii-reveal:user:${req.user._id}` : `pii-reveal:ip:${ipKeyGenerator(req, res)}`),
+  keyGenerator: (req) => (req.user?._id ? `pii-reveal:user:${req.user._id}` : `pii-reveal:ip:${ipKeyGenerator(req.ip || "")}`),
 });
 
 router.get('/settings', authenticate, (req, res, next) => controller.settings(req, res, next));

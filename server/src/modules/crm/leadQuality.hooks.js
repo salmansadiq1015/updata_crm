@@ -9,15 +9,20 @@
 import leadDuplicateService from './leadDuplicate.service.js';
 import leadScoringService from './leadScoring.service.js';
 import logger from '../../shared/logger/index.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
 
 function swallow(action) {
   return (err) => logger.debug('Lead quality hook skipped', { module: 'crm', action, error: { message: err?.message } });
 }
 
 /** New leads (single create, file import, extension import, discovery import). */
-export function onLeadsCreated(leadIds = []) {
+export function onLeadsCreated(leadIds = [], origin = 'create') {
   const ids = (Array.isArray(leadIds) ? leadIds : [leadIds]).filter(Boolean).map(String);
   if (!ids.length) return;
+  // Workflow Automation triggers (new lead / contact list upload). Never throws.
+  try { eventBus.publish(EVENT_TYPES.CRM_LEADS_CREATED, { leadIds: ids, origin }, { source: 'crm:leads' }); }
+  catch (err) { swallow('leadQuality.onLeadsCreated.publish')(err); }
   Promise.resolve()
     .then(() => leadDuplicateService.scheduleDetect(ids))
     .catch(swallow('leadQuality.onLeadsCreated.duplicates'));

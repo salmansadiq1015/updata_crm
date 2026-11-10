@@ -14,6 +14,9 @@
  */
 
 export const OUTBOUND_CALL_QUEUE = 'outbound-calling';
+// Single-lead campaigns created by other engines (follow-up calling, workflow automation).
+// They run alongside an agent's campaigns and are hidden from the campaign list by default.
+export const AUXILIARY_CAMPAIGN_KINDS = Object.freeze(['follow_up', 'workflow']);
 
 // Campaign lifecycle (mirrors messaging CAMPAIGN_STATUSES, voice-specific).
 export const CAMPAIGN_STATUSES = Object.freeze([

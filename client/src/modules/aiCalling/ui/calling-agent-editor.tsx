@@ -10,6 +10,7 @@ import { useIntelT } from '../hooks/use-intel-t';
 import { AgentImageGallery } from './agent-image-gallery';
 import { AgentExecutionFields, AgentLanguageField, AgentVoiceFields, defaultAgentInput } from './agent-settings-fields';
 import { QuestionEditor, QualificationRulesEditor } from './question-configuration';
+import { AgentMissionFields } from './agent-mission-fields';
 import { AgentAvatar, AgentDialog, AgentField, AgentTabs, inputClass, primaryClass, readableError, secondaryClass } from './calling-agent-primitives';
 
 export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange, showUsage = true }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void; avatarUrl?: string | null; onAvatarChange: (url: string | null) => void; showUsage?: boolean }) {
@@ -56,10 +57,12 @@ export function AgentIdentityFields({ value, onChange, avatarUrl, onAvatarChange
 }
 
 export function AgentQuestionTabs({ value, onChange, includeBehavior = false }: { value: CallingAgentInput; onChange: (next: CallingAgentInput) => void; includeBehavior?: boolean }) {
+  const t = useIntelT();
   const [tab, setTab] = useState('questions');
   const questions = value.questionnaire?.questions || [];
-  return <AgentTabs label="Question configuration" value={tab} onChange={setTab} items={[{ value: 'questions', label: 'Conversation questions' }, { value: 'rules', label: 'Qualification rules' }, { value: 'preview', label: 'Conversation preview' }, ...(includeBehavior ? [{ value: 'behavior', label: 'Calling behavior' }] : [])]}>
+  return <AgentTabs label="Question configuration" value={tab} onChange={setTab} items={[{ value: 'questions', label: 'Conversation questions' }, { value: 'mission', label: t('aiMission.tab', 'Conversation mode') }, { value: 'rules', label: 'Qualification rules' }, { value: 'preview', label: 'Conversation preview' }, ...(includeBehavior ? [{ value: 'behavior', label: 'Calling behavior' }] : [])]}>
     {tab === 'questions' && <QuestionEditor questions={questions} onChange={next => onChange({ ...value, questionnaire: { questions: next } })} rules={value.statusRules || []} onImport={(next, rules) => onChange({ ...value, questionnaire: { questions: next }, statusRules: rules })} />}
+    {tab === 'mission' && <AgentMissionFields value={value} onChange={onChange} />}
     {tab === 'rules' && <QualificationRulesEditor questions={questions} rules={value.statusRules || []} onChange={rules => onChange({ ...value, statusRules: rules })} />}
     {tab === 'behavior' && <AgentExecutionFields value={value} onChange={onChange} />}
     {tab === 'preview' && <div className="space-y-4"><p className="text-xs text-muted-foreground">Preview the current question sequence. The agent keeps each question&apos;s meaning and validates answers using the selected types.</p><div className="rounded-xl border border-border p-4 text-sm"><p className="mb-2 text-xs font-medium text-primary">Opening disclosure</p><p>{value.agentConfig?.disclosure?.replaceAll('{company}', value.agentConfig?.organizationName || '{company}') || 'Add an opening disclosure in Voice & instructions.'}</p></div><ol className="space-y-3">{questions.map((q, i) => <li key={q.fieldKey} className="rounded-xl border border-border p-4 text-sm"><p className="mb-1 text-xs text-muted-foreground">{i + 1} · {q.type.replaceAll('_', ' ')}{q.required ? ' · Required' : ' · Optional'}</p><p>{q.text || 'Question text is not complete.'}</p>{q.condition && <p className="mt-2 text-xs text-amber-300">Asked when its configured conditions match earlier answers.</p>}</li>)}</ol>{!questions.length && <p className="text-sm text-muted-foreground">Add questions to preview the conversation.</p>}</div>}

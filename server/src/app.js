@@ -12,7 +12,7 @@ import { redactPath, requestLogger } from './shared/middleware/requestLogger.js'
 import { securityHeaders } from './shared/middleware/securityHeaders.js';
 import { corsMiddleware } from './shared/middleware/cors.js';
 import { compressionMiddleware } from './shared/middleware/compression.js';
-import { globalLimiter, agentToolLimiter, providerWebhookLimiter, gatewayLimiter, gatewayPairLimiter } from './shared/middleware/rateLimiter.js';
+import { globalLimiter, agentToolLimiter, providerWebhookLimiter, gatewayLimiter, gatewayPairLimiter, linkPageLimiter } from './shared/middleware/rateLimiter.js';
 import { mongoSanitizeMiddleware } from './shared/utils/sanitize.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { notFoundHandler } from './shared/middleware/notFound.js';
@@ -71,6 +71,8 @@ import pairedPhoneRoutes, { gatewayRoutes as pairedPhoneGatewayRoutes } from './
 import inboundCallRoutes, { inboundGatewayRoutes, inboundAgentRoutes } from './modules/inboundCalling/inboundCall.routes.js';
 import linkAssistantRoutes from './modules/linkAssistant/linkAssistant.routes.js';
 import linkAssistantPublicRoutes from './modules/linkAssistant/linkAssistant.public.routes.js';
+import workflowRoutes from './modules/workflowAutomation/workflow.routes.js';
+import { linkRouter as workflowLinkRoutes, hookRouter as workflowHookRoutes } from './modules/workflowAutomation/workflow.public.routes.js';
 import simSmsRoutes from './modules/simSms/simSms.routes.js';
 import simCallRoutes from './modules/simCall/simCall.routes.js';
 import contactPolicyRoutes from './modules/contactPolicy/contactPolicy.routes.js';
@@ -184,6 +186,10 @@ export function createApp() {
   app.use("/api/v1/link-assistant", linkAssistantRoutes);
   // SMS link assistant customer page (public, token-authorised): https://<host>/c/<token>
   app.use("/c", linkAssistantPublicRoutes);
+  // Workflow Automation: tracked links (public redirect), inbound webhook triggers, owner API.
+  app.use("/t", linkPageLimiter, workflowLinkRoutes);
+  app.use("/api/v1/workflow-hooks", providerWebhookLimiter, workflowHookRoutes);
+  app.use("/api/v1/workflows", workflowRoutes);
   app.use("/api/v1/ai-calling/agent", agentToolLimiter, agentToolRoutes);
   app.use("/api/v1/webhooks/ai-calling", providerWebhookLimiter, aiCallingWebhookRoutes);
   // Paired-phone calling (owner's phone via the ESP32 Bluetooth gateway): owner API + gateway API.

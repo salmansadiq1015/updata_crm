@@ -302,6 +302,12 @@ const leadSchema = new mongoose.Schema(
     lastEscalatedAt: { type: Date, default: null },
     notes: { type: String, maxlength: 5000, default: null },
     tags: { type: [String], default: [] },
+    // Free-form key/value data (set by users or Workflow Automation "Set custom fields").
+    // Keys: letter + [a-zA-Z0-9_]{0,39}; values: strings ≤ 500 chars; at most 50 keys.
+    customFields: {
+      type: Map, of: { type: String, maxlength: 500 }, default: undefined,
+      validate: { validator: (m) => !m || m.size <= 50, message: 'At most 50 custom fields' },
+    },
     // Communication tracking (§ lead module). Stamped whenever a lead is
     // contacted: an email sent through the doctpl email service (sourceModule
     // 'lead') or a WhatsApp chat opened via the lead service. Drives the

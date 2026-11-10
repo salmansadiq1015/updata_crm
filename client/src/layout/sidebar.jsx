@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,7 +11,6 @@ import { useAuth } from '@/shared/hooks/use-auth';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { VersionBadge } from './version-badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -19,8 +18,6 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
   ChevronDown,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Settings,
   User,
 } from 'lucide-react';
@@ -277,7 +274,7 @@ function SidebarNav({ collapsed, onNavigate }) {
 function SidebarLogo({ collapsed }) {
   return (
     <div className={cn(
-      'sidebar-brand relative flex items-center h-16 px-5 shrink-0',
+      'sidebar-brand relative flex items-center h-14 px-5 shrink-0',
       collapsed && 'justify-center px-0'
     )}>
       {collapsed ? (
@@ -342,7 +339,7 @@ function SidebarUserCard({ collapsed }) {
     <button className={cn(
       'sidebar-account flex items-center gap-3 w-full rounded-xl px-2 py-2.5 transition-colors duration-200',
       'hover:bg-sidebar-foreground/[0.04] text-start',
-      collapsed && 'justify-center px-0 py-2.5'
+      collapsed && 'is-collapsed justify-center px-0 py-2.5'
     )}>
       <Avatar className="h-8 w-8 ring-1 ring-sidebar-primary/25 ring-offset-2 ring-offset-sidebar">
         <AvatarFallback className="text-[11px] font-bold bg-primary-gradient text-primary-foreground">
@@ -412,8 +409,7 @@ function SidebarUserCard({ collapsed }) {
 // ── Desktop sidebar ─────────────────────────────────────────
 
 export function Sidebar() {
-  const { isCollapsed, toggleCollapsed } = useSidebarStore();
-  const { t, isRTL } = useLanguage();
+  const isCollapsed = useSidebarStore((s) => s.isCollapsed);
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
@@ -423,9 +419,10 @@ export function Sidebar() {
   return (
     <TooltipProvider delayDuration={0}>
       <motion.aside
+        id="desktop-sidebar"
         animate={{ width: collapsed ? 68 : 256 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        className="updata-sidebar relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-e border-sidebar-border sidebar-inner-glow"
+        className="updata-sidebar relative flex flex-col h-dvh overflow-hidden bg-sidebar text-sidebar-foreground border-e border-sidebar-border sidebar-inner-glow"
       >
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
@@ -443,27 +440,6 @@ export function Sidebar() {
         {/* Bottom section */}
         <div className="sidebar-footer relative mx-3 py-2 space-y-1 border-t border-sidebar-border">
           <SidebarUserCard collapsed={collapsed} />
-
-          {/* Collapse toggle */}
-          <div className="py-1 mt-1">
-            <button
-              onClick={toggleCollapsed}
-              aria-label={t(collapsed ? 'experience.navigation.expand' : 'sidebar.collapse')}
-              className={cn(
-                'flex items-center justify-center w-full rounded-lg py-1.5 transition-all duration-200',
-                'text-[11px] text-sidebar-foreground/65 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/[0.04]'
-              )}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <div className="flex items-center gap-2">
-                  <PanelLeftClose className="h-4 w-4" />
-                  <span>{t('sidebar.collapse', 'Einklappen')}</span>
-                </div>
-              )}
-            </button>
-          </div>
 
           <VersionBadge collapsed={collapsed} />
         </div>

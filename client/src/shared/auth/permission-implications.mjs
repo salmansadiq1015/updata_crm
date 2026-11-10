@@ -15,6 +15,10 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   'ai-calling:write': ['inbound-calls:read', 'inbound-calls:write'],
   'inbound-calls:admin': ['inbound-calls:read', 'inbound-calls:write'],
   'inbound-calls:write': ['inbound-calls:read'],
+  // Workflow Automation: every workflow permission includes viewing workflows.
+  'workflow:write': ['workflow:read'],
+  'workflow:publish': ['workflow:read'],
+  'workflow:execute': ['workflow:read'],
   'projects:read': [
     'project:read',
     'project:documents:read',

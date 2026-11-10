@@ -18,6 +18,8 @@ import LeadEvent from '../crm/leadEvent.model.js';
 import userRepository from '../auth/user.repository.js';
 import auditService from '../auth/audit.service.js';
 import notificationService from '../notifications/notification.service.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
 import logger from '../../shared/logger/index.js';
 import { AppError, NotFoundError, ConflictError, ValidationError, ServiceUnavailableError } from '../../shared/errors/AppError.js';
@@ -28,7 +30,7 @@ import livekit from './providers/livekitSip.provider.js';
 import { routeOutboundCall, telephonyHealth } from './providers/telephonyRouter.js';
 import { phoneHash, issueAgentToken } from './callAuth.js';
 import {
-  OUTBOUND_CALL_QUEUE, ACTION_TO_LEAD_STATUS, PROTECTED_LEAD_STATUSES, normalizeTelephonyStatus,
+  OUTBOUND_CALL_QUEUE, ACTION_TO_LEAD_STATUS, PROTECTED_LEAD_STATUSES, normalizeTelephonyStatus, AUXILIARY_CAMPAIGN_KINDS,
 } from './aiCalling.constants.js';
 import { answerRequirements, isConfirmation, validateAnswer } from './engine/answerValidation.js';
 import * as engine from './engine/questionEngine.js';
@@ -544,8 +546,8 @@ class AiCallingService {
   async listCampaigns(actor, { page = 1, limit = 25, status, channel, agentId, kind = 'standard' } = {}) {
     const filter = { createdBy: actor, launchKey: { $not: /^browser-test-/ } };
     // Single-lead follow-up calls are listed on the agent's Follow-up tab, not as campaigns.
-    if (kind === 'follow_up') filter.kind = 'follow_up';
-    else if (kind !== 'all') filter.kind = { $ne: 'follow_up' };
+    if (kind === 'follow_up' || kind === 'workflow') filter.kind = kind;
+    else if (kind !== 'all') filter.kind = { $nin: AUXILIARY_CAMPAIGN_KINDS };
     if (status) filter.status = status;
     if (agentId) filter.agentId = agentId;
     if (channel === 'web_link') filter.channel = 'web_link';
@@ -1999,6 +2001,19 @@ class AiCallingService {
     });
     emitToOwner(campaign.createdBy, 'ai-calling:call', { campaignId: String(campaign._id), callId: call.internalCallId, state: callState, disposition: finalDisposition, qualification: outcome.qualification });
     onLeadSignalsChanged(call.leadId, 'ai_call'); // debounced lead rescore
+    // Workflow Automation signal (triggers + waiting ai.call steps). Published after every
+    // write above is committed; fire-and-forget, never affects call processing.
+    if (!campaign.isTest && !isTestProvider(call.provider)) {
+      try {
+        eventBus.publish(EVENT_TYPES.AI_CALL_PROCESSED, {
+          callId: String(call._id), internalCallId: call.internalCallId, campaignId: String(campaign._id), campaignKind: campaign.kind || 'standard',
+          workflowRunId: campaign.workflowRunId ? String(campaign.workflowRunId) : null, agentId: campaign.agentId ? String(campaign.agentId) : null,
+          leadId: call.leadId ? String(call.leadId) : null, ownerId: String(campaign.createdBy), state: callState, disposition: finalDisposition,
+          qualification: outcome.qualification || null, reached: Boolean(reached), recipientState: finalized?.state || null,
+          callbackRequested: finalDisposition === 'callback_requested' || Boolean(call.conversationState?.control?.callbackRequestedAt),
+        }, { source: 'ai-calling' });
+      } catch (e) { logger.warn('AI call event publish failed', { module: 'ai-calling', callId: call.internalCallId, error: e.message }); }
+    }
     return { processed: true, callId: call.internalCallId, disposition: finalDisposition, qualification: outcome.qualification, action: outcome.action };
   }
 

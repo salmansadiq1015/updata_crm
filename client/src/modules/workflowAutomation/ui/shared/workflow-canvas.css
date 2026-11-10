@@ -1,0 +1,25 @@
+/* Workflow canvas — xyflow theming on top of the app's design tokens. */
+.wf-canvas .react-flow { --xy-background-color: transparent; --xy-edge-stroke-default: #94a3b8; --xy-connectionline-stroke-default: var(--primary); --xy-connectionline-stroke-width-default: 2; }
+.wf-canvas .react-flow__node { cursor: grab; }
+.wf-canvas .react-flow__node.dragging { cursor: grabbing; }
+.wf-canvas .react-flow__node:focus-visible { outline: none; }
+.wf-canvas .react-flow__node:focus-visible > div { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 45%, transparent); }
+.wf-canvas .react-flow__selection { background: color-mix(in oklab, var(--primary) 8%, transparent); border: 1px dashed var(--primary); }
+.wf-canvas .react-flow__minimap { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.wf-canvas .react-flow__controls { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 8px 24px -12px rgb(15 23 42 / 0.25); }
+.wf-canvas .react-flow__controls-button { background: var(--card); border-bottom-color: var(--border); color: var(--foreground); width: 30px; height: 30px; }
+.wf-canvas .react-flow__controls-button:hover { background: var(--muted); }
+.wf-canvas .react-flow__controls-button svg { fill: currentColor; }
+.wf-canvas .react-flow__attribution { display: none; }
+.wf-canvas .react-flow__handle.connectingto, .wf-canvas .react-flow__handle.valid { background: var(--primary) !important; transform: scale(1.35); }
+.wf-edge-active { stroke-dasharray: 6 5; animation: wf-dash 0.9s linear infinite; }
+@keyframes wf-dash { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .wf-edge-active { animation: none; } }
+/* Copilot: a step the AI just added or changed glows briefly. */
+.wf-ai-flash { animation: wf-ai-flash 1.6s ease-out 1; }
+@keyframes wf-ai-flash {
+  0% { box-shadow: 0 0 0 0 rgb(14 165 233 / 0.55); }
+  60% { box-shadow: 0 0 0 10px rgb(14 165 233 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(14 165 233 / 0); }
+}
+@media (prefers-reduced-motion: reduce) { .wf-ai-flash { animation: none; outline: 2px solid rgb(14 165 233 / 0.6); } }

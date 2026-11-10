@@ -91,6 +91,7 @@ RULES:
 Keep responses short, clear, and conversational. Focus on completing the task efficiently.`;
 
 export function buildSystemPrompt({ agentConfig = {}, company = {}, objective = '', defaultLanguage, questions = [] } = {}) {
+  const mission = agentConfig.conversationMode === 'mission';
   const companyName = agentConfig.organizationName || company.name || 'our company';
   const style = {
     professional: 'Speak professionally and courteously.',
@@ -111,14 +112,43 @@ export function buildSystemPrompt({ agentConfig = {}, company = {}, objective = 
     'During live audio, report clear language evidence through report_language before switching. An explicit request takes priority. Use the language returned by the tool, even if a switch is refused. Preserve the current question and all completed answers. Do not report borrowed words, names or technical terms as a new language. Automatic detection requires full phrases and conversational context across turns.',
     'Disclose that you are an AI first and obtain agreement using disclose before collecting answers.',
     agentConfig.recordCall ? 'Tell the person the call is recorded.' : 'The call is NOT recorded: never say it is or may be recorded.',
-    'The latest CRM tool result or context checkpoint defines the current step until the next result. The initial step applies only before the first result. Follow that step; never ask anything else outside the configured questionnaire.',
+    mission ? MISSION_STEP_RULE : 'The latest CRM tool result or context checkpoint defines the current step until the next result. The initial step applies only before the first result. Follow that step; never ask anything else outside the configured questionnaire.',
     'Validate the meaning of every reply against the current question and answer requirements. Greetings, question echoes, incomplete or unrelated speech are not answers. Use no_response; never mark unknown unless they explicitly do not know or decline to share.',
     'Use record_answers for several explicitly volunteered configured answers; otherwise record_answer. Save promptly. On validation failure, follow the clarify action and never claim the answer was saved. The backend controls sequence, retries, confirmation and qualification.',
     'Hear the audio directly; separate ASR can be wrong. Keep spelled letters/digits across pauses. Ask for unclear parts; never fill missing details. Read back critical values when required or uncertain.',
     'When asked why, explain the objective briefly. Honor decline, do-not-contact, human and callback requests immediately using the tools. Never invent business facts, prices or commitments.',
-    questions.length ? 'Configured questionnaire (field keys also support volunteered answers):' : '',
-    ...questions.map((q, i) => `  ${i + 1}. [${q.fieldKey}] ${q.text}`),
+    ...(mission ? missionSection(agentConfig, objective, questions) : [
+      questions.length ? 'Configured questionnaire (field keys also support volunteered answers):' : '',
+      ...questions.map((q, i) => `  ${i + 1}. [${q.fieldKey}] ${q.text}`),
+    ]),
   ].filter(Boolean).join('\n');
+}
+
+// ------------------------------------------------------------------ goal-driven ("mission") mode
+const MISSION_STEP_RULE = 'The latest CRM tool result or context checkpoint tells you which information is still missing. Pursue the MISSION below through natural conversation: you may phrase, order and combine questions freely, but never ask about anything unrelated to the mission, and never claim information was saved unless the tool confirms it.';
+
+function missionSection(agentConfig, objective, questions) {
+  const m = agentConfig.mission || {};
+  const b = { naturalConversation: true, skipAnswered: true, clarifyAmbiguous: true, respectRefusals: true, ...(m.behavior || {}) };
+  const required = questions.filter((q) => q.required !== false);
+  const optional = questions.filter((q) => q.required === false);
+  return [
+    'MISSION (goal-driven conversation):',
+    `  Objective: ${objective || agentConfig.objective || 'Understand the person\'s needs and collect the required information.'}`,
+    m.persona ? `  Persona: ${m.persona}` : '',
+    'Conversation behaviour:',
+    b.naturalConversation ? '  - Talk naturally, like a skilled human caller; react to what the person says before moving on.' : '',
+    '  - Ask one question at a time and wait for the answer (always on).',
+    b.skipAnswered ? '  - Never ask for information the person already gave (volunteered answers count); record it with record_answers instead.' : '',
+    b.clarifyAmbiguous ? '  - If an answer is vague or ambiguous, ask one short clarifying question before recording it.' : '',
+    b.respectRefusals ? '  - If the person declines to share something, accept it, record it as unknown/declined and move on; if they ask to stop, end politely at once.' : '',
+    '  - Never invent, assume or guess an answer; unknown stays unknown.',
+    required.length ? 'Required information (collect all before completing):' : '',
+    ...required.map((q) => `  - [${q.fieldKey}] ${q.label || q.text} — e.g. "${q.text}"`),
+    optional.length ? 'Optional information (only when it fits naturally; never insist):' : '',
+    ...optional.map((q) => `  - [${q.fieldKey}] ${q.label || q.text} — e.g. "${q.text}"`),
+    `Completion: ${String(m.completionCriteria || 'The mission is complete when every required item is answered or explicitly declined.').replace(/[\s.!?]*$/, '.')} Then thank the person briefly and end the call.`,
+  ];
 }
 
 export function dynamicLeadInstruction(lead = {}) {

@@ -163,6 +163,8 @@ export type Lead = {
   assignedTo: string | null;
   notes: string | null;
   tags: string[];
+  /** Free-form key/value data (set by users or Workflow Automation). */
+  customFields?: Record<string, string>;
   convertedCustomerId: string | null;
   convertedAt: string | null;
   /**

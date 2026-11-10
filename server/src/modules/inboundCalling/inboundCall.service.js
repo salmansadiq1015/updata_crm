@@ -38,6 +38,8 @@ import { phoneHash } from '../aiCalling/callAuth.js';
 import notificationService from '../notifications/notification.service.js';
 import auditService from '../auth/audit.service.js';
 import logger from '../../shared/logger/index.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from '../../shared/errors/AppError.js';
 
 import {
@@ -1003,6 +1005,14 @@ class InboundCallService {
       await InboundCall.updateOne({ _id: id }, { $set: { processedAt: new Date(), processingLeaseUntil: null } });
       const done = await InboundCall.findById(id).lean();
       this._emit(done, 'processed');
+      // Workflow Automation "incoming AI call" trigger. Fire-and-forget, after processedAt is committed.
+      try {
+        eventBus.publish(EVENT_TYPES.INBOUND_CALL_PROCESSED, {
+          inboundCallId: String(done._id), leadId: done.leadId ? String(done.leadId) : null, ownerId: done.createdBy ? String(done.createdBy) : null,
+          outcome: done.outcome || null, answeredBy: done.answeredBy || null, qualification: done.qualification?.result || null,
+          doNotContact: Boolean(done.doNotContact), matchStatus: done.match?.status || null,
+        }, { source: 'inbound-calls' });
+      } catch (e) { logger.warn('Inbound call event publish failed', { module: 'inbound-calls', id: String(id), error: e.message }); }
       return done;
     } catch (error) {
       logger.error('Inbound call post-processing failed (the sweep retries)', { module: 'inbound-calls', id: String(id), error: error.message, stack: error.stack });

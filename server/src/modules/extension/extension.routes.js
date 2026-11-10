@@ -21,8 +21,8 @@ const router = Router();
 // Dedicated namespaces so these counters never share with login / global.
 const pairingLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
-  keyGenerator: (req, res) =>
-    (req.user?._id ? `extpair:user:${req.user._id}` : `extpair:ip:${ipKeyGenerator(req, res)}`),
+  keyGenerator: (req) =>
+    (req.user?._id ? `extpair:user:${req.user._id}` : `extpair:ip:${ipKeyGenerator(req.ip || "")}`),
   max: config.isDevelopment ? 10_000 : 20,
   message: 'Too many extension pairing requests, please try again later',
 });
@@ -31,7 +31,7 @@ const pairingLimiter = createLimiter({
 // IP so a leaked/guessed grant cannot be brute-forced.
 const redeemLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
-  keyGenerator: (req, res) => `extredeem:ip:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `extredeem:ip:${ipKeyGenerator(req.ip || "")}`,
   max: config.isDevelopment ? 10_000 : 30,
   message: 'Too many extension connect attempts, please try again later',
 });

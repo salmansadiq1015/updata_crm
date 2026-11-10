@@ -309,6 +309,20 @@ const EVENT_TYPES = Object.freeze({
 
   // Cache invalidation
   CACHE_INVALIDATE: 'cache.invalidate',
+
+  // Lead / calling / messaging signals (consumed by Workflow Automation triggers & waits).
+  // Published fire-and-forget AFTER the owning module has committed its own state.
+  CRM_LEADS_CREATED: 'crm.leads.created',
+  CRM_LEAD_UPDATED: 'crm.lead.updated',
+  AI_CALL_PROCESSED: 'ai_calling.call.processed',
+  INBOUND_CALL_PROCESSED: 'inbound_calling.call.processed',
+  MESSAGE_STATUS_CHANGED: 'messaging.recipient.status_changed',
+  MESSAGE_RECEIVED: 'messaging.inbound.received',
+  EMAIL_RECEIVED: 'email.inbound.received',
+  MESSAGE_OPENED: 'workflow.message.opened',
+  LEAD_OPTED_OUT: 'crm.lead.opted_out',
+  WORKFLOW_LINK_CLICKED: 'workflow.link.clicked',
+  WORKFLOW_WEBHOOK_RECEIVED: 'workflow.webhook.received',
 });
 
 export default EVENT_TYPES;

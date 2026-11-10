@@ -210,6 +210,26 @@ export async function logToCrm(message) {
   // to the CRM history. Stable ID makes retries idempotent.
   await ContactLog.updateOne({ _id: message._id }, { $setOnInsert: { leadId: message.leadId || null, customerId: message.contactId || null, occurredAt: message.date, employeeId: message.ownerId, channel: 'email', subject: message.subject.slice(0, 200), note: `${message.from}\n${message.text || message.snippet || '(HTML email)'}`.slice(0, 5000), createdBy: message.ownerId, editableUntil: new Date(Date.now() + 86400000) } }, { upsert: true });
 }
+/**
+ * Workflow Automation "email received" signal. The lead is the thread's linked lead or the
+ * lead whose email matches the sender. Fire-and-forget; never affects mailbox sync.
+ */
+export async function publishInboundEmail(m) {
+  const addr = (String(m.from || '').match(/<([^>]+)>/)?.[1] || String(m.from || '')).trim().toLowerCase();
+  let leadId = m.leadId || null;
+  if (!leadId && /^[^\s@]+@[^\s@]+$/.test(addr)) {
+    const lead = await Lead.findOne({ email: { $regex: `^${addr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' }, isDeleted: { $ne: true } }).select('_id').lean();
+    leadId = lead?._id || null;
+  }
+  if (!leadId) return;
+  const { default: eventBus } = await import('../../shared/events/EventBus.js');
+  const { default: EVENT_TYPES } = await import('../../shared/events/eventTypes.js');
+  eventBus.publish(EVENT_TYPES.EMAIL_RECEIVED, {
+    leadId: String(leadId), messageId: String(m._id), ownerId: String(m.ownerId), from: addr,
+    subject: String(m.subject || '').slice(0, 200), text: String(m.text || m.snippet || '').slice(0, 500),
+  }, { source: 'email' });
+}
+
 export async function linkCrm(ownerId, messageId, { leadId, contactId }) {
   const m = await messageFor(ownerId, messageId);
   if (leadId && !await Lead.exists({ _id: leadId, createdBy: ownerId, isDeleted: false })) throw new AuthorizationError('Lead is not owned by you');
@@ -260,6 +280,7 @@ async function persistIncoming(account, input) {
     await EmailMessage.updateOne({ _id: m._id }, { $addToSet: { attachments: f._id } });
   }
   await logToCrm(m);
+  if (!existing && m.state === 'received' && m.folder === 'inbox') publishInboundEmail(m).catch(() => {});
   if (!existing) {
     if (account.autoIntelligence && m.folder === 'inbox') await queue.addJob('mailbox', 'analyze', { messageId: String(m._id), ownerId: String(account.ownerId) }, { jobId: `email-ai-${m._id}`, attempts: 2, backoff: { type: 'exponential', delay: 60000 }, removeOnComplete: true }).catch(() => {});
     if (m.folder === 'inbox' && m.unread && account.lastSyncAt) {

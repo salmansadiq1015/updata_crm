@@ -72,6 +72,21 @@ export const agentConfigSchema = new mongoose.Schema({
   allowBargeIn: { type: Boolean, default: true },
   recordCall: { type: Boolean, default: false },
   shareLeadNotes: { type: Boolean, default: false },
+  // Goal-driven ("mission") conversation. 'questions' (default) = the classic questionnaire
+  // prompt, unchanged. 'mission' = the agent pursues `objective` naturally; the questionnaire's
+  // required/optional questions are the information to collect (same tools, same validation,
+  // same structured answers), and `mission.completionCriteria` defines when it is done.
+  conversationMode: { type: String, enum: ['questions', 'mission'], default: 'questions' },
+  mission: {
+    persona: { type: String, trim: true, maxlength: 1000, default: '' },
+    completionCriteria: { type: String, trim: true, maxlength: 1000, default: '' },
+    behavior: {
+      naturalConversation: { type: Boolean, default: true },
+      skipAnswered: { type: Boolean, default: true },
+      clarifyAmbiguous: { type: Boolean, default: true },
+      respectRefusals: { type: Boolean, default: true },
+    },
+  },
 }, { _id: false });
 
 export const scheduleSchema = new mongoose.Schema({
@@ -132,8 +147,11 @@ const campaignSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallingAgent', default: null },
   // 'follow_up' = a single follow-up conversation (followUpCalling.service.js): one lead,
   // launched automatically or by "Call now" from a LeadFollowUp. Same dial pipeline.
-  kind: { type: String, enum: ['standard', 'follow_up'], default: 'standard' },
+  // 'workflow' = a single-lead call launched by a Workflow Automation run (workflowAutomation
+  // module, ai.call node). Same dial pipeline; treated like 'follow_up' in lists/launch checks.
+  kind: { type: String, enum: ['standard', 'follow_up', 'workflow'], default: 'standard' },
   followUpId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadFollowUp', default: null },
+  workflowRunId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkflowRun', default: null },
   agentSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
   launchKey: { type: String, default: undefined, maxlength: 100 },
   launchRequestHash: { type: String, default: null },

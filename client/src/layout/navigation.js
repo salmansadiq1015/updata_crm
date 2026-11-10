@@ -1,5 +1,12 @@
 import {
   Activity,
+  Workflow as WorkflowIcon,
+  GitBranch,
+  History as HistoryIcon,
+  BarChart3,
+  SquarePlus,
+  Megaphone,
+  ListChecks,
   AlertTriangle,
   LifeBuoy,
   Bell,
@@ -169,11 +176,32 @@ const originalNavSectionDefs = [
 const growthRoutes = new Set(['/leads', '/lead-generation', '/leads/follow-ups']);
 const communicationRoutes = new Set(['/ai-calling', '/incoming-calls', '/sim-calls', '/sms-ops']);
 const insightRoutes = new Set(['/campaign-performance']);
+// Workflow Automation: its own section (new module; existing sections are unchanged).
+const automationSection = {
+  titleKey: 'workflow.nav.section',
+  items: [
+    {
+      type: 'group', key: 'automation', labelKey: 'workflow.nav.group', icon: WorkflowIcon,
+      basePath: '/automation', permission: 'workflow:read',
+      children: [
+        { type: 'leaf', labelKey: 'workflow.nav.overview', href: '/automation', icon: Activity, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.workflows', href: '/automation/workflows', icon: GitBranch, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.create', href: '/automation/new', icon: SquarePlus, permission: 'workflow:write' },
+        { type: 'leaf', labelKey: 'workflow.nav.campaigns', href: '/automation/campaigns', icon: Megaphone, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.templates', href: '/automation/templates', icon: LayoutTemplate, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.executions', href: '/automation/executions', icon: ListChecks, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.events', href: '/automation/events', icon: HistoryIcon, permission: 'workflow:read' },
+        { type: 'leaf', labelKey: 'workflow.nav.analytics', href: '/automation/analytics', icon: BarChart3, permission: 'workflow:read' },
+      ],
+    },
+  ],
+};
 const originalBusinessItems = originalNavSectionDefs[1].items;
 export const navSectionDefs = [
   originalNavSectionDefs[0],
   { titleKey: 'experience.nav.growth', items: originalBusinessItems.filter(item => growthRoutes.has(item.href)) },
   { titleKey: 'experience.nav.communication', items: originalBusinessItems.filter(item => communicationRoutes.has(item.href)) },
+  automationSection,
   { titleKey: 'experience.nav.insights', items: originalBusinessItems.filter(item => insightRoutes.has(item.href)) },
   { ...originalNavSectionDefs[1], items: originalBusinessItems.filter(item => !growthRoutes.has(item.href) && !communicationRoutes.has(item.href) && !insightRoutes.has(item.href)) },
   ...originalNavSectionDefs.slice(2),

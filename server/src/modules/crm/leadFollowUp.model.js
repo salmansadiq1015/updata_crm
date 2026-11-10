@@ -18,7 +18,7 @@ export const FOLLOW_UP_TYPES = Object.freeze(['EMAIL', 'PHONE_CALL', 'AI_CALL', 
 export const FOLLOW_UP_PRIORITIES = Object.freeze(['LOW', 'NORMAL', 'HIGH', 'CRITICAL']);
 export const FOLLOW_UP_CHANNELS = Object.freeze(['phone', 'sms', 'email', 'whatsapp', 'in_person', 'letter', 'other']);
 export const FOLLOW_UP_SOURCE_TYPES = Object.freeze([
-  'manual', 'communication', 'ai_call', 'sim_sms', 'sim_call', 'contact_log', 'migration', 'inbound_call',
+  'manual', 'communication', 'ai_call', 'sim_sms', 'sim_call', 'contact_log', 'migration', 'inbound_call', 'workflow',
 ]);
 
 const { ObjectId } = mongoose.Schema.Types;

@@ -220,7 +220,10 @@ describe('lead detail drawer — contact actions', () => {
     const drawer = await openDrawer('lead-full', 'Alpine Bakery AG');
     const user = userEvent.setup();
     await user.click(within(drawer).getByRole('tab', { name: 'Responses' }));
-    const reply = await within(drawer).findByText(/Interested in pricing/);
+    // The reply renders as a one-line <summary> preview plus the full multiline body.
+    const matches = await within(drawer).findAllByText(/Interested in pricing/);
+    const reply = matches.find((el) => el.tagName === 'P')!;
+    expect(reply).toBeDefined();
     expect(reply).toHaveTextContent('Please call tomorrow after 3 pm.');
     expect(reply).toHaveClass('whitespace-pre-wrap');
     expect(requests.every(url => url.searchParams.get('status') === 'received')).toBe(true);

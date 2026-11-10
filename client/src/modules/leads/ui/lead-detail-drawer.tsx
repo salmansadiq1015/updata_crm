@@ -1321,6 +1321,18 @@ function LeadDetailBody({
           <MutedText>{t('leads.drawer.noNotes', 'No notes yet.')}</MutedText>
         )}
       </Section>
+      {Object.keys(lead.customFields ?? {}).length > 0 && (
+        <Section title={t('leads.drawer.customFields', 'Custom fields')}>
+          <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-background/40 p-4 text-sm">
+            {Object.entries(lead.customFields ?? {}).map(([key, value]) => (
+              <div key={key} className="contents">
+                <dt dir="ltr" className="truncate text-start font-mono text-xs text-muted-foreground" title={key}>{key}</dt>
+                <dd className="whitespace-pre-wrap break-words">{value || '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      )}
 
         </Tabs.Content>
         <Tabs.Content value="communication" className="space-y-5 outline-none">

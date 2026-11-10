@@ -81,8 +81,20 @@
   background-image: radial-gradient(ellipse 85% 28rem at 45% 0%, color-mix(in srgb, var(--primary) 4%, transparent), transparent);
 }
 .updata-workspace [data-slot="app-header"] {
-  background: color-mix(in srgb, var(--card) 85%, transparent);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 3%, transparent), transparent 40%), color-mix(in srgb, var(--card) 92%, transparent);
   backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 4px 24px rgb(0 0 0 / .025), inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.workspace-nav-toggle[data-slot="button"] {
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  box-shadow: 0 2px 4px rgb(0 0 0 / .025), inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.workspace-nav-toggle[data-slot="button"]:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
 }
 .updata-workspace [data-slot="tabs-trigger"][data-state="active"] { color: var(--primary); }
 [data-slot="tabs-trigger"]::after { border-radius: 9999px; }
@@ -98,7 +110,14 @@
 }
 .updata-agent-primary:active:not(:disabled), .updata-agent-secondary:active:not(:disabled) { transform: translateY(1px); }
 
-/* Sidebar navigation: a restrained row surface with a distinct selected icon. */
+/* Shared navigation surfaces use the same accent in both themes. */
+.updata-sidebar .sidebar-section-heading p {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sidebar-foreground) 50%, transparent);
+}
 .sidebar-link {
   min-height: 42px;
   border: 1px solid transparent;
@@ -114,15 +133,16 @@
   transition: background-color var(--duration-fast), color var(--duration-fast), box-shadow var(--duration-fast);
 }
 .sidebar-link:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  background: color-mix(in srgb, var(--sidebar-primary) 5%, transparent);
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
   color: var(--sidebar-foreground);
 }
 .sidebar-link:hover .sidebar-icon { color: var(--sidebar-foreground); }
 .sidebar-link:is([aria-current="page"], .is-current) {
   color: var(--sidebar-foreground);
-  background: linear-gradient(115deg, color-mix(in srgb, var(--sidebar-primary) 9%, var(--sidebar)), color-mix(in srgb, var(--sidebar-foreground) 3%, var(--sidebar)));
-  border-color: color-mix(in srgb, var(--sidebar-primary) 16%, var(--sidebar-border));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 5%, transparent), 0 2px 6px rgb(0 0 0 / .035);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--sidebar-primary) 14%, var(--sidebar)), color-mix(in srgb, var(--sidebar-primary) 4%, var(--sidebar)));
+  border-color: color-mix(in srgb, var(--sidebar-primary) 28%, var(--sidebar-border));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 6%, transparent), 0 3px 12px rgb(0 0 0 / .06);
 }
 .sidebar-link:is([aria-current="page"], .is-current) .sidebar-icon {
   background: var(--primary-gradient);
@@ -138,7 +158,7 @@
 }
 .sidebar-link.is-collapsed .sidebar-icon { width: 34px; height: 34px; border-radius: 11px; }
 .sidebar-link.is-ancestor .sidebar-icon { color: var(--sidebar-primary); }
-.sidebar-children { border-inline-start: 1px solid var(--sidebar-border); }
+.sidebar-children { border-inline-start: 1px solid color-mix(in srgb, var(--sidebar-primary) 15%, var(--sidebar-border)); }
 .sidebar-link.is-nested { min-height: 36px; padding-block: 3px; gap: 8px; }
 .sidebar-link.is-nested .sidebar-icon { width: 24px; height: 24px; border-radius: 7px; }
 .sidebar-link:focus-visible, .updata-sidebar button:focus-visible {
@@ -151,5 +171,20 @@
   inset-inline: 20px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, var(--sidebar-border), transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sidebar-primary) 22%, var(--sidebar-border)), transparent);
 }
+.updata-sidebar .sidebar-footer {
+  padding-block: 12px 8px;
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+}
+.updata-sidebar .sidebar-account {
+  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--sidebar-primary) 5%, transparent), color-mix(in srgb, var(--sidebar-foreground) 2%, transparent));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+  padding-inline: 10px;
+}
+.updata-sidebar .sidebar-account:hover {
+  border-color: color-mix(in srgb, var(--sidebar-primary) 25%, var(--sidebar-border));
+  background-color: color-mix(in srgb, var(--sidebar-primary) 6%, transparent);
+}
+.updata-sidebar .sidebar-account.is-collapsed { padding-inline: 0; }

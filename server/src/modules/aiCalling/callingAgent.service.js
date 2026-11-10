@@ -14,6 +14,7 @@ import calling, { assertQuestionnaire } from './aiCalling.service.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import { nextWindowClose } from './engine/callWindow.js';
 import { applyAgentTemplate } from './engine/agentTypes.js';
+import { AUXILIARY_CAMPAIGN_KINDS } from './aiCalling.constants.js';
 
 export function agentReadiness(agent) {
   const missing = [];
@@ -74,7 +75,7 @@ class CallingAgentService {
   async decorate(agent, actor, knownStats) {
     const [stats, latestCampaign, eligibility, file] = await Promise.all([
       knownStats || this.campaignStats([agent._id], actor),
-      CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true }, kind: { $ne: 'follow_up' } }).sort({ createdAt: -1 }).lean(),
+      CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true }, kind: { $nin: AUXILIARY_CAMPAIGN_KINDS } }).sort({ createdAt: -1 }).lean(),
       calling.previewEligibility(actor, { leadIds: agent.assignedLeadIds.map(String) }),
       agent.avatarFileId ? FileMetadata.findOne({ _id: agent.avatarFileId, ...imageScope(actor) }).lean() : null,
     ]);
@@ -255,7 +256,7 @@ class CallingAgentService {
       if (previous && previous.status !== 'draft') return calling.getCampaign(previous._id, actor);
       // Follow-up calls (kind 'follow_up') run alongside campaigns; the lead-level lock in
       // _dispatchCall keeps them from ever calling a lead the campaign is calling.
-      if (await CallCampaign.exists({ agentId: id, createdBy: actor, kind: { $ne: 'follow_up' }, $or: [{ status: { $in: ACTIVE } }, { 'summary.inProgress': { $gt: 0 } }] })) throw new ConflictError('This agent already has an active campaign or an unfinished call. Open it to manage the queue and let its active calls finish');
+      if (await CallCampaign.exists({ agentId: id, createdBy: actor, kind: { $nin: AUXILIARY_CAMPAIGN_KINDS }, $or: [{ status: { $in: ACTIVE } }, { 'summary.inProgress': { $gt: 0 } }] })) throw new ConflictError('This agent already has an active campaign or an unfinished call. Open it to manage the queue and let its active calls finish');
       // The launch dialog can choose the phone for this run without rewriting
       // the saved agent. Retries keep the already allocated campaign's route.
       const transport = previous?.transport || input.transport || agent.transport || 'cloud_sip';

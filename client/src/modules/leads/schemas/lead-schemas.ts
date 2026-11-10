@@ -344,6 +344,10 @@ export const leadSchema = z.unknown().transform((value): Lead => {
     assignedTo: readIdOrNull(raw.assignedTo),
     notes: readStringOrNull(raw.notes),
     tags: readStringArray(raw.tags),
+    customFields: Object.fromEntries(Object.entries(readRecord(raw.customFields))
+      .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+      .slice(0, 50)
+      .map(([key, value]) => [key, String(value)])),
     convertedCustomerId: readIdOrNull(raw.convertedCustomerId),
     convertedAt: readIsoOrNull(raw.convertedAt),
     createdBy: readUserRef(raw.createdBy),

@@ -8,6 +8,11 @@ import { callingExperienceTranslations } from './calling-experience-translations
 import { inboundCallsTranslations } from './inbound-calls-translations';
 import { liveVoiceTranslations } from './live-voice-translations';
 import { aiFollowUpTranslations } from './ai-follow-up-translations';
+import { workflowAutomationTranslations } from './workflow-automation-translations';
+import { workflowBuilderTranslations } from './workflow-builder-translations';
+import { workflowPagesTranslations } from './workflow-pages-translations';
+import { aiMissionTranslations } from './ai-mission-translations';
+import { workflowCopilotTranslations } from './workflow-copilot-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
 import { callingIntelligenceTranslations } from './calling-intelligence-translations';
 import { callingQualityTranslations } from './calling-quality-translations';
@@ -1238,6 +1243,11 @@ const baseTranslations = {
     ...inboundCallsTranslations.de,
     ...liveVoiceTranslations.de,
     ...aiFollowUpTranslations.de,
+    ...workflowAutomationTranslations.de,
+    ...workflowBuilderTranslations.de,
+    ...workflowPagesTranslations.de,
+    ...aiMissionTranslations.de,
+    ...workflowCopilotTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
     // Navbar
@@ -6296,6 +6306,11 @@ const baseTranslations = {
     ...inboundCallsTranslations.en,
     ...liveVoiceTranslations.en,
     ...aiFollowUpTranslations.en,
+    ...workflowAutomationTranslations.en,
+    ...workflowBuilderTranslations.en,
+    ...workflowPagesTranslations.en,
+    ...aiMissionTranslations.en,
+    ...workflowCopilotTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
     // Navbar
@@ -11362,6 +11377,11 @@ const baseTranslations = {
     ...inboundCallsTranslations.fr,
     ...liveVoiceTranslations.fr,
     ...aiFollowUpTranslations.fr,
+    ...workflowAutomationTranslations.fr,
+    ...workflowBuilderTranslations.fr,
+    ...workflowPagesTranslations.fr,
+    ...aiMissionTranslations.fr,
+    ...workflowCopilotTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
     ...dashboardIntelligenceTranslations.fr,
     ...taskWorkspaceTranslations.fr,
@@ -11521,6 +11541,11 @@ const baseTranslations = {
     ...inboundCallsTranslations.ar,
     ...liveVoiceTranslations.ar,
     ...aiFollowUpTranslations.ar,
+    ...workflowAutomationTranslations.ar,
+    ...workflowBuilderTranslations.ar,
+    ...workflowPagesTranslations.ar,
+    ...aiMissionTranslations.ar,
+    ...workflowCopilotTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
     ...dashboardIntelligenceTranslations.ar,
     ...taskWorkspaceTranslations.ar,

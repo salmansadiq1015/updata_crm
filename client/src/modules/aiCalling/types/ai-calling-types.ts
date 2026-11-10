@@ -81,6 +81,15 @@ export interface AgentConfig {
   allowBargeIn?: boolean;
   recordCall?: boolean;
   shareLeadNotes?: boolean;
+  /** 'questions' (default) = classic questionnaire; 'mission' = goal-driven conversation (same questions = information to collect). */
+  conversationMode?: 'questions' | 'mission';
+  mission?: AgentMission;
+}
+
+export interface AgentMission {
+  persona?: string;
+  completionCriteria?: string;
+  behavior?: { naturalConversation?: boolean; skipAnswered?: boolean; clarifyAmbiguous?: boolean; respectRefusals?: boolean };
 }
 
 export interface Schedule {

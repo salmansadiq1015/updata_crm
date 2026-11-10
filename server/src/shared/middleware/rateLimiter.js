@@ -35,10 +35,10 @@ function createLimiter({ windowMs, max, message, keyGenerator, ...extra } = {}) 
         details: [],
       },
     },
-    keyGenerator: keyGenerator || ((req, res) => {
+    keyGenerator: keyGenerator || ((req) => {
       // Authenticated users: rate limit by userId (more fair)
       // Anonymous: rate limit by IP (using ipKeyGenerator for IPv6 safety)
-      return req.user?._id ? `user:${req.user._id}` : `ip:${ipKeyGenerator(req, res)}`;
+      return req.user?._id ? `user:${req.user._id}` : `ip:${ipKeyGenerator(req.ip || "")}`;
     }),
   };
 
@@ -69,14 +69,14 @@ export const authLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.auth,
   message: 'Too many authentication attempts, please try again later',
-  keyGenerator: (req, res) => `auth:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `auth:${ipKeyGenerator(req.ip || "")}`,
 });
 
 export const uploadLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
   // Separate key namespace so upload counter doesn't share with global limiter
-  keyGenerator: (req, res) =>
-    req.user?._id ? `upload:user:${req.user._id}` : `upload:ip:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) =>
+    req.user?._id ? `upload:user:${req.user._id}` : `upload:ip:${ipKeyGenerator(req.ip || "")}`,
   // In development uploads are frequent during testing; production uses the configured limit
   max: config.isDevelopment ? 10_000 : config.rateLimit.upload,
   message: 'Too many file uploads, please try again later',
@@ -87,8 +87,8 @@ export const uploadLimiter = createLimiter({
 // namespace. Generous in development where it is exercised by tests.
 export const enrichLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
-  keyGenerator: (req, res) =>
-    (req.user?._id ? `enrich:user:${req.user._id}` : `enrich:ip:${ipKeyGenerator(req, res)}`),
+  keyGenerator: (req) =>
+    (req.user?._id ? `enrich:user:${req.user._id}` : `enrich:ip:${ipKeyGenerator(req.ip || "")}`),
   max: config.isDevelopment ? 10_000 : 30,
   message: 'Too many enrichment requests, please try again later',
 });
@@ -99,8 +99,8 @@ export const enrichLimiter = createLimiter({
 // all" over a large pipeline stays a good citizen. Generous in development.
 export const geocodeLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
-  keyGenerator: (req, res) =>
-    (req.user?._id ? `geocode:user:${req.user._id}` : `geocode:ip:${ipKeyGenerator(req, res)}`),
+  keyGenerator: (req) =>
+    (req.user?._id ? `geocode:user:${req.user._id}` : `geocode:ip:${ipKeyGenerator(req.ip || "")}`),
   max: config.isDevelopment ? 10_000 : 120,
   message: 'Too many geocoding requests, please try again later',
 });
@@ -115,9 +115,9 @@ export const agentToolLimiter = createLimiter({
   windowMs: 60_000,
   max: 120,
   message: 'Too many agent tool calls for this call',
-  keyGenerator: (req, res) => {
+  keyGenerator: (req) => {
     const callId = /^\/([^/]{1,120})\//.exec(req.path)?.[1];
-    return callId ? `ai-agent:${callId}` : `ai-agent-ip:${ipKeyGenerator(req, res)}`;
+    return callId ? `ai-agent:${callId}` : `ai-agent-ip:${ipKeyGenerator(req.ip || "")}`;
   },
 });
 
@@ -126,7 +126,7 @@ export const providerWebhookLimiter = createLimiter({
   windowMs: 60_000,
   max: 1200,
   message: 'Too many webhook requests',
-  keyGenerator: (req, res) => `webhook:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `webhook:${ipKeyGenerator(req.ip || "")}`,
 });
 
 /**
@@ -138,9 +138,9 @@ export const gatewayLimiter = createLimiter({
   windowMs: 60_000,
   max: 300,
   message: 'Too many gateway requests',
-  keyGenerator: (req, res) => {
+  keyGenerator: (req) => {
     const auth = req.get('authorization') || '';
-    if (!auth.startsWith('Bearer ')) return `gateway-ip:${ipKeyGenerator(req, res)}`;
+    if (!auth.startsWith('Bearer ')) return `gateway-ip:${ipKeyGenerator(req.ip || "")}`;
     return `gateway:${crypto.createHash('sha256').update(auth.slice(7)).digest('hex').slice(0, 32)}`;
   },
 });
@@ -149,7 +149,7 @@ export const gatewayPairLimiter = createLimiter({
   windowMs: 15 * 60_000,
   max: 10,
   message: 'Too many pairing attempts, please try again later',
-  keyGenerator: (req, res) => `gateway-pair:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `gateway-pair:${ipKeyGenerator(req.ip || "")}`,
 });
 
 export { createLimiter };
@@ -166,13 +166,13 @@ export default {
 export const linkPageLimiter = createLimiter({
   windowMs: 60_000,
   max: config.isDevelopment ? 10_000 : 120,
-  keyGenerator: (req, res) => `link:ip:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `link:ip:${ipKeyGenerator(req.ip || "")}`,
 });
 
 export const linkMessageLimiter = createLimiter({
   windowMs: 60_000,
   max: config.isDevelopment ? 10_000 : 30,
-  keyGenerator: (req, res) => `link:msg:${String(req.params.token || '').slice(0, 22)}:${ipKeyGenerator(req, res)}`,
+  keyGenerator: (req) => `link:msg:${String(req.params.token || '').slice(0, 22)}:${ipKeyGenerator(req.ip || "")}`,
   message: 'Please slow down a little',
 });
 
@@ -180,6 +180,6 @@ export const linkMissLimiter = createLimiter({
   windowMs: 10 * 60_000,
   max: config.isDevelopment ? 10_000 : 20,
   skipSuccessfulRequests: true,
-  requestWasSuccessful: (req, res) => res.statusCode !== 404,
-  keyGenerator: (req, res) => `link:miss:${ipKeyGenerator(req, res)}`,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 404,
+  keyGenerator: (req) => `link:miss:${ipKeyGenerator(req.ip || "")}`,
 });

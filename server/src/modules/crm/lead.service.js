@@ -15,6 +15,8 @@ import { canonicalizeLeadAddress } from './leadGeography.js';
 import leadAssignmentService from './leadAssignment.service.js';
 import leadSlaService from './leadSla.service.js';
 import { onLeadsCreated } from './leadQuality.hooks.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
 
 /**
  * Lead service (§4.3 / §9 / §72 of LEAD_GENERATION_DESIGN.md).
@@ -250,6 +252,14 @@ class LeadService {
       details: { leadId: id, changedFields: Object.keys(data) },
       module: 'lead',
     });
+    // Workflow Automation "lead updated" trigger. `meta.workflowId` marks writes made by a
+    // workflow so a workflow never re-triggers itself. Fire-and-forget; never throws.
+    try {
+      eventBus.publish(EVENT_TYPES.CRM_LEAD_UPDATED, {
+        leadId: String(id), changedFields: Object.keys(data), status: updated.status ?? null,
+        userId: meta.userId ? String(meta.userId) : null, workflowId: meta.workflowId ? String(meta.workflowId) : null,
+      }, { source: 'crm:leads' });
+    } catch { /* best effort */ }
 
     return updated;
   }
@@ -367,7 +377,7 @@ class LeadService {
     const assignments = await leadAssignmentService.prepareNewBatch(docs);
     const result = await leadRepository.bulkCreate(docs.map((doc, i) => ({ ...doc, ...assignments[i] })));
     await leadAssignmentService.afterCreate(result.created || [], docs[0]?.createdBy ?? null);
-    onLeadsCreated((result.created || []).map((doc) => doc._id)); // duplicate detection + first score (queued)
+    onLeadsCreated((result.created || []).map((doc) => doc._id), 'import'); // duplicate detection + first score (queued)
     return result;
   }
 

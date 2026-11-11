@@ -250,7 +250,11 @@ const inboundCallSchema = new mongoose.Schema({
   processingErrors: { type: Number, default: 0 },
 }, { timestamps: true, minimize: false });
 
-inboundCallSchema.index({ createdBy: 1, createdAt: -1 });
+// List paging sorts by { createdAt, _id }: including _id lets the index supply the sort, and
+// the owner-or-assignee $or is answered by a SORT_MERGE of the two branches (migration 054
+// replaces the old { createdBy, createdAt } index with this one).
+inboundCallSchema.index({ createdBy: 1, createdAt: -1, _id: -1 }, { name: 'owner_recent_inbound' });
+inboundCallSchema.index({ assignedTo: 1, createdAt: -1, _id: -1 }, { name: 'assignee_recent_inbound' });
 inboundCallSchema.index({ createdBy: 1, 'caller.e164': 1, createdAt: -1 });
 inboundCallSchema.index({ leadId: 1, createdAt: -1 });
 inboundCallSchema.index({ deviceId: 1, createdAt: -1 });

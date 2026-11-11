@@ -8,6 +8,7 @@ const me = (req) => req.user._id;
 export default {
   readiness: wrap(async (_req, res) => res.success({ data: await service.readiness() })),
   listCampaigns: wrap(async (req, res) => res.success(await service.listCampaigns(me(req), q(req)))),
+  campaignStats: wrap(async (req, res) => res.success({ data: await service.campaignStats(me(req)) })),
   createCampaign: wrap(async (req, res) => res.success({ data: await service.createCampaign(req.body, me(req), meta(req)), statusCode: 201, message: 'Call campaign created' })),
   getCampaign: wrap(async (req, res) => res.success({ data: await service.getCampaign(req.params.id, me(req)) })),
   updateCampaign: wrap(async (req, res) => res.success({ data: await service.updateCampaign(req.params.id, req.body, me(req), meta(req)), message: 'Call campaign updated' })),

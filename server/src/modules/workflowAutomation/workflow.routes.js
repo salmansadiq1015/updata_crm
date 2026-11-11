@@ -5,8 +5,18 @@ import { validate } from '../../shared/validation/validate.js';
 import * as s from './workflow.validation.js';
 import { ipKeyGenerator } from 'express-rate-limit';
 import { createLimiter } from '../../shared/middleware/rateLimiter.js';
+import multer from 'multer';
 
 // The copilot calls an LLM: a per-user budget keeps cost and abuse bounded.
+const voiceLimiter = createLimiter({ windowMs: 60_000, max: 30, message: 'Too many voice requests, please wait a moment', keyGenerator: (req) => `wf-voice:${req.user?._id || ipKeyGenerator(req.ip || '')}` });
+// Copilot dictation: audio stays in memory, is transcribed and discarded — never stored.
+const VOICE_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/mpeg', 'audio/wav', 'audio/x-wav']);
+const voiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, VOICE_TYPES.has(String(file.mimetype).toLowerCase().split(';')[0])),
+}).single('audio');
+const checkLimiter = createLimiter({ windowMs: 60_000, max: 30, message: 'Too many checks, please wait a moment', keyGenerator: (req) => `wf-check:${req.user?._id || ipKeyGenerator(req.ip || '')}` });
 const copilotLimiter = createLimiter({ windowMs: 60_000, max: 20, message: 'Too many AI requests, please wait a moment', keyGenerator: (req) => `wf-copilot:${req.user?._id || ipKeyGenerator(req.ip || '')}` });
 
 /**
@@ -50,7 +60,9 @@ router.patch('/:id', ...write, validate(s.update), c.update);
 router.delete('/:id', ...write, validate(s.byId), c.remove);
 router.post('/:id/validate', ...write, validate(s.validateGraph), c.validate);
 router.post('/:id/test', ...write, validate(s.test), c.test);
+router.post('/:id/analyze', ...write, checkLimiter, validate(s.analyze), c.analyze);
 router.post('/:id/copilot', ...write, copilotLimiter, validate(s.copilot), c.copilot);
+router.post('/:id/copilot/transcribe', ...write, voiceLimiter, validate(s.byId), voiceUpload, c.copilotTranscribe);
 router.post('/:id/duplicate', ...write, validate(s.byId), c.duplicate);
 router.post('/:id/publish', ...publish, validate(s.publish), c.publish);
 router.post('/:id/status', ...publish, validate(s.setStatus), c.setStatus);

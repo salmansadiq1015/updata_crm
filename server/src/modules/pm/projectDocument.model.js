@@ -87,6 +87,8 @@ projectDocumentSchema.index({ projectId: 1, archived: 1 });
 projectDocumentSchema.index({ projectId: 1, releasedToField: 1, isDeleted: 1 });
 projectDocumentSchema.index({ isDeleted: 1 });
 projectDocumentSchema.index({ fileId: 1 });
+// Document repository: newest-first paging across all projects.
+projectDocumentSchema.index({ isDeleted: 1, createdAt: -1, _id: -1 });
 
 // --- Soft-delete pre-hook ---
 projectDocumentSchema.pre(/^find/, function () {

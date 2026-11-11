@@ -87,3 +87,13 @@ export interface CreateSimCallCampaignInput {
   settings: SimCallSettings;
   subscriptionId?: number | null;
 }
+
+/** GET /sim-calls/campaigns/stats — totals across all of the caller's campaigns (server-cached ~30 s). */
+export interface SimCallStats {
+  campaigns: number;
+  byStatus: Record<CampaignStatus, number>;
+  tasks: { total: number; closed: number; answered: number; callbacksDue: number; needsReview: number; syncFailed: number };
+  answerRate: number | null;
+  callbacksOverdue: number;
+  generatedAt: string;
+}

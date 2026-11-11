@@ -42,6 +42,12 @@ const ROUTE_CONTEXT_PATTERNS = [
     contextModule: 'crm',
     recordType: 'site',
   },
+  // A vehicle page: "set the meter to 90'000" means this vehicle.
+  {
+    pattern: /^\/vehicles\/([^/]+)/i,
+    contextModule: 'vehicles',
+    recordType: 'vehicle',
+  },
   // A task lives two segments deep, under the list it belongs to.
   {
     pattern: /^\/tasks\/[^/]+\/([^/]+)/i,

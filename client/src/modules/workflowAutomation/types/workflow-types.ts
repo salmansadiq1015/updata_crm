@@ -167,6 +167,19 @@ export interface CampaignInput { name: string; description?: string; workflowId:
 
 export interface TestRunStep { nodeId: string; type: string; label?: string; status: string; port?: string | null; output?: Record<string, unknown> | null; error?: { code?: string; message?: string } | null }
 export interface TestRunResult { valid: boolean; validation: ValidationResult; steps: TestRunStep[]; outcome: string | null; lead: { _id: string; name: string; status: string } }
+/** POST /workflows/:id/analyze — the "Full check" report. */
+export type CheckSeverity = 'error' | 'warning' | 'info';
+export interface CheckIssue { nodeId?: string; code: string; severity: CheckSeverity; field?: string; ports?: string[]; channel?: string; reason?: string | null; message?: string | null }
+export interface CheckNode { nodeId: string; type: string; label: string; status: 'ok' | 'warning' | 'error'; issues: CheckIssue[]; dryRun: { status: 'ok' | 'failed'; port?: string | null; error?: { code: string; message: string } } | null }
+export interface CheckChannel { nodes: string[]; ready: boolean; reason: string | null }
+export interface CheckPath { steps: Array<{ nodeId: string; port?: string }>; status: 'ends' | 'open' | 'repeats' | 'stops'; end: string | null }
+export interface WorkflowCheckReport {
+  checkedAt: string; status: 'ready' | 'attention' | 'blocked';
+  counts: { steps: number; stepsOk: number; errors: number; warnings: number; paths: number; openPaths: number; endingPaths: number };
+  lead: { _id: string; name: string } | null;
+  general: CheckIssue[]; nodes: CheckNode[]; channels: Partial<Record<'voice' | 'sms' | 'whatsapp' | 'email', CheckChannel>>;
+  paths: { total: number; truncated: boolean; paths: CheckPath[]; byStatus: Record<string, number> };
+}
 export interface TestRunOptions {
   callOutcome?: 'answered' | 'unanswered' | 'failed' | 'blocked';
   analysis?: 'qualified' | 'not_qualified' | 'callback' | 'unknown';

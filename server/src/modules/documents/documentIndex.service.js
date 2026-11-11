@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import documentIndexRepository from './documentIndex.repository.js';
 import DocumentIndex from './documentIndex.model.js';
 import GeneratedDocument from '../doctpl/generatedDocument.model.js';
@@ -10,8 +11,9 @@ import AccountingDocument from '../accounting/accountingDocument.model.js';
 import FileMetadata from '../files/file.model.js';
 import fileService from '../files/file.service.js';
 import storageService from '../../shared/storage/StorageService.js';
+import cacheManager from '../../shared/cache/CacheManager.js';
 import auditService from '../auth/audit.service.js';
-import { AuthorizationError, NotFoundError } from '../../shared/errors/AppError.js';
+import { AuthorizationError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import { loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
 import logger from '../../shared/logger/index.js';
 
@@ -24,6 +26,17 @@ const SOURCE_LABELS = {
   accounting: 'Accounting',
   mobile: 'Mobile',
 };
+
+/** Date each source sorts and pages on (generated documents carry their own). */
+const DATE_FIELD = {
+  repository: 'createdAt', generated: 'generatedAt', project: 'createdAt',
+  customer: 'createdAt', accounting: 'createdAt', mobile: 'createdAt',
+};
+
+const SCOPE_KEYS = ['customerId', 'projectId', 'jobId', 'employeeId', 'installationId', 'sourceRecordType', 'sourceRecordId'];
+const STATS_TTL = { l1Ttl: 20, l2Ttl: 60 };
+const FACETS_TTL = { l1Ttl: 120, l2Ttl: 600 };
+const STATS_GEN_KEY = 'documents:stats:gen';
 
 function cleanPathSegment(value = '') {
   return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '_').slice(0, 80);
@@ -63,13 +76,12 @@ function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null && entry !== ''));
 }
 
-// Section split (Dokumente / Dokumente mit Visum / Archiv). Only project
-// documents carry the archived/visum flags; every other source is an ordinary
-// current document (falls in "documents").
-function matchesSection(doc, section) {
-  if (!section || section === 'all') return true;
-  const docSection = doc.archived ? 'archiv' : (doc.visum ? 'visum' : 'documents');
-  return docSection === section;
+/** Plain code-point comparison: the same order the per-source keyset clauses use. */
+function compareIds(left, right) {
+  const a = String(left);
+  const b = String(right);
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 function sortDocuments(items, sortOrder) {
@@ -78,7 +90,7 @@ function sortDocuments(items, sortOrder) {
     const leftDate = toDate(left.createdAt)?.getTime() || 0;
     const rightDate = toDate(right.createdAt)?.getTime() || 0;
     if (leftDate !== rightDate) return (leftDate - rightDate) * direction;
-    return String(left.id).localeCompare(String(right.id)) * direction;
+    return compareIds(left.id, right.id) * direction;
   });
 }
 
@@ -91,26 +103,70 @@ function decodeCursor(cursor) {
   if (!cursor) return null;
   try {
     const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
-    return decoded?.createdAt && decoded?.id ? decoded : null;
+    if (!decoded?.createdAt || !decoded?.id || !toDate(decoded.createdAt) || !parseRecordId(decoded.id)) return null;
+    return decoded;
   } catch {
     return null;
   }
 }
 
-function isAfterCursor(item, cursor, sortOrder) {
-  if (!cursor) return true;
-  const direction = sortOrder === 'asc' ? 1 : -1;
-  const itemDate = toDate(item.createdAt)?.getTime() || 0;
-  const cursorDate = toDate(cursor.createdAt)?.getTime() || 0;
-  if (itemDate !== cursorDate) return (itemDate - cursorDate) * direction > 0;
-  return String(item.id).localeCompare(String(cursor.id)) * direction > 0;
+/**
+ * Keyset clause for one source: everything strictly after the cursor in the
+ * merged order (date, then the full "source:oid" id). Pushing this into each
+ * query is what lets page 2, 3, … reach older documents — filtering a fixed
+ * "newest N" window in memory silently dropped them.
+ */
+export function keysetClause(source, dateField, cursor, sortOrder) {
+  if (!cursor) return null;
+  const date = new Date(cursor.createdAt);
+  const parsed = parseRecordId(cursor.id);
+  const after = sortOrder === 'asc' ? '$gt' : '$lt';
+  const or = [{ [dateField]: { [after]: date } }];
+  if (parsed.source === source) {
+    or.push({ [dateField]: date, _id: { [after]: new mongoose.Types.ObjectId(parsed.id) } });
+  } else if (sortOrder === 'asc' ? source > parsed.source : source < parsed.source) {
+    or.push({ [dateField]: date });
+  }
+  return { $or: or };
 }
 
-function addDateFilter(filter, field, query) {
-  if (!query.dateFrom && !query.dateTo) return;
-  filter[field] = {};
-  if (query.dateFrom) filter[field].$gte = new Date(query.dateFrom);
-  if (query.dateTo) filter[field].$lte = new Date(query.dateTo);
+/** Inclusive date range; a date-only "to" covers that whole day. */
+function dateRange(query) {
+  if (!query.dateFrom && !query.dateTo) return null;
+  const range = {};
+  if (query.dateFrom) range.$gte = new Date(query.dateFrom);
+  if (query.dateTo) {
+    const to = new Date(query.dateTo);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo)) || (to.getUTCHours() === 0 && to.getUTCMinutes() === 0 && to.getUTCSeconds() === 0)) {
+      to.setUTCHours(23, 59, 59, 999);
+    }
+    range.$lte = to;
+  }
+  return range;
+}
+
+/** Section (Dokumente / mit Visum / Archiv) and field release, applied in the query. */
+function sectionClause(section, releasedOnly) {
+  const filter = {};
+  if (section === 'archiv') filter.archived = true;
+  else if (section === 'visum') { filter.archived = { $ne: true }; filter.visumBy = { $ne: null }; }
+  else if (section === 'documents') { filter.archived = { $ne: true }; filter.visumBy = null; }
+  if (releasedOnly) filter.releasedToField = true;
+  return filter;
+}
+
+function andAll(...clauses) {
+  const parts = clauses.filter((c) => c && Object.keys(c).length);
+  if (!parts.length) return {};
+  if (parts.length === 1) return parts[0];
+  return { $and: parts };
+}
+
+function searchClause(search, fields) {
+  const text = `${search || ''}`.trim();
+  if (!text) return null;
+  const regex = new RegExp(escapeRegex(text.slice(0, 200)), 'i');
+  return { $or: fields.map((field) => ({ [field]: regex })) };
 }
 
 function sourceAllowed(query, source) {
@@ -129,81 +185,540 @@ function isAdmin(user) {
   return user?.role?.name === 'Admin' || user?.role === 'Admin';
 }
 
+function oid(value) {
+  return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
+}
+
+function inIds(ids) {
+  return { $in: ids.map(oid) };
+}
+
+const fullName = (u) => (u ? [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || null : null);
+
 class DocumentIndexService {
+  /**
+   * One page of the federated document list.
+   *
+   * Every source query carries the same keyset, section, release and scope
+   * filters, so each returns only rows that can belong to this page; the merge
+   * then takes the first `limit`. Link targets (customer, project, job,
+   * employee, installation) are resolved to names in one batch per type.
+   */
   async list(query = {}, user) {
-    // An object (site) has no direct document link; documents reach it through its
-    // projects. Resolve the site's projects and aggregate their documents. (Slice 1
-    // of client feedback #18 — read-only, no model change.)
-    if (query.siteId) return this._listBySite(query, user);
+    const ctx = await this._listContext(query, user);
+    if (ctx.empty) return { data: [], pagination: { hasNext: false, nextCursor: null, limit: ctx.limit } };
 
-    const permissions = await this._permissions(user);
-    const limit = Math.min(Number(query.limit || 25), 100);
-    const cursor = decodeCursor(query.cursor);
-    const fetchLimit = Math.max(limit + 1, Math.min(limit * 2, 200));
-
+    const fetchLimit = ctx.limit + 1;
     const sources = await Promise.all([
-      this._listRepositoryDocuments(query, fetchLimit, permissions, user),
-      this._listGeneratedDocuments(query, fetchLimit, user),
-      this._listProjectDocuments(query, fetchLimit, permissions, user),
-      this._listCustomerDocuments(query, fetchLimit, permissions, user),
-      this._listAccountingDocuments(query, fetchLimit, permissions, user),
-      this._listMobileDocuments(query, fetchLimit, permissions, user),
+      this._listRepositoryDocuments(query, fetchLimit, ctx),
+      this._listGeneratedDocuments(query, fetchLimit, ctx),
+      this._listProjectDocuments(query, fetchLimit, ctx),
+      this._listCustomerDocuments(query, fetchLimit, ctx),
+      this._listAccountingDocuments(query, fetchLimit, ctx),
+      this._listMobileDocuments(query, fetchLimit, ctx),
     ]);
 
-    const releasedOnly = await this._releasedOnly(user);
-    const flat = sources.flat()
-      .filter((item) => matchesSection(item, query.section))
-      .filter((item) => !releasedOnly || item.releasedToField);
-    const sorted = sortDocuments(flat.filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
-    const pageItems = sorted.slice(0, limit);
-    const hasNext = sorted.length > limit;
+    const sorted = sortDocuments(sources.flat(), query.sortOrder);
+    const pageItems = sorted.slice(0, ctx.limit);
+    const hasNext = sorted.length > ctx.limit;
+    await this._attachNames(pageItems);
+    const canDelete = isAdmin(user) || hasPermission(ctx.permissions, 'documents:delete');
+    for (const item of pageItems) item.canDelete = Boolean(item.canDelete && canDelete);
+
     return {
       data: pageItems,
       pagination: {
         hasNext,
         nextCursor: hasNext ? encodeCursor(pageItems[pageItems.length - 1]) : null,
-        limit,
+        limit: ctx.limit,
       },
     };
   }
 
-  async _listBySite(query, user) {
-    const limit = Math.min(Number(query.limit || 25), 100);
-    const projects = await Project.find({ siteId: query.siteId }).select('_id').lean();
-    const projectIds = projects.map((project) => String(project._id));
-    if (!projectIds.length) {
-      return { data: [], pagination: { hasNext: false, nextCursor: null, limit } };
+  /** Permissions, cursor and the project scope a site or customer filter implies. */
+  async _listContext(query, user) {
+    const permissions = await this._permissions(user);
+    const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 100);
+    const ctx = {
+      user,
+      permissions,
+      limit,
+      cursor: decodeCursor(query.cursor),
+      releasedOnly: await this._releasedOnly(user, permissions),
+      section: query.section || 'all',
+      siteProjectIds: null,
+      customerProjectIds: null,
+      empty: false,
+    };
+    // An object (site) has no direct document link; documents reach it through
+    // its projects — one $in instead of a federated list per project.
+    if (query.siteId) {
+      const projects = await Project.find({ siteId: query.siteId }).select('_id').lean();
+      ctx.siteProjectIds = projects.map((p) => p._id);
+      if (!ctx.siteProjectIds.length) ctx.empty = true;
     }
+    // Project documents belong to a customer through their project.
+    if (query.customerId && sourceAllowed(query, 'project')) {
+      const projects = await Project.find({ customerId: query.customerId }).select('_id').lean();
+      ctx.customerProjectIds = projects.map((p) => p._id);
+    }
+    return ctx;
+  }
 
-    // Reuse the per-project federated list (each source already filters by projectId),
-    // then merge + dedupe across the site's projects.
-    const perProject = await Promise.all(
-      projectIds.map((projectId) => this.list(
-        { ...query, siteId: undefined, cursor: undefined, projectId, limit: 100 },
-        user,
-      )),
+  /** True when the request scopes to a link this source can never carry. */
+  _unsupportedScope(query, supported) {
+    return SCOPE_KEYS.some((key) => query[key] && !supported.includes(key));
+  }
+
+  async _listRepositoryDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'repository') || !originAllowed(query, 'uploaded')) return [];
+    if (!isAdmin(ctx.user) && !hasPermission(ctx.permissions, 'documents:read')) return [];
+    const scope = { source: 'repository' };
+    for (const key of ['customerId', 'projectId', 'jobId', 'employeeId', 'installationId', 'sourceRecordId']) {
+      if (query[key]) scope[key] = oid(query[key]);
+    }
+    if (query.sourceRecordType) scope.sourceRecordType = query.sourceRecordType;
+    if (ctx.siteProjectIds) scope.projectId = inIds(ctx.siteProjectIds);
+    if (query.documentType) scope.documentType = query.documentType;
+    if (query.category) scope.category = query.category;
+    if (query.status) scope.status = query.status;
+    const range = dateRange(query);
+    if (range) scope.createdAt = range;
+
+    const filter = andAll(
+      scope,
+      sectionClause(ctx.section, ctx.releasedOnly),
+      searchClause(query.search, ['title', 'fileName', 'description', 'documentType', 'category', 'folderPath']),
+      keysetClause('repository', 'createdAt', ctx.cursor, query.sortOrder),
     );
+    const direction = query.sortOrder === 'asc' ? 1 : -1;
+    const docs = await DocumentIndex.find(filter).sort({ createdAt: direction, _id: direction }).limit(limit).select('-__v').lean();
+    return docs.map((doc) => this._normalizeRepositoryDocument(doc));
+  }
 
-    const seen = new Set();
-    const merged = [];
-    for (const result of perProject) {
-      for (const doc of result.data) {
-        if (doc?.id == null || seen.has(doc.id)) continue;
-        seen.add(doc.id);
-        merged.push(doc);
+  async _listGeneratedDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'generated') || !originAllowed(query, 'generated')) return [];
+    if (this._unsupportedScope(query, ['customerId', 'projectId', 'jobId', 'sourceRecordId', 'sourceRecordType'])) return [];
+    if (query.status && query.status !== 'FINAL') return [];
+    const scope = {};
+    if (query.customerId) scope.sourceCustomerId = oid(query.customerId);
+    if (query.projectId) scope.sourceProjectId = oid(query.projectId);
+    if (ctx.siteProjectIds) scope.sourceProjectId = inIds(ctx.siteProjectIds);
+    if (query.jobId) scope.sourceRecordId = oid(query.jobId);
+    if (query.sourceRecordId) scope.sourceRecordId = oid(query.sourceRecordId);
+    if (query.sourceRecordType) scope.sourceModule = query.sourceRecordType;
+    // A generated document's category is its document type.
+    if (query.documentType || query.category) {
+      if (query.documentType && query.category && query.documentType !== query.category) return [];
+      scope.documentType = query.documentType || query.category;
+    }
+    const range = dateRange(query);
+    if (range) scope.generatedAt = range;
+
+    const filter = andAll(
+      scope,
+      sectionClause(ctx.section, ctx.releasedOnly),
+      searchClause(query.search, ['fileName', 'documentType', 'sourceModule', 'metadata.documentNumber', 'metadata.customerName', 'metadata.projectName']),
+      keysetClause('generated', 'generatedAt', ctx.cursor, query.sortOrder),
+    );
+    const direction = query.sortOrder === 'asc' ? 1 : -1;
+    const docs = await GeneratedDocument.find(filter).sort({ generatedAt: direction, _id: direction }).limit(limit).select('-__v').lean();
+    // Permissions are cached per user, so the per-document policy runs in parallel.
+    const readable = await Promise.all(docs.map((doc) => documentAccessPolicyService.canRead(doc, ctx.user)));
+    return docs.filter((_, i) => readable[i]).map((doc) => this._normalizeGeneratedDocument(doc));
+  }
+
+  async _listProjectDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'project')) return [];
+    if (!originAllowed(query, 'uploaded') && !originAllowed(query, 'generated') && !originAllowed(query, 'draft')) return [];
+    if (!isAdmin(ctx.user) && !hasPermission(ctx.permissions, 'project:documents:read') && !hasPermission(ctx.permissions, 'projects:read')) return [];
+    if (this._unsupportedScope(query, ['customerId', 'projectId', 'sourceRecordId', 'sourceRecordType'])) return [];
+    if (query.sourceRecordType && query.sourceRecordType !== 'project') return [];
+
+    const scope = {};
+    const projectScopes = [];
+    if (query.projectId) projectScopes.push([oid(query.projectId)]);
+    if (query.sourceRecordId) projectScopes.push([oid(query.sourceRecordId)]);
+    if (ctx.siteProjectIds) projectScopes.push(ctx.siteProjectIds);
+    if (query.customerId) projectScopes.push(ctx.customerProjectIds || []);
+    if (projectScopes.length) {
+      const allowed = projectScopes.reduce((acc, ids) => acc.filter((id) => ids.some((x) => String(x) === String(id))));
+      if (!allowed.length) return [];
+      scope.projectId = inIds(allowed);
+    }
+    // Origin is derived: draft status, generated flag, else uploaded.
+    if (query.origin === 'draft') scope.status = 'DRAFT';
+    else if (query.origin === 'generated') { scope.isGenerated = true; scope.status = { $ne: 'DRAFT' }; }
+    else if (query.origin === 'uploaded') { scope.isGenerated = { $ne: true }; scope.status = { $ne: 'DRAFT' }; }
+    if (query.category) scope.category = query.category;
+    if (query.documentType) scope.$or = [{ templateType: query.documentType }, { templateType: null, category: query.documentType }];
+    if (query.status) scope.status = query.status;
+    const range = dateRange(query);
+    if (range) scope.createdAt = range;
+
+    const filter = andAll(
+      scope,
+      sectionClause(ctx.section, ctx.releasedOnly),
+      searchClause(query.search, ['fileName', 'description', 'templateType', 'category']),
+      keysetClause('project', 'createdAt', ctx.cursor, query.sortOrder),
+    );
+    const direction = query.sortOrder === 'asc' ? 1 : -1;
+    const docs = await ProjectDocument.find(filter)
+      .populate({ path: 'fileId', select: 'originalName mimeType sizeBytes folderPath category' })
+      .sort({ createdAt: direction, _id: direction })
+      .limit(limit)
+      .lean();
+    return docs.map((doc) => this._normalizeProjectDocument(doc));
+  }
+
+  async _listCustomerDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'customer') || (!originAllowed(query, 'received') && !originAllowed(query, 'uploaded'))) return [];
+    if (!isAdmin(ctx.user) && !hasPermission(ctx.permissions, 'crm:read')) return [];
+    if (ctx.siteProjectIds) return [];
+    if (this._unsupportedScope(query, ['customerId', 'sourceRecordId', 'sourceRecordType'])) return [];
+    if (query.sourceRecordType && query.sourceRecordType !== 'customer') return [];
+    if (query.status && query.status !== 'FINAL') return [];
+    return this._listFiles('customer', { module: 'crm', entityType: 'customer' }, query.customerId || query.sourceRecordId, query, limit, ctx);
+  }
+
+  async _listMobileDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'mobile') || !originAllowed(query, 'uploaded')) return [];
+    if (!isAdmin(ctx.user) && !hasPermission(ctx.permissions, 'mobile:read') && !hasPermission(ctx.permissions, 'field-service:read')) return [];
+    if (ctx.siteProjectIds) return [];
+    if (this._unsupportedScope(query, ['jobId', 'sourceRecordId', 'sourceRecordType'])) return [];
+    if (query.sourceRecordType && query.sourceRecordType !== 'job') return [];
+    if (query.status && query.status !== 'FINAL') return [];
+    return this._listFiles('mobile', { module: 'mobile', entityType: 'document' }, query.jobId || query.sourceRecordId, query, limit, ctx);
+  }
+
+  /** Customer and mobile documents are plain stored files; their type is their category. */
+  async _listFiles(source, base, entityId, query, limit, ctx) {
+    const scope = { ...base };
+    if (entityId) scope.entityId = oid(entityId);
+    if (query.documentType || query.category) {
+      if (query.documentType && query.category && query.documentType !== query.category) return [];
+      scope.category = query.documentType || query.category;
+    }
+    const range = dateRange(query);
+    if (range) scope.createdAt = range;
+    const filter = andAll(
+      scope,
+      sectionClause(ctx.section, ctx.releasedOnly),
+      searchClause(query.search, ['originalName', 'category', 'folderPath']),
+      keysetClause(source, 'createdAt', ctx.cursor, query.sortOrder),
+    );
+    const direction = query.sortOrder === 'asc' ? 1 : -1;
+    const files = await FileMetadata.find(filter).sort({ createdAt: direction, _id: direction }).limit(limit).lean();
+    return files.map((file) => this._normalizeFileMetadata(file, source === 'customer'
+      ? { source, origin: 'received', sourceRecordType: 'customer', customerId: file.entityId }
+      : { source, origin: 'uploaded', sourceRecordType: 'job', jobId: file.entityId }));
+  }
+
+  async _listAccountingDocuments(query, limit, ctx) {
+    if (!sourceAllowed(query, 'accounting') || !originAllowed(query, 'received')) return [];
+    if (!isAdmin(ctx.user) && !hasPermission(ctx.permissions, 'accounting:documents:read')) return [];
+    if (this._unsupportedScope(query, ['customerId', 'projectId', 'employeeId', 'sourceRecordType', 'sourceRecordId'])) return [];
+    if (query.sourceRecordType && query.sourceRecordType !== 'accounting') return [];
+
+    const scope = {};
+    if (query.documentType) scope.documentType = query.documentType;
+    if (query.category) scope.accountingCategory = query.category;
+    if (query.status) scope.processingStatus = query.status;
+    if (query.projectId) scope.projectId = oid(query.projectId);
+    if (ctx.siteProjectIds) scope.projectId = inIds(ctx.siteProjectIds);
+    if (query.customerId) scope.customerId = oid(query.customerId);
+    if (query.employeeId) scope.employeeId = oid(query.employeeId);
+    if (query.sourceRecordId) scope._id = oid(query.sourceRecordId);
+    const range = dateRange(query);
+    if (range) scope.createdAt = range;
+
+    const filter = andAll(
+      scope,
+      sectionClause(ctx.section, ctx.releasedOnly),
+      searchClause(query.search, ['fileName', 'documentType', 'supplierName', 'projectReference', 'accountingCategory', 'notes']),
+      keysetClause('accounting', 'createdAt', ctx.cursor, query.sortOrder),
+    );
+    const direction = query.sortOrder === 'asc' ? 1 : -1;
+    const docs = await AccountingDocument.find(filter).sort({ createdAt: direction, _id: direction }).limit(limit).select('-__v -fullText').lean();
+    return docs.map((doc) => this._normalizeAccountingDocument(doc));
+  }
+
+  /**
+   * Replaces raw ids with readable links and names: one query per entity type
+   * for the whole page, never one per row.
+   */
+  async _attachNames(items) {
+    if (!items.length) return items;
+    const want = { customer: new Set(), project: new Set(), job: new Set(), user: new Set(), installation: new Set() };
+    const add = (set, id) => { if (id && mongoose.Types.ObjectId.isValid(id)) set.add(String(id)); };
+    for (const item of items) {
+      add(want.customer, item.customerId);
+      add(want.project, item.projectId);
+      add(want.job, item.jobId);
+      add(want.user, item.employeeId);
+      add(want.user, item.uploadedBy);
+      add(want.user, item.visumBy);
+      add(want.installation, item.installationId);
+    }
+    const ids = (set) => [...set].map(oid);
+    const model = (name) => mongoose.models[name];
+    const load = (name, set, select) => (set.size && model(name)
+      ? model(name).find({ _id: { $in: ids(set) } }, select, { includeDeleted: true }).lean()
+      : Promise.resolve([]));
+    const [customers, projects, jobs, users, installations] = await Promise.all([
+      load('Customer', want.customer, 'name customerNumber'),
+      load('Project', want.project, 'name projectNumber'),
+      load('Assignment', want.job, 'assignmentNumber title'),
+      load('User', want.user, 'firstName lastName email'),
+      load('Installation', want.installation, 'installationNumber make model'),
+    ]).catch((err) => {
+      logger.warn('Document link names could not be resolved', { module: 'documents', error: err.message });
+      return [[], [], [], [], []];
+    });
+    const byId = (rows, label) => new Map(rows.map((r) => [String(r._id), label(r)]));
+    const names = {
+      customer: byId(customers, (c) => ({ label: c.name, code: c.customerNumber })),
+      project: byId(projects, (p) => ({ label: p.name, code: p.projectNumber })),
+      job: byId(jobs, (j) => ({ label: j.title || j.assignmentNumber, code: j.assignmentNumber })),
+      employee: byId(users, (u) => ({ label: fullName(u) })),
+      installation: byId(installations, (i) => ({ label: [i.make, i.model].filter(Boolean).join(' ') || i.installationNumber, code: i.installationNumber })),
+    };
+
+    for (const item of items) {
+      const links = [];
+      for (const [type, key] of [['customer', 'customerId'], ['project', 'projectId'], ['job', 'jobId'], ['employee', 'employeeId'], ['installation', 'installationId']]) {
+        if (!item[key]) continue;
+        const hit = names[type].get(String(item[key]));
+        links.push(compactObject({ type, id: String(item[key]), label: hit?.label || null, code: hit?.code || null, missing: !hit || undefined }));
+      }
+      if (!links.length && item.sourceRecordType && item.sourceRecordId && !['accounting', 'project', 'customer'].includes(item.sourceRecordType)) {
+        links.push({ type: item.sourceRecordType, id: String(item.sourceRecordId) });
+      }
+      item.links = links;
+      if (item.uploadedBy) item.uploadedByName = names.employee.get(String(item.uploadedBy))?.label || null;
+      if (item.visumBy) {
+        item.visum = {
+          by: String(item.visumBy),
+          byName: names.employee.get(String(item.visumBy))?.label || null,
+          at: item.visumAt || null,
+        };
       }
     }
+    return items;
+  }
 
-    const releasedOnlyForSite = await this._releasedOnly(user);
-    const sorted = sortDocuments(
-      releasedOnlyForSite ? merged.filter((doc) => doc.releasedToField) : merged,
-      query.sortOrder,
-    );
-    const pageItems = sorted.slice(0, limit);
+  // ── Stats, facets, pickers ────────────────────────────────────────────────
+
+  /**
+   * Header figures: documents per section, uploaded this month and storage,
+   * across every source this user may read. Cached briefly per permission set
+   * (all counts are index-backed); any write through this module bumps a
+   * generation so the next read is fresh.
+   */
+  async stats(user) {
+    const permissions = await this._permissions(user);
+    const releasedOnly = await this._releasedOnly(user, permissions);
+    const gen = (await cacheManager.get(STATS_GEN_KEY, { skipL1: true })) || 0;
+    const scopeKey = crypto.createHash('sha1').update(JSON.stringify([isAdmin(user), [...permissions].sort(), releasedOnly])).digest('hex').slice(0, 16);
+    return cacheManager.getOrSet(`documents:stats:${gen}:${scopeKey}`, () => this._computeStats(user, permissions, releasedOnly), STATS_TTL);
+  }
+
+  async _computeStats(user, permissions, releasedOnly) {
+    const admin = isAdmin(user);
+    const can = (...perms) => admin || perms.some((p) => hasPermission(permissions, p));
+    const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+    const sources = [
+      can('documents:read') && { key: 'repository', model: DocumentIndex, base: { source: 'repository' }, date: 'createdAt', size: '$fileSizeBytes' },
+      can('documents:read', 'templates:read', 'templates:admin') && { key: 'generated', model: GeneratedDocument, base: {}, date: 'generatedAt', size: '$fileSizeBytes' },
+      can('project:documents:read', 'projects:read') && { key: 'project', model: ProjectDocument, base: {}, date: 'createdAt', size: null, sizeFromFiles: true },
+      can('crm:read') && { key: 'customer', model: FileMetadata, base: { module: 'crm', entityType: 'customer' }, date: 'createdAt', size: '$sizeBytes' },
+      can('accounting:documents:read') && { key: 'accounting', model: AccountingDocument, base: {}, date: 'createdAt', size: '$fileSize' },
+      can('mobile:read', 'field-service:read') && { key: 'mobile', model: FileMetadata, base: { module: 'mobile', entityType: 'document' }, date: 'createdAt', size: '$sizeBytes' },
+    ].filter(Boolean);
+
+    const perSource = await Promise.all(sources.map(async (s) => {
+      // Soft-deleted rows are excluded the same way the models' find hooks do.
+      const notDeleted = s.key === 'generated' ? {} : { isDeleted: { $ne: true } };
+      const released = releasedOnly ? { releasedToField: true } : {};
+      const [row] = await s.model.aggregate([
+        { $match: { ...s.base, ...notDeleted, ...released } },
+
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            archived: { $sum: { $cond: [{ $eq: ['$archived', true] }, 1, 0] } },
+            visum: { $sum: { $cond: [{ $and: [{ $ne: ['$archived', true] }, { $gt: ['$visumBy', null] }] }, 1, 0] } },
+            released: { $sum: { $cond: [{ $eq: ['$releasedToField', true] }, 1, 0] } },
+            thisMonth: { $sum: { $cond: [{ $gte: [`$${s.date}`, monthStart] }, 1, 0] } },
+            bytes: { $sum: s.size ? { $ifNull: [s.size, 0] } : 0 },
+          },
+        },
+      ]);
+      const result = { key: s.key, ...(row || { total: 0, archived: 0, visum: 0, released: 0, thisMonth: 0, bytes: 0 }) };
+      // Project documents keep their size on the stored file: two indexed
+      // queries (ids, then one sum) instead of a $lookup per document.
+      if (s.sizeFromFiles && result.total) {
+        const fileIds = await s.model.distinct('fileId', { ...s.base, ...notDeleted, ...released, fileId: { $ne: null } });
+        const [files] = await FileMetadata.aggregate([
+          { $match: { _id: { $in: fileIds } } },
+          { $group: { _id: null, bytes: { $sum: { $ifNull: ['$sizeBytes', 0] } } } },
+        ]);
+        result.bytes = files?.bytes || 0;
+      }
+      return result;
+    }));
+
+    const sum = (field) => perSource.reduce((n, s) => n + (s[field] || 0), 0);
     return {
-      data: pageItems,
-      pagination: { hasNext: sorted.length > limit, nextCursor: null, limit },
+      total: sum('total'),
+      sections: { documents: sum('total') - sum('archived') - sum('visum'), visum: sum('visum'), archiv: sum('archived') },
+      released: sum('released'),
+      thisMonth: sum('thisMonth'),
+      storageBytes: sum('bytes'),
+      bySource: Object.fromEntries(perSource.map((s) => [s.key, s.total])),
+      generatedAt: new Date().toISOString(),
     };
+  }
+
+  async _bumpStats() {
+    try {
+      const gen = (await cacheManager.get(STATS_GEN_KEY, { skipL1: true })) || 0;
+      await cacheManager.set(STATS_GEN_KEY, gen + 1, { skipL1: true, l2Ttl: 86_400 });
+    } catch (err) {
+      logger.warn('Document stats cache bump failed', { module: 'documents', error: err.message });
+    }
+  }
+
+  /** Document types and categories that actually occur, for the filter pickers. */
+  async facets() {
+    // Keyed on the same write generation as the stats, so a newly uploaded
+    // type shows up in the filter right away instead of after the TTL.
+    const gen = (await cacheManager.get(STATS_GEN_KEY, { skipL1: true })) || 0;
+    return cacheManager.getOrSet(`documents:facets:${gen}`, async () => {
+      const [repoTypes, repoCats, genTypes, projCats, projTypes, accTypes, accCats, fileCats] = await Promise.all([
+        DocumentIndex.distinct('documentType', { isDeleted: { $ne: true } }),
+        DocumentIndex.distinct('category', { isDeleted: { $ne: true } }),
+        GeneratedDocument.distinct('documentType'),
+        ProjectDocument.distinct('category', { isDeleted: { $ne: true } }),
+        ProjectDocument.distinct('templateType', { isDeleted: { $ne: true } }),
+        AccountingDocument.distinct('documentType', { isDeleted: { $ne: true } }),
+        AccountingDocument.distinct('accountingCategory', { isDeleted: { $ne: true } }),
+        FileMetadata.distinct('category', { module: { $in: ['crm', 'mobile'] }, isDeleted: { $ne: true } }),
+      ]);
+      const clean = (...lists) => [...new Set(lists.flat().filter((v) => typeof v === 'string' && v.trim()))].sort((a, b) => a.localeCompare(b));
+      return {
+        documentTypes: clean(repoTypes, genTypes, projTypes, projCats, accTypes, fileCats),
+        categories: clean(repoCats, genTypes, projCats, accCats, fileCats),
+      };
+    }, FACETS_TTL);
+  }
+
+  /**
+   * Records a document can be linked to, searched by name or number — so the
+   * upload dialog offers pickers instead of asking for database ids.
+   */
+  async linkTargets({ type, search = '', limit = 12 }, user) {
+    const permissions = await this._permissions(user);
+    const can = (...perms) => isAdmin(user) || perms.some((p) => hasPermission(permissions, p));
+    const rx = search.trim() ? new RegExp(escapeRegex(search.trim().slice(0, 100)), 'i') : null;
+    const take = Math.min(Math.max(Number(limit) || 12, 1), 25);
+    const model = (name) => mongoose.models[name];
+    switch (type) {
+      case 'customer': {
+        if (!can('crm:read') || !model('Customer')) return [];
+        const rows = await model('Customer').find(rx ? { $or: [{ name: rx }, { customerNumber: rx }, { city: rx }] } : {})
+          .select('name customerNumber city').sort({ updatedAt: -1 }).limit(take).lean();
+        return rows.map((r) => ({ id: String(r._id), label: r.name, sub: [r.customerNumber, r.city].filter(Boolean).join(' · ') }));
+      }
+      case 'project': {
+        if (!can('projects:read', 'project:documents:read') || !model('Project')) return [];
+        const rows = await model('Project').find(rx ? { $or: [{ name: rx }, { projectNumber: rx }] } : {})
+          .select('name projectNumber customerName').sort({ updatedAt: -1 }).limit(take).lean();
+        return rows.map((r) => ({ id: String(r._id), label: r.name, sub: [r.projectNumber, r.customerName].filter(Boolean).join(' · ') }));
+      }
+      case 'job': {
+        if (!can('mobile:read', 'field-service:read', 'scheduling:read', 'deploy:read') || !model('Assignment')) return [];
+        const rows = await model('Assignment').find(rx ? { $or: [{ title: rx }, { assignmentNumber: rx }] } : {})
+          .select('title assignmentNumber scheduledStart').sort({ updatedAt: -1 }).limit(take).lean();
+        return rows.map((r) => ({ id: String(r._id), label: r.title || r.assignmentNumber, sub: r.assignmentNumber || '' }));
+      }
+      case 'employee': {
+        if (!model('User')) return [];
+        const rows = await model('User').find({ status: 'active', ...(rx ? { $or: [{ firstName: rx }, { lastName: rx }, { email: rx }] } : {}) })
+          .select('firstName lastName email').sort({ firstName: 1 }).limit(take).lean();
+        return rows.map((r) => ({ id: String(r._id), label: fullName(r), sub: r.email || '' }));
+      }
+      case 'installation': {
+        if (!can('crm:read') || !model('Installation')) return [];
+        const rows = await model('Installation').find(rx ? { $or: [{ installationNumber: rx }, { make: rx }, { model: rx }, { serialNumber: rx }] } : {})
+          .select('installationNumber make model').sort({ updatedAt: -1 }).limit(take).lean();
+        return rows.map((r) => ({ id: String(r._id), label: [r.make, r.model].filter(Boolean).join(' ') || r.installationNumber, sub: r.installationNumber || '' }));
+      }
+      default:
+        throw new ValidationError('Unknown link type');
+    }
+  }
+
+  /** Title, type, category, description and links of an uploaded document. */
+  async updateMetadata(recordId, changes, user, meta = {}) {
+    const parsed = parseRecordId(recordId);
+    if (!parsed) throw new NotFoundError('Document', recordId);
+    if (parsed.source !== 'repository') {
+      throw new ValidationError('Only uploaded repository documents can be edited here; other documents are managed in their own module');
+    }
+    const record = await documentIndexRepository.findById(parsed.id);
+    if (!record) throw new NotFoundError('Document', recordId);
+    const update = {};
+    for (const key of ['title', 'documentType', 'category', 'description']) {
+      if (changes[key] !== undefined) update[key] = changes[key] === null ? '' : changes[key];
+    }
+    for (const key of ['customerId', 'projectId', 'jobId', 'employeeId', 'installationId']) {
+      if (changes[key] !== undefined) update[key] = changes[key] || null;
+    }
+    if (!Object.keys(update).length) return this._normalizeRepositoryDocument(record);
+    const updated = await documentIndexRepository.updateById(parsed.id, update);
+    auditService.logEvent({
+      eventType: 'document_repository.updated',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: recordId, changedFields: Object.keys(update) },
+      module: 'documents',
+    });
+    await this._bumpStats();
+    const [normalized] = await this._attachNames([this._normalizeRepositoryDocument(updated)]);
+    return normalized;
+  }
+
+  /**
+   * One action on up to 100 documents. Each runs through the same per-record
+   * method (and its checks) as the single action; failures are reported per id
+   * instead of aborting the batch.
+   */
+  async bulk(action, ids, user, meta = {}) {
+    const unique = [...new Set(ids)].slice(0, 100);
+    const run = {
+      archive: (id) => this.setArchived(id, user, true, meta),
+      unarchive: (id) => this.setArchived(id, user, false, meta),
+      visum: (id) => this.setVisum(id, user, true, meta),
+      unvisum: (id) => this.setVisum(id, user, false, meta),
+      release: (id) => this.setReleased(id, user, true, meta),
+      unrelease: (id) => this.setReleased(id, user, false, meta),
+      delete: (id) => this.delete(id, user, meta),
+    }[action];
+    if (!run) throw new ValidationError('Unknown bulk action');
+    const results = [];
+    // Small fixed concurrency: fast for 100 ids without flooding the pool.
+    for (let i = 0; i < unique.length; i += 8) {
+      const chunk = unique.slice(i, i + 8);
+      const settled = await Promise.allSettled(chunk.map((id) => run(id)));
+      settled.forEach((r, j) => results.push(r.status === 'fulfilled'
+        ? { id: chunk[j], ok: true }
+        : { id: chunk[j], ok: false, error: r.reason?.message || 'Failed', statusCode: r.reason?.statusCode || 500 }));
+    }
+    return { action, total: results.length, succeeded: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok) };
   }
 
   async upload(fileData, metadata, user, meta = {}) {
@@ -259,6 +774,7 @@ class DocumentIndexService {
       module: 'documents',
     });
 
+    await this._bumpStats();
     return this._normalizeRepositoryDocument(record);
   }
 
@@ -336,6 +852,7 @@ class DocumentIndexService {
       module: 'documents',
     });
 
+    await this._bumpStats();
     return { archived };
   }
 
@@ -401,6 +918,7 @@ class DocumentIndexService {
       module: 'documents',
     });
 
+    await this._bumpStats();
     return { visiert };
   }
 
@@ -420,6 +938,7 @@ class DocumentIndexService {
       module: 'documents',
     });
 
+    await this._bumpStats();
     return { released };
   }
 
@@ -466,341 +985,8 @@ class DocumentIndexService {
       module: 'documents',
     });
 
+    await this._bumpStats();
     return { deleted: true };
-  }
-
-  async _listRepositoryDocuments(query, limit, permissions, user) {
-    if (!sourceAllowed(query, 'repository') || !originAllowed(query, 'uploaded')) return [];
-    if (!isAdmin(user) && !hasPermission(permissions, 'documents:read')) return [];
-
-    const result = await documentIndexRepository.findWithCursor({
-      limit,
-      sortBy: 'createdAt',
-      sortOrder: query.sortOrder,
-      filters: {
-        ...query,
-        source: 'repository',
-        origin: query.origin === 'all' ? undefined : query.origin,
-      },
-    });
-    return result.data.map((doc) => this._normalizeRepositoryDocument(doc));
-  }
-
-  async _listGeneratedDocuments(query, limit, user) {
-    if (!sourceAllowed(query, 'generated') || !originAllowed(query, 'generated')) return [];
-    const filter = {};
-    addDateFilter(filter, 'generatedAt', query);
-    if (query.documentType) filter.documentType = query.documentType;
-    if (query.customerId) filter.sourceCustomerId = query.customerId;
-    if (query.projectId) filter.sourceProjectId = query.projectId;
-    if (query.jobId) filter.sourceRecordId = query.jobId;
-    if (query.sourceRecordId) filter.sourceRecordId = query.sourceRecordId;
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      filter.$or = [
-        { fileName: regex },
-        { documentType: regex },
-        { sourceModule: regex },
-        { 'metadata.customerName': regex },
-        { 'metadata.projectName': regex },
-      ];
-    }
-
-    const docs = await GeneratedDocument.find(filter)
-      .sort({ generatedAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
-      .limit(limit)
-      .select('-__v')
-      .lean();
-    const visible = [];
-    for (const doc of docs) {
-      if (await documentAccessPolicyService.canRead(doc, user)) visible.push(this._normalizeGeneratedDocument(doc));
-    }
-    return visible;
-  }
-
-  async _listProjectDocuments(query, limit, permissions, user) {
-    if (!sourceAllowed(query, 'project')) return [];
-    if (!originAllowed(query, 'uploaded') && !originAllowed(query, 'generated') && !originAllowed(query, 'draft')) return [];
-    if (!isAdmin(user) && !hasPermission(permissions, 'project:documents:read') && !hasPermission(permissions, 'projects:read')) return [];
-
-    const filter = {};
-    addDateFilter(filter, 'createdAt', query);
-    if (query.projectId) filter.projectId = query.projectId;
-    if (query.category) filter.category = query.category;
-    if (query.documentType) filter.templateType = query.documentType;
-    if (query.status) filter.status = query.status;
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      filter.$or = [{ fileName: regex }, { description: regex }, { templateType: regex }, { category: regex }];
-    }
-
-    const docs = await ProjectDocument.find(filter)
-      .populate({ path: 'fileId', select: 'originalName mimeType sizeBytes folderPath category' })
-      .populate({ path: 'visumBy', select: 'firstName lastName' })
-      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
-      .limit(limit)
-      .lean();
-    return docs.map((doc) => this._normalizeProjectDocument(doc));
-  }
-
-  async _listCustomerDocuments(query, limit, permissions, user) {
-    if (!sourceAllowed(query, 'customer') || !originAllowed(query, 'received') && !originAllowed(query, 'uploaded')) return [];
-    if (!isAdmin(user) && !hasPermission(permissions, 'crm:read')) return [];
-
-    const filter = { module: 'crm', entityType: 'customer' };
-    addDateFilter(filter, 'createdAt', query);
-    if (query.customerId) filter.entityId = query.customerId;
-    if (query.category) filter.category = query.category;
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      filter.$or = [{ originalName: regex }, { mimeType: regex }, { category: regex }, { folderPath: regex }];
-    }
-
-    const files = await FileMetadata.find(filter)
-      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
-      .limit(limit)
-      .lean();
-    return files.map((file) => this._normalizeFileMetadata(file, {
-      source: 'customer',
-      origin: 'received',
-      sourceRecordType: 'customer',
-      customerId: file.entityId,
-    }));
-  }
-
-  async _listAccountingDocuments(query, limit, permissions, user) {
-    if (!sourceAllowed(query, 'accounting') || !originAllowed(query, 'received')) return [];
-    if (!isAdmin(user) && !hasPermission(permissions, 'accounting:documents:read')) return [];
-
-    const filter = {};
-    addDateFilter(filter, 'createdAt', query);
-    if (query.documentType) filter.documentType = query.documentType;
-    if (query.category) filter.accountingCategory = query.category;
-    if (query.status) filter.processingStatus = query.status;
-    if (query.projectId) filter.projectId = query.projectId;
-    if (query.customerId) filter.customerId = query.customerId;
-    if (query.employeeId) filter.employeeId = query.employeeId;
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      filter.$or = [
-        { fileName: regex },
-        { documentType: regex },
-        { supplierName: regex },
-        { projectReference: regex },
-        { accountingCategory: regex },
-        { notes: regex },
-      ];
-    }
-
-    const docs = await AccountingDocument.find(filter)
-      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
-      .limit(limit)
-      .select('-__v')
-      .lean();
-    return docs.map((doc) => this._normalizeAccountingDocument(doc));
-  }
-
-  async _listMobileDocuments(query, limit, permissions, user) {
-    if (!sourceAllowed(query, 'mobile') || !originAllowed(query, 'uploaded')) return [];
-    if (!isAdmin(user) && !hasPermission(permissions, 'mobile:read') && !hasPermission(permissions, 'field-service:read')) return [];
-
-    const filter = { module: 'mobile', entityType: 'document' };
-    addDateFilter(filter, 'createdAt', query);
-    if (query.jobId) filter.entityId = query.jobId;
-    if (query.category) filter.category = query.category;
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      filter.$or = [{ originalName: regex }, { mimeType: regex }, { category: regex }, { folderPath: regex }];
-    }
-
-    const files = await FileMetadata.find(filter)
-      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
-      .limit(limit)
-      .lean();
-    return files.map((file) => this._normalizeFileMetadata(file, {
-      source: 'mobile',
-      origin: 'uploaded',
-      sourceRecordType: 'job',
-      jobId: file.entityId,
-    }));
-  }
-
-  _normalizeRepositoryDocument(doc) {
-    return compactObject({
-      id: createRecordId('repository', doc._id),
-      source: 'repository',
-      sourceLabel: SOURCE_LABELS.repository,
-      origin: 'uploaded',
-      title: doc.title || doc.fileName,
-      fileName: doc.fileName,
-      mimeType: doc.mimeType,
-      fileSizeBytes: doc.fileSizeBytes,
-      documentType: doc.documentType,
-      category: doc.category,
-      status: doc.status,
-      folderPath: doc.folderPath,
-      description: doc.description,
-      sourceRecordType: doc.sourceRecordType,
-      sourceRecordId: toStringId(doc.sourceRecordId),
-      customerId: toStringId(doc.customerId),
-      projectId: toStringId(doc.projectId),
-      jobId: toStringId(doc.jobId),
-      employeeId: toStringId(doc.employeeId),
-      installationId: toStringId(doc.installationId),
-      ownerUserId: toStringId(doc.ownerUserId),
-      uploadedBy: toStringId(doc.uploadedBy),
-      createdAt: normalizeDate(doc.createdAt),
-      updatedAt: normalizeDate(doc.updatedAt),
-      archived: Boolean(doc.archived),
-      visumBy: doc.visumBy || null,
-      releasedToField: Boolean(doc.releasedToField),
-      metadata: doc.metadata || {},
-      canDelete: true,
-    });
-  }
-
-  _normalizeGeneratedDocument(doc) {
-    return compactObject({
-      id: createRecordId('generated', doc._id),
-      source: 'generated',
-      sourceLabel: SOURCE_LABELS.generated,
-      origin: 'generated',
-      title: doc.metadata?.documentNumber || doc.fileName,
-      fileName: doc.fileName,
-      mimeType: 'application/pdf',
-      fileSizeBytes: doc.fileSizeBytes,
-      documentType: doc.documentType,
-      category: doc.documentType,
-      status: 'FINAL',
-      folderPath: doc.metadata?.folderPath || '',
-      sourceRecordType: doc.sourceModule,
-      sourceRecordId: toStringId(doc.sourceRecordId),
-      customerId: toStringId(doc.sourceCustomerId),
-      projectId: toStringId(doc.sourceProjectId),
-      employeeId: toStringId(doc.ownerUserId),
-      ownerUserId: toStringId(doc.ownerUserId),
-      uploadedBy: toStringId(doc.generatedBy),
-      templateVersion: doc.templateVersion,
-      pageCount: doc.pageCount,
-      createdAt: normalizeDate(doc.generatedAt),
-      archived: Boolean(doc.archived),
-      visumBy: doc.visumBy || null,
-      releasedToField: Boolean(doc.releasedToField),
-      metadata: doc.metadata || {},
-      canDelete: true,
-    });
-  }
-
-  _normalizeProjectDocument(doc) {
-    const file = typeof doc.fileId === 'object' ? doc.fileId : null;
-    const origin = doc.status === 'DRAFT' ? 'draft' : doc.isGenerated ? 'generated' : 'uploaded';
-    return compactObject({
-      id: createRecordId('project', doc._id),
-      source: 'project',
-      sourceLabel: SOURCE_LABELS.project,
-      origin,
-      title: doc.fileName,
-      fileName: file?.originalName || doc.fileName,
-      // Underlying stored-file id — lets the client attach the document to an
-      // email directly, without downloading it first.
-      fileId: toStringId(file?._id),
-      mimeType: file?.mimeType || '',
-      fileSizeBytes: file?.sizeBytes || 0,
-      documentType: doc.templateType || doc.category || 'OTHER',
-      category: doc.category,
-      status: doc.status || 'FINAL',
-      folderPath: file?.folderPath || '',
-      description: doc.description,
-      sourceRecordType: 'project',
-      sourceRecordId: toStringId(doc.projectId),
-      projectId: toStringId(doc.projectId),
-      uploadedBy: toStringId(doc.uploadedBy),
-      createdAt: normalizeDate(doc.createdAt),
-      updatedAt: normalizeDate(doc.updatedAt),
-      // Section flags for the 3-way split (Dokumente / mit Visum / Archiv).
-      archived: Boolean(doc.archived),
-      visumBy: doc.visumBy || null,
-      releasedToField: Boolean(doc.releasedToField),
-      visum: doc.visumBy
-        ? {
-            by: toStringId(doc.visumBy),
-            byName: (doc.visumBy && typeof doc.visumBy === 'object')
-              ? [doc.visumBy.firstName, doc.visumBy.lastName].filter(Boolean).join(' ')
-              : null,
-            at: normalizeDate(doc.visumAt),
-          }
-        : null,
-      metadata: { version: doc.version, previousVersionId: toStringId(doc.previousVersionId), isGenerated: Boolean(doc.isGenerated) },
-      canDelete: true,
-    });
-  }
-
-  _normalizeAccountingDocument(doc) {
-    return compactObject({
-      id: createRecordId('accounting', doc._id),
-      source: 'accounting',
-      sourceLabel: SOURCE_LABELS.accounting,
-      origin: 'received',
-      title: doc.fileName,
-      fileName: doc.fileName,
-      mimeType: doc.mimeType,
-      fileSizeBytes: doc.fileSize,
-      documentType: doc.documentType,
-      category: doc.accountingCategory || doc.documentType,
-      status: doc.processingStatus,
-      folderPath: `Accounting/${doc.documentType}`,
-      description: doc.notes,
-      sourceRecordType: 'accounting',
-      sourceRecordId: toStringId(doc._id),
-      customerId: toStringId(doc.customerId),
-      projectId: toStringId(doc.projectId),
-      employeeId: toStringId(doc.employeeId),
-      uploadedBy: toStringId(doc.createdBy),
-      createdAt: normalizeDate(doc.createdAt),
-      updatedAt: normalizeDate(doc.updatedAt),
-      metadata: {
-        ocrStatus: doc.ocrStatus,
-        supplierName: doc.supplierName,
-        projectReference: doc.projectReference,
-        retentionUntil: normalizeDate(doc.retentionUntil),
-        assignedTo: toStringId(doc.assignedTo),
-      },
-      archived: Boolean(doc.archived),
-      visumBy: doc.visumBy || null,
-      releasedToField: Boolean(doc.releasedToField),
-      canDelete: Boolean(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
-    });
-  }
-
-  _normalizeFileMetadata(file, context) {
-    return compactObject({
-      id: createRecordId(context.source, file._id),
-      source: context.source,
-      sourceLabel: SOURCE_LABELS[context.source],
-      origin: context.origin,
-      title: file.originalName,
-      fileName: file.originalName,
-      mimeType: file.mimeType,
-      fileSizeBytes: file.sizeBytes,
-      documentType: file.category || 'OTHER',
-      category: file.category || 'OTHER',
-      status: 'FINAL',
-      folderPath: file.folderPath || `${SOURCE_LABELS[context.source]}/${file.category || 'general'}`,
-      sourceRecordType: context.sourceRecordType,
-      sourceRecordId: toStringId(file.entityId),
-      customerId: toStringId(context.customerId),
-      projectId: toStringId(context.projectId),
-      jobId: toStringId(context.jobId),
-      employeeId: toStringId(context.employeeId),
-      uploadedBy: toStringId(file.uploadedBy),
-      createdAt: normalizeDate(file.createdAt),
-      updatedAt: normalizeDate(file.updatedAt),
-      archived: Boolean(file.archived),
-      visumBy: file.visumBy || null,
-      releasedToField: Boolean(file.releasedToField),
-      metadata: { bucket: file.bucket, storageBackend: file.storageBackend },
-      canDelete: true,
-    });
   }
 
   async _downloadRepository(id, user, attachment = false) {
@@ -885,10 +1071,10 @@ class DocumentIndexService {
    * only sees documents released to the field — the counterpart that makes the
    * Freigabe mean something instead of decorating a row.
    */
-  async _releasedOnly(user) {
-    if (user?.role?.name === 'Admin') return false;
-    const permissions = await this._permissions(user);
-    return !satisfiesPermission(permissions, 'documents:read:all');
+  async _releasedOnly(user, permissions = null) {
+    if (isAdmin(user)) return false;
+    const perms = permissions || await this._permissions(user);
+    return !satisfiesPermission(perms, 'documents:read:all');
   }
 
   async _permissions(user) {
@@ -916,77 +1102,236 @@ class DocumentIndexService {
       .join('/');
   }
 
+  // ── Normalizers: one shape for every source ───────────────────────────────
+  // Sign-off is read from visumBy/visumAt on every source (it used to count
+  // only for project documents, so a signed-off upload never left "Dokumente").
+
+  _flags(doc) {
+    return {
+      archived: Boolean(doc.archived),
+      archivedAt: normalizeDate(doc.archivedAt),
+      visumBy: toStringId(doc.visumBy),
+      visumAt: normalizeDate(doc.visumAt),
+      releasedToField: Boolean(doc.releasedToField),
+    };
+  }
+
+  _normalizeRepositoryDocument(doc) {
+    return compactObject({
+      id: createRecordId('repository', doc._id),
+      source: 'repository',
+      sourceLabel: SOURCE_LABELS.repository,
+      origin: 'uploaded',
+      title: doc.title || doc.fileName,
+      fileName: doc.fileName,
+      fileId: toStringId(doc.fileId),
+      mimeType: doc.mimeType,
+      fileSizeBytes: doc.fileSizeBytes,
+      documentType: doc.documentType,
+      category: doc.category,
+      status: doc.status,
+      folderPath: doc.folderPath,
+      description: doc.description,
+      sourceRecordType: doc.sourceRecordType,
+      sourceRecordId: toStringId(doc.sourceRecordId),
+      customerId: toStringId(doc.customerId),
+      projectId: toStringId(doc.projectId),
+      jobId: toStringId(doc.jobId),
+      employeeId: toStringId(doc.employeeId),
+      installationId: toStringId(doc.installationId),
+      ownerUserId: toStringId(doc.ownerUserId),
+      uploadedBy: toStringId(doc.uploadedBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      ...this._flags(doc),
+      metadata: doc.metadata || {},
+      canDelete: true,
+      editable: true,
+    });
+  }
+
+  _normalizeGeneratedDocument(doc) {
+    return compactObject({
+      id: createRecordId('generated', doc._id),
+      source: 'generated',
+      sourceLabel: SOURCE_LABELS.generated,
+      origin: 'generated',
+      title: doc.metadata?.documentNumber || doc.fileName,
+      fileName: doc.fileName,
+      fileId: toStringId(doc.fileId),
+      mimeType: 'application/pdf',
+      fileSizeBytes: doc.fileSizeBytes,
+      documentType: doc.documentType,
+      category: doc.documentType,
+      status: 'FINAL',
+      folderPath: doc.metadata?.folderPath || '',
+      sourceRecordType: doc.sourceModule,
+      sourceRecordId: toStringId(doc.sourceRecordId),
+      customerId: toStringId(doc.sourceCustomerId),
+      projectId: toStringId(doc.sourceProjectId),
+      // The owner is the person the document was generated for, not an
+      // employee link — showing it as "Employee: …" misled the reader.
+      ownerUserId: toStringId(doc.ownerUserId),
+      uploadedBy: toStringId(doc.generatedBy),
+      templateVersion: doc.templateVersion,
+      pageCount: doc.pageCount,
+      createdAt: normalizeDate(doc.generatedAt),
+      ...this._flags(doc),
+      metadata: doc.metadata || {},
+      canDelete: true,
+    });
+  }
+
+  _normalizeProjectDocument(doc) {
+    const file = typeof doc.fileId === 'object' && doc.fileId?._id ? doc.fileId : null;
+    const origin = doc.status === 'DRAFT' ? 'draft' : doc.isGenerated ? 'generated' : 'uploaded';
+    return compactObject({
+      id: createRecordId('project', doc._id),
+      source: 'project',
+      sourceLabel: SOURCE_LABELS.project,
+      origin,
+      title: doc.fileName,
+      fileName: file?.originalName || doc.fileName,
+      // Underlying stored-file id — lets the client attach the document to an
+      // email directly, without downloading it first.
+      fileId: toStringId(file?._id || doc.fileId),
+      mimeType: file?.mimeType || '',
+      fileSizeBytes: file?.sizeBytes || 0,
+      documentType: doc.templateType || doc.category || 'OTHER',
+      category: doc.category,
+      status: doc.status || 'FINAL',
+      folderPath: file?.folderPath || '',
+      description: doc.description,
+      sourceRecordType: 'project',
+      sourceRecordId: toStringId(doc.projectId),
+      projectId: toStringId(doc.projectId),
+      uploadedBy: toStringId(doc.uploadedBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      ...this._flags(doc),
+      metadata: { version: doc.version, previousVersionId: toStringId(doc.previousVersionId), isGenerated: Boolean(doc.isGenerated) },
+      canDelete: true,
+    });
+  }
+
+  _normalizeAccountingDocument(doc) {
+    return compactObject({
+      id: createRecordId('accounting', doc._id),
+      source: 'accounting',
+      sourceLabel: SOURCE_LABELS.accounting,
+      origin: 'received',
+      title: doc.supplierName ? `${doc.supplierName} · ${doc.fileName}` : doc.fileName,
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      fileSizeBytes: doc.fileSize,
+      documentType: doc.documentType,
+      category: doc.accountingCategory || doc.documentType,
+      status: doc.processingStatus,
+      folderPath: `Accounting/${doc.documentType}`,
+      description: doc.notes,
+      sourceRecordType: 'accounting',
+      sourceRecordId: toStringId(doc._id),
+      customerId: toStringId(doc.customerId),
+      projectId: toStringId(doc.projectId),
+      employeeId: toStringId(doc.employeeId),
+      uploadedBy: toStringId(doc.createdBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      metadata: {
+        ocrStatus: doc.ocrStatus,
+        supplierName: doc.supplierName,
+        projectReference: doc.projectReference,
+        retentionUntil: normalizeDate(doc.retentionUntil),
+        assignedTo: toStringId(doc.assignedTo),
+      },
+      ...this._flags(doc),
+      // Bookkeeping retention: deletable only once the retention period ended.
+      canDelete: Boolean(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
+      retentionLocked: !(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
+    });
+  }
+
+  _normalizeFileMetadata(file, context) {
+    return compactObject({
+      id: createRecordId(context.source, file._id),
+      source: context.source,
+      sourceLabel: SOURCE_LABELS[context.source],
+      origin: context.origin,
+      title: file.originalName,
+      fileName: file.originalName,
+      fileId: toStringId(file._id),
+      mimeType: file.mimeType,
+      fileSizeBytes: file.sizeBytes,
+      documentType: file.category || 'OTHER',
+      category: file.category || 'OTHER',
+      status: 'FINAL',
+      folderPath: file.folderPath || `${SOURCE_LABELS[context.source]}/${file.category || 'general'}`,
+      sourceRecordType: context.sourceRecordType,
+      sourceRecordId: toStringId(file.entityId),
+      customerId: toStringId(context.customerId),
+      projectId: toStringId(context.projectId),
+      jobId: toStringId(context.jobId),
+      employeeId: toStringId(context.employeeId),
+      uploadedBy: toStringId(file.uploadedBy),
+      createdAt: normalizeDate(file.createdAt),
+      updatedAt: normalizeDate(file.updatedAt),
+      ...this._flags(file),
+      metadata: { bucket: file.bucket, storageBackend: file.storageBackend },
+      canDelete: true,
+    });
+  }
+
   /**
    * Everything that can travel as an email attachment, across the three places
    * a file actually lives: the repository index, generated documents, and
-   * project documents. The index alone holds a fraction of the stored files,
-   * which is why an attachment picker built on it looked almost empty.
+   * project documents. Each source is gated by the same read rules as the list
+   * (it used to return generated and project files to anyone with
+   * documents:read), and a site scopes the repository through its projects —
+   * the index has no siteId, so that filter used to match nothing.
    */
-  async listAttachable({ siteId, customerId, projectId, search, limit = 100 } = {}) {
-    const [DocumentIndex, GeneratedDocument, ProjectDocument] = await Promise.all([
-      import('./documentIndex.model.js').then((m) => m.default),
-      import('../doctpl/generatedDocument.model.js').then((m) => m.default),
-      import('../pm/projectDocument.model.js').then((m) => m.default),
-    ]);
-
-    const rx = search
-      ? new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-      : null;
+  async listAttachable({ siteId, customerId, projectId, search, limit = 100 } = {}, user = null) {
+    const permissions = await this._permissions(user);
+    const admin = isAdmin(user);
+    const take = Math.min(Math.max(Number(limit) || 100, 1), 200);
+    const rx = search ? new RegExp(escapeRegex(String(search).slice(0, 200)), 'i') : null;
     const out = [];
 
-    const repoFilter = { fileId: { $ne: null } };
-    if (siteId) repoFilter.siteId = siteId;
-    if (customerId) repoFilter.customerId = customerId;
-    if (projectId) repoFilter.projectId = projectId;
-    if (rx) repoFilter.$or = [{ title: rx }, { fileName: rx }];
-    for (const doc of await DocumentIndex.find(repoFilter).sort({ createdAt: -1 }).limit(limit).lean()) {
-      out.push({
-        id: String(doc._id),
-        fileId: String(doc.fileId),
-        title: doc.title || doc.fileName,
-        fileName: doc.fileName,
-        createdAt: doc.createdAt,
-        origin: 'repository',
-      });
-    }
-
-    // Generated and project documents hang off projects, not off an object or a
-    // customer — so scoping to one of those means scoping to its projects.
-    let projectIds = projectId ? [projectId] : null;
+    let projectIds = projectId ? [oid(projectId)] : null;
     if (!projectIds && (siteId || customerId)) {
-      const Project = (await import('../pm/project.model.js')).default;
       const scope = siteId ? { siteId } : { customerId };
       const projects = await Project.find({ ...scope, isDeleted: { $ne: true } }).select('_id').lean();
       projectIds = projects.map((project) => project._id);
     }
 
+    const readRepo = admin || hasPermission(permissions, 'documents:read');
+    const readProject = admin || hasPermission(permissions, 'project:documents:read') || hasPermission(permissions, 'projects:read');
+
+    const repoFilter = { fileId: { $ne: null } };
+    if (customerId) repoFilter.customerId = oid(customerId);
+    else if (projectIds) repoFilter.projectId = { $in: projectIds };
+    if (rx) repoFilter.$or = [{ title: rx }, { fileName: rx }];
+
     const genFilter = { fileId: { $ne: null } };
-    if (projectIds) genFilter.sourceRecordId = { $in: projectIds };
+    if (projectIds) genFilter.$or = [{ sourceProjectId: { $in: projectIds } }, { sourceRecordId: { $in: projectIds } }];
+    if (customerId && !projectIds?.length) genFilter.sourceCustomerId = oid(customerId);
     if (rx) genFilter.fileName = rx;
-    for (const doc of await GeneratedDocument.find(genFilter).sort({ generatedAt: -1 }).limit(limit).lean()) {
-      out.push({
-        id: String(doc._id),
-        fileId: String(doc.fileId),
-        title: doc.fileName,
-        fileName: doc.fileName,
-        createdAt: doc.generatedAt || doc.createdAt,
-        origin: 'generated',
-      });
-    }
 
     const pdFilter = { fileId: { $ne: null } };
     if (projectIds) pdFilter.projectId = { $in: projectIds };
     if (rx) pdFilter.fileName = rx;
-    for (const doc of await ProjectDocument.find(pdFilter).sort({ createdAt: -1 }).limit(limit).lean()) {
-      out.push({
-        id: String(doc._id),
-        fileId: String(doc.fileId),
-        title: doc.fileName,
-        fileName: doc.fileName,
-        createdAt: doc.createdAt,
-        origin: 'project',
-      });
-    }
+
+    const [repoDocs, genDocs, projectDocs] = await Promise.all([
+      readRepo ? DocumentIndex.find(repoFilter).sort({ createdAt: -1 }).limit(take).select('fileId title fileName createdAt').lean() : [],
+      GeneratedDocument.find(genFilter).sort({ generatedAt: -1 }).limit(take).lean(),
+      readProject && !(projectIds && !projectIds.length) ? ProjectDocument.find(pdFilter).sort({ createdAt: -1 }).limit(take).select('fileId fileName createdAt').lean() : [],
+    ]);
+    const genReadable = await Promise.all(genDocs.map((doc) => documentAccessPolicyService.canRead(doc, user)));
+
+    for (const doc of repoDocs) out.push({ id: String(doc._id), fileId: String(doc.fileId), title: doc.title || doc.fileName, fileName: doc.fileName, createdAt: doc.createdAt, origin: 'repository' });
+    genDocs.forEach((doc, i) => {
+      if (genReadable[i]) out.push({ id: String(doc._id), fileId: String(doc.fileId), title: doc.metadata?.documentNumber || doc.fileName, fileName: doc.fileName, createdAt: doc.generatedAt || doc.createdAt, origin: 'generated' });
+    });
+    for (const doc of projectDocs) out.push({ id: String(doc._id), fileId: String(doc.fileId), title: doc.fileName, fileName: doc.fileName, createdAt: doc.createdAt, origin: 'project' });
 
     // The same file can be indexed twice (a mobile upload mirrored into a
     // project) — an attachment is the file, so dedupe on it.
@@ -999,9 +1344,8 @@ class DocumentIndexService {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-      .slice(0, limit);
+      .slice(0, take);
   }
-
 }
 
 const documentIndexService = new DocumentIndexService();

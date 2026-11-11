@@ -24,6 +24,7 @@ export default {
   rollback: wrap(async (req, res) => res.success({ data: await service.rollback(req.params.id, req.params.version, user(req), meta(req)), message: 'Rolled back' })),
   duplicate: wrap(async (req, res) => res.success({ data: await service.duplicate(req.params.id, user(req), meta(req)), statusCode: 201 })),
   test: wrap(async (req, res) => res.success({ data: await service.test(req.params.id, req.body) })),
+  analyze: wrap(async (req, res) => res.success({ data: await service.analyze(req.params.id, req.body) })),
 
   listCampaigns: wrap(async (req, res) => { const r = await service.listCampaigns(q(req)); return res.success({ data: r.items, pagination: r.pagination }); }),
   getCampaign: wrap(async (req, res) => res.success({ data: await service.getCampaign(req.params.id) })),
@@ -41,6 +42,16 @@ export default {
   analytics: wrap(async (req, res) => res.success({ data: await service.analytics(q(req)) })),
   leadHistory: wrap(async (req, res) => res.success({ data: await service.leadHistory(req.params.leadId) })),
 
+  /** Copilot dictation: audio (multipart field "audio") → text. Nothing is stored. */
+  async copilotTranscribe(req, res, next) {
+    try {
+      await service.get(req.params.id);
+      const language = typeof req.body?.language === 'string' ? req.body.language : null;
+      const data = await copilot.transcribe(req.file, { language });
+      return res.json({ success: true, data });
+    } catch (e) { return next(e); }
+  },
+
   /** Workflow Copilot — Server-Sent Events stream of copilot events (status/op/question/message/done). */
   async copilot(req, res, next) {
     let workflow;
@@ -56,7 +67,9 @@ export default {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
     const controller = new globalThis.AbortController();
-    req.on('close', () => controller.abort());
+    // `res` 'close' = the client went away (or we finished). `req` 'close' can fire as soon as the
+    // request body has been read, which would abort a healthy stream.
+    res.on('close', () => { if (!res.writableFinished) controller.abort(); });
     const send = (event) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`); };
     const heartbeat = setInterval(() => { if (!res.writableEnded) res.write(': ping\n\n'); }, 15000);
     let ops = 0;

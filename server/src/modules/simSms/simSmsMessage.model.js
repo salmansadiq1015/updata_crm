@@ -43,5 +43,7 @@ messageSchema.index({ createdBy: 1, direction: 1, status: 1, createdAt: 1 });
 messageSchema.index({ createdBy: 1, deviceMessageKey: 1 }, { unique: true, partialFilterExpression: { deviceMessageKey: { $type: 'string' } } });
 messageSchema.index({ status: 1, leaseUntil: 1 });
 messageSchema.index({ conversationId: 1, createdAt: 1 });
+// Device dashboard: "campaigns this phone sent for in the last 7 days" — covered by this index.
+messageSchema.index({ createdBy: 1, direction: 1, deviceId: 1, updatedAt: 1, campaignId: 1 }, { name: 'sim_sms_device_campaigns' });
 
 export default mongoose.model('SimSmsMessage', messageSchema);

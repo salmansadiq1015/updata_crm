@@ -263,6 +263,11 @@ const summarizeEnrich = (found: LeadEnrichFound, applied: LeadEnrichApplied): Le
     (applied.email ? 1 : 0) + (applied.phones?.length ?? 0) + (applied.socials?.length ?? 0),
 });
 
+export interface LeadStats {
+  total: number; newThisWeek: number; hot: number; unassigned: number; withoutPhone: number;
+  slaOverdue: number; followUpsDueToday: number; byStatus: Record<string, number>;
+}
+
 export const leadApi = {
   async listLeads(params: LeadListParams = {}): Promise<LeadPage> {
     const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.LIST, { params }));
@@ -291,6 +296,23 @@ export const leadApi = {
       withLocation: toNumber(data.withLocation),
       withoutLocation: toNumber(data.withoutLocation),
       limited: data.limited === true,
+    };
+  },
+
+  /** Header KPIs across every lead the user can see (server-cached, invalidated on writes). */
+  async getStats(): Promise<LeadStats> {
+    const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.STATS));
+    const data = isRecord(response.data) ? response.data : {};
+    const byStatus = isRecord(data.byStatus) ? data.byStatus : {};
+    return {
+      total: toNumber(data.total),
+      newThisWeek: toNumber(data.newThisWeek),
+      hot: toNumber(data.hot),
+      unassigned: toNumber(data.unassigned),
+      withoutPhone: toNumber(data.withoutPhone),
+      slaOverdue: toNumber(data.slaOverdue),
+      followUpsDueToday: toNumber(data.followUpsDueToday),
+      byStatus: Object.fromEntries(Object.entries(byStatus).map(([key, value]) => [key, toNumber(value)])),
     };
   },
 

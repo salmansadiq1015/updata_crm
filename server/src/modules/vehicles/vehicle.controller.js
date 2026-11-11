@@ -2,66 +2,60 @@ import vehicleService from './vehicle.service.js';
 import ciService from '../doctpl/ci.service.js';
 import ciRenderAssetsService from '../doctpl/ciRenderAssets.service.js';
 import { renderVehicleMaterialPdf } from './vehicleMaterialPdf.renderer.js';
+import { loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
 
 const withMeta = (req) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') });
+const query = (req) => req._validatedQuery || req.query || {};
+
+/** Bookings are open to every fleet reader; acting for others needs vehicles:write. */
+async function bookingActor(req) {
+  let canWrite = req.user.role?.name === 'Admin';
+  if (!canWrite) {
+    try { canWrite = satisfiesPermission(await loadUserPermissions(req.user), 'vehicles:write'); } catch { canWrite = false; }
+  }
+  return { _id: req.user._id, canWrite };
+}
+
+const handle = (fn, status = 200, message) => async (req, res, next) => {
+  try {
+    const data = await fn(req);
+    return res.success({ data, ...(message ? { message } : {}), statusCode: status });
+  } catch (err) { return next(err); }
+};
 
 class VehicleController {
-  async list(req, res, next) {
-    try {
-      const data = await vehicleService.list(req.query);
-      return res.success({ data });
-    } catch (err) { next(err); }
-  }
+  list = handle((req) => vehicleService.list(query(req)));
+  stats = handle(() => vehicleService.stats());
+  getById = handle((req) => vehicleService.getById(req.params.id));
+  create = handle((req) => vehicleService.create(req.body, req.user._id, withMeta(req)), 201, 'Vehicle created');
+  update = handle((req) => vehicleService.update(req.params.id, req.body, req.user._id, withMeta(req)), 200, 'Vehicle updated');
+  remove = handle((req) => vehicleService.remove(req.params.id, req.user._id, withMeta(req)), 200, 'Vehicle deleted');
+  assignDriver = handle((req) => vehicleService.assignDriver(req.params.id, req.body.driverId, req.user._id, withMeta(req)), 200, 'Driver updated');
 
-  async getById(req, res, next) {
-    try {
-      const data = await vehicleService.getById(req.params.id);
-      return res.success({ data });
-    } catch (err) { next(err); }
-  }
+  uploadPhoto = handle((req) => vehicleService.setPhoto(req.params.id, req.file, req.user._id, withMeta(req)), 200, 'Photo updated');
+  removePhoto = handle((req) => vehicleService.removePhoto(req.params.id, req.user._id, withMeta(req)), 200, 'Photo removed');
 
-  async create(req, res, next) {
-    try {
-      const data = await vehicleService.create(req.body, req.user._id, withMeta(req));
-      return res.success({ data, message: 'Vehicle created', statusCode: 201 });
-    } catch (err) { next(err); }
-  }
+  listServices = handle((req) => vehicleService.listServices(req.params.id));
+  addService = handle((req) => vehicleService.addService(req.params.id, req.body, req.user._id, withMeta(req)), 201);
+  deleteService = handle((req) => vehicleService.deleteService(req.params.id, req.params.subId, req.user._id, withMeta(req)), 200, 'Deleted');
 
-  async update(req, res, next) {
-    try {
-      const data = await vehicleService.update(req.params.id, req.body, req.user._id, withMeta(req));
-      return res.success({ data, message: 'Vehicle updated' });
-    } catch (err) { next(err); }
-  }
+  listCosts = handle((req) => vehicleService.listCosts(req.params.id, query(req)));
+  addCost = handle((req) => vehicleService.addCost(req.params.id, req.body, req.user._id, withMeta(req)), 201);
+  deleteCost = handle((req) => vehicleService.deleteCost(req.params.id, req.params.subId, req.user._id, withMeta(req)), 200, 'Deleted');
 
-  async remove(req, res, next) {
-    try {
-      await vehicleService.remove(req.params.id, req.user._id, withMeta(req));
-      return res.success({ message: 'Vehicle deleted' });
-    } catch (err) { next(err); }
-  }
+  listBookings = handle((req) => vehicleService.listBookings(req.params.id, query(req)));
+  addBooking = handle(async (req) => vehicleService.addBooking(req.params.id, req.body, await bookingActor(req), withMeta(req)), 201);
+  cancelBooking = handle(async (req) => vehicleService.cancelBooking(req.params.id, req.params.subId, await bookingActor(req), withMeta(req)), 200, 'Cancelled');
 
-  async assignDriver(req, res, next) {
-    try {
-      const data = await vehicleService.assignDriver(req.params.id, req.body.driverId, req.user._id, withMeta(req));
-      return res.success({ data, message: 'Driver updated' });
-    } catch (err) { next(err); }
-  }
+  listMaterials = handle((req) => vehicleService.listMaterials(req.params.id));
+  addMaterial = handle((req) => vehicleService.addMaterial(req.params.id, req.body, req.user._id, withMeta(req)), 201);
+  deleteMaterial = handle((req) => vehicleService.deleteMaterial(req.params.id, req.params.subId, req.user._id, withMeta(req)), 200, 'Deleted');
 
-  async listServices(req, res, next) {
-    try { return res.success({ data: await vehicleService.listServices(req.params.id) }); } catch (err) { next(err); }
-  }
+  listNotes = handle((req) => vehicleService.listNotes(req.params.id));
+  addNote = handle((req) => vehicleService.addNote(req.params.id, req.body, req.user._id, withMeta(req)), 201);
+  deleteNote = handle((req) => vehicleService.deleteNote(req.params.id, req.params.subId, req.user._id, withMeta(req)), 200, 'Deleted');
 
-  async addService(req, res, next) {
-    try {
-      const data = await vehicleService.addService(req.params.id, req.body, req.user._id, withMeta(req));
-      return res.success({ data, statusCode: 201 });
-    } catch (err) { next(err); }
-  }
-
-  async deleteService(req, res, next) {
-    try { await vehicleService.deleteService(req.params.id, req.params.subId, req.user._id, withMeta(req)); return res.success({ message: 'Deleted' }); } catch (err) { next(err); }
-  }
+  listHistory = handle((req) => vehicleService.listHistory(req.params.id));
 
   async exportMaterialsPdf(req, res, next) {
     try {
@@ -77,41 +71,7 @@ class VehicleController {
       const fileName = `Materialliste_${kennzeichen}_${dateStr}.pdf`;
 
       return res.attachment(fileName).type('application/pdf').send(buffer);
-    } catch (err) { next(err); }
-  }
-
-  async listMaterials(req, res, next) {
-    try { return res.success({ data: await vehicleService.listMaterials(req.params.id) }); } catch (err) { next(err); }
-  }
-
-  async addMaterial(req, res, next) {
-    try {
-      const data = await vehicleService.addMaterial(req.params.id, req.body, req.user._id, withMeta(req));
-      return res.success({ data, statusCode: 201 });
-    } catch (err) { next(err); }
-  }
-
-  async deleteMaterial(req, res, next) {
-    try { await vehicleService.deleteMaterial(req.params.id, req.params.subId, req.user._id, withMeta(req)); return res.success({ message: 'Deleted' }); } catch (err) { next(err); }
-  }
-
-  async listNotes(req, res, next) {
-    try { return res.success({ data: await vehicleService.listNotes(req.params.id) }); } catch (err) { next(err); }
-  }
-
-  async addNote(req, res, next) {
-    try {
-      const data = await vehicleService.addNote(req.params.id, req.body, req.user._id, withMeta(req));
-      return res.success({ data, statusCode: 201 });
-    } catch (err) { next(err); }
-  }
-
-  async deleteNote(req, res, next) {
-    try { await vehicleService.deleteNote(req.params.id, req.params.subId, req.user._id, withMeta(req)); return res.success({ message: 'Deleted' }); } catch (err) { next(err); }
-  }
-
-  async listHistory(req, res, next) {
-    try { return res.success({ data: await vehicleService.listHistory(req.params.id) }); } catch (err) { next(err); }
+    } catch (err) { return next(err); }
   }
 }
 

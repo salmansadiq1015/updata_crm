@@ -9,7 +9,7 @@ import {
   useEdgesState, useNodesState, useReactFlow, type Connection, type IsValidConnection, type NodeChange, type EdgeChange,
 } from '@xyflow/react';
 import { useTheme } from 'next-themes';
-import { ListChecks, LayoutTemplate, Settings2, Sparkles, X } from 'lucide-react';
+import { ListChecks, LayoutTemplate, PlayCircle, Settings2, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -35,6 +35,7 @@ import { PublishDialog } from './publish-dialog';
 import { VersionsSheet } from './versions-sheet';
 import { CopilotPanel, type CopilotHelpRequest } from './copilot-panel';
 import { PanelResizer, clampWidth } from './panel-resizer';
+import { WorkflowDemoDialog } from './workflow-demo';
 import { ValidationPanel, type QuickFix } from './validation-panel';
 import { NODE_CARD_WIDTH } from '../shared/workflow-node-card';
 import type { TestRunResult, ValidationResult, WorkflowGraph, WorkflowSettings } from '../../types/workflow-types';
@@ -86,6 +87,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const setPrefs = useCallback((fn: (p: Prefs) => Prefs) => setPrefsState((p) => { const next = fn(p); try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ } return next; }), []);
   const [testNodeId, setTestNodeId] = useState<string | null>(null);
   const [helpRequest, setHelpRequest] = useState<CopilotHelpRequest | null>(null);
+  const [demoOpen, setDemoOpen] = useState(false);
   const [aiFlash, setAiFlash] = useState<Set<string>>(new Set());
   const copilotBusy = useRef(false);
   const turnSnapshots = useRef(new Map<string, WorkflowGraph>());
@@ -471,7 +473,8 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const palette = (
     <NodePalette nodes={catalog.nodes} hasTrigger={hasTrigger} onAdd={(type) => addNode(type, undefined, selectedId)}
       recent={prefs.recent} favorites={prefs.favorites}
-      onToggleFavorite={(type) => setPrefs((p) => ({ ...p, favorites: p.favorites.includes(type) ? p.favorites.filter((x) => x !== type) : [...p.favorites, type].slice(0, 12) }))} />
+      onToggleFavorite={(type) => setPrefs((p) => ({ ...p, favorites: p.favorites.includes(type) ? p.favorites.filter((x) => x !== type) : [...p.favorites, type].slice(0, 12) }))}
+      onOpenDemo={() => setDemoOpen(true)} />
   );
   const configPanel = (
     <ConfigPanel workflowId={workflowId} node={selectedNode} catalog={catalog} validation={validation} nodeOptions={nodeOptions} readOnly={readOnly}
@@ -479,9 +482,12 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
       onDelete={(id) => deleteNodes([id])} onDuplicate={duplicateNode} onClose={() => setSelectedId(null)} onFocusNode={focusNode}
       onFix={applyFix} connectedPorts={connectedPorts} onTestNode={(id) => { setTestNodeId(id); setDialog('test'); }} onAiHelp={askAiAbout} />
   );
+  const issueCount = (validation?.errors.length || 0) + (validation?.warnings.filter((w) => w.severity !== 'info' && w.code !== 'branch_unconnected' && w.code !== 'loop_present').length || 0);
   const copilotPanel = (
     <CopilotPanel workflowId={workflowId} readOnly={readOnly} getGraph={snapshot} selectedNodeId={selectedId} agents={agents} helpRequest={helpRequest}
       onTurnStart={onTurnStart} onGraph={applyCopilotGraph} onRename={(name) => setMeta((m) => ({ ...m, name }))} onUndoTurn={onUndoTurn}
+      nodeCount={nodes.length} issueCount={issueCount} onOpenDemo={() => setDemoOpen(true)}
+      selectedLabel={selectedNode ? (selectedNode.data.label || t(`workflow.node.${selectedNode.type}.label`, selectedNode.type || '')) : null}
       reviewMode={Boolean(prefs.copilotReview)} onToggleReview={() => setPrefs((p) => ({ ...p, copilotReview: !p.copilotReview }))}
       onTurnEnd={() => { copilotBusy.current = false; requestAnimationFrame(() => flow.fitView({ padding: 0.2, duration: 500, maxZoom: 1 })); }}
       onClose={() => setRightPanel('config')} />
@@ -490,7 +496,6 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
     <ValidationPanel validation={validation} nodeLabel={nodeLabel} outputsOf={outputsOf} connectedPorts={connectedPorts} readOnly={readOnly}
       onFocus={(id) => { focusNode(id); setRightPanel('config'); }} onFix={applyFix} onClose={() => setRightPanel('config')} />
   );
-  const issueCount = (validation?.errors.length || 0) + (validation?.warnings.filter((w) => w.severity !== 'info' && w.code !== 'branch_unconnected' && w.code !== 'loop_present').length || 0);
   const rightTabs = (
     <div className="flex shrink-0 gap-1 border-b bg-card/80 p-1.5" role="tablist" aria-label={t('workflowBuilder.panel.aria', 'Configuration')}>
       {([['config', Settings2, t('workflowBuilder.tabs.settings', 'Settings')], ['copilot', Sparkles, t('workflowBuilder.tabs.copilot', 'AI Copilot')], ['validation', ListChecks, t('workflowBuilder.tabs.check', 'Check')]] as const).map(([key, Icon, label]) => (
@@ -560,7 +565,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
             </div>
           )}
 
-          {nodes.length === 0 && !readOnly && <EmptyCanvas onAdd={(type) => addNode(type)} onAi={() => setRightPanel('copilot')} />}
+          {nodes.length === 0 && !readOnly && <EmptyCanvas onAdd={(type) => addNode(type)} onAi={() => setRightPanel('copilot')} onDemo={() => setDemoOpen(true)} />}
         </div>
         <aside className={cn('relative hidden shrink-0 flex-col border-s bg-card/60 xl:flex', !prefs.panelWidth && (rightPanel === 'copilot' ? 'w-[420px]' : 'w-[380px]'))}
           style={prefs.panelWidth ? { width: prefs.panelWidth } : undefined} aria-label={t('workflowBuilder.panel.aria', 'Configuration')}>
@@ -577,9 +582,14 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md xl:hidden"><SheetTitle className="sr-only">{t('workflowBuilder.panel.aria', 'Configuration')}</SheetTitle>{rightTabs}<div className="min-h-0 flex-1">{rightPanel === 'config' ? panel : rightContent}</div></SheetContent>
       </Sheet>
 
+      <WorkflowDemoDialog open={demoOpen} onOpenChange={setDemoOpen} canvasEmpty={nodes.length === 0 && !readOnly}
+        onBuildWithAi={(prompt) => { if (readOnly) return; setRightPanel('copilot'); setHelpRequest({ text: prompt, nonce: Date.now() }); }}
+        onUseGraph={(g) => { if (readOnly) return; pushHistory(); loadGraph(autoLayout(g, outputs)); requestAnimationFrame(() => flow.fitView({ padding: 0.2, duration: 500, maxZoom: 1 })); }} />
       <TestRunDialog open={dialog === 'test'} onOpenChange={(v) => { setDialog(v ? 'test' : null); if (!v) setTestNodeId(null); }} workflowId={workflowId} graph={graph}
         onResult={(r) => { setTestResult(r); if (r) setDialog(null); }} startNodeId={testNodeId}
-        canLiveTest={hasPermission('workflow:execute') && wf.status === 'published'} publishedVersion={wf.publishedVersion} dirty={dirty} />
+        canLiveTest={hasPermission('workflow:execute') && wf.status === 'published'} publishedVersion={wf.publishedVersion} dirty={dirty} readOnly={readOnly}
+        onFocusNode={(id) => { focusNode(id); setRightPanel('config'); }}
+        onAskAi={(prompt) => { if (readOnly) return; setRightPanel('copilot'); setHelpRequest({ text: prompt, nonce: Date.now() }); }} />
       <PublishDialog open={dialog === 'publish'} onOpenChange={(v) => setDialog(v ? 'publish' : null)} validation={validation} nextVersion={(wf.latestVersion || 0) + 1}
         publishing={mutations.publish.isPending || mutations.save.isPending} dirty={dirty} onPublish={publish} nodeLabel={nodeLabel} />
       <VersionsSheet open={dialog === 'versions'} onOpenChange={(v) => setDialog(v ? 'versions' : null)} workflowId={workflowId} publishedVersion={wf.publishedVersion} canPublish={canPublish}
@@ -590,7 +600,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
 
 const STARTERS = ['trigger.manual', 'trigger.lead_created', 'trigger.call_completed', 'trigger.inbound_call', 'trigger.message_received', 'trigger.webhook'];
 
-function EmptyCanvas({ onAdd, onAi }: { onAdd: (type: string) => void; onAi: () => void }) {
+function EmptyCanvas({ onAdd, onAi, onDemo }: { onAdd: (type: string) => void; onAi: () => void; onDemo: () => void }) {
   const { t } = useLanguage();
   return (
     <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
@@ -611,6 +621,7 @@ function EmptyCanvas({ onAdd, onAi }: { onAdd: (type: string) => void; onAi: () 
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <Button type="button" onClick={onAi} className="border-0 bg-gradient-to-r from-sky-600 to-cyan-500 text-white hover:from-sky-700 hover:to-cyan-600"><Sparkles className="me-1.5 size-4" />{t('workflowBuilder.empty.ai', 'Describe it — build with AI')}</Button>
+          <Button type="button" variant="outline" onClick={onDemo}><PlayCircle className="me-1.5 size-4 text-sky-600 dark:text-sky-300" />{t('workflowBuilder.empty.demo', 'Watch how it works')}</Button>
           <Button asChild variant="link"><Link href="/automation/templates"><LayoutTemplate className="me-1.5 size-4" />{t('workflowBuilder.empty.templates', 'Or start from a template')}</Link></Button>
         </div>
       </div>

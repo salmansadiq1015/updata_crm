@@ -13,6 +13,10 @@ import { workflowBuilderTranslations } from './workflow-builder-translations';
 import { workflowPagesTranslations } from './workflow-pages-translations';
 import { aiMissionTranslations } from './ai-mission-translations';
 import { workflowCopilotTranslations } from './workflow-copilot-translations';
+import { workflowAssistTranslations } from './workflow-assist-translations';
+import { fleetTranslations } from './fleet-translations';
+import { documentHubTranslations } from './document-hub-translations';
+import { pageHeroTranslations } from './page-hero-translations';
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
 import { callingIntelligenceTranslations } from './calling-intelligence-translations';
 import { callingQualityTranslations } from './calling-quality-translations';
@@ -1248,6 +1252,10 @@ const baseTranslations = {
     ...workflowPagesTranslations.de,
     ...aiMissionTranslations.de,
     ...workflowCopilotTranslations.de,
+    ...workflowAssistTranslations.de,
+    ...fleetTranslations.de,
+    ...documentHubTranslations.de,
+    ...pageHeroTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
     // Navbar
@@ -6311,6 +6319,10 @@ const baseTranslations = {
     ...workflowPagesTranslations.en,
     ...aiMissionTranslations.en,
     ...workflowCopilotTranslations.en,
+    ...workflowAssistTranslations.en,
+    ...fleetTranslations.en,
+    ...documentHubTranslations.en,
+    ...pageHeroTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
     // Navbar
@@ -11382,6 +11394,10 @@ const baseTranslations = {
     ...workflowPagesTranslations.fr,
     ...aiMissionTranslations.fr,
     ...workflowCopilotTranslations.fr,
+    ...workflowAssistTranslations.fr,
+    ...fleetTranslations.fr,
+    ...documentHubTranslations.fr,
+    ...pageHeroTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
     ...dashboardIntelligenceTranslations.fr,
     ...taskWorkspaceTranslations.fr,
@@ -11546,6 +11562,10 @@ const baseTranslations = {
     ...workflowPagesTranslations.ar,
     ...aiMissionTranslations.ar,
     ...workflowCopilotTranslations.ar,
+    ...workflowAssistTranslations.ar,
+    ...fleetTranslations.ar,
+    ...documentHubTranslations.ar,
+    ...pageHeroTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
     ...dashboardIntelligenceTranslations.ar,
     ...taskWorkspaceTranslations.ar,

@@ -81,6 +81,8 @@ const campaignSchema = new mongoose.Schema({
 
 campaignSchema.index({ createdBy: 1, createdAt: -1 });
 campaignSchema.index({ createdBy: 1, status: 1, lastActivityAt: -1 });
+// Unfiltered campaign list: sort { lastActivityAt: -1, createdAt: -1 } served by the index.
+campaignSchema.index({ createdBy: 1, lastActivityAt: -1, createdAt: -1 }, { name: 'sim_call_campaign_feed' });
 
 campaignSchema.index({ createdBy: 1, creationKey: 1 }, {
   unique: true, partialFilterExpression: { creationKey: { $type: 'string' } }, name: 'sim_call_creation_key',

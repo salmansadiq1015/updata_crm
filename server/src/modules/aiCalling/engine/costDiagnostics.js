@@ -1,5 +1,15 @@
 import { computeCallCost, modelCost } from './callCost.js';
 
+/**
+ * `env` with AI_CALLING_MODEL_PRICING replaced, as a read-through view. Copying process.env
+ * (`{ ...env }`) costs ~1 ms per call — it dominated the per-call analytics loops — while the
+ * pricing code only reads a few keys.
+ */
+export function withModelPricing(env, overrides) {
+  const pricing = JSON.stringify(overrides);
+  return new Proxy(env, { get: (target, key) => (key === 'AI_CALLING_MODEL_PRICING' ? pricing : target[key]) });
+}
+
 /** Usage is observed; dollars are rate-card estimates, never invoice amounts. */
 export function costDiagnostics(cost, usage, durationSeconds, env = process.env) {
   const tokens = cost.tokens;
@@ -9,7 +19,7 @@ export function costDiagnostics(cost, usage, durationSeconds, env = process.env)
   try { const parsed = JSON.parse(env.AI_CALLING_MODEL_PRICING || '{}'); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) overrides = parsed; } catch { /* known rates */ }
   for (const row of cost.models || []) if (row.model && row.rates && !row.unpriced) overrides[row.model] = row.rates;
   if (cost.model && cost.rates) overrides[cost.model] = cost.rates;
-  const historicalEnv = { ...env, AI_CALLING_MODEL_PRICING: JSON.stringify(overrides) };
+  const historicalEnv = withModelPricing(env, overrides);
   const responses = (telemetry?.responses || []).map(row => {
     const priced = computeCallCost({ usage: [row] }, historicalEnv);
     return { ...row, tokens: priced.breakdown.tokens, estimatedCost: priced.breakdown.unpriced ? null : priced.amount };

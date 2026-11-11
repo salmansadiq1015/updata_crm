@@ -7,7 +7,7 @@ import { NotFoundError } from '../../shared/errors/AppError.js';
 import { toCsv } from '../../shared/utils/csv.js';
 import { computeCallCost, COST_PRICING_VERSION, needsPricing } from './engine/callCost.js';
 import { providerComparison } from './engine/providerComparison.js';
-import { costDiagnostics } from './engine/costDiagnostics.js';
+import { costDiagnostics, withModelPricing } from './engine/costDiagnostics.js';
 
 /**
  * Cost and outcome analytics for one calling agent: every call its campaigns
@@ -39,7 +39,7 @@ export function pricedCost(call, env = process.env) {
     const completeRates = rates => rates && ['audioIn', 'audioCachedIn', 'audioOut', 'textIn', 'textCachedIn', 'textOut'].every(k => rates[k] != null && Number.isFinite(Number(rates[k])) && Number(rates[k]) >= 0);
     if (breakdown.model && completeRates(breakdown.rates)) overrides[breakdown.model] = breakdown.rates;
     for (const m of breakdown.models || []) if (m.model && !m.unpriced && completeRates(m.rates)) overrides[m.model] = m.rates;
-    const historical = { ...env, AI_CALLING_MODEL_PRICING: JSON.stringify(overrides) };
+    const historical = withModelPricing(env, overrides);
     const priced = computeCallCost({
       usage: breakdown.usage, durationSeconds: call.durationSeconds || 0, provider: call.provider,
       // A missing historical model is unknown; today's server default is not evidence.

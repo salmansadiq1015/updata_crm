@@ -8,7 +8,11 @@ import {
   listAttachableSchema,
   listDocumentsSchema,
   uploadDocumentSchema,
+  linkTargetsSchema,
+  updateDocumentSchema,
+  bulkDocumentsSchema,
 } from './documentIndex.validation.js';
+import { satisfiesPermission, loadUserPermissions } from '../../shared/middleware/authenticate.js';
 import config from '../../config/index.js';
 
 const router = Router();
@@ -23,6 +27,34 @@ router.get(
   requirePermission('documents:read'),
   validate(listAttachableSchema),
   (req, res, next) => documentIndexController.listAttachable(req, res, next),
+);
+
+router.get('/stats', authenticate, requirePermission('documents:read'), (req, res, next) => documentIndexController.stats(req, res, next));
+router.get('/facets', authenticate, requirePermission('documents:read'), (req, res, next) => documentIndexController.facets(req, res, next));
+router.get(
+  '/link-targets',
+  authenticate,
+  requirePermission('documents:write'),
+  validate(linkTargetsSchema),
+  (req, res, next) => documentIndexController.linkTargets(req, res, next),
+);
+
+// Bulk delete needs documents:delete on top of write; the per-record checks
+// still run inside the service for every id.
+async function requireBulkPermission(req, res, next) {
+  if (req.body?.action !== 'delete' || req.user?.role?.name === 'Admin') return next();
+  try {
+    if (satisfiesPermission(await loadUserPermissions(req.user), 'documents:delete')) return next();
+  } catch (err) { return next(err); }
+  return res.status(403).json({ success: false, error: { statusCode: 403, code: 'INSUFFICIENT_PERMISSIONS', message: 'Insufficient permissions. Required: documents:delete', details: [] } });
+}
+router.post(
+  '/bulk',
+  authenticate,
+  requirePermission('documents:write'),
+  validate(bulkDocumentsSchema),
+  requireBulkPermission,
+  (req, res, next) => documentIndexController.bulk(req, res, next),
 );
 
 router.get(
@@ -99,6 +131,14 @@ router.delete(
   requirePermission('documents:write'),
   validate(documentRecordParamSchema),
   (req, res, next) => documentIndexController.setArchived(req, res, next),
+);
+
+router.patch(
+  '/:id',
+  authenticate,
+  requirePermission('documents:write'),
+  validate(updateDocumentSchema),
+  (req, res, next) => documentIndexController.update(req, res, next),
 );
 
 router.delete(

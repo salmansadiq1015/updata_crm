@@ -208,6 +208,11 @@ class LeadService {
     return leadRepository.getFilterOptions({ filters, search: term, searchUserIds });
   }
 
+  /** Header KPIs for the Leads page (same visible set as the list; cached ≤ 60 s). */
+  async getStats() {
+    return leadRepository.stats();
+  }
+
   /** Company-wide get (shared). Throws when the lead does not exist. */
   async getById(id) {
     const lead = await leadRepository.getById(id);

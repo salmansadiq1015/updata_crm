@@ -18,6 +18,8 @@ const qualificationWrite = (req, res, next) => req.body.qualification?.answers?.
 
 router.get('/readiness', ...read, controller.readiness);
 router.get('/campaigns', ...read, validate(schemas.listCampaigns), controller.listCampaigns);
+// Header KPIs over all of the user's campaigns. Declared before '/campaigns/:id'.
+router.get('/campaigns/stats', ...read, controller.campaignStats);
 router.post('/campaigns', ...write, validate(schemas.createCampaign), controller.createCampaign);
 router.get('/campaigns/:id', ...read, validate(schemas.campaignId), controller.getCampaign);
 router.patch('/campaigns/:id', ...write, validate(schemas.updateCampaign), controller.updateCampaign);

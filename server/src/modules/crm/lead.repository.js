@@ -1,4 +1,5 @@
-import Lead from './lead.model.js';
+import Lead, { LEAD_STATUS } from './lead.model.js';
+import LeadFollowUp, { FOLLOW_UP_OPEN_STATUSES } from './leadFollowUp.model.js';
 import { normalizeName } from '../businessDiscovery/engine/normalizer.js';
 import { businessIdentityKeys, googleIdentityKeys, identityAfterPatch, sameBusinessIdentity } from './leadIdentity.js';
 import {
@@ -9,6 +10,7 @@ import {
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
 import { currentLeadAccessFilter } from '../../shared/security/requestAccessContext.js';
 import { buildGeographyFacets, canonicalizeLeadAddress, countGeographyFacets } from './leadGeography.js';
+import { cachedLeadAggregate } from './leadCache.js';
 
 // Build a regex where each letter also matches its accented variants, e.g.
 // "mull" → "[mM][uüùûú][lL][lL]" so it matches "Müller". With $options:'i'
@@ -251,7 +253,11 @@ class LeadRepository {
 
     // Total matching rows (independent of the cursor) so the UI can show an
     // honest "page X of Y". countDocuments does NOT run Mongoose's soft-delete
-    // `find` hook, so isDeleted:false is explicit (mirrors listForMap).
+    // `find` hook, so isDeleted:false is explicit (mirrors listForMap). The
+    // count is the expensive half of a page (it visits every match), and it is
+    // identical on every page of one filter, so it is cached per filter under
+    // the lead write generation (any lead write invalidates it).
+    const countFilter = combineFilters({ isDeleted: false }, datasetFilter);
     const [docs, total] = await Promise.all([
       Lead.find(filter)
         .sort(buildCursorSort(safeSortBy, sortOrder))
@@ -259,7 +265,7 @@ class LeadRepository {
         .select('-__v')
         .populate(POPULATE)
         .lean(),
-      Lead.countDocuments(combineFilters({ isDeleted: false }, datasetFilter)),
+      cachedLeadAggregate('count', countFilter, () => Lead.countDocuments(countFilter)),
     ]);
 
     const response = buildCursorResponse(docs, limit, safeSortBy);
@@ -324,11 +330,13 @@ class LeadRepository {
    * cost scales with the number of distinct places, not leads.
    */
   async geographyFacets() {
-    const rows = await Lead.aggregate([
-      { $match: { isDeleted: false } },
-      GEO_TUPLE_GROUP,
-    ]);
-    return buildGeographyFacets(rows.map(tupleRow));
+    // Every geography-filtered list page and every filter-options call needs
+    // this index, and it changes only when a lead is written: cache the raw
+    // tuple rows (plain JSON — the built index holds Maps) per write generation.
+    const rows = await cachedLeadAggregate('geo-tuples', null, async () => (
+      (await Lead.aggregate([{ $match: { isDeleted: false } }, GEO_TUPLE_GROUP])).map(tupleRow)
+    ));
+    return buildGeographyFacets(rows);
   }
 
   /**
@@ -377,9 +385,9 @@ class LeadRepository {
       }),
     );
 
-    const [geography, [facets]] = await Promise.all([
+    const [geography, facets] = await Promise.all([
       this.geographyFacets(),
-      Lead.aggregate([
+      cachedLeadAggregate('facets', base, async () => (await Lead.aggregate([
         {
           $facet: {
             places: [
@@ -400,7 +408,7 @@ class LeadRepository {
             ],
           },
         },
-      ]),
+      ]))[0] ?? null),
     ]);
 
     const { countries, cities, areas } = countGeographyFacets(
@@ -416,6 +424,92 @@ class LeadRepository {
       types: (facets?.types ?? []).map((type) => ({ value: type._id, count: type.count })),
       businessTypes: (facets?.businessTypes ?? []).map((bt) => ({ value: bt._id, count: bt.count })),
     };
+  }
+
+  /**
+   * Header KPIs for the Leads page, over the same visible set as the list
+   * (live leads + governance access filter; leads are company-wide). One
+   * $group pass over the leads plus one grouped pass over today's open
+   * follow-ups; cached ≤ 60 s under the lead/follow-up write generation.
+   *
+   * - newThisWeek: created in the last 7 days (rolling, timezone-free)
+   * - hot: score.band === 'hot' (top band of leadScoring.engine SCORE_BANDS)
+   * - unassigned: no assignedTo
+   * - withoutPhone: neither phone nor mobile
+   * - slaOverdue: slaStatus === 'overdue' (the toolbar's "Response overdue" filter)
+   * - followUpsDueToday: open/snoozed follow-ups with nextDueAt before the end
+   *   of today (server timezone) — overdue ones included — on visible leads
+   */
+  async stats(now = new Date()) {
+    const access = currentLeadAccessFilter();
+    return cachedLeadAggregate('stats', { access }, () => this.computeStats(now, access), { ttlSeconds: 60 });
+  }
+
+  async computeStats(now = new Date(), access = currentLeadAccessFilter()) {
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const endOfToday = new Date(now);
+    endOfToday.setHours(24, 0, 0, 0);
+    const sumIf = (cond) => ({ $sum: { $cond: [cond, 1, 0] } });
+    const blank = (path) => ({ $in: [{ $ifNull: [path, ''] }, ['']] });
+    const accessMatch = Object.keys(access).length ? [access] : [];
+
+    const [statusRows, dueRows] = await Promise.all([
+      Lead.aggregate([
+        { $match: combineFilters({ isDeleted: false }, ...accessMatch) },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            newThisWeek: sumIf({ $gte: ['$createdAt', weekAgo] }),
+            hot: sumIf({ $eq: ['$score.band', 'hot'] }),
+            unassigned: sumIf({ $eq: [{ $ifNull: ['$assignedTo', null] }, null] }),
+            withoutPhone: sumIf({ $and: [blank('$phone'), blank('$mobile')] }),
+            slaOverdue: sumIf({ $eq: ['$slaStatus', 'overdue'] }),
+          },
+        },
+      ]),
+      LeadFollowUp.aggregate([
+        { $match: { status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $lt: endOfToday } } },
+        { $group: { _id: '$leadId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const byStatus = Object.fromEntries(Object.values(LEAD_STATUS).map((status) => [status, 0]));
+    const totals = { total: 0, newThisWeek: 0, hot: 0, unassigned: 0, withoutPhone: 0, slaOverdue: 0 };
+    for (const row of statusRows) {
+      if (row._id) byStatus[row._id] = (byStatus[row._id] ?? 0) + row.count;
+      totals.total += row.count;
+      totals.newThisWeek += row.newThisWeek;
+      totals.hot += row.hot;
+      totals.unassigned += row.unassigned;
+      totals.withoutPhone += row.withoutPhone;
+      totals.slaOverdue += row.slaOverdue;
+    }
+    return {
+      ...totals,
+      byStatus,
+      followUpsDueToday: await this.countOnVisibleLeads(dueRows, accessMatch),
+      generatedAt: now.toISOString(),
+    };
+  }
+
+  /**
+   * Sum `count` over [{ _id: leadId, count }] rows whose lead is live and
+   * visible — chunked indexed `_id $in` reads (a per-row $lookup sub-pipeline
+   * was ~100× slower on 10k leads).
+   */
+  async countOnVisibleLeads(rows, accessMatch = []) {
+    let total = 0;
+    for (let i = 0; i < rows.length; i += 5000) {
+      const part = rows.slice(i, i + 5000);
+      // eslint-disable-next-line no-await-in-loop
+      const live = await Lead.find(combineFilters({ _id: { $in: part.map((row) => row._id) }, isDeleted: { $ne: true } }, ...accessMatch))
+        .setOptions({ includeDeleted: true })
+        .select('_id').lean();
+      const ids = new Set(live.map((doc) => String(doc._id)));
+      for (const row of part) if (ids.has(String(row._id))) total += row.count;
+    }
+    return total;
   }
 
   async update(id, data, { createdBy } = {}) {

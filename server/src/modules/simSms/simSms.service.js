@@ -143,8 +143,12 @@ class SimSmsService {
     if (!leadIds.length) throw new ValidationError('Select at least one lead');
     if (leadIds.length > MAX_LEADS) throw new ValidationError(`A SIM SMS campaign is limited to ${MAX_LEADS} leads (personal SIM sending limits)`);
 
-    const leads = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
+    // Keep the user's selection order: the first lead with a number keeps it and later
+    // ones are DUPLICATE_NUMBER. The DB's $in result order depends on the query plan.
+    const found = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
       .select('_id name contactName phone mobile address.country status').lean();
+    const byId = new Map(found.map((l) => [String(l._id), l]));
+    const leads = leadIds.map((id) => byId.get(id)).filter(Boolean);
     if (!leads.length) throw new ValidationError('Selected leads are unavailable');
 
     const campaign = await SimSmsCampaign.create({

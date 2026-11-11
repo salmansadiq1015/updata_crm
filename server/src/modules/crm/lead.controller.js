@@ -29,6 +29,14 @@ class LeadController {
     } catch (err) { next(err); }
   }
 
+  /** Header KPIs (total, new this week, by status, hot, unassigned, …). */
+  async stats(req, res, next) {
+    try {
+      const data = await leadService.getStats();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   /**
    * Leads for the map view: the whole filtered set (projected, located-first)
    * plus located/unlocated counts. Not cursor-paginated — the map fits bounds,

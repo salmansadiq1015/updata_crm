@@ -6,13 +6,17 @@ import { workflowBuilderTranslations } from '../workflow-builder-translations';
 import { aiMissionTranslations } from '../ai-mission-translations';
 import { workflowCopilotTranslations } from '../workflow-copilot-translations';
 import { workflowPagesTranslations } from '../workflow-pages-translations';
+import { workflowAssistTranslations } from '../workflow-assist-translations';
+import { PROMPT_KEYS } from '../../../modules/workflowAutomation/ui/builder/copilot-prompts';
+import { DEMO_KEYS } from '../../../modules/workflowAutomation/ui/builder/workflow-demo';
+import { CHECK_KEYS } from '../../../modules/workflowAutomation/ui/builder/workflow-check';
 import { NODE_VISUALS } from '../../../modules/workflowAutomation/lib/node-registry';
 
 /** Workflow Automation shared vocabulary + builder: complete locales, intact placeholders, every used key defined. */
 const LOCALES = ['de', 'fr', 'ar'];
 const placeholders = (s) => (String(s).match(/\{\w+\}/g) || []).sort();
 const all = {
-  en: { ...workflowAutomationTranslations.en, ...workflowBuilderTranslations.en, ...workflowCopilotTranslations.en, ...workflowPagesTranslations.en },
+  en: { ...workflowAutomationTranslations.en, ...workflowBuilderTranslations.en, ...workflowCopilotTranslations.en, ...workflowPagesTranslations.en, ...workflowAssistTranslations.en },
 };
 const moduleDir = path.resolve(__dirname, '../../../modules/workflowAutomation');
 function sources(dir) {
@@ -28,6 +32,7 @@ describe.each([
   ['builder', workflowBuilderTranslations],
   ['AI mission mode', aiMissionTranslations],
   ['copilot', workflowCopilotTranslations],
+  ['voice, prompts & demo', workflowAssistTranslations],
 ])('workflow %s translations', (_, dict) => {
   it('has a non-empty value for every key in every locale with the same placeholders', () => {
     const en = dict.en;
@@ -46,7 +51,7 @@ describe('workflow keys used in code', () => {
   it('defines every static workflow.* / workflowBuilder.* key used by the module', () => {
     const used = new Set();
     for (const src of sources(moduleDir)) {
-      for (const m of src.matchAll(/t\(\s*'((?:workflow|workflowBuilder|workflowCopilot)\.[A-Za-z0-9_.]+)'/g)) used.add(m[1]);
+      for (const m of src.matchAll(/t\(\s*'((?:workflow|workflowBuilder|workflowCopilot|workflowDemo)\.[A-Za-z0-9_.]+)'/g)) used.add(m[1]);
     }
     expect(used.size).toBeGreaterThan(200);
     expect([...used].filter((k) => !(k in all.en))).toEqual([]);
@@ -98,6 +103,7 @@ describe('workflow keys used in code', () => {
     ['invalid_key', 'too_many'].forEach((c) => { need(`workflowBuilder.validation.${c}`); need(`workflowBuilder.fix.${c}`); });
     ['reviewMode', 'proposed', 'apply', 'discard', 'discarded', 'resolvePending', 'appliedChoice'].forEach((k) => need(`workflowCopilot.${k}`));
     need('workflowBuilder.panel.resize');
+    [...PROMPT_KEYS, ...DEMO_KEYS, ...CHECK_KEYS].forEach(need);
     expect(missing).toEqual([]);
   });
 });

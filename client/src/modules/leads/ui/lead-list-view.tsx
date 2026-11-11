@@ -27,6 +27,8 @@ import {
 import { AssignLeadsToAgentDialog } from '@/modules/aiCalling/ui/assign-leads-to-agent-dialog';
 import { showError, showSuccess } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { PageHero, heroButton } from '@/shared/components/page-hero';
+import { LeadHeroStats } from './lead-hero-stats';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useDrawer } from '@/shared/hooks/use-drawer';
@@ -534,23 +536,29 @@ export function LeadListView() {
           {extImportProgress && (
             <ExtensionImportBanner progress={extImportProgress} onDismiss={dismissExtImport} />
           )}
-          {/* Page header */}
-          <div data-slot="page-header" className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="shrink-0 rounded-xl bg-primary/10 p-2.5 ring-1 ring-primary/20">
-                <Target className="h-5 w-5 text-primary" aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-2xl font-semibold tracking-tight leading-tight text-foreground">
-                  {t('leads.title', 'Leads')}
-                </h1>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">
-                  {t('leads.subtitle', 'Prospective customers from business discovery and manual entry')}
-                </p>
-              </div>
-            </div>
+          <PageHero
+            id="leads-title"
+            art="/hero/leads"
+            icon={Target}
+            eyebrow={t('leads.title', 'Leads')}
+            title={t('hero.leads.title', 'Your pipeline, qualified and in motion.')}
+            subtitle={t('leads.subtitle', 'Prospective customers from business discovery and manual entry')}
+            actions={<>
+              {canDiscover && (
+                <Link href="/lead-generation" className={heroButton.ghost}><Radar aria-hidden="true" />{t('leads.discover', 'Find businesses')}</Link>
+              )}
+              {canImport && (
+                <button type="button" className={heroButton.ghost} onClick={() => setImportOpen(true)}><Upload aria-hidden="true" />{t('leads.import.action', 'Import')}</button>
+              )}
+              {canWrite && (
+                <button type="button" className={heroButton.primary} onClick={() => setFormState({ open: true, lead: null })}><Plus aria-hidden="true" />{t('leads.new', 'New lead')}</button>
+              )}
+            </>}
+            stats={<LeadHeroStats listUpdatedAt={query.dataUpdatedAt} onOverdue={() => setSlaOverdueOnly(true)} onHot={() => setFilters({ scoreBand: 'hot' })} />}
+          />
 
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Command bar: layout, SLA/follow-up workflow and lead-quality tools */}
+          <div data-slot="lead-command-bar" className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/80 bg-card/90 p-2 shadow-[0_8px_30px_-18px_rgba(15,23,42,0.35)] backdrop-blur">
               <div
                 role="group"
                 aria-label={t('leads.view.label', 'Layout')}
@@ -571,7 +579,7 @@ export function LeadListView() {
                     onClick={() => setViewMode(mode)}
                     className={cn(
                       'flex h-8 w-8 items-center justify-center rounded-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      viewMode === mode ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                      viewMode === mode ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     <Icon className="h-4 w-4" aria-hidden="true" />
@@ -579,6 +587,7 @@ export function LeadListView() {
                 ))}
               </div>
 
+              <span className="mx-1 hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
               <LeadWorkflowToolbar
                 overdueOnly={slaOverdueOnly}
                 onOverdueOnlyChange={setSlaOverdueOnly}
@@ -591,66 +600,39 @@ export function LeadListView() {
                 <span className="hidden sm:inline">{t('leads.map.open', 'View on map')}</span>
               </Button>
 
-              {canDiscover && (
-                <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link href="/lead-generation">
-                    <Radar className="h-4 w-4" aria-hidden="true" />
-                    {t('leads.discover', 'Find businesses')}
-                  </Link>
-                </Button>
-              )}
-
               {canExport && <LeadExportMenu />}
 
               {/* Lead quality: duplicate review (lead:read; merging needs lead:merge) and scoring config (admin). */}
               {canExport && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link aria-label={t('leads.dup.open')} href="/leads/duplicates">
+                  <Link aria-label={t('leads.dup.open')} title={t('leads.dup.open')} href="/leads/duplicates">
                     <Copy className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">{t('leads.dup.open', 'Duplicates')}</span>
+                    <span className="hidden min-[1760px]:inline">{t('leads.dup.open', 'Duplicates')}</span>
                   </Link>
                 </Button>
               )}
               {(isAdmin || hasPermission('lead:scoring-admin')) && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link aria-label={t('leads.scoring.open')} href="/leads/scoring">
+                  <Link aria-label={t('leads.scoring.open')} title={t('leads.scoring.open')} href="/leads/scoring">
                     <Gauge className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">{t('leads.scoring.open', 'Scoring')}</span>
+                    <span className="hidden min-[1760px]:inline">{t('leads.scoring.open', 'Scoring')}</span>
                   </Link>
                 </Button>
               )}
 
               {canExport && (
                 <Button asChild variant="outline" className="h-9 gap-2">
-                  <Link aria-label={t('experience.outreach')} href="/leads/outreach">
+                  <Link aria-label={t('experience.outreach')} title={t('experience.outreach')} href="/leads/outreach">
                     <Megaphone className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">{t('experience.outreach')}</span>
+                    <span className="hidden min-[1760px]:inline">{t('experience.outreach')}</span>
                   </Link>
                 </Button>
               )}
 
               {/* Chrome Extension connect/status — gated by lead:read (same as
                   the page itself). Does not interfere with existing actions. */}
-              {canExport && <ExtensionConnectCard />}
+              {canExport && <div className="ms-auto"><ExtensionConnectCard /></div>}
 
-              {canImport && (
-                <Button
-                  variant="outline"
-                  className="h-9 gap-2"
-                  onClick={() => setImportOpen(true)}
-                >
-                  <Upload className="h-4 w-4" aria-hidden="true" />
-                  {t('leads.import.action', 'Import')}
-                </Button>
-              )}
-
-              {canWrite && (
-                <Button className="h-9 gap-2" onClick={() => setFormState({ open: true, lead: null })}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  {t('leads.new', 'New lead')}
-                </Button>
-              )}
-            </div>
           </div>
 
           <LeadFilterBar

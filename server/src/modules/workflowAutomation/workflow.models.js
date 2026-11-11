@@ -134,6 +134,12 @@ runSchema.index({ workflowId: 1, status: 1, updatedAt: -1 });
 runSchema.index({ campaignId: 1, status: 1 });
 runSchema.index({ 'wait.kind': 1, status: 1 });
 runSchema.index({ updatedAt: -1 });
+// Read paths (migration 056): analytics windows by creation date, the campaign execution list
+// (sorted by updatedAt) and "recent failures" (partial — only failed runs are indexed).
+runSchema.index({ createdAt: -1 });
+runSchema.index({ workflowId: 1, createdAt: -1 });
+runSchema.index({ campaignId: 1, updatedAt: -1 });
+runSchema.index({ status: 1, completedAt: -1 }, { name: 'status_1_completedAt_-1_failed', partialFilterExpression: { status: 'failed' } });
 
 // ------------------------------------------------------------------------------ Event
 const eventSchema = new mongoose.Schema({
@@ -185,6 +191,9 @@ const campaignSchema = new mongoose.Schema({
   createdBy: { type: ObjectId, ref: 'User', required: true, index: true },
   updatedBy: { type: ObjectId, ref: 'User', default: null },
 }, { timestamps: true, minimize: false });
+// Campaign list (newest first, optionally by status) without sorting the fat documents in memory.
+campaignSchema.index({ createdAt: -1 });
+campaignSchema.index({ status: 1, createdAt: -1 });
 
 // ------------------------------------------------------------------------------ Link
 const linkSchema = new mongoose.Schema({
@@ -206,6 +215,7 @@ const linkSchema = new mongoose.Schema({
 linkSchema.index({ token: 1 }, { unique: true });
 linkSchema.index({ actionKey: 1 }, { unique: true });
 linkSchema.index({ workflowId: 1, createdAt: -1 });
+linkSchema.index({ createdAt: -1 }); // analytics window across all workflows
 
 const model = (name, schema) => mongoose.models[name] || mongoose.model(name, schema);
 export const Workflow = model('Workflow', workflowSchema);

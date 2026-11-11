@@ -153,10 +153,13 @@ class ContactPolicyService {
 
   /** Lead panel: every channel's decision + recent touches. */
   async leadStatus(leadId, now = new Date()) {
-    const channels = {};
-    for (const channel of CONTACT_CHANNELS) channels[channel] = await this.check({ leadId, channel, at: now });
-    const recent = await ContactTouch.find({ leadId, status: { $ne: 'released' } }).sort({ at: -1 }).limit(20)
-      .select('channel source campaignId at status manual policyWarning').lean();
+    // check() is read-only, so the per-channel decisions and the touch list load in parallel.
+    const [decisions, recent] = await Promise.all([
+      Promise.all(CONTACT_CHANNELS.map((channel) => this.check({ leadId, channel, at: now }))),
+      ContactTouch.find({ leadId, status: { $ne: 'released' } }).sort({ at: -1 }).limit(20)
+        .select('channel source campaignId at status manual policyWarning').lean(),
+    ]);
+    const channels = Object.fromEntries(CONTACT_CHANNELS.map((channel, i) => [channel, decisions[i]]));
     const allowedTimes = Object.values(channels).filter((c) => !c.blocked).map((c) => (c.allowed ? now : c.nextAllowedAt)).filter(Boolean);
     return {
       leadId: String(leadId),

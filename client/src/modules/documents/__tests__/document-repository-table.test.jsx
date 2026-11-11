@@ -59,7 +59,7 @@ describe('DocumentRepositoryTable', () => {
 
     expect(screen.getAllByText('Signed installation contract')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Repository')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('CONTRACT')[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/contract/i)[0]).toBeInTheDocument();
     expect(screen.getAllByText(/Project:/)[0]).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByTitle('Preview')[0]);

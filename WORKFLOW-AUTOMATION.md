@@ -240,3 +240,19 @@ Do this on a staging deployment, or on production with **your own phone number /
 - Lead custom fields are editable only by workflows and the API (PATCH `customFields`); the lead form has no editor yet (read-only display).
 - Org isolation: N/A (single-tenant by design; data is scoped by owner / permissions).
 - Deployment: optional `WORKFLOW_EVENT_RETENTION_DAYS`. No migration needed (`customFields` is optional; Map fields need no backfill).
+
+## 7. Copilot assist: timeline, voice, predefined prompts, interactive demo (2026-11-11)
+- **Live timeline** of every copilot turn (`copilot-timeline.tsx`): understanding → resources → thinking rounds (with the model's plan text) → each tool call → check → answer, with client-measured durations; a stall watchdog (45 s) and an error when a stream ends without `done`.
+- **Voice**: mic in the composer → `POST /workflows/:id/copilot/transcribe` (`workflow:write`, 30/min/user, multipart `audio` ≤ 10 MB, kept in memory only, `sttGateway`). Pausing ~2 s after speaking sends automatically; ✓ puts the text in the box instead; ✕ discards. Optional read-aloud of replies (browser speech synthesis, UI language).
+- **Predefined prompts**: context-aware chips above the composer (empty canvas / selected step / problems / general) and a categorised prompt library (build, improve, channels, explain & check).
+- **Interactive demo** (`workflow-demo.tsx`; from the palette “Demo”, the empty canvas and the copilot): 3 scenarios built from real node cards; blocks glide in and link step by step with an explanation + “Do it right” tip; autoplay or click the glowing block; final checklist; “Use as my starting point” (empty canvas only) or “Build this with AI”. Every demo graph passes the server validator except the agent choice, which is left to the user on purpose.
+- Edges: several branches of one step into the same target now show one combined label.
+
+## 8. Test → Full check (2026-11-11)
+- **Endpoint** `POST /workflows/:id/analyze { graph?, leadId? }` (`workflow:write`, 30/min/user, read-only) → `workflow.analysis.js`:
+  1. settings & references (`validate()`: required fields, agents, templates, users, loops, dead ends),
+  2. every step executed in **dry mode** on a sample lead (or a real one) — catches steps that would fail at run time,
+  3. **every path** from the trigger (bounded, ≤ 200): ends with an outcome / open (no End step) / bounded repeat / intentional stop,
+  4. **channels**: AI calling via the same launch preflight a real campaign uses (per agent: cloud line or paired phone), SMS / WhatsApp / email via `messaging.channelReadiness()` (enabled + configured + last recorded provider health; no network calls, no writes).
+- **UI**: the Test button opens **Full check** first (Simulation and Live test stay as tabs). Verdict (Ready / Needs attention / Not ready), stats, channel cards with the manual fix, steps with problems first (problem + how to fix + dry-run result) with **Show on canvas** and **Fix with AI**, all paths with **Show path** (drawn on the canvas) and **Fix with AI** for open paths, **Fix everything with AI** and **Check again**.
+- AI prompts contain only what the copilot can change in the workflow; missing phone lines / providers are shown as set-up tasks for a person.

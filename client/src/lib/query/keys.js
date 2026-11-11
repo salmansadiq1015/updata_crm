@@ -41,6 +41,9 @@ export const queryKeys = {
   documents: {
     all: () => ['documents'],
     list: (filters) => ['documents', 'repository', 'list', filters],
+    stats: () => ['documents', 'repository', 'stats'],
+    facets: () => ['documents', 'repository', 'facets'],
+    linkTargets: (type, search) => ['documents', 'link-targets', type, search],
   },
   catalog: {
     categories: () => ['catalog', 'categories'],

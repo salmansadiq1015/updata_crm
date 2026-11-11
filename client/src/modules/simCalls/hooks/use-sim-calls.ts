@@ -8,6 +8,7 @@ import type { CreateSimCallCampaignInput } from '../types/sim-call-types';
 export const simCallKeys = {
   all: ['sim-calls'] as const,
   list: (params: Record<string, unknown>) => ['sim-calls', 'list', params] as const,
+  stats: ['sim-calls', 'stats'] as const,
   campaign: (id: string) => ['sim-calls', 'campaign', id] as const,
   tasks: (id: string, params: Record<string, unknown>) => ['sim-calls', 'tasks', id, params] as const,
   events: (id: string) => ['sim-calls', 'events', id] as const,
@@ -25,6 +26,11 @@ export function useSimCallCampaigns(params: { status?: string; q?: string; page?
     refetchInterval: 20000,
     placeholderData: (previous) => previous,
   });
+}
+
+/** Totals across every campaign (not just the visible page); mutations invalidate simCallKeys.all. */
+export function useSimCallStats() {
+  return useQuery({ queryKey: simCallKeys.stats, queryFn: () => simCallsApi.stats(), refetchInterval: 30000 });
 }
 
 export function useSimCallCampaign(id: string | null) {

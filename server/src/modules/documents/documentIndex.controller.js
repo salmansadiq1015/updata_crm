@@ -13,8 +13,45 @@ class DocumentIndexController {
   async listAttachable(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const data = await documentIndexService.listAttachable(query);
+      const data = await documentIndexService.listAttachable(query, req.user);
       return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async stats(req, res, next) {
+    try {
+      res.set('Cache-Control', 'private, max-age=15');
+      return res.success({ data: await documentIndexService.stats(req.user) });
+    } catch (err) { next(err); }
+  }
+
+  async facets(req, res, next) {
+    try {
+      res.set('Cache-Control', 'private, max-age=120');
+      return res.success({ data: await documentIndexService.facets() });
+    } catch (err) { next(err); }
+  }
+
+  async linkTargets(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      return res.success({ data: await documentIndexService.linkTargets(query, req.user) });
+    } catch (err) { next(err); }
+  }
+
+  async update(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await documentIndexService.updateMetadata(req.params.id, req.body, req.user, meta);
+      return res.success({ data, message: 'Document updated' });
+    } catch (err) { next(err); }
+  }
+
+  async bulk(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await documentIndexService.bulk(req.body.action, req.body.ids, req.user, meta);
+      return res.success({ data, message: `${data.succeeded} of ${data.total} documents updated` });
     } catch (err) { next(err); }
   }
 

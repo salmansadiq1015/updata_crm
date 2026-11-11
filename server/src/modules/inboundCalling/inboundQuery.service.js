@@ -24,6 +24,7 @@ import { pricedCost } from '../aiCalling/callAnalytics.service.js';
 
 const { ObjectId } = mongoose.Types;
 const SORTS = { newest: { createdAt: -1, _id: -1 }, oldest: { createdAt: 1, _id: 1 }, longest: { durationSeconds: -1, _id: -1 } };
+const LIST_COUNT_CAP = 10000;
 const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Owner of the phone, or the person the call is assigned to; supervisors (inbound-calls:admin) see all.
@@ -97,6 +98,47 @@ async function leadsFor(rows) {
   return new Map(leads.map((l) => [String(l._id), l]));
 }
 
+const STATS_GROUP = {
+  _id: null,
+  total: { $sum: 1 },
+  ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } },
+  human: { $sum: { $cond: [{ $eq: ['$answeredBy', 'human'] }, 1, 0] } },
+  missed: { $sum: { $cond: [{ $eq: ['$status', 'MISSED'] }, 1, 0] } },
+  rejected: { $sum: { $cond: [{ $eq: ['$status', 'REJECTED'] }, 1, 0] } },
+  completed: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
+  failed: { $sum: { $cond: [{ $in: ['$status', ['FAILED', 'INTERRUPTED']] }, 1, 0] } },
+  active: { $sum: { $cond: [{ $in: ['$status', [...ACTIVE_STATUSES]] }, 1, 0] } },
+  newLeads: { $sum: { $cond: ['$leadCreated', 1, 0] } },
+  existing: { $sum: { $cond: [{ $eq: ['$match.status', 'existing'] }, 1, 0] } },
+  qualified: { $sum: { $cond: [{ $eq: ['$qualification.result', 'QUALIFIED'] }, 1, 0] } },
+  callbacks: { $sum: { $cond: ['$callback.requested', 1, 0] } },
+  escalations: { $sum: { $cond: ['$handoff.requested', 1, 0] } },
+  answeredDuration: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', 0] } },
+  answeredCount: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, 1, 0] } },
+  aiAttempted: { $sum: { $cond: [{ $eq: ['$handling.mode', 'ai'] }, 1, 0] } },
+  aiSucceeded: { $sum: { $cond: [{ $and: [{ $eq: ['$answeredBy', 'ai'] }, { $eq: ['$status', 'COMPLETED'] }] }, 1, 0] } },
+  aiFailed: { $sum: { $cond: [{ $and: [{ $eq: ['$handling.mode', 'ai'] }, { $or: [{ $in: ['$status', ['FAILED', 'INTERRUPTED']] }, { $eq: ['$aiStatus', 'unavailable'] }] }] }, 1, 0] } },
+};
+
+function presentStats(agg) {
+  const s = agg || {};
+  const rate = (a, b) => (b ? Math.round((1000 * a) / b) / 10 : null);
+  return {
+    total: s.total || 0, answeredByAi: s.ai || 0, answeredByHuman: s.human || 0, missed: s.missed || 0, rejected: s.rejected || 0,
+    completed: s.completed || 0, failed: s.failed || 0, active: s.active || 0, newLeads: s.newLeads || 0, existingLeads: s.existing || 0,
+    qualified: s.qualified || 0, callbacks: s.callbacks || 0, escalations: s.escalations || 0,
+    averageDurationSeconds: s.answeredCount ? Math.round(s.answeredDuration / s.answeredCount) : null,
+    aiSuccessRate: rate(s.aiSucceeded || 0, s.aiAttempted || 0),
+    aiFailureRate: rate(s.aiFailed || 0, s.aiAttempted || 0),
+    answerRate: rate((s.ai || 0) + (s.human || 0), s.total || 0),
+    aiAnswerRate: rate(s.ai || 0, s.total || 0),
+    missedRate: rate(s.missed || 0, s.total || 0),
+    qualificationRate: rate(s.qualified || 0, s.ai || 0),
+    callbackRate: rate(s.callbacks || 0, (s.ai || 0)),
+    escalationRate: rate(s.escalations || 0, (s.ai || 0)),
+  };
+}
+
 class InboundQueryService {
   async list(viewer, q = {}) {
     const page = Math.max(1, Number(q.page) || 1);
@@ -104,10 +146,11 @@ class InboundQueryService {
     const filter = buildFilter(viewer, q);
     const [rows, total] = await Promise.all([
       InboundCall.find(filter).sort(SORTS[q.sort] || SORTS.newest).skip((page - 1) * limit).limit(limit).select(LIST_FIELDS).lean(),
-      InboundCall.countDocuments(filter),
+      // Bounded count (filters such as isTest are not indexed); past the cap `total` is a lower bound.
+      InboundCall.countDocuments(filter, { limit: LIST_COUNT_CAP }),
     ]);
     const leads = await leadsFor(rows);
-    return { data: rows.map((r) => presentRow(r, leads)), pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+    return { data: rows.map((r) => presentRow(r, leads)), pagination: { page, limit, total, pages: Math.ceil(total / limit), totalCapped: total >= LIST_COUNT_CAP } };
   }
 
   async live(viewer) {
@@ -202,75 +245,52 @@ class InboundQueryService {
 
   /** Overview cards. All counts from stored records in the window. */
   async stats(viewer, q = {}) {
-    const match = buildFilter(viewer, q);
-    const [agg] = await InboundCall.aggregate([
-      { $match: match },
-      { $group: {
-        _id: null,
-        total: { $sum: 1 },
-        ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } },
-        human: { $sum: { $cond: [{ $eq: ['$answeredBy', 'human'] }, 1, 0] } },
-        missed: { $sum: { $cond: [{ $eq: ['$status', 'MISSED'] }, 1, 0] } },
-        rejected: { $sum: { $cond: [{ $eq: ['$status', 'REJECTED'] }, 1, 0] } },
-        completed: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
-        failed: { $sum: { $cond: [{ $in: ['$status', ['FAILED', 'INTERRUPTED']] }, 1, 0] } },
-        active: { $sum: { $cond: [{ $in: ['$status', [...ACTIVE_STATUSES]] }, 1, 0] } },
-        newLeads: { $sum: { $cond: ['$leadCreated', 1, 0] } },
-        existing: { $sum: { $cond: [{ $eq: ['$match.status', 'existing'] }, 1, 0] } },
-        qualified: { $sum: { $cond: [{ $eq: ['$qualification.result', 'QUALIFIED'] }, 1, 0] } },
-        callbacks: { $sum: { $cond: ['$callback.requested', 1, 0] } },
-        escalations: { $sum: { $cond: ['$handoff.requested', 1, 0] } },
-        answeredDuration: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, '$durationSeconds', 0] } },
-        answeredCount: { $sum: { $cond: [{ $gt: ['$durationSeconds', 0] }, 1, 0] } },
-        aiAttempted: { $sum: { $cond: [{ $eq: ['$handling.mode', 'ai'] }, 1, 0] } },
-        aiSucceeded: { $sum: { $cond: [{ $and: [{ $eq: ['$answeredBy', 'ai'] }, { $eq: ['$status', 'COMPLETED'] }] }, 1, 0] } },
-        aiFailed: { $sum: { $cond: [{ $and: [{ $eq: ['$handling.mode', 'ai'] }, { $or: [{ $in: ['$status', ['FAILED', 'INTERRUPTED']] }, { $eq: ['$aiStatus', 'unavailable'] }] }] }, 1, 0] } },
-      } },
-    ]);
-    const s = agg || {};
-    const rate = (a, b) => (b ? Math.round((1000 * a) / b) / 10 : null);
-    return {
-      total: s.total || 0, answeredByAi: s.ai || 0, answeredByHuman: s.human || 0, missed: s.missed || 0, rejected: s.rejected || 0,
-      completed: s.completed || 0, failed: s.failed || 0, active: s.active || 0, newLeads: s.newLeads || 0, existingLeads: s.existing || 0,
-      qualified: s.qualified || 0, callbacks: s.callbacks || 0, escalations: s.escalations || 0,
-      averageDurationSeconds: s.answeredCount ? Math.round(s.answeredDuration / s.answeredCount) : null,
-      aiSuccessRate: rate(s.aiSucceeded || 0, s.aiAttempted || 0),
-      aiFailureRate: rate(s.aiFailed || 0, s.aiAttempted || 0),
-      answerRate: rate((s.ai || 0) + (s.human || 0), s.total || 0),
-      aiAnswerRate: rate(s.ai || 0, s.total || 0),
-      missedRate: rate(s.missed || 0, s.total || 0),
-      qualificationRate: rate(s.qualified || 0, s.ai || 0),
-      callbackRate: rate(s.callbacks || 0, (s.ai || 0)),
-      escalationRate: rate(s.escalations || 0, (s.ai || 0)),
-    };
+    const [agg] = await InboundCall.aggregate([{ $match: buildFilter(viewer, q) }, { $group: STATS_GROUP }]);
+    return presentStats(agg);
   }
 
+  /**
+   * Charts + the summary cards in ONE pass over the window ($facet), instead of eleven
+   * aggregations re-reading the same calls. Only the fields the groups use are carried in.
+   */
   async analytics(viewer, q = {}) {
     const match = buildFilter(viewer, q);
     const tz = q.tz || 'UTC';
-    const group = (key) => InboundCall.aggregate([{ $match: match }, { $group: { _id: key, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 20 }]);
-    const [byDay, byInquiry, byOutcome, byQualification, byDevice, bySim, byAgent, byLanguage, byHour, services] = await Promise.all([
-      InboundCall.aggregate([{ $match: match }, { $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } },
-        total: { $sum: 1 },
-        ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } },
-        human: { $sum: { $cond: [{ $eq: ['$answeredBy', 'human'] }, 1, 0] } },
-        missed: { $sum: { $cond: [{ $eq: ['$status', 'MISSED'] }, 1, 0] } },
-        qualified: { $sum: { $cond: [{ $eq: ['$qualification.result', 'QUALIFIED'] }, 1, 0] } },
-        newLeads: { $sum: { $cond: ['$leadCreated', 1, 0] } },
-      } }, { $sort: { _id: 1 } }]),
-      group('$intents.primary'), group('$outcome'), group('$qualification.result'),
-      InboundCall.aggregate([{ $match: match }, { $group: { _id: { id: '$deviceId', name: '$deviceName' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      group('$simSlot'),
-      InboundCall.aggregate([{ $match: match }, { $group: { _id: { id: '$handling.agentId', name: '$handling.agentName' }, count: { $sum: 1 }, ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } } } }, { $sort: { count: -1 } }]),
-      group('$language.current'),
-      InboundCall.aggregate([{ $match: match }, { $group: { _id: { $hour: { date: '$createdAt', timezone: tz } }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
-      InboundCall.aggregate([{ $match: match }, { $unwind: '$fields' }, { $match: { 'fields.key': 'service_interest', 'fields.supersededAt': null, 'fields.explicit': true } },
-        { $group: { _id: { $toLower: { $trim: { input: '$fields.value' } } }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
+    const group = (key) => [{ $group: { _id: key, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 20 }];
+    const [facets] = await InboundCall.aggregate([
+      { $match: match },
+      { $project: {
+        _id: 0, createdAt: 1, answeredBy: 1, status: 1, aiStatus: 1, leadCreated: 1, outcome: 1, durationSeconds: 1, deviceId: 1, deviceName: 1, simSlot: 1,
+        'match.status': 1, 'qualification.result': 1, 'callback.requested': 1, 'handoff.requested': 1, 'intents.primary': 1, 'language.current': 1,
+        'handling.mode': 1, 'handling.agentId': 1, 'handling.agentName': 1,
+        services: { $filter: { input: { $ifNull: ['$fields', []] }, as: 'f', cond: { $and: [
+          { $eq: ['$$f.key', 'service_interest'] }, { $eq: [{ $ifNull: ['$$f.supersededAt', null] }, null] }, { $eq: ['$$f.explicit', true] },
+        ] } } },
+      } },
+      { $facet: {
+        summary: [{ $group: STATS_GROUP }],
+        byDay: [{ $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz } },
+          total: { $sum: 1 },
+          ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } },
+          human: { $sum: { $cond: [{ $eq: ['$answeredBy', 'human'] }, 1, 0] } },
+          missed: { $sum: { $cond: [{ $eq: ['$status', 'MISSED'] }, 1, 0] } },
+          qualified: { $sum: { $cond: [{ $eq: ['$qualification.result', 'QUALIFIED'] }, 1, 0] } },
+          newLeads: { $sum: { $cond: ['$leadCreated', 1, 0] } },
+        } }, { $sort: { _id: 1 } }],
+        byInquiry: group('$intents.primary'), byOutcome: group('$outcome'), byQualification: group('$qualification.result'),
+        byDevice: [{ $group: { _id: { id: '$deviceId', name: '$deviceName' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }],
+        bySim: group('$simSlot'),
+        byAgent: [{ $group: { _id: { id: '$handling.agentId', name: '$handling.agentName' }, count: { $sum: 1 }, ai: { $sum: { $cond: [{ $eq: ['$answeredBy', 'ai'] }, 1, 0] } } } }, { $sort: { count: -1 } }],
+        byLanguage: group('$language.current'),
+        byHour: [{ $group: { _id: { $hour: { date: '$createdAt', timezone: tz } }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
+        services: [{ $unwind: '$services' }, { $group: { _id: { $toLower: { $trim: { input: '$services.value' } } }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }],
+      } },
     ]);
+    const { summary, byDay, byInquiry, byOutcome, byQualification, byDevice, bySim, byAgent, byLanguage, byHour, services } = facets;
     const rows = (list) => list.filter((r) => r._id !== null && r._id !== undefined).map((r) => ({ key: r._id, count: r.count }));
     return {
-      summary: await this.stats(viewer, q),
+      summary: presentStats(summary[0]),
       series: byDay.map((d) => ({ date: d._id, total: d.total, ai: d.ai, human: d.human, missed: d.missed, qualified: d.qualified, newLeads: d.newLeads })),
       byInquiry: rows(byInquiry), byOutcome: rows(byOutcome), byQualification: rows(byQualification),
       byDevice: byDevice.filter((r) => r._id?.id).map((r) => ({ key: String(r._id.id), label: r._id.name, count: r.count })),

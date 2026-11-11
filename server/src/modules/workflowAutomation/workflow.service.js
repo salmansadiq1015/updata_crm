@@ -20,8 +20,9 @@ import { nextScheduleFire } from './engine/time.js';
 import { HANDLERS } from './engine/handlers.js';
 import { buildTemplate, TEMPLATE_META } from './workflow.templates.js';
 import { trackedBaseUrl } from './workflowLink.service.js';
+import { bumpWorkflowReadGeneration, cachedRead, READ_TTL } from './workflow.readCache.js';
 import {
-  ACTIVE_RUN_STATUSES, CALL_OUTCOME_FILTERS, CONDITION_OPERATORS, END_OUTCOMES, LEAD_STATUSES, LIMITS,
+  ACTIVE_RUN_STATUSES, CALL_OUTCOME_FILTERS, CONDITION_OPERATORS, END_OUTCOMES, LEAD_STATUSES, LIMITS, RUN_STATUSES,
   NODE_CATALOG, WAITABLE_EVENTS, WORKFLOW_QUEUE,
 } from './workflow.constants.js';
 import auditService from '../auth/audit.service.js';
@@ -31,8 +32,13 @@ const str = (v) => (v == null ? null : String(v));
 const oid = (v) => new mongoose.Types.ObjectId(String(v));
 const DAY = 86_400_000;
 const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MESSAGE_STEP_TYPES = ['msg.sms', 'msg.whatsapp', 'msg.email'];
+const ANALYTICS_STEP_TYPES = ['ai.call', ...MESSAGE_STEP_TYPES];
 
 function audit(eventType, user, meta, details) {
+  // Every audited write changes what the dashboards show: drop the cached reads
+  // (the generation switches synchronously in-process; the Redis copy follows).
+  void bumpWorkflowReadGeneration();
   auditService.logEvent({ eventType, module: 'workflow', userId: user, ipAddress: meta?.ipAddress || 'internal', userAgent: meta?.userAgent, result: 'success', details });
 }
 
@@ -73,11 +79,19 @@ class WorkflowService {
         .skip((page - 1) * limit).limit(limit).populate('createdBy', 'firstName lastName').populate('updatedBy', 'firstName lastName').lean(),
       Workflow.countDocuments(filter),
     ]);
-    const stats = await this._runStats(items.map((w) => w._id));
+    const stats = await this._cachedRunStats(items.map((w) => w._id));
     return {
       items: items.map((w) => ({ ...w, stats: stats.get(String(w._id)) || emptyStats() })),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     };
+  }
+
+  /** Run counters for a page of workflows, cached briefly (the list pages poll every 30 s). */
+  async _cachedRunStats(ids) {
+    if (!ids.length) return new Map();
+    const key = crypto.createHash('sha1').update(ids.map(String).sort().join(',')).digest('base64url');
+    const obj = await cachedRead('runStats', [key], READ_TTL.runStats, async () => Object.fromEntries(await this._runStats(ids)));
+    return new Map(Object.entries(obj));
   }
 
   async _runStats(ids) {
@@ -305,6 +319,22 @@ class WorkflowService {
    * Simulate the draft on a real lead WITHOUT side-effects: conditions read the real lead,
    * actions are simulated, waits pass immediately. `options` steer simulated outcomes.
    */
+  /** "Full check": settings, every step (dry), every path, live channels. Read-only. */
+  async analyze(id, { graph: overrideGraph = null, leadId = null } = {}) {
+    const wf = await Workflow.findById(id).select('name draft settings').lean();
+    if (!wf) throw new NotFoundError('Workflow', id);
+    const graph = overrideGraph ? sanitizeGraph(overrideGraph) : wf.draft;
+    const validation = await this.validate(graph);
+    let lead = null;
+    if (leadId) {
+      const { default: Lead } = await import('../crm/lead.model.js');
+      lead = await Lead.findById(leadId).select('-qualification.history').lean();
+      if (!lead || lead.isDeleted) throw new NotFoundError('Lead', leadId);
+    }
+    const { analyzeWorkflow } = await import('./workflow.analysis.js');
+    return analyzeWorkflow({ workflow: wf, graph, validation, lead });
+  }
+
   async test(id, { leadId, graph: overrideGraph = null, options = {} } = {}) {
     const wf = await Workflow.findById(id).select('name draft settings').lean();
     if (!wf) throw new NotFoundError('Workflow', id);
@@ -451,6 +481,7 @@ class WorkflowService {
     const selected = leads.length;
     const enrolledTotal = await WorkflowRun.countDocuments({ campaignId: campaign._id });
     await WorkflowCampaign.updateOne({ _id: campaign._id }, { $set: { 'counts.selected': selected, 'counts.enrolled': enrolledTotal, 'counts.skipped': skipped.length, skipped: skipped.slice(0, 1000) } });
+    await bumpWorkflowReadGeneration();
     return { selected, enrolled, skipped: skipped.length };
   }
 
@@ -489,15 +520,24 @@ class WorkflowService {
     if (leadId) filter.leadId = leadId;
     if (status === 'active') filter.status = { $in: ACTIVE_RUN_STATUSES };
     else if (status) filter.status = status;
-    const [items, total] = await Promise.all([
-      WorkflowRun.find(filter).select('-steps.output -context -visits').sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit)
-        .populate('workflowId', 'name').populate('leadId', 'name leadNumber status').lean(),
-      WorkflowRun.countDocuments(filter),
+    // Every run has a status: spelling it out lets { workflowId, status, updatedAt } serve the
+    // updatedAt sort as a merge of per-status ranges instead of a blocking in-memory sort.
+    else if (workflowId && !campaignId && !leadId) filter.status = { $in: RUN_STATUSES };
+    const match = { ...filter };
+    for (const key of ['workflowId', 'campaignId', 'leadId']) if (match[key]) match[key] = oid(match[key]);
+    const [rows, total] = await Promise.all([
+      // Runs are fat (steps with outputs, context, trigger payloads): page and sort on the
+      // index, then project only the step count and the last step instead of the whole array.
+      WorkflowRun.aggregate([
+        { $match: match }, { $sort: { updatedAt: -1 } }, { $skip: (page - 1) * limit }, { $limit: limit },
+        { $project: { context: 0, visits: 0 } },
+        { $set: { stepTotal: { $size: { $ifNull: ['$steps', []] } }, currentStep: { $ifNull: [{ $arrayElemAt: ['$steps', -1] }, null] } } },
+        { $project: { steps: 0, 'currentStep.output': 0 } },
+      ]),
+      Object.keys(filter).length ? WorkflowRun.countDocuments(filter) : WorkflowRun.estimatedDocumentCount(),
     ]);
-    return {
-      items: items.map((r) => ({ ...r, stepTotal: r.steps?.length || 0, currentStep: r.steps?.[r.steps.length - 1] || null, steps: undefined })),
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
-    };
+    const items = await WorkflowRun.populate(rows, [{ path: 'workflowId', select: 'name' }, { path: 'leadId', select: 'name leadNumber status' }]);
+    return { items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
   async getRun(id) {
@@ -531,57 +571,82 @@ class WorkflowService {
     const [items, total] = await Promise.all([
       WorkflowEvent.find(filter).sort({ at: -1 }).skip((page - 1) * limit).limit(limit)
         .populate('workflowId', 'name').populate('leadId', 'name leadNumber').populate('actor', 'firstName lastName').lean(),
-      WorkflowEvent.countDocuments(filter),
+      // The unfiltered timeline is the default view: read the total from collection metadata
+      // instead of counting an append-only log that grows without bound.
+      Object.keys(filter).length ? WorkflowEvent.countDocuments(filter) : WorkflowEvent.estimatedDocumentCount(),
     ]);
     return { items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
   // ------------------------------------------------------------------------ analytics
+  /**
+   * Dashboard KPIs. Cached for READ_TTL.analytics seconds (key includes the write generation,
+   * so a publish / campaign / manual action shows up immediately; background run progress
+   * within the TTL).
+   */
   async analytics({ days = 30, workflowId = null } = {}) {
-    const since = new Date(Date.now() - days * DAY);
+    return cachedRead('analytics', [days, workflowId ? String(workflowId) : 'all'], READ_TTL.analytics, () => this._analytics({ days, workflowId }));
+  }
+
+  async _analytics({ days = 30, workflowId = null } = {}) {
+    // The window is exactly the `days` UTC calendar days shown in the timeline, so the timeline
+    // always adds up to the execution totals (a rolling now-N*24h window left runs from the
+    // partial first day in the totals but outside every timeline bucket).
+    const since = new Date(Math.floor(Date.now() / DAY) * DAY - (days - 1) * DAY);
     const scope = workflowId ? { workflowId: oid(workflowId) } : {};
-    const [wfCounts, runCounts, outcomes, stepAgg, contacts, series, top, links, recentFailures] = await Promise.all([
+    const window = { ...scope, createdAt: { $gte: since } };
+    // One pass over the window's runs (index on createdAt / workflowId+createdAt). The steps
+    // array is reduced to the four fields the KPIs read before anything is grouped, instead of
+    // six separate aggregations that each fetched and unwound the full run documents.
+    const [wfCounts, [facets], links, recentFailures] = await Promise.all([
       Workflow.aggregate([{ $match: workflowId ? { _id: oid(workflowId) } : { archivedAt: null } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
-      WorkflowRun.aggregate([{ $match: { ...scope, createdAt: { $gte: since } } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
-      WorkflowRun.aggregate([{ $match: { ...scope, createdAt: { $gte: since }, outcome: { $ne: null } } }, { $group: { _id: '$outcome', n: { $sum: 1 } } }]),
       WorkflowRun.aggregate([
-        { $match: { ...scope, createdAt: { $gte: since } } }, { $unwind: '$steps' },
-        { $match: { 'steps.type': { $in: ['ai.call', 'msg.sms', 'msg.whatsapp', 'msg.email'] } } },
-        { $group: { _id: { t: '$steps.type', p: '$steps.port', s: '$steps.status' }, n: { $sum: 1 } } },
-      ]),
-      WorkflowRun.aggregate([{ $match: { ...scope, createdAt: { $gte: since } } }, { $group: { _id: '$leadId' } }, { $count: 'n' }]),
-      WorkflowRun.aggregate([
-        { $match: { ...scope, createdAt: { $gte: since } } },
-        { $group: { _id: { d: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, s: '$status' }, n: { $sum: 1 } } },
-      ]),
-      WorkflowRun.aggregate([
-        { $match: { ...scope, createdAt: { $gte: since } } },
-        { $group: { _id: '$workflowId', runs: { $sum: 1 }, completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }, failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } } } },
-        { $sort: { runs: -1 } }, { $limit: 8 },
-        { $lookup: { from: 'workflows', localField: '_id', foreignField: '_id', as: 'wf', pipeline: [{ $project: { name: 1, status: 1 } }] } },
-      ]),
-      WorkflowLink.aggregate([{ $match: { ...scope, createdAt: { $gte: since } } }, { $group: { _id: { $ifNull: ['$kind', 'link'] }, links: { $sum: 1 }, clicked: { $sum: { $cond: [{ $gt: ['$humanClicks', 0] }, 1, 0] } }, human: { $sum: '$humanClicks' }, scanner: { $sum: '$scannerHits' } } }]),
+        { $match: window },
+        { $project: {
+          _id: 0, status: 1, outcome: 1, leadId: 1, workflowId: 1, createdAt: 1,
+          steps: { $map: {
+            input: { $filter: { input: { $ifNull: ['$steps', []] }, as: 's', cond: { $in: ['$$s.type', ANALYTICS_STEP_TYPES] } } },
+            as: 's', in: { t: '$$s.type', p: '$$s.port', s: '$$s.status', r: '$$s.output.recipientId' },
+          } },
+        } },
+        { $facet: {
+          status: [{ $group: { _id: '$status', n: { $sum: 1 } } }],
+          outcomes: [{ $match: { outcome: { $ne: null } } }, { $group: { _id: '$outcome', n: { $sum: 1 } } }],
+          contacts: [{ $group: { _id: '$leadId' } }, { $count: 'n' }],
+          series: [{ $group: { _id: { d: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, s: '$status' }, n: { $sum: 1 } } }],
+          top: [
+            { $group: { _id: '$workflowId', runs: { $sum: 1 }, completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }, failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } } } },
+            { $sort: { runs: -1, _id: 1 } }, { $limit: 8 },
+          ],
+          steps: [{ $unwind: '$steps' }, { $group: { _id: { t: '$steps.t', p: '$steps.p', s: '$steps.s' }, n: { $sum: 1 } } }],
+          // Delivered = provider-confirmed delivery of workflow messages (messaging is the source of truth).
+          recipients: [
+            { $unwind: '$steps' }, { $match: { 'steps.t': { $in: MESSAGE_STEP_TYPES }, 'steps.p': 'sent', 'steps.r': { $nin: [null, ''] } } },
+            { $limit: 20000 }, { $group: { _id: null, ids: { $push: '$steps.r' } } },
+          ],
+        } },
+      ]).allowDiskUse(true),
+      WorkflowLink.aggregate([{ $match: window }, { $group: { _id: { $ifNull: ['$kind', 'link'] }, links: { $sum: 1 }, clicked: { $sum: { $cond: [{ $gt: ['$humanClicks', 0] }, 1, 0] } }, human: { $sum: '$humanClicks' }, scanner: { $sum: '$scannerHits' } } }]),
       WorkflowRun.find({ ...scope, status: 'failed', completedAt: { $gte: since } }).select('workflowId leadId error completedAt').sort({ completedAt: -1 }).limit(8)
         .populate('workflowId', 'name').populate('leadId', 'name leadNumber').lean(),
     ]);
+    const { status: runCounts, outcomes, contacts, series, top, steps: stepAgg, recipients } = facets;
     const byKey = (rows) => Object.fromEntries(rows.map((r) => [r._id, r.n]));
     const runs = byKey(runCounts);
     const steps = { calls: 0, answered: 0, unanswered: 0, messagesSent: 0, messagesBlocked: 0 };
-    const messageCampaignIds = [];
     for (const r of stepAgg) {
       if (r._id.t === 'ai.call' && r._id.s !== 'running') { if (r._id.p !== 'blocked') steps.calls += r.n; if (r._id.p === 'answered') steps.answered += r.n; if (r._id.p === 'unanswered') steps.unanswered += r.n; }
       if (r._id.t.startsWith('msg.') && r._id.p === 'sent') steps.messagesSent += r.n;
       if (r._id.t.startsWith('msg.') && r._id.p === 'blocked') steps.messagesBlocked += r.n;
     }
-    // Delivered = provider-confirmed delivery of workflow messages (messaging is the source of truth).
-    const msgRuns = await WorkflowRun.aggregate([
-      { $match: { ...scope, createdAt: { $gte: since } } }, { $unwind: '$steps' },
-      { $match: { 'steps.type': { $in: ['msg.sms', 'msg.whatsapp', 'msg.email'] }, 'steps.port': 'sent' } },
-      { $project: { r: '$steps.output.recipientId' } }, { $limit: 20000 },
+    const messageRecipientIds = (recipients[0]?.ids || []).filter((r) => mongoose.isValidObjectId(r)).map(oid);
+    const [delivered, topNames] = await Promise.all([
+      messageRecipientIds.length
+        ? import('../messaging/messageRecipient.model.js').then(({ default: MessageRecipient }) => MessageRecipient.countDocuments({ _id: { $in: messageRecipientIds }, status: { $in: ['delivered', 'read'] } }))
+        : 0,
+      top.length ? Workflow.find({ _id: { $in: top.map((t) => t._id) } }).select('name status').lean() : [],
     ]);
-    for (const m of msgRuns) if (m.r && mongoose.isValidObjectId(m.r)) messageCampaignIds.push(oid(m.r));
-    const { default: MessageRecipient } = await import('../messaging/messageRecipient.model.js');
-    const delivered = messageCampaignIds.length ? await MessageRecipient.countDocuments({ _id: { $in: messageCampaignIds }, status: { $in: ['delivered', 'read'] } }) : 0;
+    const wfById = new Map(topNames.map((w) => [String(w._id), w]));
     const totalRuns = Object.values(runs).reduce((a, b) => a + b, 0);
     const outcomeMap = byKey(outcomes);
     const finished = (runs.completed || 0) + (runs.failed || 0) + (runs.skipped || 0);
@@ -589,7 +654,7 @@ class WorkflowService {
     const seriesMap = new Map();
     for (const r of series) { const row = seriesMap.get(r._id.d) || { date: r._id.d, started: 0, completed: 0, failed: 0 }; row.started += r.n; if (r._id.s === 'completed') row.completed += r.n; if (r._id.s === 'failed') row.failed += r.n; seriesMap.set(r._id.d, row); }
     const timeline = [];
-    for (let d = days - 1; d >= 0; d -= 1) { const key = new Date(Date.now() - d * DAY).toISOString().slice(0, 10); timeline.push(seriesMap.get(key) || { date: key, started: 0, completed: 0, failed: 0 }); }
+    for (let d = 0; d < days; d += 1) { const key = new Date(since.getTime() + d * DAY).toISOString().slice(0, 10); timeline.push(seriesMap.get(key) || { date: key, started: 0, completed: 0, failed: 0 }); }
     const wfMap = byKey(wfCounts);
     return {
       range: { days, since },
@@ -607,7 +672,7 @@ class WorkflowService {
       outcomes: outcomeMap, qualified: outcomeMap.qualified || 0,
       conversionRate: totalRuns ? Math.round((conversions / totalRuns) * 1000) / 10 : null,
       timeline,
-      topWorkflows: top.map((t) => ({ workflowId: t._id, name: t.wf?.[0]?.name || '—', status: t.wf?.[0]?.status || null, runs: t.runs, completed: t.completed, failed: t.failed, successRate: (t.completed + t.failed) ? Math.round((t.completed / (t.completed + t.failed)) * 1000) / 10 : null })),
+      topWorkflows: top.map((t) => { const wf = wfById.get(String(t._id)); return { workflowId: t._id, name: wf?.name || '—', status: wf?.status || null, runs: t.runs, completed: t.completed, failed: t.failed, successRate: (t.completed + t.failed) ? Math.round((t.completed / (t.completed + t.failed)) * 1000) / 10 : null }; }),
       recentFailures,
     };
   }

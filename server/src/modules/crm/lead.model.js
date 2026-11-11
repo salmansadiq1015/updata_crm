@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { businessIdentityKeys, BUSINESS_IDENTITY_INDEX } from './leadIdentity.js';
 import { canonicalizeLeadAddress } from './leadGeography.js';
 import { QUALIFICATION_ANSWER_SOURCES, TRANSCRIPT_QUOTE_MAX } from './leadQualification.constants.js';
+import { registerLeadCacheInvalidation } from './leadCache.js';
 
 /**
  * Lead — a prospective customer (own `leads` collection), numbered L-##### via
@@ -411,6 +412,13 @@ leadSchema.index({ email: 1 }); // duplicate detection
 leadSchema.index({ scoreValue: -1, _id: -1 }); // sort by score (no isDeleted prefix: it would hijack _id $in plans)
 leadSchema.index({ 'score.band': 1 }); // band filter
 leadSchema.index({ mergedInto: 1 }, { partialFilterExpression: { mergedInto: { $type: 'objectId' } } });
+// Leads list (migration 053): the default sort (newest first) and the
+// business-category / name-sorted views, each with the _id tie-breaker the
+// cursor pagination sorts on, so a page is an index walk instead of an
+// in-memory sort over every live lead.
+leadSchema.index({ isDeleted: 1, createdAt: -1, _id: -1 }, { name: 'lead_list_recent' });
+leadSchema.index({ 'sourceMetadata.businessType': 1, createdAt: -1, _id: -1 }, { name: 'lead_list_business_type' });
+leadSchema.index({ name: 1, _id: 1 }, { name: 'lead_list_name' });
 leadSchema.index(
   { name: 'text', 'address.city': 'text', email: 'text' },
   { weights: { name: 10, email: 5, 'address.city': 2 } },
@@ -424,6 +432,9 @@ leadSchema.pre('validate', function canonicalizeAddress() {
   this.address = canonicalizeLeadAddress(address, { source: this.source || 'model' });
   this.businessIdentityKeys = businessIdentityKeys(this.toObject({ depopulate: true }));
 });
+
+// Every write bumps the lead aggregate cache generation (leadCache.js).
+registerLeadCacheInvalidation(leadSchema);
 
 // --- Soft-delete pre-hook ---
 leadSchema.pre(/^find/, function () {

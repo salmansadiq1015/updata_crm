@@ -22,7 +22,8 @@ vi.mock('@/stores/auth-store', () => ({ useAuthStore: { getState: () => ({ acces
 vi.mock('@/modules/auth/services/session-refresh-service', () => ({ refreshSession: refresh }));
 vi.mock('@/lib/api/config', () => ({ API_URL: 'http://api.test/api/v1' }));
 
-const { streamCopilot } = await import('../services/copilot-stream');
+const { streamCopilot, CopilotStreamError } = await import('../services/copilot-stream');
+const { timelineReduce, startTimeline } = await import('../ui/builder/copilot-timeline');
 const { CopilotPanel } = await import('../ui/builder/copilot-panel');
 const { ValidationPanel, fixesFor } = await import('../ui/builder/validation-panel');
 const { PanelResizer, PANEL_MIN, PANEL_MAX } = await import('../ui/builder/panel-resizer');
@@ -52,7 +53,7 @@ describe('copilot stream', () => {
   it('refreshes the session once on 401 and surfaces API errors', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response('{}', { status: 401 }))
-      .mockResolvedValueOnce(sseResponse([{ type: 'message', text: 'ok' }]));
+      .mockResolvedValueOnce(sseResponse([{ type: 'message', text: 'ok' }, { type: 'done', graph: g(0), name: 'x', changed: false, opsApplied: 0, validation: { valid: true, errors: [], warnings: [] } }]));
     vi.stubGlobal('fetch', fetchMock);
     const got: string[] = [];
     await streamCopilot('wf1', { messages: [{ role: 'user', content: 'hi' }], graph: g(0), locale: 'en' }, (e) => got.push(e.type), new AbortController().signal);
@@ -60,6 +61,70 @@ describe('copilot stream', () => {
     expect((fetchMock.mock.calls[1][1] as RequestInit & { headers: Record<string, string> }).headers.Authorization).toBe('Bearer tok-2');
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { code: 'AI_NOT_CONFIGURED', message: 'nope' } }), { status: 503 })));
     await expect(streamCopilot('wf1', { messages: [], graph: g(0), locale: 'en' }, () => {}, new AbortController().signal)).rejects.toMatchObject({ status: 503, code: 'AI_NOT_CONFIGURED' });
+  });
+});
+
+describe('copilot stream robustness', () => {
+  it('reports a stream that closes without a final event', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sseResponse([{ type: 'status', key: 'understanding' }])));
+    await expect(streamCopilot('wf1', { messages: [], graph: g(0), locale: 'en' }, () => {}, new AbortController().signal)).rejects.toMatchObject({ reason: 'ended' });
+  });
+  it('gives up when nothing (not even a keep-alive) arrives in time', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(c) { c.enqueue(encoder.encode(': ping\n\n')); init.signal?.addEventListener('abort', () => c.error(new DOMException('aborted', 'AbortError'))); },
+    }), { status: 200 })));
+    const err = await streamCopilot('wf1', { messages: [], graph: g(0), locale: 'en' }, () => {}, new AbortController().signal, { stallMs: 60 }).catch((e) => e);
+    expect(err).toBeInstanceOf(CopilotStreamError);
+    expect(err.reason).toBe('stalled');
+  });
+  it('a user stop is not reported as a stall', async () => {
+    const ctl = new AbortController();
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(c) { init.signal?.addEventListener('abort', () => c.error(new DOMException('aborted', 'AbortError'))); setTimeout(() => ctl.abort(), 10); },
+    }), { status: 200 })));
+    const err = await streamCopilot('wf1', { messages: [], graph: g(0), locale: 'en' }, () => {}, ctl.signal, { stallMs: 5000 }).catch((e) => e);
+    expect(err).not.toBeInstanceOf(CopilotStreamError);
+  });
+});
+
+describe('copilot timeline', () => {
+  const tt = (k: string, f?: string | null, v?: Record<string, unknown>) => (f || k).replace(/\{(\w+)\}/g, (_, n) => String(v?.[n] ?? ''));
+  it('reduces a turn into timed entries: understand → resources → thinking (+plan) → tool calls → check', () => {
+    let items = startTimeline(0, tt);
+    const ev = (e: object, at: number) => { items = timelineReduce(items, e as never, at, tt); };
+    ev({ type: 'status', key: 'resources', agents: 3, templates: 5 }, 400);
+    ev({ type: 'status', key: 'thinking', round: 1 }, 400);
+    ev({ type: 'thought', text: 'I will add a trigger and a call.' }, 1900);
+    ev({ type: 'tool_start', callId: 'c1', name: 'add_node', step: 'Adding the trigger' }, 1900);
+    ev({ type: 'op', callId: 'c1', name: 'add_node', step: 'Adding the trigger', change: { kind: 'add_node' }, graph: g(1) }, 2100);
+    ev({ type: 'tool_start', callId: 'c2', name: 'add_node', step: 'Adding the call' }, 2100);
+    ev({ type: 'op_error', callId: 'c2', name: 'add_node', code: 'unknown_agent', message: 'Agent x does not exist' }, 2200);
+    ev({ type: 'status', key: 'thinking', round: 2 }, 2200);
+    ev({ type: 'tool_start', callId: 'c3', name: 'validate_workflow', step: '' }, 3000);
+    ev({ type: 'tool_done', callId: 'c3', name: 'validate_workflow', errors: 0, warnings: 1 }, 3050);
+    ev({ type: 'done' }, 3600);
+    expect(items.map((i) => [i.kind, i.label, i.state, (i.t1 ?? 0) - i.t0])).toEqual([
+      ['understand', 'Understanding your request', 'done', 400],
+      ['resources', 'Loaded your agents and templates', 'done', 0],
+      ['think', 'Thinking', 'done', 1500],
+      ['tool', 'Adding the trigger', 'done', 200],
+      ['tool', 'Adding the call', 'warn', 100],
+      ['think', 'Thinking about the next step', 'done', 800],
+      ['validate', 'validate_workflow', 'done', 50],
+    ]);
+    expect(items[1].detail).toBe('Agents: 3 · Templates: 5');
+    expect(items[2].thought).toBe('I will add a trigger and a call.');
+    expect(items[4].detail).toBe('Agent x does not exist');
+    expect(items[6].detail).toBe('No blocking problems · Warnings: 1');
+  });
+  it('the round that produced the reply is shown as writing the answer', () => {
+    let items = timelineReduce(startTimeline(0, tt), { type: 'status', key: 'thinking', round: 3 } as never, 100, tt);
+    items = timelineReduce(items, { type: 'message', text: 'Done' } as never, 900, tt);
+    expect(items.at(-1)).toMatchObject({ kind: 'answer', label: 'Writing the answer', state: 'done', t1: 900 });
+  });
+  it('an error stops whatever is running', () => {
+    const items = timelineReduce(startTimeline(0, tt), { type: 'error', message: 'x' }, 50, tt);
+    expect(items[0]).toMatchObject({ state: 'stopped', t1: 50 });
   });
 });
 
@@ -90,6 +155,8 @@ describe('copilot panel', () => {
     expect(screen.getByText('Adding the trigger')).toBeInTheDocument();
     expect(screen.getByText('Adjusting a step')).toBeInTheDocument();
     expect(screen.getByText('2 steps').tagName).toBe('STRONG');
+    expect(screen.getByRole('list', { name: 'What the AI did' })).toBeInTheDocument();
+    expect(screen.getByText(/^Worked for /)).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').some((li) => li.textContent === 'Call')).toBe(true);
     expect(props.onTurnEnd).toHaveBeenCalled();
     const turnId = props.onTurnStart.mock.calls[0][0];

@@ -2553,6 +2553,38 @@ class MessagingService {
     }));
   }
 
+  /**
+   * Read-only readiness per channel for other modules (e.g. the workflow "Full check"):
+   * a channel is ready when at least one enabled provider is configured and its last recorded
+   * health check (written by the provider monitor) was not "down". No network calls, no writes.
+   */
+  async channelReadiness() {
+    const stored = await settings();
+    const enabled = stored?.providers || {};
+    const providersByChannel = {
+      sms: [['textbee', enabled.textbeeEnabled, textBee.configured], ['twilio', enabled.twilioEnabled, twilio.configured]],
+      whatsapp: [['metaWhatsapp', enabled.metaWhatsappEnabled, metaWhatsapp.configured], ['twilioWhatsapp', enabled.twilioWhatsappEnabled, twilio.whatsappConfigured]],
+      email: [['email', enabled.emailEnabled, existingEmail.configured]],
+    };
+    const keys = Object.values(providersByChannel).flat().map(([key]) => `messaging_${key}`);
+    const latest = await IntegrationHealthCheck.aggregate([
+      { $match: { integrationKey: { $in: keys } } }, { $sort: { checkedAt: -1 } },
+      { $group: { _id: '$integrationKey', status: { $first: '$status' }, checkedAt: { $first: '$checkedAt' } } },
+    ]);
+    const health = new Map(latest.map((h) => [h._id.replace(/^messaging_/, ''), h]));
+    const out = {};
+    for (const [channel, list] of Object.entries(providersByChannel)) {
+      const usable = list.filter(([, on, configured]) => on && configured);
+      const live = usable.filter(([key]) => health.get(key)?.status !== 'down');
+      out[channel] = {
+        ready: live.length > 0,
+        providers: usable.map(([key]) => ({ key, status: health.get(key)?.status || 'unknown', checkedAt: health.get(key)?.checkedAt || null })),
+        reason: live.length ? null : !list.some(([, on]) => on) ? 'not_enabled' : !usable.length ? 'not_configured' : 'provider_down',
+      };
+    }
+    return out;
+  }
+
   async providerHealth() {
     const [stored, monitored, recentErrors, unknownMessages, pendingReconciliation, queue] = await Promise.all([
       settings(),

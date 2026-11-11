@@ -24,6 +24,8 @@ jest.unstable_mockModule('../../src/shared/ai/llmFactory.js', () => ({
   isAiConfigured: () => true, assertAiConfigured: () => {}, createChatModel: async () => ({}),
   createOpenAiClient: async () => ({ chat: { completions: { create } } }),
 }));
+const stt = jest.fn(async () => ({ text: '  Call every new lead with Aria  ' }));
+jest.unstable_mockModule('../../src/modules/ai/sttGateway.service.js', () => ({ default: { transcribe: (...a) => stt(...a) } }));
 jest.unstable_mockModule('node:dns/promises', () => ({ lookup, default: { lookup } }));
 jest.unstable_mockModule('../../src/shared/queue/QueueManager.js', () => ({ default: { addJob: jest.fn(async () => ({})), addScheduledJob: jest.fn(), registerQueue: jest.fn(), getQueueStats: jest.fn(async () => ({ workers: 1 })) } }));
 jest.unstable_mockModule('../../src/modules/auth/audit.service.js', () => ({ default: { logEvent: jest.fn() } }));
@@ -190,6 +192,19 @@ describe('Workflow Copilot', () => {
     expect(bad.some((x) => x.type === 'op')).toBe(false);
     expect(seen[0].at(-1).content).toMatch(/failed/);
     expect(bad.at(-1)).toMatchObject({ type: 'done', changed: false, opsApplied: 0 });
+  });
+});
+
+describe('Workflow Copilot — dictation', () => {
+  it('transcribes in memory with a language hint, trims the text and degrades instead of failing', async () => {
+    const file = { buffer: Buffer.from('fake-audio'), mimetype: 'audio/webm;codecs=opus' };
+    expect(await copilot.transcribe(file, { language: 'de' })).toEqual({ available: true, text: 'Call every new lead with Aria' });
+    expect(stt).toHaveBeenLastCalledWith(file.buffer, { mimeType: 'audio/webm', language: 'de' });
+    await copilot.transcribe(file, { language: 'xx' });
+    expect(stt).toHaveBeenLastCalledWith(file.buffer, { mimeType: 'audio/webm', language: undefined });
+    stt.mockRejectedValueOnce(new Error('provider down'));
+    expect(await copilot.transcribe(file, {})).toEqual({ available: false, reason: 'ai_unavailable', text: '' });
+    await expect(copilot.transcribe(null, {})).rejects.toThrow(/audio recording/);
   });
 });
 

@@ -265,8 +265,17 @@ export const leadFilterOptions = {
     countryId: canonicalLocationId,
     cityId: canonicalLocationId,
     businessType: Joi.string().trim().max(120),
+    // The list sends these too; without them the facet counts silently
+    // ignored an active score-band / response-overdue filter (stripUnknown).
+    scoreBand: Joi.string().valid('hot', 'warm', 'cold', 'unscored'),
+    slaStatus: Joi.string().valid('none', 'pending', 'met', 'overdue', 'late'),
     q: Joi.string().trim().max(100).allow(''),
   }),
+};
+
+// Header KPIs: no parameters (visibility comes from the authenticated request).
+export const leadStats = {
+  query: Joi.object({}),
 };
 
 // Follow-ups agenda across leads (contact-log followUpAt). `scope=mine` keeps

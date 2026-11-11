@@ -8,6 +8,9 @@ vi.mock('../hooks/use-inbound-calls', () => ({
   useInboundSettings: () => ({ data: { enabled: true } }),
   useInboundLive: () => ({ data: [] }),
   useInboundRealtime: () => {},
+  useInboundStats: () => ({ data: undefined, isLoading: true }),
+  useInboundList: () => ({ data: undefined, isLoading: true }),
+  useInboundDevices: () => ({ data: undefined, isLoading: true }),
 }));
 vi.mock('../ui/overview-tab', () => ({ OverviewTab: () => <div>Overview content</div> }));
 vi.mock('../ui/use-inbound-language', () => ({ useInboundLanguage: () => ({ t: (_key: string, fallback: string) => fallback }) }));

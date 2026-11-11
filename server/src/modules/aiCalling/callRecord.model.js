@@ -202,6 +202,10 @@ callRecordSchema.index({ campaignId: 1, initiatedAt: 1 });
 callRecordSchema.index({ pairedDeviceId: 1, initiatedAt: 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_usage' });
 callRecordSchema.index({ pairedDeviceId: 1, 'gateway.state': 1 }, { partialFilterExpression: { pairedDeviceId: { $type: 'objectId' } }, name: 'paired_device_queue' });
 callRecordSchema.index({ createdBy: 1, 'intelligence.pendingReview': 1, endedAt: -1 }, { partialFilterExpression: { 'intelligence.pendingReview': { $gt: 0 } }, name: 'intelligence_review_queue' });
+// Owner-scoped call history + analytics (GET /ai-calling/calls, /analytics): newest first
+// without an in-memory sort, and per-agent analytics over its campaigns (SORT_MERGE on $in).
+callRecordSchema.index({ createdBy: 1, createdAt: -1 }, { name: 'owner_recent_calls' });
+callRecordSchema.index({ createdBy: 1, campaignId: 1, createdAt: -1 }, { name: 'owner_campaign_calls' });
 callRecordSchema.index({ 'handoff.offeredTo': 1, 'handoff.status': 1 }, { partialFilterExpression: { 'handoff.status': 'ringing' }, name: 'handoff_ringing' });
 
 export default mongoose.model('CallRecord', callRecordSchema);

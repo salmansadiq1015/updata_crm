@@ -10,6 +10,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "dist/**",
     "next-env.d.ts",
   ]),
   // Downgrade React Compiler strict rules: these fire on valid React patterns

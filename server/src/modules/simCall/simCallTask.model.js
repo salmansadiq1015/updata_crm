@@ -94,5 +94,11 @@ taskSchema.index({ createdBy: 1, 'callback.status': 1, 'callback.at': 1 });
 taskSchema.index({ state: 1, 'lock.until': 1 });
 taskSchema.index({ 'attempts.attemptId': 1 });
 taskSchema.index({ 'attempts.destinationHash': 1, 'attempts.doNotContact': 1 }, { name: 'sim_call_opt_out_recovery' });
+// Task list (web + app) pages a campaign in call order; addLeads reads the last order.
+taskSchema.index({ campaignId: 1, order: 1 }, { name: 'sim_call_task_order' });
+// Sweep: due-callback reminders not yet sent.
+taskSchema.index({ 'callback.status': 1, 'callback.notifiedAt': 1, 'callback.at': 1 }, { name: 'sim_call_callback_due' });
+// Sweep: completed attempts whose CRM sync still has retries left (multikey, $elemMatch bounds).
+taskSchema.index({ 'attempts.sync.status': 1, 'attempts.sync.attempts': 1 }, { name: 'sim_call_sync_retry' });
 
 export default mongoose.model('SimCallTask', taskSchema);

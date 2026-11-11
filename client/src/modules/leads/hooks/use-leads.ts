@@ -53,6 +53,8 @@ export const leadKeys = {
   duplicates: (params: LeadDuplicateParams) => [...leadKeys.root, 'duplicates', params] as const,
   contactLog: (id: string | null) => [...leadKeys.root, 'contact-log', id] as const,
   filterOptions: () => [...leadKeys.root, 'filter-options'] as const,
+  // Not under lists(): optimistic updates rewrite every lists() query as lead pages.
+  stats: () => [...leadKeys.root, 'stats'] as const,
   filterOption: (params: Omit<LeadFilters, 'areaId'> = {}) => [...leadKeys.filterOptions(), params] as const,
   enrichJob: (jobId: string | null) => [...leadKeys.root, 'enrich-job', jobId] as const,
 };
@@ -110,6 +112,10 @@ export function useLeadMap(params: LeadMapParams, options: { enabled?: boolean }
     staleTime: 20_000,
     placeholderData: keepPreviousData,
   });
+}
+
+export function useLeadStats() {
+  return useQuery({ queryKey: leadKeys.stats(), queryFn: () => leadApi.getStats(), staleTime: 30_000, refetchInterval: 60_000 });
 }
 
 export function useLeadFilterOptions(params: Omit<LeadFilters, 'areaId'> = {}) {

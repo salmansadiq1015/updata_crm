@@ -28,6 +28,7 @@ import { AiChatThread } from '../chat/ai-chat-thread';
 import { AiVoiceStatusBar } from '../voice/ai-voice-status-bar';
 import { AiHelpOverlay } from '../ai-help-overlay';
 import { buildAiRouteContext } from '../../utils/ai-route-context';
+import { useAiStore } from '../../store/ai-store';
 import { useLiveVoiceStore } from '../../voice-live/live-voice-store';
 import {
   AGENT_STATUSES,
@@ -241,6 +242,16 @@ export function AiPanelChat({ onClose }) {
   // Same rule as the full page: a suggestion fills the field, it never sends.
   const [prefill, setPrefill] = useState(null);
   const handleSuggestion = useCallback((text) => setPrefill({ text, at: Date.now() }), []);
+
+  // A page asked the assistant something on the person's behalf (e.g. the
+  // fleet's "Ask AI"): show it in the input, ready to send or edit.
+  const pendingPrompt = useAiStore((s) => s.pendingPrompt);
+  const consumePendingPrompt = useAiStore((s) => s.consumePendingPrompt);
+  useEffect(() => {
+    if (!pendingPrompt?.text) return;
+    setPrefill({ text: pendingPrompt.text, at: pendingPrompt.at });
+    consumePendingPrompt();
+  }, [pendingPrompt, consumePendingPrompt]);
 
   const handleVoiceStart = useCallback(async () => {
     try {

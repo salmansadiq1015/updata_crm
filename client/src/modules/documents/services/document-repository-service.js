@@ -53,6 +53,31 @@ export const documentRepositoryService = {
     return res.data;
   },
 
+  async stats() {
+    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.STATS);
+    return res.data;
+  },
+
+  async facets() {
+    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.FACETS);
+    return res.data || { documentTypes: [], categories: [] };
+  },
+
+  async linkTargets(type, search = '') {
+    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.LINK_TARGETS, { params: stripEmptyParams({ type, search }) });
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  async update(id, changes) {
+    const res = await apiClient.patch(ENDPOINTS.DOCUMENTS.BY_ID(id), changes);
+    return res.data;
+  },
+
+  async bulk(action, ids) {
+    const res = await apiClient.post(ENDPOINTS.DOCUMENTS.BULK, { action, ids });
+    return res.data;
+  },
+
   async setArchived(id, archived) {
     const res = archived
       ? await apiClient.post(ENDPOINTS.DOCUMENTS.ARCHIVE(id))

@@ -60,3 +60,35 @@ export const listAttachableSchema = {
     limit: Joi.number().integer().min(1).max(200).default(100),
   }),
 };
+
+const optionalId = objectId.allow(null, '');
+
+export const linkTargetsSchema = {
+  query: Joi.object({
+    type: Joi.string().valid('customer', 'project', 'job', 'employee', 'installation').required(),
+    search: Joi.string().trim().max(100).allow('').default(''),
+    limit: Joi.number().integer().min(1).max(25).default(12),
+  }),
+};
+
+export const updateDocumentSchema = {
+  params: Joi.object({ id: Joi.string().pattern(CENTRAL_RECORD_ID).required() }),
+  body: Joi.object({
+    title: Joi.string().trim().max(300).allow('', null),
+    documentType: Joi.string().trim().max(100),
+    category: Joi.string().trim().max(100),
+    description: Joi.string().max(2000).allow('', null),
+    customerId: optionalId,
+    projectId: optionalId,
+    jobId: optionalId,
+    employeeId: optionalId,
+    installationId: optionalId,
+  }).min(1),
+};
+
+export const bulkDocumentsSchema = {
+  body: Joi.object({
+    action: Joi.string().valid('archive', 'unarchive', 'visum', 'unvisum', 'release', 'unrelease', 'delete').required(),
+    ids: Joi.array().items(Joi.string().pattern(CENTRAL_RECORD_ID)).min(1).max(100).unique().required(),
+  }),
+};

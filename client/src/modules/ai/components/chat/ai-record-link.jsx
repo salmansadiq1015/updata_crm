@@ -24,6 +24,7 @@ const ROUTES = {
   workReport: (id) => `/field-ops/reports?reportId=${id}`,
   assignment: (id) => `/scheduling/calendar?assignmentId=${id}`,
   installation: (id) => `/crm/installations/${id}`,
+  vehicle: (id) => `/vehicles/${id}`,
 };
 
 const LABEL_KEYS = {
@@ -37,6 +38,7 @@ const LABEL_KEYS = {
   workReport: 'ai.record.openReport',
   assignment: 'ai.record.openAssignment',
   chatRoom: 'ai.record.openChat',
+  vehicle: 'ai.record.openVehicle',
 };
 
 export function AiRecordLink({ output }) {
@@ -51,7 +53,7 @@ export function AiRecordLink({ output }) {
   const record = output.record || {};
   const caption = record.quotationNumber || record.projectNumber || record.orderNumber
     || record.invoiceNumber || record.reportNumber || record.installationNumber
-    || record.title || record.name || null;
+    || record.plate || record.title || record.name || null;
 
   return (
     <Link

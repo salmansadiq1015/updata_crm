@@ -9,7 +9,8 @@
  */
 import mongoose from 'mongoose';
 import config from '../../../config/index.js';
-import { createOpenAiClient } from '../../../shared/ai/llmFactory.js';
+import { createOpenAiClient, isAiConfigured } from '../../../shared/ai/llmFactory.js';
+import { ValidationError } from '../../../shared/errors/AppError.js';
 import logger from '../../../shared/logger/index.js';
 import { CONDITION_FIELDS, QUALIFICATION_FIELD_KEYS } from '../engine/nodeConfig.js';
 import { sanitizeGraph, validateGraph } from '../engine/graph.js';
@@ -133,7 +134,26 @@ export const quoteMatches = (quote, userTexts) => {
   return q.length >= 10 && REMOVAL_INTENT.test(q) && userTexts.some((t) => t.toLowerCase().includes(q));
 };
 
+const STT_LANGUAGES = new Set(['de', 'en', 'fr', 'ar']);
+
 class WorkflowCopilot {
+  /** Speech → text for the copilot composer (in memory only; never stored). Degrades to { available:false }. */
+  async transcribe(file, { language = null } = {}) {
+    if (!file?.buffer?.length) throw new ValidationError('An audio recording (field "audio", webm/ogg/mp4/wav, ≤ 10 MB) is required');
+    if (!isAiConfigured()) return { available: false, reason: 'ai_not_configured', text: '' };
+    try {
+      const { default: stt } = await import('../../ai/sttGateway.service.js');
+      const result = await Promise.race([
+        stt.transcribe(file.buffer, { mimeType: String(file.mimetype).split(';')[0], language: STT_LANGUAGES.has(language) ? language : undefined }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('transcription_timeout')), 60_000)),
+      ]);
+      return { available: true, text: String(result?.text || '').trim().slice(0, 4000) };
+    } catch (error) {
+      logger.warn('Copilot dictation unavailable', { module: 'workflow-copilot', error: error.message });
+      return { available: false, reason: 'ai_unavailable', text: '' };
+    }
+  }
+
   /**
    * @param {{ workflow: object, messages: Array<{role:'user'|'assistant', content:string}>, graph: object, selectedNodeId?: string, locale?: string, userId: string, signal?: AbortSignal }} input
    * @returns {AsyncGenerator<object>} events
@@ -152,11 +172,11 @@ class WorkflowCopilot {
       try {
         const result = OPS.update_node(graph, { node: String(apply.node), config: apply.config }, resources);
         graph = result.graph;
-        yield { type: 'op', name: 'update_node', step: '', change: { ...result.change, direct: true }, graph };
+        yield { type: 'op', callId: 'apply', name: 'update_node', step: '', change: { ...result.change, direct: true }, graph };
         applyNote = `SYSTEM NOTE (not from the user): the user's choice was ALREADY applied to step "${apply.node}" (${JSON.stringify(apply.config).slice(0, 300)}). Do not repeat that change; continue with whatever else the request needs, then summarise briefly.`;
       } catch (error) {
         const op = error instanceof OpError ? error : new OpError('error', error.message);
-        yield { type: 'op_error', name: 'update_node', code: op.code, message: op.message };
+        yield { type: 'op_error', callId: 'apply', name: 'update_node', code: op.code, message: op.message };
         applyNote = `SYSTEM NOTE (not from the user): applying the user's choice to step "${apply.node}" failed (${op.code}: ${op.message}). Handle the answer yourself.`;
       }
     }
@@ -172,8 +192,12 @@ class WorkflowCopilot {
     let toolCalls = 0; let name = workflow.name; let opsApplied = directOps; let repairs = 0;
     const addedThisTurn = new Set();
 
+    let repairing = false;
     for (let round = 0; round < MAX_ROUNDS; round += 1) {
       if (signal?.aborted) return;
+      // Timeline: one "thinking" entry per model round (the client measures its duration).
+      yield { type: 'status', key: repairing ? 'repairing' : 'thinking', round: round + 1 };
+      repairing = false;
       const res = await client.chat.completions.create({
         model: config.ai.model || 'gpt-4o', temperature: 0.2, messages: convo, tools: TOOLS, tool_choice: 'auto', parallel_tool_calls: false,
       }, { signal });
@@ -186,6 +210,7 @@ class WorkflowCopilot {
         if (changedSoFar && validation.errors.length && repairs < REPAIR_ROUNDS) {
           // Do not hand back a broken workflow: make the model fix what it built.
           repairs += 1;
+          repairing = true;
           yield { type: 'status', key: 'validating' };
           convo.push({ role: 'user', content: `SYSTEM CHECK (not from the user): the workflow still has blocking errors: ${JSON.stringify(validation.errors.slice(0, 15))}. Fix them now with tools: connect the steps you added in this turn, or remove steps you added in this turn (never delete steps that existed before), follow the recipes, then validate and summarise.` });
           continue;
@@ -194,6 +219,8 @@ class WorkflowCopilot {
         yield { type: 'done', graph, name, changed: JSON.stringify(graph) !== initial, opsApplied, validation };
         return;
       }
+      // The model's own plan text that accompanies its tool calls ("thinking" detail on the timeline).
+      if (msg.content && !msg.tool_calls.some((c) => c.function?.name === 'ask_user')) yield { type: 'thought', text: String(msg.content).slice(0, 600) };
       for (const call of msg.tool_calls) {
         toolCalls += 1;
         const fn = call.function?.name;
@@ -201,6 +228,7 @@ class WorkflowCopilot {
         try {
           if (toolCalls > MAX_TOOL_CALLS) throw new OpError('limit', 'Too many changes in one turn; summarise and stop.');
           const args = parseArgs(call.function?.arguments);
+          if (fn !== 'ask_user') yield { type: 'tool_start', callId: call.id, name: fn, step: String(args.step || '').slice(0, 120) };
           if (fn === 'ask_user') {
             if (msg.content) yield { type: 'message', text: msg.content };
             yield { type: 'question', question: String(args.question || '').slice(0, 500), kind: args.kind || 'choice', options: (args.options || []).slice(0, 8), allowFreeText: args.allowFreeText !== false };
@@ -209,7 +237,7 @@ class WorkflowCopilot {
           }
           if (fn === 'validate_workflow') {
             const v = validateGraph(graph);
-            yield { type: 'status', key: 'validating' };
+            yield { type: 'tool_done', callId: call.id, name: fn, errors: v.errors.length, warnings: v.warnings.length };
             content = JSON.stringify({ valid: v.valid, errors: v.errors.slice(0, 20), warnings: v.warnings.slice(0, 20) });
           } else if (fn === 'start_from_template') {
             if (graph.nodes.length) throw new OpError('canvas_not_empty', 'start_from_template only works on an empty canvas; edit the existing steps instead.');
@@ -218,12 +246,13 @@ class WorkflowCopilot {
             graph = sanitizeGraph(tpl);
             for (const n of graph.nodes) addedThisTurn.add(n.id);
             opsApplied += 1;
-            yield { type: 'op', name: fn, step: String(args.step || '').slice(0, 120), change: { kind: 'template', template: args.template }, graph };
+            yield { type: 'op', callId: call.id, name: fn, step: String(args.step || '').slice(0, 120), change: { kind: 'template', template: args.template }, graph };
             if (STEP_PACE_MS) await sleep(STEP_PACE_MS);
             content = JSON.stringify({ ok: true, loaded: args.template, graph: compactGraph(graph), note: 'These template steps ARE the workflow now. Customise them in place with update_node on their ids (agents, texts, waits), insert extra steps between them with add_node/connect_nodes, remove template steps the user does not want. Never build a second trigger or a second parallel path.' });
           } else if (fn === 'set_workflow_name') {
             name = String(args.name || '').trim().slice(0, 160) || name;
             yield { type: 'rename', name };
+            yield { type: 'tool_done', callId: call.id, name: fn };
             content = JSON.stringify({ ok: true, name });
           } else if (OPS[fn]) {
             if (fn === 'remove_node' && !addedThisTurn.has(String(args.node)) && !quoteMatches(args.userRequestQuote, userTexts)) {
@@ -233,7 +262,7 @@ class WorkflowCopilot {
             graph = result.graph;
             if (fn === 'add_node' && result.change.nodeId) addedThisTurn.add(result.change.nodeId);
             opsApplied += 1;
-            yield { type: 'op', name: fn, step: String(args.step || '').slice(0, 120), change: result.change, graph };
+            yield { type: 'op', callId: call.id, name: fn, step: String(args.step || '').slice(0, 120), change: result.change, graph };
             if (STEP_PACE_MS) await sleep(STEP_PACE_MS);
             content = JSON.stringify({ ok: true, ...result.change });
           } else {
@@ -242,7 +271,7 @@ class WorkflowCopilot {
         } catch (error) {
           const op = error instanceof OpError ? error : new OpError('error', error.message);
           if (!(error instanceof OpError)) logger.warn('Workflow copilot tool failed', { module: 'workflow-copilot', tool: fn, error: error.message });
-          yield { type: 'op_error', name: fn, code: op.code, message: op.message };
+          yield { type: 'op_error', callId: call.id, name: fn, code: op.code, message: op.message };
           content = JSON.stringify({ ok: false, error: op.code, message: op.message });
         }
         convo.push({ role: 'tool', tool_call_id: call.id, content });

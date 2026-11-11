@@ -1,6 +1,6 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
-import type { CreateSimCallCampaignInput, SimCallCampaign, SimCallEvent, SimCallTask } from '../types/sim-call-types';
+import type { CreateSimCallCampaignInput, SimCallCampaign, SimCallEvent, SimCallStats, SimCallTask } from '../types/sim-call-types';
 
 // apiClient's response interceptor unwraps the envelope to { data, pagination }.
 const unwrap = <T,>(res: unknown): T => ((res as { data?: T }).data ?? res) as T;
@@ -12,6 +12,9 @@ function paged<T>(res: unknown): Paged<T> {
 const E = ENDPOINTS.SIM_CALLS;
 
 export const simCallsApi = {
+  async stats() {
+    return unwrap<SimCallStats>(await apiClient.get(E.CAMPAIGN_STATS));
+  },
   async list(params: { page?: number; limit?: number; status?: string; q?: string } = {}) {
     return paged<SimCallCampaign>(await apiClient.get(E.CAMPAIGNS, { params }));
   },

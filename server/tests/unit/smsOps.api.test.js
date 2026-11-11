@@ -458,3 +458,45 @@ describe('device dashboard', () => {
     expect((await RecoveryItem.findById(item._id).lean()).status).toBe('resolved');
   });
 });
+
+describe('recovery inbox ordering and action results', () => {
+  it('lists the most severe items first (high → medium → low), newest first within a severity', async () => {
+    const recovery = (await import('../../src/modules/simSms/recovery.service.js')).default;
+    const mk = (key, severity) => recovery.record({ key, type: 'provider_failure', severity, ownerId: userA._id, source: 'messaging' });
+    await mk('p-low', 'low');
+    await mk('p-medium', 'medium');
+    await mk('p-high-old', 'high');
+    await RecoveryItem.updateOne({ key: 'p-high-old' }, { $set: { createdAt: new Date(Date.now() - 3600_000) } });
+    await mk('p-high-new', 'high');
+    const rows = (await request(server).get('/api/v1/sim-sms/recovery').set(auth(tokenA)).expect(200)).body.data;
+    expect(rows.map((r) => r.key)).toEqual(['p-high-new', 'p-high-old', 'p-medium', 'p-low']);
+    expect(rows.map((r) => r.severityRank)).toEqual([3, 3, 2, 1]);
+    const typed = (await request(server).get('/api/v1/sim-sms/recovery?type=provider_failure').set(auth(tokenA)).expect(200)).body.data;
+    expect(typed.map((r) => r.key)).toEqual(['p-high-new', 'p-high-old', 'p-medium', 'p-low']);
+    expect((await request(server).get('/api/v1/sim-sms/recovery/counts').set(auth(tokenA)).expect(200)).body.data)
+      .toEqual({ open: 4, byType: { provider_failure: 4 } });
+  });
+
+  it('returns the lead summary with an action result (same shape as the list)', async () => {
+    const lead = await makeLead();
+    const recovery = (await import('../../src/modules/simSms/recovery.service.js')).default;
+    const item = await recovery.record({ key: 'p-lead', type: 'provider_failure', ownerId: userA._id, source: 'messaging', leadId: lead._id });
+    const res = (await request(server).post(`/api/v1/sim-sms/recovery/${item._id}/actions`).set(auth(tokenA)).send({ action: 'dismiss' }).expect(200)).body.data;
+    expect(res).toMatchObject({ status: 'dismissed', lead: { _id: String(lead._id), name: lead.name } });
+  });
+});
+
+describe('device dashboard campaigns', () => {
+  it('lists the campaigns each phone sent for in the last 7 days', async () => {
+    const lead = await makeLead();
+    const campaign = await startCampaign([lead]);
+    await sendNext();
+    await request(server).post('/api/v1/sim-sms/devices/heartbeat').set(auth(tokenA)).send({ deviceId: DEVICE, platform: 'android' }).expect(200);
+    await request(server).post('/api/v1/sim-sms/devices/heartbeat').set(auth(tokenA)).send({ deviceId: 'other-phone-0001', platform: 'android' }).expect(200);
+    await request(server).post(`/api/v1/sim-sms/campaigns/${campaign._id}/pause`).set(auth(tokenA)).expect(200);
+    const devices = (await request(server).get('/api/v1/sim-sms/devices').set(auth(tokenA)).expect(200)).body.data;
+    const byId = Object.fromEntries(devices.map((d) => [d.deviceId, d]));
+    expect(byId[DEVICE].campaigns).toEqual([{ id: String(campaign._id), name: 'Ops campaign', status: 'paused' }]);
+    expect(byId['other-phone-0001'].campaigns).toEqual([]);
+  });
+});

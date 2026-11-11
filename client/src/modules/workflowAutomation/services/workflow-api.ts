@@ -1,7 +1,7 @@
 import api from '@/lib/api/client';
 import type {
   CampaignInput, CampaignSelection, EventFilters, ListFilters, Paged, RunAction, RunFilters, TestRunOptions, TestRunResult,
-  ValidationResult, Workflow, WorkflowAnalytics, WorkflowCampaign, WorkflowCatalog, WorkflowEventItem, WorkflowGraph,
+  ValidationResult, Workflow, WorkflowAnalytics, WorkflowCheckReport, WorkflowCampaign, WorkflowCatalog, WorkflowEventItem, WorkflowGraph,
   WorkflowListItem, WorkflowRun, WorkflowRunDetail, WorkflowSettings, WorkflowTemplate, WorkflowVersion, WorkflowVersionSummary,
 } from '../types/workflow-types';
 
@@ -25,6 +25,7 @@ export const workflowApi = {
     unwrap<Workflow>(await api.patch(`${root}/${id}`, input)),
   remove: async (id: string) => unwrap<{ deleted?: boolean; archived?: boolean }>(await api.delete(`${root}/${id}`)),
   validate: async (id: string, graph?: WorkflowGraph) => unwrap<ValidationResult>(await api.post(`${root}/${id}/validate`, graph ? { graph } : {})),
+  analyze: async (id: string, input: { graph?: WorkflowGraph; leadId?: string | null }) => unwrap<WorkflowCheckReport>(await api.post(`${root}/${id}/analyze`, input)),
   test: async (id: string, input: { leadId: string; graph?: WorkflowGraph; options?: TestRunOptions }) => unwrap<TestRunResult>(await api.post(`${root}/${id}/test`, input)),
   publish: async (id: string, notes = '') => unwrap<Workflow>(await api.post(`${root}/${id}/publish`, { notes })),
   setStatus: async (id: string, status: 'published' | 'paused' | 'archived') => unwrap<Workflow>(await api.post(`${root}/${id}/status`, { status })),

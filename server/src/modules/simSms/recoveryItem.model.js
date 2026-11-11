@@ -15,6 +15,8 @@ const recoverySchema = new mongoose.Schema({
   key: { type: String, required: true, maxlength: 160 },
   type: { type: String, enum: RECOVERY_TYPES, required: true },
   severity: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+  // Numeric severity for the inbox sort (high → medium → low); the string sorts alphabetically.
+  severityRank: { type: Number, default: 2 },
   ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   source: { type: String, enum: ['sim_sms', 'messaging', 'device'], default: 'sim_sms' },
   leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null },
@@ -38,5 +40,10 @@ const recoverySchema = new mongoose.Schema({
 
 recoverySchema.index({ key: 1 }, { unique: true });
 recoverySchema.index({ ownerId: 1, status: 1, type: 1, createdAt: -1 });
+// Inbox list: most severe first, newest first — with and without a type filter.
+recoverySchema.index({ ownerId: 1, status: 1, severityRank: -1, createdAt: -1 }, { name: 'recovery_inbox' });
+recoverySchema.index({ ownerId: 1, status: 1, type: 1, severityRank: -1, createdAt: -1 }, { name: 'recovery_inbox_type' });
+
+export const SEVERITY_RANK = Object.freeze({ low: 1, medium: 2, high: 3 });
 
 export default mongoose.models.RecoveryItem || mongoose.model('RecoveryItem', recoverySchema);

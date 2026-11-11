@@ -46,6 +46,8 @@ export const validateGraph = { params: idParams, body: Joi.object({ graph }) };
 export const publish = { params: idParams, body: Joi.object({ notes: Joi.string().allow('').max(500).default('') }) };
 export const setStatus = { params: idParams, body: Joi.object({ status: Joi.string().valid('published', 'paused', 'archived').required() }) };
 export const version = { params: Joi.object({ id: objectId.required(), version: Joi.number().integer().min(1).required() }) };
+export const analyze = { params: idParams, body: Joi.object({ leadId: objectId.allow(null), graph }) };
+
 export const test = { params: idParams, body: Joi.object({
   leadId: objectId.required(), graph,
   options: Joi.object({

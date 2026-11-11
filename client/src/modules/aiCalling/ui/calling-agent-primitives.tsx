@@ -4,6 +4,7 @@ import { Dialog, Tabs } from 'radix-ui';
 import { Bot, X } from 'lucide-react';
 import { useOptionalLanguage } from '@/lib/i18n/language-context';
 import { translations } from '@/lib/i18n/translations';
+import { pageTabs } from '@/shared/components/page-hero';
 
 export const panelClass = 'updata-agent-panel p-4 sm:p-5';
 export const inputClass = 'updata-agent-input';
@@ -16,13 +17,13 @@ export function AgentAvatar({ name, url, large = false }: { name: string; url?: 
     {url && failedUrl !== url ? <img src={url} alt={name} loading="lazy" decoding="async" onError={() => setFailedUrl(url)} className="h-full w-full object-cover" /> : name ? <span className={`${large ? 'text-2xl' : 'text-lg'} font-semibold text-primary`}>{name.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase()}</span> : <Bot className="h-6 w-6 text-primary" />}
   </span>;
 }
-export function AgentTabs({ value, onChange, items, children, label }: {
+export function AgentTabs({ value, onChange, items, children, label, variant = 'underline' }: {
   value: string; onChange: (value: string) => void; items: Array<{ value: string; label: string }>;
-  children: ReactNode; label: string;
+  children: ReactNode; label: string; variant?: 'underline' | 'pill';
 }) {
   return <Tabs.Root value={value} onValueChange={onChange} className="min-w-0 space-y-5">
-    <Tabs.List aria-label={label} className="flex max-w-full gap-1 overflow-x-auto border-b border-border pb-px">
-      {items.map(item => <Tabs.Trigger key={item.value} value={item.value} className="relative shrink-0 px-3.5 py-3 text-sm font-medium text-muted-foreground outline-none transition after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-gradient-to-r after:from-brand-500 after:to-brand-300 after:opacity-0 after:transition hover:text-foreground focus-visible:bg-muted data-[state=active]:text-primary data-[state=active]:after:opacity-100">{item.label}</Tabs.Trigger>)}
+    <Tabs.List aria-label={label} className={variant === 'pill' ? pageTabs.list : 'flex max-w-full gap-1 overflow-x-auto border-b border-border pb-px'}>
+      {items.map(item => <Tabs.Trigger key={item.value} value={item.value} className={variant === 'pill' ? pageTabs.tab : "relative shrink-0 px-3.5 py-3 text-sm font-medium text-muted-foreground outline-none transition after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-gradient-to-r after:from-brand-500 after:to-brand-300 after:opacity-0 after:transition hover:text-foreground focus-visible:bg-muted data-[state=active]:text-primary data-[state=active]:after:opacity-100"}>{item.label}</Tabs.Trigger>)}
     </Tabs.List>
     <Tabs.Content key={value} value={value} className="space-y-5 outline-none">{children}</Tabs.Content>
   </Tabs.Root>;

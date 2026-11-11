@@ -13,5 +13,7 @@ const eventSchema = new mongoose.Schema({
 }, { versionKey: false });
 
 eventSchema.index({ campaignId: 1, at: -1 });
+// Activity tab sorts { at: -1, _id: -1 }: without _id in the key every event of the campaign was sorted in memory.
+eventSchema.index({ campaignId: 1, at: -1, _id: -1 }, { name: 'sim_call_event_feed' });
 
 export default mongoose.model('SimCallEvent', eventSchema);

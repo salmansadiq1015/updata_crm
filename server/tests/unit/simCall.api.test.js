@@ -865,3 +865,78 @@ describe('mobile calling readiness', () => {
     await request(server).get(`${BASE}/readiness`).expect(401);
   });
 });
+
+describe('campaign stats (header KPIs) and list endpoints', () => {
+  it('GET /campaigns/stats sums every campaign of the caller (not only one page), scoped to the owner', async () => {
+    const empty = (await request(server).get(`${BASE}/campaigns/stats`).set(auth(tokenA)).expect(200)).body.data;
+    expect(empty).toMatchObject({
+      campaigns: 0, byStatus: { draft: 0, running: 0, paused: 0, completed: 0, cancelled: 0 },
+      tasks: { total: 0, closed: 0, answered: 0, callbacksDue: 0, needsReview: 0, syncFailed: 0 },
+      answerRate: null, callbacksOverdue: 0,
+    });
+
+    const running = await createRunning([await makeLead(), await makeLead()]);
+    await create([await makeLead()]); // a draft
+    await create([await makeLead()], {}, tokenB); // another user's campaign is never counted
+    await callOnce(running._id, { outcome: 'answered', answers: UNKNOWN_REQUIRED });
+    const cb = await callOnce(running._id, { outcome: 'callback_requested', callback: { at: new Date(Date.now() + 3600_000).toISOString(), timezone: 'UTC' } });
+    await SimCallTask.updateOne({ _id: cb.id }, { $set: { 'callback.at': new Date(Date.now() - 60_000) } });
+
+    const stats = (await request(server).get(`${BASE}/campaigns/stats`).set(auth(tokenA)).expect(200)).body.data;
+    expect(stats).toMatchObject({
+      campaigns: 2, byStatus: { draft: 1, running: 1, paused: 0, completed: 0, cancelled: 0 },
+      tasks: { total: 3, closed: 1, answered: 1, needsReview: 0, syncFailed: 0 },
+      answerRate: 1, callbacksOverdue: 1,
+    });
+    // Same figures the page used to add up from the list rows.
+    const list = (await request(server).get(`${BASE}/campaigns?limit=100`).set(auth(tokenA)).expect(200)).body.data;
+    expect(list.reduce((n, c) => n + c.summary.total, 0)).toBe(stats.tasks.total);
+
+    // A status change is visible immediately (generation-key invalidation).
+    await request(server).post(`${BASE}/campaigns/${running._id}/pause`).set(auth(tokenA)).expect(200);
+    const after = (await request(server).get(`${BASE}/campaigns/stats`).set(auth(tokenA)).expect(200)).body.data;
+    expect(after.byStatus).toMatchObject({ running: 0, paused: 1 });
+
+    const other = (await request(server).get(`${BASE}/campaigns/stats`).set(auth(tokenB)).expect(200)).body.data;
+    expect(other).toMatchObject({ campaigns: 1, byStatus: { draft: 1 }, tasks: { total: 1 } });
+    await request(server).get(`${BASE}/campaigns/stats`).expect(401);
+  });
+
+  it('single-pass summary matches the per-state/outcome/sync/attempt counters', async () => {
+    const c = await createRunning([await makeLead(), await makeLead(), await makeLead()]);
+    await callOnce(c._id, { outcome: 'no_answer' });
+    const t2 = await callOnce(c._id, { outcome: 'answered', answers: UNKNOWN_REQUIRED });
+    await SimCallTask.updateOne({ _id: t2.id }, { $set: { 'attempts.0.sync.status': 'failed' } });
+    const summary = await service.refreshSummary(c._id);
+    expect(summary).toMatchObject({
+      total: 3, pending: 2, completed: 1, answered: 1, noAnswer: 1, attempts: 2, syncFailed: 1, callbacks: 0, callbacksDue: 0,
+    });
+  });
+
+  it('task list omits the per-attempt CRM snapshot but keeps what the UI shows', async () => {
+    const c = await createRunning([await makeLead()]);
+    await callOnce(c._id, { outcome: 'answered', answers: UNKNOWN_REQUIRED, notes: 'Spoke to owner', transcript: 'call me in May' });
+    const [row] = (await request(server).get(`${BASE}/campaigns/${c._id}/tasks`).set(auth(tokenA)).expect(200)).body.data;
+    expect(row.attempts[0]).toMatchObject({ outcome: 'answered', notes: 'Spoke to owner', transcript: 'call me in May', sync: { status: 'ok' } });
+    expect(row.attempts[0].crmNotes).toBeUndefined();
+    expect(row.lead).toMatchObject({ name: expect.any(String) });
+  });
+
+  it('event feed is newest-first with a bounded total', async () => {
+    const c = await create([await makeLead()]);
+    const base = Date.now();
+    await SimCallEvent.insertMany(Array.from({ length: 1005 }, (_, i) => ({ campaignId: c._id, type: 'task.claimed', at: new Date(base - i * 1000) })));
+    const res = (await request(server).get(`${BASE}/campaigns/${c._id}/events?limit=10`).set(auth(tokenA)).expect(200)).body;
+    expect(res.data).toHaveLength(10);
+    expect(new Date(res.data[0].at) >= new Date(res.data[1].at)).toBe(true);
+    expect(res.pagination).toMatchObject({ total: 1000, totalCapped: true });
+  });
+
+  it('an overdue callback filter is never widened by a later "to" date', async () => {
+    const c = await createRunning([await makeLead()]);
+    await callOnce(c._id, { outcome: 'callback_requested', callback: { at: new Date(Date.now() + 2 * 3600_000).toISOString(), timezone: 'UTC' } });
+    const to = new Date(Date.now() + 5 * 24 * 3600_000).toISOString();
+    expect((await request(server).get(`${BASE}/callbacks`).query({ status: 'pending', to }).set(auth(tokenA)).expect(200)).body.data).toHaveLength(1);
+    expect((await request(server).get(`${BASE}/callbacks`).query({ status: 'overdue', to }).set(auth(tokenA)).expect(200)).body.data).toHaveLength(0);
+  });
+});

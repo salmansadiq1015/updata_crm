@@ -479,7 +479,7 @@ async function seedStarterVehicles() {
 
   const defs = [
     {
-      kennzeichen: 'ZH 128 540', label: 'Servicebus 1', make: 'VW', model: 'Crafter',
+      kennzeichen: 'ZH 128 540', label: 'Servicebus 1', make: 'VW', model: 'Crafter', assetType: 'van',
       fuelType: 'diesel', year: 2021, mileageKm: 84200, status: 'in_use', driverId: driverAt(0),
       lastServiceDate: monthsAgo(3), lastServiceKm: 78000, lastServiceGarage: 'Garage Müller AG',
       nextServiceDate: daysFromNow(75), nextServiceKm: 95000,
@@ -496,7 +496,7 @@ async function seedStarterVehicles() {
       ],
     },
     {
-      kennzeichen: 'BE 245 118', label: 'Servicebus 2', make: 'Ford', model: 'Transit',
+      kennzeichen: 'BE 245 118', label: 'Servicebus 2', make: 'Ford', model: 'Transit', assetType: 'van',
       fuelType: 'diesel', year: 2020, mileageKm: 112500, status: 'available', driverId: driverAt(1),
       lastServiceDate: monthsAgo(5), lastServiceKm: 104000, lastServiceGarage: 'AMAG',
       nextServiceDate: daysFromNow(30), nextServiceKm: 120000,
@@ -511,7 +511,7 @@ async function seedStarterVehicles() {
       ],
     },
     {
-      kennzeichen: 'ZH 401 992', label: 'Poolfahrzeug', make: 'Renault', model: 'Zoe',
+      kennzeichen: 'ZH 401 992', label: 'Poolfahrzeug', make: 'Renault', model: 'Zoe', assetType: 'car',
       fuelType: 'electric', year: 2023, mileageKm: 18300, status: 'available', driverId: null,
       lastServiceDate: monthsAgo(8), lastServiceKm: 9000, lastServiceGarage: 'Renault Retail',
       nextServiceDate: daysFromNow(120), nextServiceKm: 30000,
@@ -530,7 +530,7 @@ async function seedStarterVehicles() {
   let count = 0;
   for (const d of defs) {
     const vehicle = await Vehicle.create({
-      kennzeichen: d.kennzeichen, label: d.label, make: d.make, model: d.model,
+      kennzeichen: d.kennzeichen, label: d.label, make: d.make, model: d.model, assetType: d.assetType,
       fuelType: d.fuelType, year: d.year, mileageKm: d.mileageKm, status: d.status,
       currentDriverId: d.driverId,
       lastServiceDate: d.lastServiceDate, lastServiceKm: d.lastServiceKm, lastServiceGarage: d.lastServiceGarage,

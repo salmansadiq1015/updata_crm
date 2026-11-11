@@ -62,6 +62,10 @@ class DocumentIndexRepository {
     return buildCursorResponse(docs, limit, sortField);
   }
 
+  async updateById(id, update) {
+    return DocumentIndex.findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true }).select('-__v').lean();
+  }
+
   async softDelete(id, deletedBy) {
     return DocumentIndex.findByIdAndUpdate(
       id,

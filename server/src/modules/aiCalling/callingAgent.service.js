@@ -72,13 +72,63 @@ class CallingAgentService {
     return new Map(rows.map(row => [String(row._id), row]));
   }
 
-  async decorate(agent, actor, knownStats) {
-    const [stats, latestCampaign, eligibility, file] = await Promise.all([
+  /**
+   * Batch-load what decorate() needs for a page of agents: one eligibility pass over every
+   * assigned lead (instead of one policy lookup per agent) and one avatar file query.
+   * `byLead` may be passed in when the caller already resolved the leads' eligibility.
+   */
+  async decorateContext(agents, actor, { byLead = null } = {}) {
+    if (!byLead) byLead = await this.leadEligibility(agents.flatMap(a => a.assignedLeadIds || []), actor);
+    const fileIds = [...new Set(agents.filter(a => a.avatarFileId).map(a => String(a.avatarFileId)))];
+    const files = fileIds.length ? await FileMetadata.find({ _id: { $in: fileIds }, ...imageScope(actor) }).lean() : [];
+    return { byLead, files: new Map(files.map(f => [String(f._id), f])) };
+  }
+
+  /** leadId → preview row (previewEligibility shape), resolved in bounded batches. */
+  async leadEligibility(leadIds, actor) {
+    const ids = [...new Set(leadIds.map(String))];
+    const byLead = new Map();
+    const chunks = [];
+    for (let offset = 0; offset < ids.length; offset += 500) chunks.push(ids.slice(offset, offset + 500));
+    // A few batches at a time: bounded memory and connection use, without a serial chain.
+    for (let i = 0; i < chunks.length; i += 4) {
+      const previews = await Promise.all(chunks.slice(i, i + 4).map(leadIds => calling.previewEligibility(actor, { leadIds })));
+      for (const preview of previews) for (const row of preview.leads) byLead.set(row.leadId, row);
+    }
+    return byLead;
+  }
+
+  /**
+   * One agent's eligibility (same shape as calling.previewEligibility) from shared per-lead rows.
+   * Phone/suppression/consent reasons are per lead; `duplicate_phone` depends on the set, so it
+   * is recomputed for this agent's leads alone (first lead by id keeps the number).
+   */
+  agentEligibility(agent, byLead) {
+    const ids = [...new Set((agent.assignedLeadIds || []).map(String))];
+    const found = ids.filter(id => byLead.has(id)).sort();
+    const seen = new Set();
+    const reasonCounts = {};
+    const leads = found.map(id => {
+      const row = byLead.get(id);
+      const reasons = row.reasons.filter(r => r !== 'duplicate_phone');
+      if (row.phone) {
+        if (seen.has(row.phone)) reasons.push('duplicate_phone');
+        seen.add(row.phone);
+      }
+      for (const r of reasons) reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+      return { ...row, eligible: reasons.length === 0, reasons };
+    });
+    return { total: ids.length, found: found.length, unavailable: ids.length - found.length, eligible: leads.filter(l => l.eligible).length, reasonCounts, leads };
+  }
+
+  async decorate(agent, actor, knownStats, context = null) {
+    const ctx = context || await this.decorateContext([agent], actor);
+    const [stats, latestCampaign] = await Promise.all([
       knownStats || this.campaignStats([agent._id], actor),
       CallCampaign.findOne({ agentId: agent._id, createdBy: actor, isTest: { $ne: true }, kind: { $nin: AUXILIARY_CAMPAIGN_KINDS } }).sort({ createdAt: -1 }).lean(),
-      calling.previewEligibility(actor, { leadIds: agent.assignedLeadIds.map(String) }),
-      agent.avatarFileId ? FileMetadata.findOne({ _id: agent.avatarFileId, ...imageScope(actor) }).lean() : null,
     ]);
+    const eligibility = this.agentEligibility(agent, ctx.byLead);
+    const file = agent.avatarFileId ? ctx.files.get(String(agent.avatarFileId)) || null : null;
     let avatarUrl = findAvatarPreset(agent.avatarPresetId)?.url || null;
     if (!avatarUrl && file) { try { avatarUrl = (await this.image(file)).url; } catch { /* identity still loads during storage outages */ } }
     const totals = stats.get(String(agent._id)) || { completed: 0, answered: 0, inProgress: 0, failed: 0, qualified: 0, noAnswer: 0, totalCallSeconds: 0, campaigns: 0, activeCampaigns: 0, lastActiveAt: null };
@@ -106,13 +156,9 @@ class CallingAgentService {
     const filtered = docs.filter(a => (!readiness || agentReadiness(a).ready === (readiness === 'ready'))
       && (!campaignStatus || ((stats.get(String(a._id))?.activeCampaigns || 0) > 0) === (campaignStatus === 'active')));
     if (sort === 'active') filtered.sort((a, b) => new Date(stats.get(String(b._id))?.lastActiveAt || 0) - new Date(stats.get(String(a._id))?.lastActiveAt || 0));
-    const ids = [...new Set(docs.flatMap(doc => doc.assignedLeadIds.map(String)))];
-    const byLead = new Map();
-    // Bound policy lookups instead of making a request per off-screen agent.
-    for (let offset = 0; offset < ids.length; offset += 500) {
-      const preview = await calling.previewEligibility(actor, { leadIds: ids.slice(offset, offset + 500) });
-      for (const row of preview.leads) byLead.set(row.leadId, row);
-    }
+    // Bound policy lookups instead of making a request per off-screen agent; the visible
+    // cards reuse these rows rather than re-running eligibility once per agent.
+    const byLead = await this.leadEligibility(docs.flatMap(doc => doc.assignedLeadIds), actor);
     let eligible = 0;
     for (const doc of docs) {
       const seen = new Set();
@@ -126,7 +172,9 @@ class CallingAgentService {
     }
     const summary = { agents: docs.length, activeCampaigns: 0, inProgress: 0, completed: 0, eligible };
     for (const row of stats.values()) for (const key of ['activeCampaigns', 'inProgress', 'completed']) summary[key] += row[key] || 0;
-    return { data: await Promise.all(filtered.slice((page - 1) * limit, page * limit).map(doc => this.decorate(doc, actor, stats))),
+    const visible = filtered.slice((page - 1) * limit, page * limit);
+    const context = await this.decorateContext(visible, actor, { byLead });
+    return { data: await Promise.all(visible.map(doc => this.decorate(doc, actor, stats, context))),
       pagination: { page, limit, total: filtered.length, pages: Math.ceil(filtered.length / limit) }, summary };
   }
 

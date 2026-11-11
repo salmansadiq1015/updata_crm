@@ -107,7 +107,7 @@ const generatedDocumentSchema = new mongoose.Schema(
 generatedDocumentSchema.index({ sourceModule: 1, sourceRecordId: 1 });
 generatedDocumentSchema.index({ sourceModule: 1, sourceProjectId: 1, generatedAt: -1 });
 generatedDocumentSchema.index({ sourceModule: 1, sourceCustomerId: 1, generatedAt: -1 });
-generatedDocumentSchema.index({ generatedAt: -1 });
+generatedDocumentSchema.index({ generatedAt: -1, _id: -1 });
 
 const GeneratedDocument = mongoose.model('GeneratedDocument', generatedDocumentSchema);
 export default GeneratedDocument;

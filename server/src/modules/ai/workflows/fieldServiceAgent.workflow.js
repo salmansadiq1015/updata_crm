@@ -18,6 +18,13 @@ import {
   getFieldServiceCapabilityFields,
   isFieldServiceCapabilityAction,
 } from '../capabilities/fieldService.capabilities.js';
+import {
+  FLEET_ACTIONS,
+  classifyFleetAction,
+  executeFleetCapability,
+  getFleetCapabilityFields,
+  isFleetCapabilityAction,
+} from '../capabilities/fleet.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
 import agentGovernance from '../governance/agentGovernance.service.js';
 import { ACTION_LABELS, RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
@@ -71,8 +78,16 @@ const ACTIONS = Object.freeze({
   CREATE_QUOTATION: 'CREATE_QUOTATION',
   CREATE_INVOICE: 'CREATE_INVOICE',
   CREATE_TASK_REMINDER: 'CREATE_TASK_REMINDER',
+  ...FLEET_ACTIONS,
   GENERAL: 'GENERAL',
 });
+
+// Fleet actions that find their vehicle themselves and need no CRM context
+// (person, customer, project) resolved first.
+const FLEET_ACTIONS_WITHOUT_CONTEXT = new Set([
+  FLEET_ACTIONS.CREATE_VEHICLE, FLEET_ACTIONS.UPDATE_VEHICLE, FLEET_ACTIONS.SEARCH_VEHICLES,
+  FLEET_ACTIONS.FLEET_DUE, FLEET_ACTIONS.LOG_VEHICLE_SERVICE, FLEET_ACTIONS.LOG_VEHICLE_COST,
+]);
 
 
 const PROJECT_STATUS_BY_PHRASE = [
@@ -139,7 +154,7 @@ async function executeAction(state) {
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action, llmPlan?.params || null);
+  const context = action === ACTIONS.CREATE_CUSTOMER || FLEET_ACTIONS_WITHOUT_CONTEXT.has(action) ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action, llmPlan?.params || null);
   // Clean parameters extracted by the LLM planner; handlers prefer these over
   // keyword stripping. Dates crossed the queue as ISO strings.
   context.llmDraft = llmPlan?.params || null;
@@ -203,6 +218,8 @@ async function executeAction(state) {
 
 function classifyAction(input) {
   const text = input.toLowerCase();
+  const fleetAction = classifyFleetAction(text);
+  if (fleetAction) return fleetAction;
   const isDelete = hasAny(text, ['delete', 'remove', 'archive', 'deactivate', 'loeschen', 'löschen', 'archiv']);
   const isUpdate = hasAny(text, ['update', 'edit', 'change', 'set', 'mark', 'status', 'aktualisier', 'aendere', 'ändere']);
   const isView = hasSearchIntent(text) || hasAny(text, ['list', 'view', 'display', 'all', 'overview', 'recent', 'latest', 'alle', 'liste', 'uebersicht', 'übersicht']);
@@ -310,6 +327,17 @@ async function performAction(action, input, context, userId, state = {}) {
       ...target,
       resolvedContext: summarizeContext(context),
     };
+  }
+
+  if (isFleetCapabilityAction(action)) {
+    return executeFleetCapability({
+      action,
+      input,
+      context,
+      userId,
+      state,
+      helpers: fieldServiceCapabilityHelpers,
+    });
   }
 
   if (isFieldServiceCapabilityAction(action)) {
@@ -2027,6 +2055,7 @@ function fieldsForAction(action) {
     [ACTIONS.SEARCH_TASKS]: ['task search term'],
     [ACTIONS.SEARCH_REPORTS]: ['service report search term'],
   };
+  if (isFleetCapabilityAction(action)) return getFleetCapabilityFields(action);
   return map[action] || getFieldServiceCapabilityFields(action) || ['details'];
 }
 

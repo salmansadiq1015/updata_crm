@@ -84,6 +84,10 @@ const PAIRED_SYSTEM_END_REASONS = new Set(['agent_left', 'audio_failed', 'audio_
 const TEST_PROVIDERS = ['livekit_web', 'web_link_preview'];
 const isTestProvider = (provider) => TEST_PROVIDERS.includes(provider);
 const NOT_WEB_TEST = { provider: { $nin: TEST_PROVIDERS } };
+// Max lead / campaign ids a call-history search term expands to.
+const SEARCH_ID_LIMIT = 1000;
+// Max documents counted for the call-history pagination total.
+const LIST_COUNT_CAP = 10000;
 const callConsentRequired = () => process.env.AI_CALLING_REQUIRE_CONSENT !== 'false';
 
 /**
@@ -348,7 +352,11 @@ class AiCallingService {
    * the two can never disagree. Returns [{ lead, e164, hash, reasons }].
    */
   async _computeEligibility(leads, { isLink }) {
-    const computed = leads.map((lead) => {
+    // Lead id order, not query-plan order: which of two leads sharing a number keeps it (the
+    // other is `duplicate_phone`) must not change when the leads collection gains an index
+    // that answers `_id $in` in a different order. Lowest (oldest) id wins, as before.
+    const ordered = [...leads].sort((a, b) => (String(a._id) < String(b._id) ? -1 : String(a._id) > String(b._id) ? 1 : 0));
+    const computed = ordered.map((lead) => {
       const e164 = validDestination(lead);
       return { lead, e164, hash: e164 ? phoneHash(e164) : null };
     });
@@ -2549,9 +2557,11 @@ class AiCallingService {
     if (term) {
       const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
+      // Bounded: a broad term must not pull every matching CRM lead id into the $in. Deleted
+      // leads still match (their call history stays searchable), as with the former distinct().
       const [leadIds, campaignIds] = await Promise.all([
-        Lead.find({ $or: [{ name: regex }, { leadNumber: regex }] }).distinct('_id'),
-        CallCampaign.find({ createdBy: actor, name: regex }).distinct('_id'),
+        Lead.find({ $or: [{ name: regex }, { leadNumber: regex }] }).setOptions({ includeDeleted: true }).select('_id').limit(SEARCH_ID_LIMIT).lean().then(rows => rows.map(r => r._id)),
+        CallCampaign.find({ createdBy: actor, name: regex }).select('_id').limit(SEARCH_ID_LIMIT).lean().then(rows => rows.map(r => r._id)),
       ]);
       filter.$or = [
         { leadId: { $in: leadIds } },
@@ -2569,9 +2579,11 @@ class AiCallingService {
         .populate('campaignId', 'name')
         .populate('leadId', 'leadNumber name')
         .lean(),
-      CallRecord.countDocuments(filter),
+      // Bounded: the exclusions (tests, browser calls) are not in the index, so an exact count
+      // fetches every owner call. Past the cap the total is a lower bound (totalCapped).
+      CallRecord.countDocuments(filter, { limit: LIST_COUNT_CAP }),
     ]);
-    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit), totalCapped: total >= LIST_COUNT_CAP } };
   }
 
   async historyForLead(leadId, actor, { page = 1, limit = 25, campaignId } = {}) {
@@ -2817,27 +2829,36 @@ class AiCallingService {
   async analytics(actor, { from, to, campaignId } = {}) {
     const match = this._analyticsMatch(actor, { from, to, campaignId });
     const answeredCond = { $cond: [{ $in: ['$disposition', ['answered_completed', 'answered_partial', 'interrupted', 'unresponsive']] }, 1, 0] };
-    const [byDisposition, byQualification, byDay, totals, campaigns] = await Promise.all([
-      CallRecord.aggregate([{ $match: match }, { $group: { _id: '$disposition', count: { $sum: 1 } } }]),
-      CallRecord.aggregate([{ $match: match }, { $group: { _id: '$qualification', count: { $sum: 1 } } }]),
+    // One pass over the owner's calls ($facet) instead of four scans of the same match;
+    // only the fields the groups read are carried into the facets.
+    const [[facets], campaigns] = await Promise.all([
       CallRecord.aggregate([
         { $match: match },
-        { $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          calls: { $sum: 1 }, answered: { $sum: answeredCond },
-          qualified: { $sum: { $cond: [{ $eq: ['$qualification', 'qualified'] }, 1, 0] } },
+        { $project: { _id: 0, disposition: 1, qualification: 1, createdAt: 1, durationSeconds: 1, 'cost.amount': 1, reviewRequired: 1 } },
+        { $facet: {
+          byDisposition: [{ $group: { _id: '$disposition', count: { $sum: 1 } } }],
+          byQualification: [{ $group: { _id: '$qualification', count: { $sum: 1 } } }],
+          byDay: [
+            { $group: {
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              calls: { $sum: 1 }, answered: { $sum: answeredCond },
+              qualified: { $sum: { $cond: [{ $eq: ['$qualification', 'qualified'] }, 1, 0] } },
+            } },
+            // Keep the most recent 180 days (was the oldest 180), returned in date order.
+            { $sort: { _id: -1 } }, { $limit: 180 }, { $sort: { _id: 1 } },
+          ],
+          totals: [{ $group: {
+            _id: null, calls: { $sum: 1 }, answered: { $sum: answeredCond },
+            totalSeconds: { $sum: '$durationSeconds' }, cost: { $sum: '$cost.amount' },
+            reviews: { $sum: { $cond: ['$reviewRequired', 1, 0] } },
+            callbacks: { $sum: { $cond: [{ $eq: ['$disposition', 'callback_requested'] }, 1, 0] } },
+            qualified: { $sum: { $cond: [{ $eq: ['$qualification', 'qualified'] }, 1, 0] } },
+          } }],
         } },
-        { $sort: { _id: 1 } }, { $limit: 180 },
       ]),
-      CallRecord.aggregate([{ $match: match }, { $group: {
-        _id: null, calls: { $sum: 1 }, answered: { $sum: answeredCond },
-        totalSeconds: { $sum: '$durationSeconds' }, cost: { $sum: '$cost.amount' },
-        reviews: { $sum: { $cond: ['$reviewRequired', 1, 0] } },
-        callbacks: { $sum: { $cond: [{ $eq: ['$disposition', 'callback_requested'] }, 1, 0] } },
-        qualified: { $sum: { $cond: [{ $eq: ['$qualification', 'qualified'] }, 1, 0] } },
-      } }]),
       CallCampaign.countDocuments({ createdBy: actor }),
     ]);
+    const { byDisposition, byQualification, byDay, totals } = facets;
     const t = totals[0] || { calls: 0, answered: 0, totalSeconds: 0, cost: 0, reviews: 0, callbacks: 0, qualified: 0 };
     return {
       campaigns,

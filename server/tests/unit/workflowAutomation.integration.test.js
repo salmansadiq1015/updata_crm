@@ -615,3 +615,61 @@ describe('Workflow Automation — custom fields, schedules, fallbacks, email sig
     expect(await M.WorkflowEvent.exists({ type: 'link.clicked' })).toBeNull();
   });
 });
+
+describe('Workflow Automation — full check (analyze)', () => {
+  it('reports per-step problems, unready channels and open paths — and creates or sends nothing', async () => {
+    const sarah = await agents.create(agentInput(), actor);
+    const created = await wf.create({ name: 'Check me', graph: {
+      nodes: [
+        n('t', 'trigger.manual'), n('call', 'ai.call', { agentId: String(sarah._id), maxAttempts: 2 }),
+        n('sms', 'msg.sms', { body: '', purpose: 'transactional' }), n('q', 'logic.condition', { rules: { op: 'and', rules: [{ field: 'lead.status', operator: 'equals', value: 'new' }] } }),
+        n('ok', 'end', { outcome: 'qualified', updateLeadStatus: false }),
+      ],
+      edges: [e('t', 'out', 'call'), e('call', 'answered', 'q'), e('q', 'yes', 'ok'), e('call', 'unanswered', 'sms')],
+    } }, actor);
+    const lead = await makeLead();
+    const report = await wf.analyze(created._id, { leadId: String(lead._id) });
+
+    expect(report.status).toBe('blocked');
+    const byId = Object.fromEntries(report.nodes.map((x) => [x.nodeId, x]));
+    expect(byId.sms.status).toBe('error');
+    expect(byId.sms.issues).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'body', code: 'required', severity: 'error' })]));
+    expect(byId.sms.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'channel_unavailable', channel: 'sms' })]));
+    expect(report.channels.sms).toMatchObject({ ready: false, nodes: ['sms'] });
+    expect(report.channels.voice).toMatchObject({ ready: true, nodes: ['call'] });
+    expect(byId.t.status).toBe('ok');
+    expect(byId.call.dryRun).toMatchObject({ status: 'ok', port: 'answered' });
+    expect(byId.q.dryRun).toMatchObject({ status: 'ok', port: 'yes' }); // evaluated on the real lead (status "new")
+    // Paths: answered→yes ends; answered→no, failed, blocked and the SMS branches are open.
+    expect(report.counts.endingPaths).toBe(1);
+    expect(report.counts.openPaths).toBeGreaterThanOrEqual(4);
+    expect(report.paths.paths.find((p) => p.status === 'ends')).toMatchObject({ end: 'qualified', steps: [{ nodeId: 't', port: 'out' }, { nodeId: 'call', port: 'answered' }, { nodeId: 'q', port: 'yes' }, { nodeId: 'ok' }] });
+    expect(report.lead).toMatchObject({ name: 'Müller AG' });
+
+    expect(await CallCampaign.countDocuments({})).toBe(0);
+    expect(await MessageRecipient.countDocuments({})).toBe(0);
+    expect(await M.WorkflowRun.countDocuments({})).toBe(0);
+    expect(dial).not.toHaveBeenCalled();
+  });
+
+  it('a complete workflow is ready, every step passes its dry run (no false alarms) without a sample lead', async () => {
+    const created = await wf.create({ name: 'Fine', graph: {
+      nodes: [n('t', 'trigger.manual'), n('tag', 'crm.add_tags', { add: ['vip'] }), n('cf', 'crm.custom_fields', { set: [{ key: 'tier', value: 'gold' }] }), n('note', 'crm.add_note', { text: 'Hello {{lead.name}}' }), n('end', 'end', { outcome: 'completed' })],
+      edges: [e('t', 'out', 'tag'), e('tag', 'out', 'cf'), e('cf', 'out', 'note'), e('note', 'out', 'end')],
+    } }, actor);
+    const report = await wf.analyze(created._id, {});
+    expect(report).toMatchObject({ status: 'ready', counts: { steps: 5, stepsOk: 5, errors: 0, paths: 1, openPaths: 0, endingPaths: 1 }, channels: {}, lead: null });
+    expect(report.nodes.every((x) => x.dryRun?.status === 'ok')).toBe(true);
+  });
+
+  it('retry loops are reported as bounded repeats, intentional ends as stops; an unsaved draft graph can be checked', async () => {
+    const created = await wf.create({ name: 'Draft' }, actor);
+    const graph = {
+      nodes: [n('t', 'trigger.manual'), n('d', 'logic.delay', { amount: 1, unit: 'days' }), n('q', 'logic.condition', { rules: { op: 'and', rules: [{ field: 'run.visits', operator: 'lt', value: 3 }] }, intentionalEnd: true })],
+      edges: [e('t', 'out', 'd'), e('d', 'out', 'q'), e('q', 'yes', 'd')],
+    };
+    const report = await wf.analyze(created._id, { graph });
+    expect(report.paths.byStatus).toEqual({ repeats: 1, stops: 1 });
+    expect(report.counts.openPaths).toBe(0);
+  });
+});

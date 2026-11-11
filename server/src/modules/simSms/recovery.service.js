@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import RecoveryItem from './recoveryItem.model.js';
+import RecoveryItem, { SEVERITY_RANK } from './recoveryItem.model.js';
 import SimSmsMessage from './simSmsMessage.model.js';
 import SimSmsConversation from './simSmsConversation.model.js';
 import SmsDevice from './smsDevice.model.js';
@@ -11,6 +11,10 @@ import auditService from '../auth/audit.service.js';
 import logger from '../../shared/logger/index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import { maskNumber } from './engine/deviceHealth.js';
+import { generationCache } from '../simCall/generationCache.js';
+
+// Recovery badge counts (polled by every open CRM tab); bumped on every status/type change below.
+const countsCache = generationCache('simsms:recovery-counts', { ttlSeconds: 30 });
 
 /**
  * Central recovery inbox. Collectors (one-line hooks in the SIM SMS service,
@@ -28,11 +32,15 @@ const ACTIONS = {
   provider_failure: ['dismiss'],
 };
 
+/** Invalidate the cached counts, then push the fresh open count (which re-warms the cache). */
 function emitCounts(ownerId) {
+  if (!ownerId) return;
+  const bumped = countsCache.bump(ownerId);
   setImmediate(async () => {
     try {
-      const counts = await RecoveryItem.countDocuments({ ownerId, status: 'open' });
-      global.io?.to(`user:${ownerId}`).emit('sim-sms:recovery', { open: counts });
+      await bumped;
+      const { open } = await recoveryService.counts(ownerId);
+      global.io?.to(`user:${ownerId}`).emit('sim-sms:recovery', { open });
     } catch { /* best effort */ }
   });
 }
@@ -56,7 +64,7 @@ class RecoveryService {
       const item = await RecoveryItem.findOneAndUpdate(
         { key },
         {
-          $setOnInsert: { key, type, severity, ownerId, source, leadId, campaignId, conversationId, messageId, deviceId, details, status: 'open' },
+          $setOnInsert: { key, type, severity, severityRank: SEVERITY_RANK[severity] ?? 2, ownerId, source, leadId, campaignId, conversationId, messageId, deviceId, details, status: 'open' },
           $set: { lastSeenAt: new Date() },
           $inc: { occurrences: 1 },
         },
@@ -127,17 +135,22 @@ class RecoveryService {
   }
 
   async crmSyncSucceeded(conversationId) {
+    const key = `sync_failure:crm_sync:${conversationId}`;
+    const open = await RecoveryItem.findOne({ key, status: 'open' }).select('ownerId').lean();
+    if (!open) return;
     await RecoveryItem.updateMany(
-      { key: `sync_failure:crm_sync:${conversationId}`, status: 'open' },
+      { key, status: 'open' },
       { $set: { status: 'resolved', resolution: { action: 'auto_resolved', by: null, at: new Date(), note: 'CRM sync succeeded on retry', result: null } } },
     );
+    emitCounts(open.ownerId);
   }
 
   async autoResolveResync(ownerId, deviceId) {
-    await RecoveryItem.updateMany(
+    const res = await RecoveryItem.updateMany(
       { ownerId, deviceId, type: 'sync_failure', status: 'open', 'resolution.action': 'request_resync' },
       { $set: { status: 'resolved', 'resolution.at': new Date(), 'resolution.note': 'Device completed the resync' } },
     );
+    if (res.modifiedCount) emitCounts(ownerId);
   }
 
   /** Sweep collector: provider messaging recipients stuck in unknown / permanently failed. */
@@ -167,7 +180,7 @@ class RecoveryService {
   async list(actor, { page = 1, limit = 25, type, status = 'open' } = {}) {
     const filter = { ownerId: actor, status, ...(type ? { type } : {}) };
     const [rows, total] = await Promise.all([
-      RecoveryItem.find(filter).sort({ severity: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      RecoveryItem.find(filter).sort({ severityRank: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       RecoveryItem.countDocuments(filter),
     ]);
     const leadIds = [...new Set(rows.filter((r) => r.leadId).map((r) => String(r.leadId)))];
@@ -176,6 +189,10 @@ class RecoveryService {
   }
 
   async counts(actor) {
+    return countsCache.get(actor, () => this._computeCounts(actor));
+  }
+
+  async _computeCounts(actor) {
     const rows = await RecoveryItem.aggregate([
       { $match: { ownerId: new mongoose.Types.ObjectId(String(actor)), status: 'open' } },
       { $group: { _id: '$type', n: { $sum: 1 } } },
@@ -187,7 +204,12 @@ class RecoveryService {
   async get(actor, id) {
     const item = await RecoveryItem.findOne({ _id: id, ownerId: actor }).lean();
     if (!item) throw new NotFoundError('RecoveryItem', id);
-    const lead = item.leadId ? await Lead.findById(item.leadId).select('_id name leadNumber').lean() : null;
+    return this._serializeWithLead(item);
+  }
+
+  /** One item with its lead summary (the list's shape — action results used to come back with lead: null). */
+  async _serializeWithLead(item) {
+    const lead = item?.leadId ? await Lead.findById(item.leadId).select('_id name leadNumber').lean() : null;
     return this._serialize(item, new Map(lead ? [[String(lead._id), { _id: String(lead._id), name: lead.name, leadNumber: lead.leadNumber }]] : []));
   }
 
@@ -252,7 +274,7 @@ class RecoveryService {
       eventType: `sim_sms.recovery.${action}`, userId: actor, ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent, result: 'success', module: 'sim-sms',
       details: { recoveryItemId: String(item._id), type: item.type, messageId: item.messageId ? String(item.messageId) : null, leadId: leadId || (item.leadId ? String(item.leadId) : null), note },
     });
-    return this._serialize(updated);
+    return this._serializeWithLead(updated);
   }
 
   async bulkDismiss(actor, { ids, note = null }, meta = {}) {
@@ -343,4 +365,5 @@ class RecoveryService {
   async deviceExists(ownerId, deviceId) { return Boolean(await SmsDevice.exists({ userId: ownerId, deviceId })); }
 }
 
-export default new RecoveryService();
+const recoveryService = new RecoveryService();
+export default recoveryService;

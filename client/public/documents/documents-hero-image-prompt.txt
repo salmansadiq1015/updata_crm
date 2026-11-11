@@ -1,0 +1,5 @@
+Document hub header artwork
+Generated with Higgsfield gpt_image_2_6 (16:9), upscaled 4K (bytedance), encoded with sharp: AVIF q52 + WebP q78 at 960/1600/2560 px.
+
+Prompt:
+Premium enterprise SaaS dashboard header background, ultra-wide. Photoreal 3D render on deep midnight navy (#070d1a). Right half: fanned stack of white documents with abstract unreadable lines, dark glass folder, frosted glass archive box, glowing cyan check-mark seal, floating glass cards linked by faint cyan light threads; glossy reflective floor, blue/cyan rim light, volumetric haze. Left 45% calm empty navy for text. Blue and cyan only, no purple. No readable text, logos, people or watermark.

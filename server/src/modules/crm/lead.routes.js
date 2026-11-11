@@ -10,6 +10,7 @@ import {
   listLeads,
   mapLeads,
   leadFilterOptions,
+  leadStats,
   followUps,
   leadIdParam,
   convertLead,
@@ -42,6 +43,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 // Named routes BEFORE /:id
 router.get('/duplicates', authenticate, requirePermission('lead:read'), validate(duplicates), (req, res, next) => leadController.duplicates(req, res, next));
+// Header KPIs (cached ≤ 60 s, invalidated by any lead / follow-up write).
+router.get('/stats', authenticate, requirePermission('lead:read'), validate(leadStats), (req, res, next) => leadController.stats(req, res, next));
 router.get('/filter-options', authenticate, requirePermission('lead:read'), validate(leadFilterOptions), (req, res, next) => leadController.filterOptions(req, res, next));
 // Follow-ups agenda across leads (contact-log followUpAt), for the mobile app.
 router.get('/follow-ups', authenticate, requirePermission('lead:read'), validate(followUps), (req, res, next) => leadController.followUps(req, res, next));

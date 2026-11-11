@@ -180,6 +180,7 @@ class LeadSlaService {
       ] },
     }).select('_id leadId ownerId nextDueAt priority').limit(BATCH).lean();
     const reminderNames = await this._leadNames(reminders.map((fu) => fu.leadId));
+    await this._retireOrphans(reminders, reminderNames, 'reminderNotifiedFor');
     for (const fu of reminders) {
       if (!reminderNames.has(String(fu.leadId))) continue;
       const delivered = await notify({
@@ -203,6 +204,7 @@ class LeadSlaService {
       $expr: { $ne: ['$overdueNotifiedFor', '$nextDueAt'] },
     }).select('_id leadId ownerId nextDueAt timezone note').limit(BATCH).lean();
     const leadNames = await this._leadNames(overdueFollowUps.map((f) => f.leadId));
+    await this._retireOrphans(overdueFollowUps, leadNames, 'overdueNotifiedFor');
     for (const fu of overdueFollowUps) {
       const leadName = leadNames.get(String(fu.leadId));
       if (!leadName) continue; // lead deleted
@@ -236,6 +238,7 @@ class LeadSlaService {
         $expr: { $ne: ['$escalatedFor', '$nextDueAt'] },
       }).select('_id leadId ownerId nextDueAt').limit(BATCH).lean();
       const names = await this._leadNames(stale.map((f) => f.leadId));
+      await this._retireOrphans(stale, names, 'escalatedFor');
       for (const fu of stale) {
         const leadName = names.get(String(fu.leadId));
         if (!leadName) continue;
@@ -265,6 +268,25 @@ class LeadSlaService {
       }
     }
     return result;
+  }
+
+  /**
+   * Follow-ups whose lead is gone (soft-deleted) are skipped by the sweep, but
+   * they kept matching the next sweep's query too: once BATCH of them piled up
+   * they filled every batch and starved live follow-ups of reminders, overdue
+   * alerts and escalations. Stamp the marker for the current due instant (no
+   * notification, no action entry) so they leave the candidate set; a snooze
+   * or reschedule re-arms them exactly like any other follow-up.
+   */
+  async _retireOrphans(rows, names, marker) {
+    const orphans = rows.filter((fu) => !names.has(String(fu.leadId)));
+    if (!orphans.length) return;
+    await LeadFollowUp.bulkWrite(orphans.map((fu) => ({
+      updateOne: {
+        filter: { _id: fu._id, status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: fu.nextDueAt },
+        update: { $set: { [marker]: fu.nextDueAt } },
+      },
+    })), { ordered: false });
   }
 
   async _leadNames(leadIds) {

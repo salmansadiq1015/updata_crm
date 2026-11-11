@@ -23,3 +23,39 @@
   100% { box-shadow: 0 0 0 0 rgb(14 165 233 / 0); }
 }
 @media (prefers-reduced-motion: reduce) { .wf-ai-flash { animation: none; outline: 2px solid rgb(14 165 233 / 0.6); } }
+
+/* Copilot timeline — live orb, shimmering current step, pulsing node, entries slide in. Brand blue/cyan only. */
+.wf-tl-orb-live { background: conic-gradient(from 0deg, rgb(14 165 233), rgb(34 211 238), rgb(56 189 248), rgb(14 165 233)); animation: wf-tl-spin 2.4s linear infinite; box-shadow: 0 0 16px -2px rgb(34 211 238 / 0.55); }
+.wf-tl-orb-live > * { animation: wf-tl-spin 2.4s linear infinite reverse; }
+@keyframes wf-tl-spin { to { transform: rotate(360deg); } }
+.wf-tl-shimmer {
+  background: linear-gradient(90deg, currentColor 0%, currentColor 35%, rgb(56 189 248) 50%, currentColor 65%, currentColor 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: wf-tl-shimmer 1.8s ease-in-out infinite;
+}
+@keyframes wf-tl-shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+.wf-tl-ping { animation: wf-tl-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@keyframes wf-tl-ping { 75%, 100% { transform: scale(1.6); opacity: 0; } }
+.wf-tl-in { animation: wf-tl-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes wf-tl-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .wf-tl-orb-live, .wf-tl-orb-live > *, .wf-tl-ping, .wf-tl-in { animation: none; }
+  .wf-tl-shimmer { animation: none; -webkit-text-fill-color: currentColor; background: none; }
+}
+/* Copilot read-aloud equaliser */
+.wf-voice-eq { height: 30%; animation: wf-voice-eq 0.9s ease-in-out infinite; }
+@keyframes wf-voice-eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }
+@media (prefers-reduced-motion: reduce) { .wf-voice-eq { animation: none; height: 70%; } }
+/* Workflow demo: blocks glide in from the palette side, the next block to add glows, progress fills. */
+.wf-demo .react-flow__node.wf-demo-node { transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1), opacity 450ms ease-out; }
+.wf-demo .react-flow__node.wf-demo-spawn { opacity: 0; transition: none; }
+.wf-demo .react-flow__edge.wf-demo-edge-new { animation: wf-demo-fade 450ms ease-out both; }
+@keyframes wf-demo-fade { from { opacity: 0; } to { opacity: 1; } }
+.wf-demo-next { animation: wf-demo-glow 1.6s ease-in-out infinite; }
+@keyframes wf-demo-glow { 50% { box-shadow: 0 0 0 6px rgb(14 165 233 / 0.10), 0 0 18px -2px rgb(34 211 238 / 0.55); } }
+.wf-demo-progress { animation: wf-demo-progress linear forwards; width: 0; }
+@keyframes wf-demo-progress { to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .wf-demo .react-flow__node.wf-demo-node, .wf-demo .react-flow__edge.wf-demo-edge-new, .wf-demo-next { transition: none; animation: none; }
+  .wf-demo-progress { animation: none; width: 100%; }
+}

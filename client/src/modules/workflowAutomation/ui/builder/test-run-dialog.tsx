@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ExternalLink, FlaskConical, Loader2, Rocket, Search, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ExternalLink, FlaskConical, ListChecks, Loader2, Rocket, Search, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,7 +13,8 @@ import { useLeadSearch, type LeadOption } from '../../hooks/use-lookups';
 import { CATEGORY_STYLES, PORT_TONE_CLASSES, portTone, visualFor } from '../../lib/node-registry';
 import { SelectField } from './form-controls';
 import { OutcomeBadge } from '../shared/status-badge';
-import type { EndOutcome, TestRunOptions, TestRunResult, WorkflowGraph } from '../../types/workflow-types';
+import { WorkflowCheck } from './workflow-check';
+import type { EndOutcome, TestRunOptions, TestRunResult, WorkflowCheckReport, WorkflowGraph } from '../../types/workflow-types';
 
 interface Props {
   open: boolean; onOpenChange: (v: boolean) => void; workflowId: string; graph: WorkflowGraph; onResult: (r: TestRunResult | null) => void;
@@ -23,9 +24,13 @@ interface Props {
   canLiveTest?: boolean;
   publishedVersion?: number | null;
   dirty?: boolean;
+  /** Full check: jump to a step, or hand a repair request to the AI Copilot. */
+  onFocusNode?: (nodeId: string) => void;
+  onAskAi?: (prompt: string) => void;
+  readOnly?: boolean;
 }
 
-export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult, startNodeId = null, canLiveTest = false, publishedVersion = null, dirty = false }: Props) {
+export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult, startNodeId = null, canLiveTest = false, publishedVersion = null, dirty = false, onFocusNode, onAskAi, readOnly = false }: Props) {
   const { t } = useLanguage();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -33,7 +38,23 @@ export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult,
   const [options, setOptions] = useState<TestRunOptions>({ callOutcome: 'answered', analysis: 'qualified', messageOutcome: 'sent', eventOutcome: 'matched' });
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<TestRunResult | null>(null);
-  const [mode, setMode] = useState<'dry' | 'live'>('dry');
+  const [mode, setMode] = useState<'check' | 'dry' | 'live'>('check');
+  const [report, setReport] = useState<WorkflowCheckReport | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const runCheck = useCallback(async () => {
+    setChecking(true); setCheckError(null);
+    try { setReport(await workflowApi.analyze(workflowId, { graph, leadId: lead?._id || null })); }
+    catch (e) { setCheckError((e as { message?: string })?.message || t('workflowBuilder.check.failed', 'The check could not be completed.')); }
+    finally { setChecking(false); }
+  }, [workflowId, graph, lead, t]);
+  const effectiveMode = startNodeId ? 'dry' : mode;
+  // Run the full check as soon as the dialog opens on it (and when the user returns to it).
+  useEffect(() => {
+    if (!open || effectiveMode !== 'check' || report || checking || checkError) return undefined;
+    const id = setTimeout(() => { void runCheck(); }, 0);
+    return () => clearTimeout(id);
+  }, [open, effectiveMode, report, checking, checkError, runCheck]);
   const [confirmLive, setConfirmLive] = useState(false);
   const [liveCampaign, setLiveCampaign] = useState<string | null>(null);
   useEffect(() => { const id = setTimeout(() => setDebounced(q), 250); return () => clearTimeout(id); }, [q]);
@@ -60,24 +81,31 @@ export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult,
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setResult(null); setLiveCampaign(null); setConfirmLive(false); setMode('dry'); } }}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setResult(null); setLiveCampaign(null); setConfirmLive(false); setMode('check'); setReport(null); setCheckError(null); } }}>
+      <DialogContent className={cn('max-h-[90vh] overflow-y-auto', effectiveMode === 'check' ? 'sm:max-w-3xl' : 'sm:max-w-2xl')}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FlaskConical className="size-5 text-primary" />{startNodeId ? t('workflowBuilder.test.stepTitle', 'Test this step') : t('workflowBuilder.test.title', 'Test workflow')}</DialogTitle>
-          <DialogDescription>{startNodeId ? t('workflowBuilder.test.stepDescription', 'Simulates only this step for a real lead — nothing is called, sent or changed.') : t('workflowBuilder.test.description', 'A safe simulation on a real lead: conditions read the lead’s real data, but nothing is called, sent or changed.')}</DialogDescription>
+          <DialogDescription>{effectiveMode === 'check' ? t('workflowBuilder.check.tabHint', 'Checks every step, every path and every channel of this draft. Nothing is called, sent or changed.') : startNodeId ? t('workflowBuilder.test.stepDescription', 'Simulates only this step for a real lead — nothing is called, sent or changed.') : t('workflowBuilder.test.description', 'A safe simulation on a real lead: conditions read the lead’s real data, but nothing is called, sent or changed.')}</DialogDescription>
         </DialogHeader>
         {!startNodeId && (
           <div className="inline-flex rounded-lg border bg-muted/40 p-0.5" role="tablist">
-            {(['dry', 'live'] as const).map((m) => (
+            {(['check', 'dry', 'live'] as const).map((m) => (
               <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)} disabled={m === 'live' && !canLiveTest}
-                className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40', mode === m ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                {m === 'dry' ? t('workflowBuilder.test.modeDry', 'Simulation (safe)') : t('workflowBuilder.test.modeLive', 'Live test (real actions)')}
+                className={cn('inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40', mode === m ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                {m === 'check' && <ListChecks className="size-3.5" />}
+                {m === 'check' ? t('workflowBuilder.check.tab', 'Full check') : m === 'dry' ? t('workflowBuilder.test.modeDry', 'Simulation (safe)') : t('workflowBuilder.test.modeLive', 'Live test (real actions)')}
               </button>
             ))}
           </div>
         )}
 
-        <div className="grid gap-5 md:grid-cols-2">
+        {effectiveMode === 'check' && (
+          <WorkflowCheck report={report} loading={checking} error={checkError} readOnly={readOnly} onRerun={() => void runCheck()}
+            onFocusNode={(id) => { onFocusNode?.(id); onOpenChange(false); }}
+            onAskAi={(prompt) => { onAskAi?.(prompt); onOpenChange(false); }}
+            onShowPath={(r) => onResult(r)} />
+        )}
+        {effectiveMode !== 'check' && <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <p className="text-xs font-semibold">{t('workflowBuilder.test.lead', 'Sample lead')}</p>
             <div className="relative">
@@ -122,9 +150,9 @@ export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult,
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="mt-px size-3.5 shrink-0 text-emerald-500" />{t('workflowBuilder.test.safe', 'No calls, messages, tasks or CRM changes are made.')}</p>
           </div>
           )}
-        </div>
+        </div>}
 
-        {result && (
+        {result && effectiveMode !== 'check' && (
           <div className="space-y-3 rounded-2xl border bg-muted/20 p-4" aria-live="polite">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold">{t('workflowBuilder.test.path', 'Path for {lead}', { lead: result.lead.name })}</p>
@@ -160,7 +188,7 @@ export function TestRunDialog({ open, onOpenChange, workflowId, graph, onResult,
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('workflowBuilder.common.close', 'Close')}</Button>
-          {mode === 'live'
+          {effectiveMode === 'check' ? null : mode === 'live'
             ? <Button onClick={runLive} disabled={!lead || running || !confirmLive || !publishedVersion || Boolean(liveCampaign)} className="bg-amber-600 hover:bg-amber-700">{running ? <Loader2 className="me-1.5 size-4 animate-spin" /> : <Rocket className="me-1.5 size-4" />}{t('workflowBuilder.test.runLive', 'Start live test')}</Button>
             : <Button onClick={run} disabled={!lead || running}>{running ? <Loader2 className="me-1.5 size-4 animate-spin" /> : <FlaskConical className="me-1.5 size-4" />}{startNodeId ? t('workflowBuilder.test.runStep', 'Test step') : t('workflowBuilder.test.run', 'Run test')}</Button>}
         </DialogFooter>

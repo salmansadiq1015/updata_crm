@@ -11,7 +11,7 @@ vi.mock('@/modules/leads/services/lead-api', () => ({
 }));
 const api = {
   list: vi.fn(), get: vi.fn(), create: vi.fn(), action: vi.fn(), retry: vi.fn(), tasks: vi.fn(), events: vi.fn(),
-  retrySync: vi.fn(), reschedule: vi.fn(), cancelCallback: vi.fn(), callbacks: vi.fn(),
+  retrySync: vi.fn(), reschedule: vi.fn(), cancelCallback: vi.fn(), callbacks: vi.fn(), stats: vi.fn(),
 };
 vi.mock('../services/sim-calls-api', () => ({ simCallsApi: api }));
 
@@ -41,6 +41,7 @@ function wrap(ui: ReactNode) {
 beforeEach(() => {
   cleanup();
   Object.values(api).forEach((fn) => fn.mockReset());
+  api.stats.mockResolvedValue({ campaigns: 1, byStatus: { draft: 0, running: 1, paused: 0, completed: 0, cancelled: 0 }, tasks: { total: 4, closed: 2, answered: 1, callbacksDue: 0, needsReview: 1, syncFailed: 1 }, answerRate: 0.5, callbacksOverdue: 0, generatedAt: new Date().toISOString() });
   api.events.mockResolvedValue(page([{ _id: 'e1', type: 'task.completed', at: new Date().toISOString(), leadId: { name: 'Acme AG' } }]));
   api.tasks.mockImplementation(async (_id: string, params: { state?: string }) => page(params.state === 'scheduled' ? [cbTask] : [task]));
 });

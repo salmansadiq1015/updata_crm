@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ChevronDown, Search, Star } from 'lucide-react';
+import { ChevronDown, PlayCircle, Search, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -18,9 +18,10 @@ interface Props {
   recent?: string[];
   favorites?: string[];
   onToggleFavorite?: (type: string) => void;
+  onOpenDemo?: () => void;
 }
 
-export function NodePalette({ nodes, hasTrigger, onAdd, className, recent = [], favorites = [], onToggleFavorite }: Props) {
+export function NodePalette({ nodes, hasTrigger, onAdd, className, recent = [], favorites = [], onToggleFavorite, onOpenDemo }: Props) {
   const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -42,9 +43,17 @@ export function NodePalette({ nodes, hasTrigger, onAdd, className, recent = [], 
   return (
     <aside className={cn('flex h-full min-h-0 flex-col', className)} aria-label={t('workflowBuilder.palette.title', 'Building blocks')}>
       <div className="space-y-3 border-b p-3">
-        <div>
-          <p className="text-sm font-semibold">{t('workflowBuilder.palette.title', 'Building blocks')}</p>
-          <p className="text-xs text-muted-foreground">{t('workflowBuilder.palette.hint', 'Drag onto the canvas or click to add')}</p>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{t('workflowBuilder.palette.title', 'Building blocks')}</p>
+            <p className="text-xs text-muted-foreground">{t('workflowBuilder.palette.hint', 'Drag onto the canvas or click to add')}</p>
+          </div>
+          {onOpenDemo && (
+            <button type="button" onClick={onOpenDemo} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/[0.06] px-2 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-500/15 dark:text-sky-300"
+              title={t('workflowDemo.title', 'How to build a workflow')}>
+              <PlayCircle className="size-3.5" />{t('workflowBuilder.palette.demo', 'Demo')}
+            </button>
+          )}
         </div>
         <div className="relative">
           <Search className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />

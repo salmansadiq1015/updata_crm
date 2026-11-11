@@ -4,12 +4,14 @@ import dynamic from 'next/dynamic';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { intlLocaleFor } from '@/lib/i18n/locale-config';
 import { DropdownMenu } from 'radix-ui';
-import { Archive, ArrowRight, Bot, Copy, MoreHorizontal, Pencil, PhoneIncoming, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Archive, ArrowRight, AudioLines, BarChart3, Bot, Coins, Copy, MoreHorizontal, Pencil, PhoneIncoming, PhoneOutgoing, Plus, Radio, Search, Target, Timer, Trash2, Users } from 'lucide-react';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton } from '@/shared/components/page-hero';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useAgentMutations, useCallingAgents } from '../hooks/use-calling-agents';
 import { useAiCallingRealtime } from '../hooks/use-ai-calling-realtime';
-import { useCampaigns, useTelephonyHealth } from '../hooks/use-ai-calling';
+import { useAnalytics, useCampaigns, useTelephonyHealth } from '../hooks/use-ai-calling';
 import type { CallingAgent, Campaign } from '../types/ai-calling-types';
 const CallingAgentEditor = dynamic(() => import('./calling-agent-editor').then(module => module.CallingAgentEditor), { loading: DeferredCallingView });
 const AgentCampaignHistory = dynamic(() => import('./calling-agent-workspace').then(module => module.AgentCampaignHistory), { loading: DeferredCallingView });
@@ -47,7 +49,7 @@ function DeferredCallingView() {
 const PLATFORM_TABS = ['agents', 'campaigns', 'calls', 'analytics', 'quality', 'benchmarks', 'review', 'knowledge', 'testing', 'connections'];
 
 export function CallingAgentPlatform({ initialAgentId = null, initialTab = null }: { initialAgentId?: string | null; initialTab?: string | null } = {}) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [tab, setTab] = useState(initialTab && PLATFORM_TABS.includes(initialTab) ? initialTab : 'agents');
   const [agentId, setAgentId] = useState<string | null>(initialAgentId);
   const [workspaceTab, setWorkspaceTab] = useState('overview');
@@ -62,6 +64,14 @@ export function CallingAgentPlatform({ initialAgentId = null, initialTab = null 
   const campaigns = useCampaigns({ limit: 100 });
   const telephony = useTelephonyHealth();
   useAiCallingRealtime();
+  // All-time figures: the same query the Analytics tab opens with (no date range), so it is shared.
+  const stats = useAnalytics();
+  const intl = intlLocaleFor(locale);
+  const running = (campaigns.data?.data || []).filter(c => c.status === 'running').length;
+  const num = (v: number | undefined) => (v == null ? '—' : v.toLocaleString(intl));
+  const pct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+  const duration = (sec: number) => { const m = Math.floor((sec || 0) / 60); const r = Math.round((sec || 0) % 60); return m ? `${m}m ${String(r).padStart(2, '0')}s` : `${r}s`; };
+  const money = (usd: number) => new Intl.NumberFormat(intl, { style: 'currency', currency: 'USD', maximumFractionDigits: usd < 100 ? 2 : 0 }).format(usd || 0);
   const openAgent = (id: string, section = 'overview') => { setWorkspaceTab(section); setAgentId(id); setCreating(false); };
   return <div className="h-full space-y-5 overflow-y-auto bg-card p-4 text-foreground sm:p-6">
     {agentId ? <CallingAgentWorkspace key={agentId} id={agentId} initialTab={workspaceTab} onBack={() => {
@@ -72,8 +82,37 @@ export function CallingAgentPlatform({ initialAgentId = null, initialTab = null 
         window.history.replaceState(window.history.state, '', url);
       }
     }} onLaunch={setLaunchAgent} onCampaign={setCampaignId} /> : <>
-      <header className="flex flex-wrap items-start justify-between gap-4 py-1"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/20 bg-gradient-to-br from-blue-500/15 to-cyan-500/15"><Bot className="h-5 w-5 text-primary" /></span><div><h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('callingExperience.agents')}</h1><p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">{t('callingExperience.intro')}</p></div></div><button className={primaryClass} disabled={!canManage} onClick={() => setCreating(true)}><Plus className="h-4 w-4" />{t('callingExperience.create')}</button></header>
-      <AgentTabs label={t('callingExperience.sections')} value={tab} onChange={setTab} items={[{ value: 'agents', label: t('callingExperience.agents') }, { value: 'campaigns', label: t('callingExperience.campaigns') }, { value: 'calls', label: t('callingExperience.calls') }, { value: 'analytics', label: t('callingExperience.analytics') }, { value: 'quality', label: t('callingExperience.quality') }, { value: 'benchmarks', label: t('callingExperience.benchmarks') }, { value: 'review', label: t('callingExperience.review') }, { value: 'knowledge', label: t('callingExperience.knowledge') }, { value: 'testing', label: t('callingExperience.testing') }, { value: 'connections', label: t('callingExperience.connections') }]}>
+      <PageHero
+        id="ai-calling-title"
+        art="/hero/aicalling"
+        icon={AudioLines}
+        eyebrow={t('hero.calling.eyebrow', 'AI Calling')}
+        title={t('hero.calling.title', 'Voice agents that sound like your best rep.')}
+        subtitle={t('callingExperience.intro')}
+        status={telephony.data ? (
+          <HeroPill tone={telephony.data.eligible ? (telephony.data.operations?.status === 'attention' ? 'warn' : 'ok') : 'off'} onClick={() => setTab('connections')}>
+            {telephony.data.eligible
+              ? (telephony.data.operations?.status === 'attention' ? t('hero.calling.lineAttention', 'Calling line needs attention') : t('hero.calling.lineReady', 'Calling line ready'))
+              : t('hero.calling.lineOff', 'Calling line not connected')}
+          </HeroPill>
+        ) : null}
+        actions={<>
+          <button type="button" className={heroButton.ghost} onClick={() => setTab('analytics')}><BarChart3 aria-hidden="true" />{t('callingExperience.analytics')}</button>
+          <button type="button" className={heroButton.primary} disabled={!canManage} onClick={() => setCreating(true)}><Plus aria-hidden="true" />{t('callingExperience.create')}</button>
+        </>}
+        stats={<>
+          <HeroStat icon={PhoneOutgoing} label={t('hero.calling.calls', 'Calls placed')} value={num(stats.data?.totalCalls)} hint={t('hero.calling.answered', '{rate} answered', { rate: pct(stats.data?.answerRate) })} loading={stats.isLoading} />
+          <HeroStat icon={Target} tone="text-emerald-300" label={t('hero.calling.qualified', 'Qualified')} value={num(stats.data?.qualified)} hint={t('hero.calling.qualifiedRate', '{rate} of answered calls', { rate: pct(stats.data?.qualificationRate) })} loading={stats.isLoading} />
+          <button type="button" onClick={() => setTab('campaigns')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50">
+            <HeroStat icon={Radio} tone={running ? 'text-emerald-300' : 'text-sky-200'} label={t('hero.calling.running', 'Running campaigns')} value={num(campaigns.data ? running : undefined)} hint={t('hero.calling.callbacks', '{count} callbacks requested', { count: num(stats.data?.callbacks) })} loading={campaigns.isLoading} />
+          </button>
+          <HeroStat icon={Timer} tone="text-cyan-300" label={t('hero.calling.avg', 'Average call')} value={stats.data ? duration(stats.data.avgCallSeconds) : '—'} hint={t('hero.calling.reviews', '{count} calls to review', { count: num(stats.data?.reviews) })} loading={stats.isLoading} />
+          <div className="col-span-2 lg:col-span-1">
+            <HeroStat icon={Coins} tone="text-amber-300" label={t('hero.calling.spend', 'AI spend')} value={stats.data ? money(stats.data.totalCost) : '—'} hint={t('hero.calling.spendHint', 'All calls, all time')} loading={stats.isLoading} />
+          </div>
+        </>}
+      />
+      <AgentTabs variant="pill" label={t('callingExperience.sections')} value={tab} onChange={setTab} items={[{ value: 'agents', label: t('callingExperience.agents') }, { value: 'campaigns', label: t('callingExperience.campaigns') }, { value: 'calls', label: t('callingExperience.calls') }, { value: 'analytics', label: t('callingExperience.analytics') }, { value: 'quality', label: t('callingExperience.quality') }, { value: 'benchmarks', label: t('callingExperience.benchmarks') }, { value: 'review', label: t('callingExperience.review') }, { value: 'knowledge', label: t('callingExperience.knowledge') }, { value: 'testing', label: t('callingExperience.testing') }, { value: 'connections', label: t('callingExperience.connections') }]}>
         {tab === 'agents' && <CallingAgentGallery canManage={canManage} onOpen={openAgent} onLaunch={setLaunchAgent} onCreate={() => setCreating(true)} onCampaign={setCampaignId} />}
         {tab === 'campaigns' && <><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{t('callingExperience.campaigns')}</h2><p className="mt-1 text-xs text-muted-foreground">{t('callingExperience.savedRun')}</p></div><button className={secondaryClass} disabled={!canManage} onClick={() => { setEditingCampaign(null); setLegacyWizard(true); }}>{t('callingExperience.legacy')}</button></div><AgentCampaignHistory onCampaign={setCampaignId} /></>}
         {tab === 'calls' && <CallHistoryPanel />}

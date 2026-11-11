@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { registerLeadCacheInvalidation } from './leadCache.js';
 
 /**
  * LeadFollowUp — a first-class follow-up ("call back Tuesday 10:00 Zurich time")
@@ -117,7 +118,12 @@ const followUpSchema = new mongoose.Schema({
 }, { timestamps: true, collection: 'leadfollowups' });
 
 followUpSchema.index({ ownerId: 1, status: 1, nextDueAt: 1, _id: 1 }, { name: 'follow_up_inbox' });
-followUpSchema.index({ status: 1, nextDueAt: 1 }, { name: 'follow_up_sweep' });
+// Company-wide inbox buckets + the SLA sweep (migration 053 replaced the former
+// { status, nextDueAt } 'follow_up_sweep' index with this superset, which also
+// carries the _id tie-breaker the cursor pagination sorts on).
+followUpSchema.index({ status: 1, nextDueAt: 1, _id: 1 }, { name: 'follow_up_status_due' });
+// Company-wide 'done' bucket: closed rows newest-closed first (053).
+followUpSchema.index({ status: 1, closedAt: -1, _id: -1 }, { name: 'follow_up_closed' });
 followUpSchema.index({ leadId: 1, createdAt: -1 }, { name: 'follow_up_lead' });
 followUpSchema.index({ ownerId: 1, closedAt: -1, _id: -1 }, { name: 'follow_up_done', partialFilterExpression: { closedAt: { $type: 'date' } } });
 followUpSchema.index({ sourceKey: 1 }, { unique: true, name: 'follow_up_source_unique', partialFilterExpression: { sourceKey: { $type: 'string' } } });
@@ -125,6 +131,9 @@ followUpSchema.index({ 'source.contactLogId': 1 }, { name: 'follow_up_contact_lo
 
 followUpSchema.index({ 'automation.state': 1, nextDueAt: 1 }, { name: 'follow_up_ai_due', partialFilterExpression: { 'automation.mode': 'ai' } });
 followUpSchema.index({ 'automation.agentId': 1, 'automation.state': 1, nextDueAt: 1 }, { name: 'follow_up_ai_agent', partialFilterExpression: { 'automation.mode': 'ai' } });
+
+// Lead KPIs (follow-ups due today) are cached by generation; every write bumps it.
+registerLeadCacheInvalidation(followUpSchema);
 
 const LeadFollowUp = mongoose.model('LeadFollowUp', followUpSchema);
 export default LeadFollowUp;

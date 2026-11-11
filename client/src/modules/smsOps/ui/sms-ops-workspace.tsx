@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarClock, ClipboardCheck, Inbox, LifeBuoy, ShieldCheck, Smartphone } from 'lucide-react';
-import { useRecoveryCounts, useReviewCounts, useSmsOpsRealtime } from '../hooks/use-sms-ops';
+import { CalendarClock, ClipboardCheck, Inbox, MessageSquareText, Send, ShieldCheck, Smartphone } from 'lucide-react';
+import { intlLocaleFor } from '@/lib/i18n/locale-config';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton, pageTabs } from '@/shared/components/page-hero';
+import { useRecoveryCounts, useReviewCounts, useSmsCallbacks, useSmsDevices, useSmsOpsRealtime } from '../hooks/use-sms-ops';
 import { AnswerReviewQueue } from './answer-review-queue';
 import { ContactPolicySettingsForm } from './contact-policy-settings';
 import { DeviceDashboard } from './device-dashboard';
@@ -21,35 +24,68 @@ const TABS: { id: SmsOpsTab; icon: typeof Smartphone; fallback: string }[] = [
 
 /** SMS operations: the Android phones that send SIM SMS, what needs a human, and the contact limits. */
 export function SmsOpsWorkspace({ initialTab = 'devices' }: { initialTab?: SmsOpsTab }) {
-  const { t } = useSmsOpsLanguage();
+  const { t, locale } = useSmsOpsLanguage();
   const [tab, setTab] = useState<SmsOpsTab>(initialTab);
   useSmsOpsRealtime();
   const recovery = useRecoveryCounts();
   const reviews = useReviewCounts();
   const badge = (id: SmsOpsTab) => (id === 'recovery' ? recovery.data?.open : id === 'reviews' ? reviews.data?.pending : 0) || 0;
 
+  const devices = useSmsDevices();
+  const callbacks = useSmsCallbacks();
+  const list = devices.data ?? [];
+  const online = list.filter((d) => d.health.status === 'online').length;
+  const attention = list.filter((d) => d.health.status !== 'online').length;
+  const queued = list.reduce((sum, d) => sum + (d.queue?.pending ?? 0) + (d.queue?.attempting ?? 0), 0);
+  const failed = list.reduce((sum, d) => sum + (d.queue?.failed ?? 0), 0);
+  const nf = new Intl.NumberFormat(intlLocaleFor(locale));
+  const n = (v: number | undefined) => (v == null ? '—' : nf.format(v));
+
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500/10 ring-1 ring-brand-500/20"><LifeBuoy className="h-5 w-5 text-brand-500" /></div>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">{t('smsOps.title', 'SMS operations')}</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">{t('smsOps.subtitle', 'Health of the phones that send SIM SMS, messages that need a human decision, and the contact limits shared by calls and messages.')}</p>
-        </div>
-      </div>
+      <PageHero
+        id="sms-ops-title"
+        art="/hero/smsops"
+        icon={MessageSquareText}
+        eyebrow={t('smsOps.title', 'SMS operations')}
+        title={t('hero.sms.title', 'Every message, delivered with care.')}
+        subtitle={t('smsOps.subtitle', 'Health of the phones that send SIM SMS, messages that need a human decision, and the contact limits shared by calls and messages.')}
+        status={devices.data ? (
+          <HeroPill tone={!list.length ? 'off' : attention ? 'warn' : 'ok'} onClick={() => setTab('devices')}>
+            {!list.length ? t('hero.sms.noPhones', 'No phones connected') : attention ? t('hero.sms.attention', '{count} phone(s) need attention', { count: attention }) : t('hero.sms.allOnline', 'All phones online')}
+          </HeroPill>
+        ) : null}
+        actions={<>
+          <button type="button" className={heroButton.ghost} onClick={() => setTab('policy')}><ShieldCheck aria-hidden="true" />{t('smsOps.tabs.policy', 'Contact limits')}</button>
+          <button type="button" className={heroButton.primary} onClick={() => setTab('recovery')}><Inbox aria-hidden="true" />{t('smsOps.tabs.recovery', 'Recovery inbox')}</button>
+        </>}
+        stats={<>
+          <HeroStat icon={Smartphone} label={t('hero.sms.phonesOnline', 'Phones online')} value={devices.data ? `${n(online)} / ${n(list.length)}` : '—'} hint={t('hero.sms.phonesHint', 'Android phones sending SIM SMS')} loading={devices.isLoading} />
+          <HeroStat icon={Send} tone="text-cyan-300" label={t('hero.sms.queued', 'In the send queue')} value={n(devices.data ? queued : undefined)} hint={failed ? t('hero.sms.failed', '{count} failed on the phone', { count: nf.format(failed) }) : t('hero.sms.queuedHint', 'Waiting or being sent now')} loading={devices.isLoading} />
+          <button type="button" onClick={() => setTab('recovery')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50">
+            <HeroStat icon={Inbox} tone="text-amber-300" label={t('smsOps.tabs.recovery', 'Recovery inbox')} value={n(recovery.data?.open)} hint={t('hero.sms.recoveryHint', 'Messages that need a decision')} loading={recovery.isLoading} />
+          </button>
+          <button type="button" onClick={() => setTab('reviews')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50">
+            <HeroStat icon={ClipboardCheck} label={t('smsOps.tabs.reviews', 'Answer reviews')} value={n(reviews.data?.pending)} hint={t('hero.sms.reviewsHint', 'AI answers awaiting a check')} loading={reviews.isLoading} />
+          </button>
+          <button type="button" onClick={() => setTab('callbacks')} className="col-span-2 rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/50 lg:col-span-1">
+            <HeroStat icon={CalendarClock} tone="text-emerald-300" label={t('smsOps.tabs.callbacks', 'Callbacks')} value={n(callbacks.data?.length)} hint={t('hero.sms.callbacksHint', 'Promised by SMS')} loading={callbacks.isLoading} />
+          </button>
+        </>}
+      />
 
-      <div role="tablist" aria-label={t('smsOps.title', 'SMS operations')} className="flex flex-wrap gap-1 border-b border-border">
+      <div role="tablist" aria-label={t('smsOps.title', 'SMS operations')} className={pageTabs.list}>
         {TABS.map(({ id, icon: Icon, fallback }) => {
-          const n = badge(id);
+          const count = badge(id);
           return (
             <button
               key={id} type="button" role="tab" id={`sms-ops-tab-${id}`} aria-selected={tab === id} aria-controls={`sms-ops-panel-${id}`}
               onClick={() => setTab(id)}
-              className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${tab === id ? 'border-brand-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              className={pageTabs.tab}
             >
-              <Icon className="h-4 w-4" aria-hidden />
+              <Icon aria-hidden />
               {t(`smsOps.tabs.${id}`, fallback)}
-              {n ? <span className="rounded-full bg-amber-500/15 px-1.5 text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">{n}</span> : null}
+              {count ? <span className={pageTabs.badge}>{count}</span> : null}
             </button>
           );
         })}

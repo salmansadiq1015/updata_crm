@@ -135,6 +135,9 @@ fileMetadataSchema.index({ isDeleted: 1, deletedAt: 1 });
 // Recent files listing
 fileMetadataSchema.index({ createdAt: -1 });
 
+// Document repository: customer / mobile documents paged newest-first per module.
+fileMetadataSchema.index({ module: 1, entityType: 1, createdAt: -1, _id: -1 });
+
 // Default query scope: exclude soft-deleted files
 fileMetadataSchema.pre(/^find/, function () {
   // Allow explicit queries for deleted files (e.g., cleanup job)

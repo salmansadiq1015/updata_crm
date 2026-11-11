@@ -111,6 +111,16 @@ const ACTION_RISK = Object.freeze({
   KNOWLEDGE_ASK: RISK_LEVELS.LOW,
   GENERAL: RISK_LEVELS.LOW,
 
+  // Fleet master data and logs: internal, audited and reversible in the UI.
+  CREATE_VEHICLE: RISK_LEVELS.LOW,
+  UPDATE_VEHICLE: RISK_LEVELS.LOW,
+  SEARCH_VEHICLES: RISK_LEVELS.LOW,
+  FLEET_DUE: RISK_LEVELS.LOW,
+  ASSIGN_VEHICLE_DRIVER: RISK_LEVELS.LOW,
+  LOG_VEHICLE_SERVICE: RISK_LEVELS.LOW,
+  LOG_VEHICLE_COST: RISK_LEVELS.LOW,
+  BOOK_VEHICLE: RISK_LEVELS.LOW,
+
   // These pull a whole cascade in behind them — a project opens its checklist,
   // an order starts the commercial chain — so they get one look before they
   // exist. Master data (customer, task, note) stays direct: it is cheap to fix
@@ -220,5 +230,13 @@ export const ACTION_LABELS = Object.freeze({
   CREATE_QUOTATION: 'eine Offerte erstellen',
   CREATE_INVOICE: 'eine Rechnung erstellen',
   CREATE_TASK_REMINDER: 'eine Erinnerung erstellen',
+  CREATE_VEHICLE: 'ein Fahrzeug erfassen',
+  UPDATE_VEHICLE: 'ein Fahrzeug aktualisieren',
+  SEARCH_VEHICLES: 'Fahrzeuge suchen',
+  FLEET_DUE: 'die fälligen Fahrzeugtermine prüfen',
+  ASSIGN_VEHICLE_DRIVER: 'einen Fahrer zuweisen',
+  LOG_VEHICLE_SERVICE: 'einen Fahrzeugservice erfassen',
+  LOG_VEHICLE_COST: 'Fahrzeugkosten erfassen',
+  BOOK_VEHICLE: 'ein Fahrzeug reservieren',
   GENERAL: 'beim System helfen',
 });

@@ -6,13 +6,14 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageHeader } from '@/shared/components/page-header';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton } from '@/shared/components/page-hero';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useWorkflowAnalytics, useWorkflowCampaigns, useWorkflowRuns, useWorkflowTemplates, useWorkflows } from '../../hooks/use-workflows';
 import { formatNumber, formatPercent, formatRelative, leadName, refName } from '../../lib/format';
 import { CampaignStatusBadge, RunStatusBadge, WorkflowStatusBadge } from '../shared/status-badge';
-import { EmptyBlock, ErrorBlock, Kpi, KpiSkeleton, Panel, RUN_SEGMENT_CLASSES, SegmentBar, useNodeLabel } from './page-kit';
+import { EmptyBlock, ErrorBlock, Panel, RUN_SEGMENT_CLASSES, SegmentBar, useNodeLabel } from './page-kit';
 
 export function OverviewPage() {
   const { t, locale } = useLanguage();
@@ -28,24 +29,34 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('workflowPages.overview.title', 'Workflow Automation')} description={t('workflowPages.overview.description', 'Automate AI calls, messages, follow-ups and CRM updates — and see exactly what every workflow is doing.')} icon={WorkflowIcon}>
-        {canWrite && (
-          <Button asChild className="gap-2"><Link href="/automation/new"><Plus className="size-4" />{t('workflow.nav.create', 'Create workflow')}</Link></Button>
-        )}
-      </PageHeader>
-
-      {analytics.isError ? <ErrorBlock onRetry={() => analytics.refetch()} /> : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {!a ? <KpiSkeleton /> : (
-            <>
-              <Kpi icon={GitBranch} label={t('workflowPages.kpi.activeWorkflows', 'Active workflows')} value={formatNumber(a.workflows.published, locale)} hint={t('workflowPages.kpi.ofTotal', 'of {total} total', { total: a.workflows.total })} />
-              <Kpi icon={Activity} tone="cyan" label={t('workflowPages.kpi.executions30', 'Executions (30 days)')} value={formatNumber(a.executions.total, locale)} hint={t('workflowPages.kpi.runningWaiting', '{running} running · {waiting} waiting', { running: a.executions.running, waiting: a.executions.waiting })} />
-              <Kpi icon={CheckCircle2} tone="emerald" label={t('workflowPages.kpi.successRate', 'Success rate')} value={formatPercent(a.executions.successRate, locale)} hint={t('workflowPages.kpi.completedFailed', '{completed} completed · {failed} failed', { completed: a.executions.completed, failed: a.executions.failed })} />
-              <Kpi icon={Users} tone="amber" label={t('workflowPages.kpi.qualified', 'Qualified leads')} value={formatNumber(a.qualified, locale)} hint={t('workflowPages.kpi.conversion', 'Conversion {rate}', { rate: formatPercent(a.conversionRate, locale) })} />
-            </>
-          )}
-        </div>
-      )}
+      <PageHero
+        id="automation-title"
+        art="/hero/automation"
+        icon={WorkflowIcon}
+        eyebrow={t('workflowPages.overview.title', 'Workflow Automation')}
+        title={t('hero.automation.title', 'Your best process, running on its own.')}
+        subtitle={t('workflowPages.overview.description', 'Automate AI calls, messages, follow-ups and CRM updates — and see exactly what every workflow is doing.')}
+        status={a ? (
+          <HeroPill tone={a.executions.running + a.executions.waiting > 0 ? 'ok' : 'off'}>
+            {t('workflowPages.kpi.runningWaiting', '{running} running · {waiting} waiting', { running: a.executions.running, waiting: a.executions.waiting })}
+          </HeroPill>
+        ) : null}
+        actions={<>
+          <Link href="/automation/templates" className={heroButton.ghost}><LayoutTemplate aria-hidden="true" />{t('hero.automation.templates', 'Browse templates')}</Link>
+          {canWrite && <Link href="/automation/new" className={heroButton.primary}><Plus aria-hidden="true" />{t('workflow.nav.create', 'Create workflow')}</Link>}
+        </>}
+        stats={analytics.isError ? (
+          <div className="col-span-2 rounded-2xl border border-rose-300/20 bg-rose-500/10 p-4 text-sm text-rose-100 lg:col-span-1">
+            {t('hero.loadError', 'Figures could not be loaded.')}{' '}
+            <button type="button" className="font-semibold underline underline-offset-2" onClick={() => void analytics.refetch()}>{t('common.retry', 'Retry')}</button>
+          </div>
+        ) : <>
+          <HeroStat icon={GitBranch} label={t('workflowPages.kpi.activeWorkflows', 'Active workflows')} value={a ? formatNumber(a.workflows.published, locale) : '—'} hint={a ? t('workflowPages.kpi.ofTotal', 'of {total} total', { total: a.workflows.total }) : undefined} loading={!a} />
+          <HeroStat icon={Activity} tone="text-cyan-300" label={t('workflowPages.kpi.executions30', 'Executions (30 days)')} value={a ? formatNumber(a.executions.total, locale) : '—'} hint={a ? t('workflowPages.kpi.runningWaiting', '{running} running · {waiting} waiting', { running: a.executions.running, waiting: a.executions.waiting }) : undefined} loading={!a} />
+          <HeroStat icon={CheckCircle2} tone="text-emerald-300" label={t('workflowPages.kpi.successRate', 'Success rate')} value={a ? formatPercent(a.executions.successRate, locale) : '—'} hint={a ? t('workflowPages.kpi.completedFailed', '{completed} completed · {failed} failed', { completed: a.executions.completed, failed: a.executions.failed }) : undefined} loading={!a} />
+          <HeroStat icon={Users} tone="text-amber-300" label={t('workflowPages.kpi.qualified', 'Qualified leads')} value={a ? formatNumber(a.qualified, locale) : '—'} hint={a ? t('workflowPages.kpi.conversion', 'Conversion {rate}', { rate: formatPercent(a.conversionRate, locale) }) : undefined} loading={!a} />
+        </>}
+      />
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel className="xl:col-span-2" icon={Activity} title={t('workflowPages.overview.activity', 'Execution activity')} description={t('workflowPages.overview.activityHint', 'Contacts entering workflows per day, last 30 days')}

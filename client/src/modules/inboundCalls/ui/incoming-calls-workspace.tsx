@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowUpRight, AudioLines, BarChart3, Bot, Coins, History, LayoutGrid, PhoneIncoming, Settings2, ShieldCheck, Smartphone, Workflow, type LucideIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Activity, BarChart3, Bot, Coins, History, Inbox, LayoutGrid, PhoneIncoming, Radio, Settings2, Smartphone, Workflow, type LucideIcon } from 'lucide-react';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton, pageTabs } from '@/shared/components/page-hero';
 import { Tabs } from 'radix-ui';
 import { useDrawer } from '@/shared/hooks/use-drawer';
-import { useInboundLive, useInboundRealtime, useInboundSettings } from '../hooks/use-inbound-calls';
+import { useInboundDevices, useInboundList, useInboundLive, useInboundRealtime, useInboundSettings, useInboundStats } from '../hooks/use-inbound-calls';
+import { browserTimeZone, filtersToQuery, formatDuration, formatRate, rangeFor } from '../inbound-domain';
 import { incomingStyles as styles } from './incoming-calls-styles';
 import { useInboundLanguage } from './use-inbound-language';
 import type { InboundFilters } from '../types/inbound-call-types';
@@ -44,7 +47,7 @@ export type InboundTab = (typeof INBOUND_TABS)[number];
 
 /** Incoming Calls: the AI receptionist on the owner's connected phone(s). */
 export function IncomingCallsWorkspace({ initialTab = 'overview', initialAgentId = null }: { initialTab?: string; initialAgentId?: string | null }) {
-  const { t } = useInboundLanguage();
+  const { t, intlLocale } = useInboundLanguage();
   const [tab, setTab] = useState<InboundTab>((INBOUND_TABS as readonly string[]).includes(initialTab) ? initialTab as InboundTab : 'overview');
   const drawer = useDrawer('call');
   const router = useRouter();
@@ -66,36 +69,60 @@ export function IncomingCallsWorkspace({ initialTab = 'overview', initialAgentId
     devices: t('inbound.tabs.devices', 'Connected Devices'),
   };
   const enabled = settings.data?.enabled;
+  // Same 30-day query the Overview tab opens with, so both share one cached request.
+  const statsParams = useMemo(() => { const r = rangeFor('30d'); return filtersToQuery({ from: r.from, to: r.to }, { tz: browserTimeZone() }); }, []);
+  const stats = useInboundStats(statsParams);
+  const s = stats.data;
+  // Live operational figures (period totals live in the Overview tab); same queries the tabs use.
+  const openCalls = useInboundList(useMemo(() => ({ workStatus: 'open', page: 1, limit: 1 }), []));
+  const devices = useInboundDevices();
+  const devicesOnline = (devices.data ?? []).filter((d) => d.online).length;
+  const devicesOffline = (devices.data?.length ?? 0) - devicesOnline;
+  const num = (v: number | undefined) => (v == null ? '—' : v.toLocaleString(intlLocale));
 
   return (
     <div className={styles.workspace}>
       <div className={styles.container}>
-      <header className={styles.header}>
-        <div className={styles.heading}>
-          <span className={styles.brandIcon}><PhoneIncoming aria-hidden="true" /><span><AudioLines /></span></span>
-          <div className="min-w-0">
-            <p className={styles.eyebrow}>{t('inbound.ai.prefix', 'AI')} <span aria-hidden="true">/</span> {labels[tab]}</p>
-            <h1 className={styles.title}>{t('inbound.title', 'Incoming Calls')}</h1>
-            <p className={styles.subtitle}>{t('inbound.subtitle', 'Calls to your connected phones: who called, what they needed, and what your AI receptionist did.')}</p>
-          </div>
-        </div>
-        {settings.data ? (
-          <button type="button" onClick={() => { setAgentId(null); setTab('settings'); }} className={styles.statusButton} data-enabled={Boolean(enabled)}>
-            <ShieldCheck aria-hidden="true" className="size-4" /><span className={styles.statusDot} />
+      <PageHero
+        id="incoming-calls-title"
+        className="mb-6"
+        art="/hero/incoming"
+        icon={PhoneIncoming}
+        eyebrow={t('inbound.title', 'Incoming Calls')}
+        title={t('hero.inbound.title', 'Every caller answered, day and night.')}
+        subtitle={t('inbound.subtitle', 'Calls to your connected phones: who called, what they needed, and what your AI receptionist did.')}
+        status={settings.data ? (
+          <HeroPill tone={enabled ? 'ok' : 'off'} onClick={() => { setAgentId(null); setTab('settings'); }}>
             {enabled ? t('inbound.header.aiOn', 'AI answering is on') : t('inbound.header.aiOff', 'AI answering is off')}
-            <ArrowUpRight aria-hidden="true" className="size-3.5 opacity-60 rtl:-scale-x-100" />
-          </button>
+          </HeroPill>
         ) : null}
-      </header>
+        actions={<>
+          <button type="button" className={heroButton.ghost} onClick={() => { setAgentId(null); setTab('analytics'); }}><BarChart3 aria-hidden="true" />{t('inbound.tabs.analytics', 'Analytics')}</button>
+          <button type="button" className={heroButton.primary} onClick={() => { setAgentId(null); setTab('live'); }}><Activity aria-hidden="true" />{t('inbound.tabs.live', 'Live Monitor')}{liveCount ? ` (${liveCount})` : ''}</button>
+        </>}
+        stats={<>
+          <HeroStat icon={PhoneIncoming} label={t('hero.inbound.calls', 'Calls · 30 days')} value={num(s?.total)} hint={t('hero.inbound.callsHint', '{count} answered by AI', { count: num(s?.answeredByAi) })} loading={stats.isLoading} />
+          <HeroStat icon={Bot} tone="text-cyan-300" label={t('hero.inbound.aiRate', 'AI answer rate')} value={s ? formatRate(s.aiAnswerRate) : '—'} hint={t('hero.inbound.avg', 'Average call {duration}', { duration: s ? formatDuration(s.averageDurationSeconds) : '—' })} loading={stats.isLoading} />
+          <button type="button" onClick={() => { setAgentId(null); setHistoryPreset({ workStatus: 'open' }); setTab('history'); }} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50">
+            <HeroStat icon={Inbox} tone={openCalls.data?.pagination.total ? 'text-amber-300' : 'text-emerald-300'} label={t('hero.inbound.open', 'Calls to handle')} value={num(openCalls.data?.pagination.total)} hint={t('hero.inbound.openHint', 'Open follow-up work from callers')} loading={openCalls.isLoading} />
+          </button>
+          <button type="button" onClick={() => { setAgentId(null); setTab('devices'); }} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50">
+            <HeroStat icon={Smartphone} tone={devicesOffline ? 'text-amber-300' : 'text-cyan-300'} label={t('hero.inbound.devices', 'Phones online')} value={devices.data ? `${num(devicesOnline)} / ${num(devices.data.length)}` : '—'} hint={devicesOffline ? t('hero.inbound.devicesOffline', '{count} offline', { count: devicesOffline }) : t('hero.inbound.devicesHint', 'Connected phones answering calls')} loading={devices.isLoading} />
+          </button>
+          <button type="button" onClick={() => { setAgentId(null); setTab('live'); }} className="col-span-2 rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50 lg:col-span-1">
+            <HeroStat icon={Radio} tone={liveCount ? 'text-emerald-300' : 'text-sky-200'} label={t('hero.inbound.live', 'On the line now')} value={num(live.data ? liveCount : undefined)} hint={t('hero.inbound.liveHint', 'Live calls, updated in real time')} loading={live.isLoading} />
+          </button>
+        </>}
+      />
       {agentId ? (
         <CallingAgentWorkspace key={agentId} id={agentId} initialTab="settings"
           onBack={() => { setAgentId(null); setTab('agents'); }}
           onLaunch={(agent) => router.push(`/ai-calling?agent=${agent._id}`)} onCampaign={() => router.push(`/ai-calling?agent=${agentId}`)} />
       ) : <Tabs.Root value={tab} onValueChange={(v) => setTab(v as InboundTab)} className="min-w-0">
-        <div className={styles.navRail}>
-          <Tabs.List aria-label={t('inbound.tabs.label', 'Incoming calls sections')} className={styles.tabs}>
+        <div className="mb-6">
+          <Tabs.List aria-label={t('inbound.tabs.label', 'Incoming calls sections')} className={pageTabs.list}>
             {INBOUND_TAB_ITEMS.map(({ value, icon: Icon }) => {
-              return <Tabs.Trigger key={value} value={value} className={styles.tab}><Icon aria-hidden="true" className="size-4" />{labels[value]}</Tabs.Trigger>;
+              return <Tabs.Trigger key={value} value={value} className={pageTabs.tab}><Icon aria-hidden="true" className="size-4" />{labels[value]}</Tabs.Trigger>;
             })}
           </Tabs.List>
         </div>

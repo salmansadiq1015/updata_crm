@@ -29,10 +29,17 @@ const leadAccessMatch = () => { const f = currentLeadAccessFilter(); return Obje
 export const FOLLOW_UP_LIMIT = 200;
 export const NOTE_EXCERPT_LENGTH = 140;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SUPPRESSION_CONCURRENCY = 8;
+const IN_CHUNK = 5000;
+const chunk = (list, size) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
 const DEFAULT_PAST_DAYS = 30;
 const DEFAULT_FUTURE_DAYS = 60;
 const CALLBACK_DISPOSITIONS = new Set(['callback_requested', 'human_follow_up']);
 const USER_FIELDS = { firstName: 1, lastName: 1, email: 1 };
+const SUMMARY_BUCKETS = ['pending', 'completed', 'overdue', 'today', 'upcoming', 'done', 'aiManaged', 'aiScheduled', 'aiInProgress', 'aiCompleted', 'aiFailed', 'attention'];
+const LEAD_ROW_FIELDS = {
+  _id: 1, name: 1, leadNumber: 1, status: 1, assignedTo: 1, phone: 1, mobile: 1, email: 1, latestCall: 1, pipelineStage: 1, lastContactedAt: 1, lastContactChannel: 1,
+};
 const { ObjectId } = mongoose.Types;
 
 const oid = (v) => (v instanceof ObjectId ? v : new ObjectId(String(v)));
@@ -275,6 +282,35 @@ class LeadFollowUpService {
     }
   }
 
+  /**
+   * Owner name, AI agent identity and live call state for one page of rows —
+   * three indexed `_id $in` reads instead of three $lookups per row. Sets the
+   * same `owner` / `aiAgent` / `aiCall` arrays the $lookup stages produced.
+   */
+  async _attachRowRefs(rows) {
+    if (!rows.length) return;
+    const ids = (pick) => [...new Map(rows.map(pick).filter(Boolean).map((id) => [String(id), id])).values()];
+    const db = mongoose.connection.db;
+    const byId = (docs) => new Map(docs.map((doc) => [String(doc._id), doc]));
+    const ownerIds = ids((r) => r.ownerId);
+    const agentIds = ids((r) => r.automation?.agentId);
+    const callIds = ids((r) => r.automation?.callRecordId);
+    const [owners, agents, calls] = await Promise.all([
+      ownerIds.length ? db.collection('users').find({ _id: { $in: ownerIds } }, { projection: USER_FIELDS }).toArray() : [],
+      agentIds.length ? db.collection('callingagents').find({ _id: { $in: agentIds } }, { projection: { name: 1, title: 1, agentType: 1, avatarPresetId: 1, availability: 1 } }).toArray() : [],
+      callIds.length ? db.collection('callrecords').find({ _id: { $in: callIds } }, { projection: { state: 1, disposition: 1, qualification: 1, durationSeconds: 1, answeredAt: 1, endedAt: 1, 'callNotes.summary': 1 } }).toArray() : [],
+    ]);
+    const ownerMap = byId(owners); const agentMap = byId(agents); const callMap = byId(calls);
+    for (const row of rows) {
+      const o = ownerMap.get(String(row.ownerId));
+      const a = row.automation?.agentId && agentMap.get(String(row.automation.agentId));
+      const c = row.automation?.callRecordId && callMap.get(String(row.automation.callRecordId));
+      row.owner = o ? [o] : [];
+      row.aiAgent = a ? [a] : [];
+      row.aiCall = c ? [c] : [];
+    }
+  }
+
   /** Agent identity + live call state for AI-managed rows (after pagination). */
   _automationLookups() {
     return [
@@ -283,22 +319,49 @@ class LeadFollowUpService {
     ];
   }
 
-  _pipelineHead(match) {
+  /**
+   * Live, governed lead for each follow-up row. Equality lookup on `_id`
+   * (localField/foreignField) so every row is one index point read; rows whose
+   * lead is soft-deleted or outside the viewer's lead access drop out.
+   */
+  _leadLookup(project = LEAD_ROW_FIELDS) {
     return [
-      { $match: match },
       {
         $lookup: {
           from: Lead.collection.name,
-          let: { leadId: '$leadId' },
+          localField: 'leadId',
+          foreignField: '_id',
           pipeline: [
-            { $match: { $expr: { $eq: ['$_id', '$$leadId'] }, isDeleted: { $ne: true }, ...leadAccessMatch() } },
-            { $project: { _id: 1, name: 1, leadNumber: 1, status: 1, assignedTo: 1, phone: 1, mobile: 1, email: 1, latestCall: 1, pipelineStage: 1, lastContactedAt: 1, lastContactChannel: 1 } },
+            { $match: { isDeleted: { $ne: true }, ...leadAccessMatch() } },
+            { $project: project },
           ],
           as: 'lead',
         },
       },
       { $unwind: '$lead' },
     ];
+  }
+
+  /**
+   * Live, governed leads by id (chunked `_id $in`, index point reads) →
+   * Map(String(id) → projected lead). Same visibility as the $lookup join:
+   * not soft-deleted and inside the request's lead access filter.
+   */
+  async _liveLeads(ids, project = LEAD_ROW_FIELDS) {
+    const out = new Map();
+    const unique = [...new Map(ids.filter(Boolean).map((id) => [String(id), id])).values()];
+    for (const part of chunk(unique, IN_CHUNK)) {
+      // eslint-disable-next-line no-await-in-loop
+      const docs = await Lead.find({ _id: { $in: part }, isDeleted: { $ne: true }, ...leadAccessMatch() })
+        .setOptions({ includeDeleted: true }) // isDeleted is explicit above
+        .select(project).lean();
+      for (const doc of docs) out.set(String(doc._id), doc);
+    }
+    return out;
+  }
+
+  _pipelineHead(match) {
+    return [{ $match: match }, ...this._leadLookup()];
   }
 
   /**
@@ -331,15 +394,42 @@ class LeadFollowUpService {
     // Search after the governed lead lookup, before pagination. Treat input as
     // literal text so punctuation cannot change the meaning of the query.
     const search = q.trim() ? new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
-    const rows = await LeadFollowUp.aggregate([
-      ...this._pipelineHead(match),
-      ...(qualification ? [{ $match: { 'lead.latestCall.qualificationStatus': qualification } }] : []),
-      ...(search ? [{ $match: { $or: [{ 'lead.name': search }, { 'lead.leadNumber': search }, { 'lead.phone': search }, { 'lead.mobile': search }, { 'lead.email': search }, { note: search }] } }] : []),
-      { $sort: { [sortField]: dir, _id: dir } },
-      { $limit: limit + 1 },
-      { $lookup: { from: 'users', localField: 'ownerId', foreignField: '_id', pipeline: [{ $project: USER_FIELDS }], as: 'owner' } },
-      ...this._automationLookups(),
-    ]);
+    const leadMatches = (lead, row) => (!qualification || lead.latestCall?.qualificationStatus === qualification)
+      && (!search || [lead.name, lead.leadNumber, lead.phone, lead.mobile, lead.email, row.note]
+        .some((value) => typeof value === 'string' && search.test(value)));
+    // Walk the follow-ups in page order (index-backed sort) in growing batches
+    // and join their leads with one indexed `_id $in` read per batch, keeping
+    // rows whose lead is live, visible and matches the lead-side filters,
+    // until the page (+1 for hasNext) is full. Same rows, same order as
+    // joining every follow-up in scope first, but the work is bounded by the
+    // page instead of the whole inbox (no per-row $lookup sub-pipeline).
+    const sort = { [sortField]: dir, _id: dir };
+    const op = desc ? '$lt' : '$gt';
+    const rows = [];
+    let after = null;
+    let batch = Math.max((limit + 1) * 2, 50);
+    for (;;) {
+      const filter = after
+        ? { $and: [match, { $or: [{ [sortField]: { [op]: after.at } }, { [sortField]: after.at, _id: { [op]: after.id } }] }] }
+        : match;
+      // eslint-disable-next-line no-await-in-loop
+      const scanned = await LeadFollowUp.find(filter).sort(sort).limit(batch).select('-actions').lean();
+      if (!scanned.length) break;
+      // eslint-disable-next-line no-await-in-loop
+      const leads = await this._liveLeads(scanned.map((row) => row.leadId));
+      for (const row of scanned) {
+        const lead = leads.get(String(row.leadId));
+        if (lead && leadMatches(lead, row)) {
+          rows.push({ ...row, lead });
+          if (rows.length > limit) break;
+        }
+      }
+      if (rows.length > limit || scanned.length < batch) break;
+      const tail = scanned[scanned.length - 1];
+      after = { at: tail[sortField], id: tail._id };
+      batch = Math.min(batch * 2, 2000);
+    }
+    await this._attachRowRefs(rows.slice(0, limit + 1));
     const hasNext = rows.length > limit;
     const page = rows.slice(0, limit);
     const data = await this._serializeMany(page, now, endOfToday);
@@ -355,54 +445,64 @@ class LeadFollowUpService {
     const zone = isValidTimezone(tz) ? tz : 'UTC';
     const endOfToday = startOfNextZonedDay(now, zone);
     const base = await this._scopeMatch(scope, viewer);
-    const [result] = await LeadFollowUp.aggregate([
-      ...this._pipelineHead(base),
-      { $facet: {
-      buckets: [
+    const open = { $in: ['$status', FOLLOW_UP_OPEN_STATUSES] };
+    const count = (cond) => ({ $sum: { $cond: [cond, 1, 0] } });
+    // Count per LEAD first (one pass over the follow-ups in scope), then
+    // resolve the distinct leads with chunked indexed `_id $in` reads instead of
+    // a $lookup sub-pipeline per follow-up (which dominated: ~10 s for 15k rows).
+    // Rows of soft-deleted / out-of-scope leads drop out exactly as before.
+    const perLead = await LeadFollowUp.aggregate([
+      { $match: base },
       {
         $group: {
-          _id: null,
-          pending: { $sum: { $cond: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, 1, 0] } },
-          completed: { $sum: { $cond: [{ $eq: ['$status', 'done'] }, 1, 0] } },
-          overdue: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $lt: ['$nextDueAt', now] }] }, 1, 0] } },
-          today: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', now] }, { $lt: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
-          upcoming: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $gte: ['$nextDueAt', endOfToday] }] }, 1, 0] } },
-          done: { $sum: { $cond: [{ $in: ['$status', ['done', 'cancelled']] }, 1, 0] } },
-          aiManaged: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }] }, 1, 0] } },
-          aiScheduled: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $in: ['$automation.state', ['scheduled', 'queued', 'retry_scheduled']] }] }, 1, 0] } },
-          aiInProgress: { $sum: { $cond: [{ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $eq: ['$automation.state', 'calling'] }] }, 1, 0] } },
-          aiCompleted: { $sum: { $cond: [{ $eq: ['$automation.state', 'completed'] }, 1, 0] } },
-          aiFailed: { $sum: { $cond: [{ $in: ['$automation.state', ['failed', 'no_answer', 'busy']] }, 1, 0] } },
-          attention: { $sum: { $cond: [{ $and: [{ $in: ['$status', FOLLOW_UP_OPEN_STATUSES] }, { $in: ['$automation.state', ['requires_human', 'failed', 'paused']] }] }, 1, 0] } },
+          _id: '$leadId',
+          pending: count(open),
+          completed: count({ $eq: ['$status', 'done'] }),
+          overdue: count({ $and: [open, { $lt: ['$nextDueAt', now] }] }),
+          today: count({ $and: [open, { $gte: ['$nextDueAt', now] }, { $lt: ['$nextDueAt', endOfToday] }] }),
+          upcoming: count({ $and: [open, { $gte: ['$nextDueAt', endOfToday] }] }),
+          done: count({ $in: ['$status', ['done', 'cancelled']] }),
+          aiManaged: count({ $and: [{ $eq: ['$automation.mode', 'ai'] }, open] }),
+          aiScheduled: count({ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $in: ['$automation.state', ['scheduled', 'queued', 'retry_scheduled']] }] }),
+          aiInProgress: count({ $and: [{ $eq: ['$automation.mode', 'ai'] }, { $eq: ['$automation.state', 'calling'] }] }),
+          aiCompleted: count({ $eq: ['$automation.state', 'completed'] }),
+          aiFailed: count({ $in: ['$automation.state', ['failed', 'no_answer', 'busy']] }),
+          attention: count({ $and: [open, { $in: ['$automation.state', ['requires_human', 'failed', 'paused']] }] }),
         },
       },
-      ],
-      leads: [
-        { $group: { _id: '$leadId', qualified: { $max: { $cond: [{ $eq: ['$lead.latestCall.qualificationStatus', 'QUALIFIED'] }, 1, 0] } } } },
-        { $group: { _id: null, totalLeads: { $sum: 1 }, qualifiedLeads: { $sum: '$qualified' } } },
-      ],
-      emails: [
-        { $group: { _id: '$leadId' } },
-        { $lookup: { from: MessageRecipient.collection.name, localField: '_id', foreignField: 'leadId',
-          pipeline: [{ $match: { channel: 'email' } }, { $group: { _id: null,
-            sent: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$sentAt', null] }, null] }, 1, 0] } },
-            delivered: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$deliveredAt', null] }, null] }, 1, 0] } },
-            failed: { $sum: { $cond: [{ $in: ['$status', ['failed', 'undelivered']] }, 1, 0] } },
-          } }], as: 'messages' } },
-        { $unwind: '$messages' },
-        { $group: { _id: null, sent: { $sum: '$messages.sent' }, delivered: { $sum: '$messages.delivered' }, failed: { $sum: '$messages.failed' } } },
-      ],
-      } },
     ]);
-    const row = result?.buckets?.[0];
-    const leads = result?.leads?.[0];
-    const emails = result?.emails?.[0];
-    return { overdue: row?.overdue ?? 0, today: row?.today ?? 0, upcoming: row?.upcoming ?? 0, done: row?.done ?? 0,
-      pending: row?.pending ?? 0, completed: row?.completed ?? 0,
-      aiManaged: row?.aiManaged ?? 0, aiScheduled: row?.aiScheduled ?? 0, aiInProgress: row?.aiInProgress ?? 0,
-      aiCompleted: row?.aiCompleted ?? 0, aiFailed: row?.aiFailed ?? 0, attention: row?.attention ?? 0,
-      totalLeads: leads?.totalLeads ?? 0, qualifiedLeads: leads?.qualifiedLeads ?? 0,
-      emailsSent: emails?.sent ?? 0, emailsDelivered: emails?.delivered ?? 0, emailsFailed: emails?.failed ?? 0, timezone: zone };
+    const leads = await this._liveLeads(perLead.map((row) => row._id), { _id: 1, 'latestCall.qualificationStatus': 1 });
+    const totals = Object.fromEntries(SUMMARY_BUCKETS.map((k) => [k, 0]));
+    let totalLeads = 0;
+    let qualifiedLeads = 0;
+    const liveIds = [];
+    for (const row of perLead) {
+      const lead = leads.get(String(row._id));
+      if (!lead) continue;
+      liveIds.push(lead._id);
+      totalLeads += 1;
+      if (lead.latestCall?.qualificationStatus === 'QUALIFIED') qualifiedLeads += 1;
+      for (const k of SUMMARY_BUCKETS) totals[k] += row[k];
+    }
+    const emails = { sent: 0, delivered: 0, failed: 0 };
+    for (const ids of chunk(liveIds, IN_CHUNK)) {
+      // eslint-disable-next-line no-await-in-loop
+      const [part] = await MessageRecipient.aggregate([
+        { $match: { leadId: { $in: ids }, channel: 'email' } },
+        { $group: { _id: null,
+          sent: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$sentAt', null] }, null] }, 1, 0] } },
+          delivered: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$deliveredAt', null] }, null] }, 1, 0] } },
+          failed: { $sum: { $cond: [{ $in: ['$status', ['failed', 'undelivered']] }, 1, 0] } },
+        } },
+      ]);
+      if (part) { emails.sent += part.sent; emails.delivered += part.delivered; emails.failed += part.failed; }
+    }
+    return { overdue: totals.overdue, today: totals.today, upcoming: totals.upcoming, done: totals.done,
+      pending: totals.pending, completed: totals.completed,
+      aiManaged: totals.aiManaged, aiScheduled: totals.aiScheduled, aiInProgress: totals.aiInProgress,
+      aiCompleted: totals.aiCompleted, aiFailed: totals.aiFailed, attention: totals.attention,
+      totalLeads, qualifiedLeads,
+      emailsSent: emails.sent, emailsDelivered: emails.delivered, emailsFailed: emails.failed, timezone: zone };
   }
 
   async getById(id, viewer, now = new Date()) {
@@ -418,15 +518,20 @@ class LeadFollowUpService {
 
   async _serializeMany(rows, now, endOfToday) {
     const out = [];
+    // Contact suppression per distinct (lead, channel) of the OPEN rows, run
+    // with bounded concurrency instead of one sequential check per row.
     const memo = new Map();
+    const pending = [...new Map(rows.filter((r) => FOLLOW_UP_OPEN_STATUSES.includes(r.status))
+      .map((r) => [`${r.leadId}:${r.channel || ''}`, r])).entries()];
+    for (let i = 0; i < pending.length; i += SUPPRESSION_CONCURRENCY) {
+      // eslint-disable-next-line no-await-in-loop
+      const results = await Promise.all(pending.slice(i, i + SUPPRESSION_CONCURRENCY)
+        .map(([, r]) => checkContactSuppression(r.leadId, r.channel || null)));
+      pending.slice(i, i + SUPPRESSION_CONCURRENCY).forEach(([key], j) => memo.set(key, results[j]));
+    }
     for (const r of rows) {
       const open = FOLLOW_UP_OPEN_STATUSES.includes(r.status);
-      let suppression = null;
-      if (open) {
-        const key = `${r.leadId}:${r.channel || ''}`;
-        if (!memo.has(key)) memo.set(key, await checkContactSuppression(r.leadId, r.channel || null));
-        suppression = memo.get(key);
-      }
+      const suppression = open ? memo.get(`${r.leadId}:${r.channel || ''}`) : null;
       const due = new Date(r.nextDueAt);
       out.push({
         id: String(r._id),
@@ -612,8 +717,9 @@ class LeadFollowUpService {
     const fuMatch = { status: { $in: FOLLOW_UP_OPEN_STATUSES }, nextDueAt: { $gte: start, $lte: end } };
     if (scope !== 'all') fuMatch.$or = [{ ownerId: me }, { createdBy: me }];
     const followUps = await LeadFollowUp.aggregate([
-      ...this._pipelineHead(fuMatch),
-      { $sort: { nextDueAt: 1, _id: 1 } },
+      { $match: fuMatch },
+      { $sort: { nextDueAt: 1, _id: 1 } }, // before the lead join: lookups stop once the page is full
+      ...this._leadLookup(),
       { $limit: FOLLOW_UP_LIMIT },
       { $lookup: { from: ContactLogEntry.collection.name, localField: 'source.contactLogId', foreignField: '_id', pipeline: [{ $project: { subject: 1 } }], as: 'log' } },
       ...this._automationLookups(),

@@ -1,0 +1,14 @@
+Module page header artwork (leads, followups, aicalling, incoming, simcalls, smsops, automation)
+Generated with Higgsfield gpt_image_2_6 (16:9, 1344x752), upscaled 4K (bytedance), encoded with sharp:
+AVIF q52 (effort 8) + WebP q78 (effort 6) at 960/1600/2560 px, cropped 16:9 anchored right.
+Shared style: photoreal 3D editorial render on deep midnight navy (#070d1a); subject on the RIGHT half;
+LEFT 45% calm empty navy for text; glossy reflective floor, blue/cyan rim light, volumetric haze;
+blue and cyan only (no purple/magenta); no readable text, logos, people or watermark.
+
+leads       glass sales funnel, cyan spheres flowing in, glass contact cards + map pins, wireframe city grid
+followups   frosted glass calendar, dark glass clock with cyan hands, timeline cards with check marks
+aicalling   luminous AI voice orb with waveform rings, glass smartphone, studio microphone, call cards
+incoming    dark-glass desk telephone with cyan edge light, incoming signal arcs, small light orb above
+simcalls    three dark smartphones, glowing SIM chip, cyan signal arcs linking them
+smsops      frosted glass chat bubbles floating in depth, light paths, smartphone at the base
+automation  node-based automation graph of glass tiles joined by glowing cables, graphite gears

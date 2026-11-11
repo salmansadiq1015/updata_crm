@@ -10,12 +10,19 @@ const INITIAL_STATE = {
   panelView:       PANEL_VIEWS.IDLE,
   voiceMode:       'manual',
   autoPlay:        false,
+  // Text a page hands the assistant ("Ask AI about this vehicle"). The panel
+  // puts it in the input and clears it; it never sends on its own.
+  pendingPrompt:   null,
 };
 
 export const useAiStore = create((set) => ({
   ...INITIAL_STATE,
 
   openPanel: () => set({ isPanelOpen: true }),
+
+  openPanelWithPrompt: (text) => set({ isPanelOpen: true, pendingPrompt: text ? { text: String(text), at: Date.now() } : null }),
+
+  consumePendingPrompt: () => set({ pendingPrompt: null }),
 
   closePanel: () =>
     set({

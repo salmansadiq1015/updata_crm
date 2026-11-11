@@ -9,6 +9,7 @@
 import config from '../../../config/index.js';
 import logger from '../../../shared/logger/index.js';
 import { createChatModel } from '../../../shared/ai/llmFactory.js';
+import { FLEET_ACTIONS, FLEET_PLANNER_RULES, sanitizeVehicleDraft } from '../capabilities/fleet.capabilities.js';
 
 export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'DELETE_CUSTOMER', 'SEARCH_CUSTOMER',
@@ -21,6 +22,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
   'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING', 'PERMIT_CHECK',
   'DISPATCH_CHECK', 'DISPATCH_SUGGEST', 'MATERIAL_CHECK', 'DOCUMENT_CLASSIFY', 'PAYMENT_CHECK', 'PROJECT_FIGURES', 'DRAFT_CUSTOMER_MESSAGE', 'KNOWLEDGE_ASK',
+  ...Object.values(FLEET_ACTIONS),
   'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
@@ -29,7 +31,7 @@ const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 const SYSTEM_PROMPT = (todayIso) => `You are the planning brain of an ERP assistant for Updata (Swiss HVAC company). Users write in German, French, Italian or English.
 
 Classify the user message into exactly ONE action and extract parameters. Reply with JSON only, no markdown fences:
-{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null,"installationName":null}}
+{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null,"installationName":null,"vehicle":null}}
 
 Actions: ${PLANNER_ACTIONS.join(', ')}.
 
@@ -50,6 +52,7 @@ Hard rules:
 - Asking whether ONE named person can take a slot ("Kann Thomas am Dienstag zu X?", "Passt der Termin bei Sarah?", "Geht das bei Thomas am Montag um 8 Uhr?") → DISPATCH_CHECK, with assigneeName and dateTime.
 - Questions about permits, building notifications or subsidy applications for a project ("Welche Bewilligungen braucht das Projekt X?", "Behördencheck für X", "Was muss ich bei der Gemeinde einreichen?", "Ist eine Baumeldung nötig?", "Fördergesuch für X") → PERMIT_CHECK, with projectName set.
 - Asking what a technician needs to know before an intervention on a specific plant ("Briefing für die Anlage A-00001", "Was muss ich zur Wartung bei Kunde X wissen?", "Infos zum Boiler bei Y") → SERVICE_BRIEFING, with installationName and/or customerName set.
+${FLEET_PLANNER_RULES}
 - Parameters:
   - title: the user's OWN words. Remove ONLY the command wrapper ("Erstelle eine Aufgabe", "Neue Aufgabe:", "Aufgabe erstellen") and the trailing attributes you put into other fields (date, priority, assignee). Everything in between stays EXACTLY as written, in the user's language.
     Reference codes, order and plant numbers, article numbers, project prefixes, abbreviations and words you do not recognise are PART OF THE TITLE, never noise: "Erstelle eine Aufgabe AUF-2026-0052 Nachkontrolle" → title "AUF-2026-0052 Nachkontrolle"; "Erstelle eine Aufgabe XY7 Boiler entkalken" → title "XY7 Boiler entkalken".
@@ -121,6 +124,7 @@ class LlmPlannerService {
       status: str(raw.status, 60),
       messageContent: str(raw.messageContent, 2000),
       installationName: str(raw.installationName, 120),
+      vehicle: sanitizeVehicleDraft(raw.vehicle),
     };
     return params;
   }

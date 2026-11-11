@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  AlarmClock, ArrowLeft, Bot, CalendarClock, Check, CheckCheck, ChevronDown, Clock3, Globe2, Info, Loader2, Mail, MessageCircle, MessageSquare, MoreHorizontal, PanelRightOpen, Phone, Plus, RefreshCw, Search, ShieldOff, UserRound, X,
+  AlarmClock, Bot, CalendarClock, Check, CheckCheck, ChevronDown, Clock3, Globe2, Info, Loader2, Mail, MessageCircle, MessageSquare, MoreHorizontal, PanelRightOpen, Phone, Plus, RefreshCw, Search, ShieldOff, UserRound, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton } from '@/shared/components/page-hero';
 import { showError, showSuccess } from '@/lib/toast';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useWorkspaceUsers } from '@/modules/tasks/hooks/use-workspace-users';
@@ -368,22 +370,35 @@ export function FollowUpInbox() {
   return (
     <div className="h-full overflow-y-auto bg-background/40">
       <div className="mx-auto max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
-        <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-          <div className="space-y-2">
-            <Link href="/leads" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden="true" />{t('leads.followUps.backToLeads', 'Back to leads')}</Link>
-            <h1 className="text-2xl font-semibold tracking-tight">{t('leads.followUps.title', 'Follow-ups')}</h1>
-            <p className="text-sm text-muted-foreground">{t('leads.followUps.intro', 'Keep every conversation moving. See what’s due and plan your next step.')}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:pt-6">
+        <PageHero
+          id="follow-ups-title"
+          art="/hero/followups"
+          icon={CalendarClock}
+          back={{ href: '/leads', label: t('leads.followUps.backToLeads', 'Back to leads') }}
+          eyebrow={t('leads.followUps.title', 'Follow-ups')}
+          title={t('hero.followUps.title', 'Every promise kept, right on time.')}
+          subtitle={t('leads.followUps.intro', 'Keep every conversation moving. See what’s due and plan your next step.')}
+          status={summary.data && !summary.isError ? (
+            <HeroPill tone={summary.data.overdue ? 'warn' : 'ok'} onClick={() => setBucket(summary.data?.overdue ? 'overdue' : 'today')}>
+              {summary.data.overdue ? t('hero.followUps.overdue', '{count} overdue', { count: summary.data.overdue }) : t('hero.followUps.onTrack', 'Nothing overdue')}
+            </HeroPill>
+          ) : null}
+          actions={<>
             <label className="sr-only" htmlFor="fu-scope">{t('leads.followUps.scope', 'Whose follow-ups')}</label>
-            <select id="fu-scope" className={selectClass} value={scope} onChange={(e) => { setScope(e.target.value as FollowUpScope); setOwnerId(''); }}>
+            <select id="fu-scope" className={cn(heroButton.ghost, 'appearance-none pe-9 [&>option]:text-foreground')} style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2716%27 height=%2716%27 fill=%27none%27 stroke=%27%2367e8f9%27 stroke-width=%272%27%3E%3Cpath d=%27m4 6 4 4 4-4%27/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.9rem center' }} value={scope} onChange={(e) => { setScope(e.target.value as FollowUpScope); setOwnerId(''); }}>
               <option value="mine">{t('leads.followUps.scope.mine', 'Mine')}</option>
               <option value="team">{t('leads.followUps.scope.team', 'My team')}</option>
               {canAll && <option value="all">{t('leads.followUps.scope.all', 'Everyone')}</option>}
             </select>
-            {canWrite && <Button onClick={() => setCreating(true)} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />{t('leads.followUps.new', 'New follow-up')}</Button>}
-          </div>
-        </header>
+            {canWrite && <button type="button" className={heroButton.primary} onClick={() => setCreating(true)}><Plus aria-hidden="true" />{t('leads.followUps.new', 'New follow-up')}</button>}
+          </>}
+          stats={<>
+            <HeroStat icon={UserRound} label={t('leads.followUps.metric.totalLeads', 'Follow-up leads')} value={metric('totalLeads')} hint={t('hero.followUps.pending', '{count} pending activities', { count: metric('pending') })} loading={summary.isLoading} />
+            <HeroStat icon={CheckCheck} tone="text-emerald-300" label={t('leads.followUps.metric.qualifiedLeads', 'Qualified leads')} value={metric('qualifiedLeads')} hint={t('hero.followUps.completed', '{count} completed', { count: metric('completed') })} loading={summary.isLoading} />
+            <HeroStat icon={Mail} tone="text-cyan-300" label={t('leads.followUps.metric.emailsSent', 'Emails sent')} value={metric('emailsSent')} hint={t('hero.followUps.emails', '{delivered} delivered · {failed} failed', { delivered: metric('emailsDelivered'), failed: metric('emailsFailed') })} loading={summary.isLoading} />
+            <HeroStat icon={Bot} tone="text-sky-200" label={t('leads.followUps.ai.metricsTitle', 'AI follow-up calls')} value={metric('aiManaged')} hint={t('hero.followUps.ai', '{count} need attention', { count: metric('attention') })} loading={summary.isLoading} />
+          </>}
+        />
 
         {canAiRead && settings && (!settings.enabled || settings.voicePaused) && (
           <div role="status" className="flex flex-col gap-2 rounded-xl border border-sky-500/25 bg-sky-500/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -402,18 +417,8 @@ export function FollowUpInbox() {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <dl className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
-          {([
-            ['totalLeads', 'Follow-up leads'], ['qualifiedLeads', 'Qualified leads'],
-            ['pending', 'Pending activities'], ['emailsSent', 'Emails sent'],
-            ['emailsDelivered', 'Emails delivered'], ['emailsFailed', 'Failed emails'],
-          ] as const).map(([key, fallback]) => <div key={key} className="space-y-1 px-2">
-            <dt className="text-xs text-muted-foreground">{t(`leads.followUps.metric.${key}`, fallback)}</dt>
-            <dd className={cn('text-xl font-semibold tabular-nums', key === 'emailsFailed' && summary.data?.emailsFailed && 'text-destructive')}>{summary.data && !summary.isError ? summary.data[key] : '—'}</dd>
-          </div>)}
-        </dl>
-        <section aria-labelledby="fu-ai-metrics" className="flex flex-col gap-3 border-t border-border bg-gradient-to-r from-blue-600/[0.04] via-transparent to-cyan-500/[0.05] px-4 py-3 lg:flex-row lg:items-center">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_8px_30px_-18px_rgba(15,23,42,0.35)]">
+        <section aria-labelledby="fu-ai-metrics" className="flex flex-col gap-3 bg-gradient-to-r from-blue-600/[0.04] via-transparent to-cyan-500/[0.05] px-4 py-3 lg:flex-row lg:items-center">
           <div className="flex shrink-0 items-center gap-2 px-2 lg:w-48">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-500 text-white" aria-hidden="true"><Bot className="h-3.5 w-3.5" /></span>
             <div className="min-w-0">

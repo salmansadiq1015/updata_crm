@@ -1,8 +1,9 @@
 'use client';
 
 import {
-  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote,
+  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote, Camera, Wallet, CalendarRange,
 } from 'lucide-react';
+import { useFleetFormat } from '../lib/fleet-meta';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -14,7 +15,13 @@ const EVENT_META = {
   'vehicle.created': { icon: Plus, cls: 'bg-emerald-500/10 text-emerald-600', label: 'Fahrzeug erstellt' },
   'vehicle.updated': { icon: Pencil, cls: 'bg-blue-500/10 text-blue-600', label: 'Fahrzeug aktualisiert' },
   'vehicle.deleted': { icon: Trash2, cls: 'bg-red-500/10 text-red-600', label: 'Fahrzeug gelöscht' },
-  'vehicle.driver_changed': { icon: User, cls: 'bg-violet-500/10 text-violet-600', label: 'Fahrer geändert' },
+  'vehicle.driver_changed': { icon: User, cls: 'bg-sky-500/10 text-sky-600', label: 'Driver changed' },
+  'vehicle.photo_changed': { icon: Camera, cls: 'bg-sky-500/10 text-sky-600', label: 'Photo updated' },
+  'vehicle.photo_removed': { icon: Camera, cls: 'bg-red-500/10 text-red-600', label: 'Photo removed' },
+  'vehicle.cost_added': { icon: Wallet, cls: 'bg-cyan-500/10 text-cyan-600', label: 'Cost logged' },
+  'vehicle.cost_deleted': { icon: Wallet, cls: 'bg-red-500/10 text-red-600', label: 'Cost deleted' },
+  'vehicle.booking_created': { icon: CalendarRange, cls: 'bg-sky-500/10 text-sky-600', label: 'Booked' },
+  'vehicle.booking_cancelled': { icon: CalendarRange, cls: 'bg-red-500/10 text-red-600', label: 'Booking cancelled' },
   'vehicle.service_added': { icon: Wrench, cls: 'bg-emerald-500/10 text-emerald-600', label: 'Service erfasst' },
   'vehicle.service_deleted': { icon: Wrench, cls: 'bg-red-500/10 text-red-600', label: 'Service gelöscht' },
   'vehicle.material_added': { icon: Package, cls: 'bg-amber-500/10 text-amber-600', label: 'Material hinzugefügt' },
@@ -23,15 +30,11 @@ const EVENT_META = {
   'vehicle.note_deleted': { icon: StickyNote, cls: 'bg-red-500/10 text-red-600', label: 'Notiz gelöscht' },
 };
 
-const fmt = (v) => {
-  if (!v) return '—';
-  const d = new Date(v);
-  return `${d.toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`;
-};
 
 export function VehicleHistoryTab({ vehicleId }) {
   const { t } = useLanguage();
   const { data: events = [], isLoading } = useVehicleHistory(vehicleId);
+  const f = useFleetFormat();
 
   if (isLoading) {
     return (
@@ -78,8 +81,11 @@ export function VehicleHistoryTab({ vehicleId }) {
                   <div className="min-w-0 flex-1 pb-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold">{t(`vehicles.event.${e.eventType}`, meta.label)}</p>
-                      <span className="ml-auto text-[11px] text-muted-foreground">{fmt(e.timestamp)}</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">{f.dateTime(e.timestamp)}</span>
                     </div>
+                    {e.details?.source === 'ai-agent' && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-200">{t('fleet.history.viaAi', 'via AI assistant')}</span>
+                    )}
                     {e.userName && (
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
                         {t('common.by', 'von')} {e.userName}

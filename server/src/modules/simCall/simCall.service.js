@@ -14,6 +14,7 @@ import { nextWindowOpen, windowState, isValidTimezone } from '../aiCalling/engin
 import auditService from '../auth/audit.service.js';
 import notificationService from '../notifications/notification.service.js';
 import logger from '../../shared/logger/index.js';
+import { generationCache } from './generationCache.js';
 import { AppError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import {
   CALLABLE_TASK_STATES, CAMPAIGN_TRANSITIONS, DEFAULT_SETTINGS, LOCK_MS, MAX_LEADS, NO_CONTACT_OUTCOMES,
@@ -26,6 +27,10 @@ const MAX_SYNC_ATTEMPTS = 5;
 const MAX_FAILED_DIALS = 3;          // "could not place the call" before the task is closed as failed
 const CANCELLED_DIAL_DELAY_MS = 5 * 60_000;
 const MAX_CALLBACK_AHEAD_MS = 366 * 24 * 3600_000;
+const ELIGIBILITY_CONCURRENCY = 8;   // lead eligibility checks run in parallel batches when building tasks
+// Header KPIs (≤30 s); invalidated by a generation bump on every summary/status write.
+const statsCache = generationCache('simcall:stats', { ttlSeconds: 30 });
+const EVENTS_COUNT_CAP = 1000;       // the activity feed only shows recent pages; never count a huge log exactly
 const canonical = (value) => {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(canonical);
@@ -73,6 +78,8 @@ function assertQuestionnaire(questionnaire) {
   };
   for (const key of keys) visit(key);
 }
+
+const HEAVY_ATTEMPT_FIELDS = '-attempts.crmNotes -attempts.answers -attempts.callbackSnapshot';
 
 const destinationField = (lead) => (lead.mobile ? 'mobile' : 'phone');
 
@@ -229,12 +236,17 @@ class SimCallService {
     const leads = await Lead.find({ _id: { $in: leadIds }, isDeleted: false })
       .select('_id name phone mobile address.country status').lean();
     const byId = new Map(leads.map((l) => [String(l._id), l]));
+    // Deleted / unknown leads are simply not added. Eligibility (CRM suppression +
+    // opt-out lookups) runs in small parallel batches instead of one lead at a time.
+    const found = leadIds.map((id) => byId.get(String(id))).filter(Boolean);
+    const checks = [];
+    for (let i = 0; i < found.length; i += ELIGIBILITY_CONCURRENCY) {
+      checks.push(...await Promise.all(found.slice(i, i + ELIGIBILITY_CONCURRENCY).map((lead) => phoneEligibility(lead))));
+    }
     const docs = [];
     let order = startOrder;
-    for (const id of leadIds) {
-      const lead = byId.get(String(id));
-      if (!lead) continue; // deleted / unknown leads are simply not added
-      const e = await phoneEligibility(lead);
+    for (const [index, lead] of found.entries()) {
+      const e = checks[index];
       docs.push({
         campaignId: campaign._id, leadId: lead._id, createdBy: actor, order: order++,
         state: e.eligible ? 'pending' : 'ineligible',
@@ -372,6 +384,48 @@ class SimCallService {
     return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
   }
 
+  /**
+   * Header KPIs over ALL of the owner's campaigns (not just the visible page): sums
+   * the per-campaign `summary` counters in one $group, plus live overdue callbacks.
+   */
+  async campaignStats(actor) {
+    return statsCache.get(actor, () => this._computeCampaignStats(actor));
+  }
+
+  async _computeCampaignStats(actor, now = new Date()) {
+    const sum = (field) => ({ $sum: { $ifNull: [`$summary.${field}`, 0] } });
+    const [rows, callbacksOverdue] = await Promise.all([
+      SimCallCampaign.aggregate([
+        { $match: { createdBy: toId(actor) } },
+        { $group: {
+          _id: '$status', campaigns: { $sum: 1 }, total: sum('total'),
+          completed: sum('completed'), skipped: sum('skipped'), ineligible: sum('ineligible'), cancelled: sum('cancelled'),
+          answered: sum('answered'), callbacksDue: sum('callbacksDue'), needsReview: sum('needsReview'), syncFailed: sum('syncFailed'),
+        } },
+      ]),
+      SimCallTask.countDocuments({ createdBy: actor, 'callback.status': 'pending', 'callback.at': { $lte: now } }),
+    ]);
+    const byStatus = { draft: 0, running: 0, paused: 0, completed: 0, cancelled: 0 };
+    const tasks = { total: 0, closed: 0, answered: 0, callbacksDue: 0, needsReview: 0, syncFailed: 0 };
+    let campaigns = 0;
+    for (const r of rows) {
+      if (r._id in byStatus) byStatus[r._id] = r.campaigns;
+      campaigns += r.campaigns;
+      tasks.total += r.total;
+      tasks.closed += r.completed + r.skipped + r.ineligible + r.cancelled; // same "closed" as the campaign progress bar
+      tasks.answered += r.answered;
+      tasks.callbacksDue += r.callbacksDue;
+      tasks.needsReview += r.needsReview;
+      tasks.syncFailed += r.syncFailed;
+    }
+    return {
+      campaigns, byStatus, tasks,
+      answerRate: tasks.closed ? Math.round((tasks.answered / tasks.closed) * 10_000) / 10_000 : null,
+      callbacksOverdue,
+      generatedAt: now.toISOString(),
+    };
+  }
+
   async _transition(id, actor, action, set, meta) {
     const from = CAMPAIGN_TRANSITIONS[action];
     const updated = await SimCallCampaign.findOneAndUpdate(
@@ -383,6 +437,7 @@ class SimCallService {
       const current = await this._ownedCampaign(id, actor);
       throw conflict(`Cannot ${action} a campaign that is ${current.status}`, SIM_CALL_ERROR_CODES.INVALID_TRANSITION, { status: current.status });
     }
+    await statsCache.bump(updated.createdBy);
     const type = { start: 'campaign.started', resume: 'campaign.resumed', pause: 'campaign.paused', cancel: 'campaign.cancelled' }[action];
     await this._event(id, type, { actor });
     this._audit(`sim_call.${type}`, actor, meta, { campaignId: id });
@@ -467,24 +522,36 @@ class SimCallService {
 
   async refreshSummary(campaignId) {
     const now = new Date();
-    const [byState, byOutcome, callbacks, due, syncFailed, attempts] = await Promise.all([
-      SimCallTask.aggregate([{ $match: { campaignId: toId(campaignId) } }, { $group: { _id: '$state', n: { $sum: 1 } } }]),
-      SimCallTask.aggregate([{ $match: { campaignId: toId(campaignId), outcome: { $ne: null } } }, { $group: { _id: '$outcome', n: { $sum: 1 } } }]),
-      SimCallTask.countDocuments({ campaignId, 'callback.status': 'pending' }),
-      SimCallTask.countDocuments({ campaignId, 'callback.status': 'pending', 'callback.at': { $lte: now } }),
-      SimCallTask.countDocuments({ campaignId, attempts: { $elemMatch: { 'sync.status': 'failed' } } }),
-      // Only attempts that were actually dialled count as calls (a claim that was never dialled is not a call).
-      SimCallTask.aggregate([{ $match: { campaignId: toId(campaignId) } }, { $group: { _id: null, n: { $sum: { $size: { $filter: { input: '$attempts', cond: { $ne: [{ $ifNull: ['$$this.dialedAt', null] }, null] } } } } } } }]),
+    // One pass over the campaign's tasks (was six separate scans on every claim/complete).
+    const pendingCallback = { $eq: ['$callback.status', 'pending'] };
+    const [facets] = await SimCallTask.aggregate([
+      { $match: { campaignId: toId(campaignId) } },
+      { $project: { state: 1, outcome: 1, 'callback.status': 1, 'callback.at': 1, 'attempts.dialedAt': 1, 'attempts.sync.status': 1 } },
+      { $facet: {
+        byState: [{ $group: { _id: '$state', n: { $sum: 1 } } }],
+        byOutcome: [{ $match: { outcome: { $ne: null } } }, { $group: { _id: '$outcome', n: { $sum: 1 } } }],
+        totals: [{ $group: {
+          _id: null,
+          callbacks: { $sum: { $cond: [pendingCallback, 1, 0] } },
+          // countDocuments({'callback.at': {$lte: now}}) never matched a null/missing time; keep that.
+          due: { $sum: { $cond: [{ $and: [pendingCallback, { $ne: [{ $ifNull: ['$callback.at', null] }, null] }, { $lte: ['$callback.at', now] }] }, 1, 0] } },
+          syncFailed: { $sum: { $cond: [{ $in: ['failed', { $ifNull: ['$attempts.sync.status', []] }] }, 1, 0] } },
+          // Only attempts that were actually dialled count as calls (a claim that was never dialled is not a call).
+          attempts: { $sum: { $size: { $filter: { input: { $ifNull: ['$attempts', []] }, cond: { $ne: [{ $ifNull: ['$$this.dialedAt', null] }, null] } } } } },
+        } }],
+      } },
     ]);
-    const s = Object.fromEntries(byState.map((r) => [r._id, r.n]));
-    const o = Object.fromEntries(byOutcome.map((r) => [r._id, r.n]));
+    const s = Object.fromEntries(facets.byState.map((r) => [r._id, r.n]));
+    const o = Object.fromEntries(facets.byOutcome.map((r) => [r._id, r.n]));
+    const totals = facets.totals[0] || {};
+    const { callbacks = 0, due = 0, syncFailed = 0 } = totals;
     const summary = {
       total: Object.values(s).reduce((a, b) => a + b, 0),
       pending: s.pending || 0, inProgress: s.in_progress || 0, scheduled: s.scheduled || 0, needsReview: s.needs_review || 0,
       completed: s.completed || 0, skipped: s.skipped || 0, ineligible: s.ineligible || 0, cancelled: s.cancelled || 0,
       answered: o.answered || 0, noAnswer: o.no_answer || 0, busy: o.busy || 0, rejected: o.rejected || 0,
       callbacks, callbacksDue: due, wrongNumber: o.wrong_number || 0, failed: o.failed || 0,
-      syncFailed, attempts: attempts[0]?.n || 0,
+      syncFailed, attempts: totals.attempts || 0,
     };
     const open = summary.pending + summary.inProgress + summary.scheduled + summary.needsReview;
     const campaign = await SimCallCampaign.findOneAndUpdate(
@@ -499,6 +566,7 @@ class SimCallService {
         emit(done.createdBy, 'sim-call:campaign', { campaignId: String(campaignId), status: 'completed' });
       }
     }
+    if (campaign) await statsCache.bump(campaign.createdBy);
     return summary;
   }
 
@@ -515,7 +583,9 @@ class SimCallService {
       filter.leadId = { $in: leads.map((l) => l._id) };
     }
     const [rows, total] = await Promise.all([
+      // Per-attempt CRM snapshots (crmNotes, answers, callbackSnapshot) are never serialized; don't load them.
       SimCallTask.find(filter).sort({ order: 1 }).skip((page - 1) * limit).limit(limit)
+        .select(HEAVY_ATTEMPT_FIELDS)
         .populate('leadId', 'name leadNumber contactName status address.city').lean(),
       SimCallTask.countDocuments(filter),
     ]);
@@ -971,7 +1041,12 @@ class SimCallService {
     else if (status === 'pending') Object.assign(filter, { 'callback.status': 'pending' });
     else filter['callback.status'] = status;
     if (from || to) {
-      filter['callback.at'] = { ...(filter['callback.at'] || {}), ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+      // "overdue" is capped at now: a later `to` must not widen it to future callbacks.
+      const upper = [filter['callback.at']?.$lte, to ? new Date(to) : null].filter(Boolean);
+      filter['callback.at'] = {
+        ...(from ? { $gte: new Date(from) } : {}),
+        ...(upper.length ? { $lte: new Date(Math.min(...upper.map((d) => d.getTime()))) } : {}),
+      };
     }
     const [rows, total] = await Promise.all([
       SimCallTask.find(filter).sort({ 'callback.at': 1 }).skip((page - 1) * limit).limit(limit)
@@ -1024,9 +1099,10 @@ class SimCallService {
     const [data, total] = await Promise.all([
       SimCallEvent.find({ campaignId }).sort({ at: -1, _id: -1 }).skip((page - 1) * limit).limit(limit)
         .populate('leadId', 'name leadNumber').lean(),
-      SimCallEvent.countDocuments({ campaignId }),
+      // Bounded: a long-running campaign logs tens of thousands of events.
+      SimCallEvent.countDocuments({ campaignId }, { limit: EVENTS_COUNT_CAP }),
     ]);
-    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit), totalCapped: total >= EVENTS_COUNT_CAP } };
   }
 
   /** All SIM call tasks of one lead for the owner (lead history). */

@@ -26,7 +26,9 @@ const listFilters = {
   assignedTo: Joi.alternatives(objectId, Joi.string().valid('me', 'none')),
   ids: Joi.string().pattern(/^[a-f0-9]{24}(,[a-f0-9]{24}){0,499}$/),
   from: Joi.date().iso(), to: Joi.date().iso(),
-  tz: Joi.string().max(80),
+  // An unknown zone made the analytics aggregation throw (500); reject it as a 400 instead
+  // and pass on the canonical IANA spelling (e.g. 'utc' → 'UTC').
+  tz: Joi.string().max(80).custom((v, h) => { try { return new Intl.DateTimeFormat('en-US', { timeZone: v }).resolvedOptions().timeZone; } catch { return h.error('any.invalid'); } }),
 };
 
 export const list = { query: Joi.object({ ...listFilters, page: Joi.number().integer().min(1).default(1), limit: Joi.number().integer().min(1).max(100).default(25), sort: Joi.string().valid('newest', 'oldest', 'longest').default('newest') }) };

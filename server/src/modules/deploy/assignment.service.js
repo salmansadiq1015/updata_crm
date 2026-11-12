@@ -1,6 +1,7 @@
 import assignmentRepository from './assignment.repository.js';
 import counterService from './counter.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import calendarCache from './calendarCache.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
@@ -564,8 +565,10 @@ class AssignmentService {
     await cacheManager.del(`deploy:assignment:${id}`);
   }
 
+  // Calendar ranges are cached under a write generation (calendarCache.js) that the
+  // Assignment model hooks already bump; the explicit bump keeps call sites honest.
   async _invalidateCalendarCache() {
-    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+    await calendarCache.bump();
   }
 
   async _invalidateDashboardCache() {

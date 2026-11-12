@@ -1,6 +1,6 @@
 Fleet management header artwork
-Generated with Higgsfield gpt_image_2_6 (16:9, 1344x752), upscaled 4K (bytedance), encoded with sharp:
-AVIF q52 + WebP q78 at 960/1600/2560 px, plus a 24 px blurred WebP placeholder (lqip.txt).
+Generated with the Codex CLI image tool (16:9, 1672x941), encoded with sharp (lanczos3 resize + light sharpen):
+AVIF q52 (effort 8) + WebP q78 (effort 6) at 960/1600/2560 px, cropped 16:9 anchored right.
 
 Prompt:
 Use case: premium enterprise SaaS dashboard header background, ultra-wide landscape. Photoreal 3D editorial render on a deep midnight navy background (#070d1a). On the RIGHT half of the frame, an elegant lineup of a mixed multi-industry fleet parked at a subtle three-quarter angle on a glossy dark reflective studio floor: a modern white delivery van, a sleek dark executive sedan, a compact electric pickup, a heavy box truck and a small graphite compact excavator, all in restrained graphite, silver and white paint. Soft cinematic rim lighting in electric blue and cyan, faint luminous cyan light trails on the floor connecting the vehicles like a network, delicate volumetric haze, mirror reflections. The LEFT 45% of the frame is calm, dark, nearly empty navy gradient negative space for overlaid text. Luxurious, quiet, world-class automotive photography aesthetic, shallow depth of field, crisp detail. Blue and cyan palette only, no purple, no magenta. No text, no letters, no logos, no license plates text, no people, no watermark.

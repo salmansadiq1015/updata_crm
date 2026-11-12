@@ -3,6 +3,7 @@ import FileMetadata from '../files/file.model.js';
 import storageService from '../../shared/storage/StorageService.js';
 import ChatMessage from '../mobile/chatMessage.model.js';
 import chatRoomRepository from './chatRoom.repository.js';
+import ChatRoom from './chatRoom.model.js';
 import chatRoomService from './chatRoom.service.js';
 import chatAccessService from './chatAccess.service.js';
 import eventBus from '../../shared/events/EventBus.js';
@@ -10,6 +11,8 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, AuthorizationError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import config from '../../config/index.js';
+
+const READ_HORIZON_MARGIN_MS = 5 * 60 * 1000;
 
 function userIdOf(user) {
   return String(user?._id ?? user);
@@ -52,7 +55,12 @@ const chatMessageService = {
   async listMessages(roomId, user, { limit = 50, before, beforeId } = {}) {
     await chatRoomService.assertMembership(roomId, user);
     const query = { roomId, isDeleted: false };
-    if (before && beforeId) query.$or = [{ sentAt: { $lt: new Date(before) } }, { sentAt: new Date(before), _id: { $lt: new mongoose.Types.ObjectId(beforeId) } }];
+    // Keyset (sentAt desc, _id desc); the redundant `sentAt <= before` bound keeps the
+    // chat_cursor index scan seeking straight to the page start.
+    if (before && beforeId) {
+      query.sentAt = { $lte: new Date(before) };
+      query.$or = [{ sentAt: { $lt: new Date(before) } }, { sentAt: new Date(before), _id: { $lt: new mongoose.Types.ObjectId(beforeId) } }];
+    }
     else if (before) query.sentAt = { $lt: new Date(before) };
     const messages = await ChatMessage.find(query)
       .sort({ sentAt: -1, _id: -1 })
@@ -299,8 +307,8 @@ const chatMessageService = {
         query.roomId = { $nin: linkedRooms.filter(room => room.roomType === 'LEAD' || room.leadIds?.length).map(room => room._id) };
       }
     } else {
-      const rooms = await chatRoomService.listRoomsForUser(user);
-      const roomIds = rooms.map((room) => room._id);
+      // Only the ids are needed: skip listRoomsForUser's populates and unread aggregation.
+      const roomIds = await chatRoomService.listAccessibleRoomIds(user);
       if (roomIds.length === 0) return [];
       query.roomId = { $in: roomIds };
     }
@@ -313,7 +321,11 @@ const chatMessageService = {
       .lean();
   },
 
-  async addReaction(messageId, roomId, emoji, user, userName) {
+  /**
+   * POST toggles the caller's reaction (existing client contract); DELETE passes
+   * mode 'remove' so it can never add a reaction the user did not have.
+   */
+  async addReaction(messageId, roomId, emoji, user, userName, { mode = 'toggle' } = {}) {
     await chatRoomService.assertMembership(roomId, user);
     const message = await ChatMessage.findById(messageId);
     if (!message) throw new NotFoundError('Message');
@@ -325,6 +337,8 @@ const chatMessageService = {
     );
     if (existingIdx >= 0) {
       message.reactions.splice(existingIdx, 1);
+    } else if (mode === 'remove') {
+      return message.reactions; // nothing to remove: no write, no broadcast
     } else {
       message.reactions.push({ emoji, userId, userName });
     }
@@ -337,17 +351,29 @@ const chatMessageService = {
   },
 
   async markRoomRead(roomId, user) {
-    await chatRoomService.assertMembership(roomId, user);
+    const room = await chatRoomService.assertMembership(roomId, user);
     const userId = userIdOf(user);
     const now = new Date();
-    await ChatMessage.updateMany(
+    const member = (room.members || []).find((m) => String(m.userId?._id ?? m.userId) === userId);
+    const filter = {
+      roomId,
+      senderId: { $ne: userId },
+      isDeleted: false,
+      'readBy.userId': { $ne: userId },
+    };
+    // Everything countable before the stored horizon is already read (see chatRoom.model.js).
+    if (member?.lastReadAt) filter.sentAt = { $gte: new Date(member.lastReadAt) };
+    await ChatMessage.updateMany(filter, { $addToSet: { readBy: { userId, readAt: now } } });
+    // Advance the horizon only after the update, and keep a margin for messages whose
+    // sentAt was stamped (possibly on another instance) before they were inserted.
+    const horizon = new Date(now.getTime() - READ_HORIZON_MARGIN_MS);
+    await ChatRoom.updateOne(
+      { _id: roomId },
+      { $set: { 'members.$[me].lastReadAt': horizon } },
       {
-        roomId,
-        senderId: { $ne: userId },
-        isDeleted: false,
-        'readBy.userId': { $ne: userId },
+        arrayFilters: [{ 'me.userId': new mongoose.Types.ObjectId(userId), 'me.lastReadAt': { $not: { $gte: horizon } } }],
+        timestamps: false,
       },
-      { $addToSet: { readBy: { userId, readAt: now } } }
     );
     global.io?.to(`room:${roomId}`).emit('chat:read', { roomId, userId, readAt: now });
   },
@@ -379,7 +405,7 @@ const chatMessageService = {
     }
     if (message.isDeleted) throw new NotFoundError('Message');
     if (!String(content || '').trim()) throw new ValidationError('Message cannot be empty');
-    if (message.messageType !== 'TEXT') throw new Error('Only TEXT messages can be edited');
+    if (message.messageType !== 'TEXT') throw new ValidationError('Only TEXT messages can be edited');
     message.content = content;
     message.editedAt = new Date();
     await message.save();

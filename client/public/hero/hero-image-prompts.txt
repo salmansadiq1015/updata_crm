@@ -1,5 +1,5 @@
 Module page header artwork (leads, followups, aicalling, incoming, simcalls, smsops, automation)
-Generated with Higgsfield gpt_image_2_6 (16:9, 1344x752), upscaled 4K (bytedance), encoded with sharp:
+Generated with the Codex CLI image tool (16:9, 1672x941), encoded with sharp (lanczos3 resize + light sharpen):
 AVIF q52 (effort 8) + WebP q78 (effort 6) at 960/1600/2560 px, cropped 16:9 anchored right.
 Shared style: photoreal 3D editorial render on deep midnight navy (#070d1a); subject on the RIGHT half;
 LEFT 45% calm empty navy for text; glossy reflective floor, blue/cyan rim light, volumetric haze;
@@ -12,3 +12,13 @@ incoming    dark-glass desk telephone with cyan edge light, incoming signal arcs
 simcalls    three dark smartphones, glowing SIM chip, cyan signal arcs linking them
 smsops      frosted glass chat bubbles floating in depth, light paths, smartphone at the base
 automation  node-based automation graph of glass tiles joined by glowing cables, graphite gears
+
+Main-menu pages (2026-11-12, same pipeline and style):
+dashboard      layered glass analytics panels: rising area chart, donut, bars, cyan horizon line
+chat           constellation of glass chat bubbles + abstract avatar discs joined by light threads
+calendar       perspective wave of glass calendar day tiles, a few glowing as events, sweeping time lines
+tasks          stepped staircase of glass task cards with cyan check marks, progress ring
+email          arc of glass envelopes, one open and glowing, paper-plane light trails
+notifications  dark glass bell with cyan rim, light ripples, floating alert cards
+ai             faceted glass crystal sphere with swirling cyan light, orbit rings, prompt cards
+employees      hierarchy of glass ID badges and abstract avatar discs joined by light lines

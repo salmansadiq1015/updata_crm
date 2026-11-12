@@ -1,5 +1,8 @@
 export const taskWorkspaceTranslations = {
   en: {
+    'tasks.tabs.tasks': 'Tasks',
+    'tasks.tabs.analytics': 'Analytics',
+    'tasks.tabs.aria': 'Tasks and analytics',
     'tasks.personalOverview': 'Your workload',
     'tasks.personalScope': 'Personal totals across all lists',
     'tasks.syncFailed': 'Update failed',
@@ -18,6 +21,9 @@ export const taskWorkspaceTranslations = {
     'tasks.addTaskRow': 'Add a task',
   },
   de: {
+    'tasks.tabs.tasks': 'Aufgaben',
+    'tasks.tabs.analytics': 'Analysen',
+    'tasks.tabs.aria': 'Aufgaben und Analysen',
     'tasks.personalOverview': 'Ihre Auslastung',
     'tasks.personalScope': 'Persönliche Übersicht über alle Listen',
     'tasks.syncFailed': 'Aktualisierung fehlgeschlagen',
@@ -36,6 +42,9 @@ export const taskWorkspaceTranslations = {
     'tasks.addTaskRow': 'Aufgabe hinzufügen',
   },
   fr: {
+    'tasks.tabs.tasks': 'Tâches',
+    'tasks.tabs.analytics': 'Analyses',
+    'tasks.tabs.aria': 'Tâches et analyses',
     'tasks.personalOverview': 'Votre charge de travail',
     'tasks.personalScope': 'Totaux personnels pour toutes les listes',
     'tasks.syncFailed': 'Échec de la mise à jour',
@@ -54,6 +63,9 @@ export const taskWorkspaceTranslations = {
     'tasks.addTaskRow': 'Ajouter une tâche',
   },
   ar: {
+    'tasks.tabs.tasks': 'المهام',
+    'tasks.tabs.analytics': 'التحليلات',
+    'tasks.tabs.aria': 'المهام والتحليلات',
     'tasks.personalOverview': 'عبء عملك',
     'tasks.personalScope': 'الإجماليات الشخصية لجميع القوائم',
     'tasks.syncFailed': 'تعذر التحديث',

@@ -21,6 +21,11 @@ class RoleRepository {
     return Role.find().populate('permissions').sort({ name: 1 }).lean();
   }
 
+  /** Non-deleted roles (soft-deleted ones are excluded by the model's find hook). */
+  async count() {
+    return Role.countDocuments({ isDeleted: false });
+  }
+
   async updateById(id, data) {
     return Role.findByIdAndUpdate(id, data, {
       returnDocument: 'after',

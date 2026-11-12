@@ -4,6 +4,7 @@ import {
   buildCursorQuery,
   buildCursorSort,
   buildCursorResponse,
+  decodeCursor,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
@@ -24,6 +25,37 @@ const ALLOWED_FILTERS = {
 };
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'dueDate', 'priority', 'title', 'sortOrder', '_id'];
+// Sort fields that may hold null. MongoDB sorts null before every date, and a
+// range operator ($gt/$lt) never matches null, so the generic keyset condition
+// silently drops the null (or the non-null) part of the result after page 1.
+const NULLABLE_SORT_FIELDS = new Set(['dueDate']);
+// Bound the assignee-name lookup behind free-text search.
+const SEARCH_USER_LIMIT = 200;
+
+/**
+ * Keyset condition for "rows after this cursor", null-aware for nullable fields:
+ * ascending puts nulls first, descending puts them last (MongoDB's order).
+ */
+function buildTaskCursorQuery(cursor, sortBy, sortOrder) {
+  if (!cursor || !NULLABLE_SORT_FIELDS.has(sortBy)) return buildCursorQuery(cursor, sortBy, sortOrder);
+  const decoded = decodeCursor(cursor);
+  if (!decoded || !(sortBy in decoded)) return buildCursorQuery(cursor, sortBy, sortOrder);
+
+  const desc = sortOrder === 'desc';
+  const op = desc ? '$lt' : '$gt';
+  const value = decoded[sortBy];
+  if (value === null) {
+    return desc
+      ? { [sortBy]: null, _id: { $lt: decoded._id } }
+      : { $or: [{ [sortBy]: { $ne: null } }, { [sortBy]: null, _id: { $gt: decoded._id } }] };
+  }
+  const clauses = [
+    { [sortBy]: { [op]: value } },
+    { [sortBy]: value, _id: { [op]: decoded._id } },
+  ];
+  if (desc) clauses.push({ [sortBy]: null });
+  return { $or: clauses };
+}
 
 const POPULATE_FIELDS = [
   { path: 'assigneeId', select: 'firstName lastName email role' },
@@ -156,7 +188,7 @@ class TaskRepository {
               const tokenRegex = { $regex: escapeRegex(token), $options: 'i' };
               return { $or: [{ firstName: tokenRegex }, { lastName: tokenRegex }, { email: tokenRegex }] };
             }),
-          }).select('_id').lean()
+          }).select('_id').limit(SEARCH_USER_LIMIT).lean()
         : [];
       const or = [{ title: regex }, { description: regex }];
       if (matchedUsers.length > 0) {
@@ -182,7 +214,7 @@ class TaskRepository {
         }
       : {};
 
-    const filter = combineFilters(baseFilter, searchFilter, buildCursorQuery(cursor, safeSortBy, sortOrder), accessFilter);
+    const filter = combineFilters(baseFilter, searchFilter, buildTaskCursorQuery(cursor, safeSortBy, sortOrder), accessFilter);
 
     const sort = buildCursorSort(safeSortBy, sortOrder);
 
@@ -200,6 +232,10 @@ class TaskRepository {
     return Task.find({ parentTaskId: parentId })
       .sort({ sortOrder: 1 })
       .lean();
+  }
+
+  async countByParentId(parentId) {
+    return Task.countDocuments({ parentTaskId: parentId });
   }
 
   async findByListId(listId, { status } = {}) {

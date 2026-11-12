@@ -8,6 +8,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
 import { queryKeys } from '@/lib/query/keys';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
+import { HeroStat } from '@/shared/components/hero-art';
+import { PageHero, heroButton } from '@/shared/components/page-hero';
 import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
@@ -72,6 +76,10 @@ export function UsersTable() {
   const [rowSelection, setRowSelection] = useState({});
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
   const debouncedGlobalFilter = useDebounce(globalFilter, 300);
+  // Totals across all employees (the list below is paged, so it cannot count them).
+  const statsQuery = useQuery({ queryKey: queryKeys.users.stats(), queryFn: () => apiClient.get(ENDPOINTS.USERS.STATS).then((res) => res?.data ?? res), staleTime: 30_000 });
+  const stats = statsQuery.data;
+  const num = (value) => (value == null ? '—' : new Intl.NumberFormat(locale).format(value));
 
   const userListParams = useMemo(() => ({
     sortBy: sorting[0]?.id || 'createdAt',
@@ -307,89 +315,37 @@ export function UsersTable() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{t('users.title')}</h1>
-            <span className="inline-flex items-center justify-center h-6 min-w-6 px-2 rounded-full bg-primary/10 text-primary text-xs font-bold">
-              {totalItems}
-            </span>
+      <PageHero
+        id="users-title"
+        art="/hero/employees"
+        icon={Users}
+        eyebrow={t('sidebar.employmentManagement', 'Employee Management')}
+        title={t('usersHero.title', 'The people behind every job.')}
+        subtitle={t('users.titleDesc') || 'Mitarbeiter anlegen, bearbeiten, Rollen zuweisen und Zugriff verwalten.'}
+        actions={<>
+          <div role="group" aria-label={t('usersHero.layout', 'Layout')} className="flex h-11 items-center rounded-full border border-white/15 bg-white/[0.07] p-1 backdrop-blur-md">
+            {[['table', List, t('usersHero.table', 'Table view')], ['grid', LayoutGrid, t('usersHero.grid', 'Card view')]].map(([mode, Icon, label]) => (
+              <button key={mode} type="button" aria-label={label} title={label} aria-pressed={viewMode === mode} onClick={() => setViewMode(mode)}
+                className={cn('grid size-9 place-items-center rounded-full transition', viewMode === mode ? 'bg-white/20 text-white' : 'text-slate-300 hover:text-white')}>
+                <Icon className="size-4" aria-hidden="true" />
+              </button>
+            ))}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('users.titleDesc') || 'Mitarbeiter anlegen, bearbeiten, Rollen zuweisen und Zugriff verwalten.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <div className="flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5">
-            <button
-              onClick={() => setViewMode('table')}
-              className={cn(
-                'flex items-center justify-center h-8 w-8 rounded-md transition-all',
-                viewMode === 'table' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <List className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={cn(
-                'flex items-center justify-center h-8 w-8 rounded-md transition-all',
-                viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-          </div>
-
           <PermissionGate permission="users:write">
-            <Button
-              onClick={() => { setEditUser(null); setFormOpen(true); }}
-              className="gap-2 rounded-xl h-10 px-5 shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              {t('users.newUser')}
-            </Button>
+            <button type="button" className={heroButton.primary} onClick={() => { setEditUser(null); setFormOpen(true); }}><Plus aria-hidden="true" />{t('users.newUser')}</button>
           </PermissionGate>
-        </div>
-      </div>
-
-      {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: t('users.total') || 'Gesamt',
-            value: totalItems,
-            icon: Users,
-            accent: 'violet',
-            trend: '+12%',
-          },
-          {
-            label: t('users.active'),
-            value: activeCount,
-            icon: UserCheck2,
-            accent: 'emerald',
-            trend: '+5%',
-          },
-          {
-            label: t('users.pending') || 'Nicht aktiviert',
-            value: pendingCount,
-            icon: Clock,
-            accent: 'amber',
-            trend: null,
-          },
-          {
-            label: t('roles.title'),
-            value: roles.length,
-            icon: Shield,
-            accent: 'blue',
-            trend: null,
-          },
-        ].map((stat) => (
-          <PremiumStatCard key={stat.label} {...stat} />
-        ))}
-      </div>
+        </>}
+        stats={<>
+          <HeroStat icon={Users} label={t('users.total') || 'Gesamt'} value={num(stats?.total)} hint={stats?.newThisMonth != null ? t('usersHero.newThisMonth', '{count} joined this month', { count: num(stats.newThisMonth) }) : undefined} loading={statsQuery.isLoading} />
+          <button type="button" onClick={() => setStatusFilter('active')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/50">
+            <HeroStat icon={UserCheck2} tone="text-emerald-300" label={t('users.active')} value={num(stats?.byStatus?.active)} hint={t('usersHero.activeHint', 'Can sign in')} loading={statsQuery.isLoading} />
+          </button>
+          <button type="button" onClick={() => setStatusFilter('pending_activation')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50">
+            <HeroStat icon={Clock} tone="text-amber-300" label={t('users.pending') || 'Nicht aktiviert'} value={num(stats?.byStatus?.pending_activation)} hint={t('usersHero.pendingHint', 'Invitation not confirmed')} loading={statsQuery.isLoading} />
+          </button>
+          <HeroStat icon={Shield} tone="text-cyan-300" label={t('roles.title')} value={num(stats?.roles ?? roles.length)} hint={t('usersHero.inactive', '{count} deactivated', { count: num(stats?.byStatus?.deactivated) })} loading={statsQuery.isLoading} />
+        </>}
+      />
 
       {/* ── Filter Bar ── */}
       <div className="flex items-center gap-3 flex-wrap rounded-xl border border-border/40 bg-card/50 px-4 py-3">
@@ -851,85 +807,6 @@ function UserCard({ user, onEdit, onToggle }) {
               </span>
             )}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Premium Stat Card ── */
-const ACCENT_THEMES = {
-  violet: {
-    glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]',
-    iconBg: 'bg-brand-500/10',
-    iconRing: 'ring-brand-500/20',
-    iconColor: 'text-brand-500',
-    valueGlow: 'text-brand-500 dark:text-brand-400',
-    trendBg: 'bg-brand-500/10 text-brand-600 dark:text-brand-400',
-    bar: 'from-brand-500 to-transparent',
-  },
-  emerald: {
-    glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(16_185_129_/_0.25),transparent_60%)]',
-    iconBg: 'bg-emerald-500/10',
-    iconRing: 'ring-emerald-500/20',
-    iconColor: 'text-emerald-500',
-    valueGlow: 'text-emerald-600 dark:text-emerald-400',
-    trendBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    bar: 'from-emerald-500 to-transparent',
-  },
-  amber: {
-    glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(245_158_11_/_0.25),transparent_60%)]',
-    iconBg: 'bg-amber-500/10',
-    iconRing: 'ring-amber-500/20',
-    iconColor: 'text-amber-500',
-    valueGlow: 'text-amber-600 dark:text-amber-400',
-    trendBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    bar: 'from-amber-500 to-transparent',
-  },
-  blue: {
-    glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(59_130_246_/_0.25),transparent_60%)]',
-    iconBg: 'bg-blue-500/10',
-    iconRing: 'ring-blue-500/20',
-    iconColor: 'text-blue-500',
-    valueGlow: 'text-blue-600 dark:text-blue-400',
-    trendBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    bar: 'from-blue-500 to-transparent',
-  },
-};
-
-function PremiumStatCard({ label, value, icon: Icon, accent, trend }) {
-  const theme = ACCENT_THEMES[accent] || ACCENT_THEMES.violet;
-
-  return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-theme-sm transition-all duration-300 hover:shadow-theme-md hover:-translate-y-0.5">
-      {/* Top accent bar */}
-      <div className={cn('absolute left-0 right-0 top-0 h-px bg-linear-to-r', theme.bar)} />
-
-      {/* Ambient glow */}
-      <div className={cn('pointer-events-none absolute inset-0 opacity-60 transition-opacity group-hover:opacity-100', theme.glow)} />
-
-      {/* Content */}
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <p className={cn('text-3xl font-bold tracking-tight leading-none', theme.valueGlow)}>
-              {value}
-            </p>
-            {trend && (
-              <span className={cn('inline-flex items-center text-[11px] font-semibold px-1.5 py-0.5 rounded-md', theme.trendBg)}>
-                {trend}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform group-hover:scale-110',
-          theme.iconBg,
-          theme.iconRing,
-        )}>
-          <Icon className={cn('h-5 w-5', theme.iconColor)} />
         </div>
       </div>
     </div>

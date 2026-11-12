@@ -87,6 +87,14 @@ router.get(
   (req, res, next) => userController.directory(req, res, next),
 );
 
+// KPI counts for the Employee Management page (before /:id).
+router.get(
+  '/stats',
+  authenticate,
+  requirePermission('users:read'),
+  (req, res, next) => userController.stats(req, res, next),
+);
+
 router.get(
   '/assignment-targets',
   authenticate,

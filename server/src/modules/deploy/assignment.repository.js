@@ -108,8 +108,10 @@ class AssignmentRepository {
     if (type) filter.assignmentType = type;
     if (status) filter.status = status;
 
+    // _id breaks start-time ties: without it the order of simultaneous starts
+    // depends on the chosen index (natural order is not stable).
     return Assignment.find(filter)
-      .sort({ startDatetime: 1 })
+      .sort({ startDatetime: 1, _id: 1 })
       .populate(POPULATE_FIELDS)
       .lean();
   }

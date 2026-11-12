@@ -33,6 +33,12 @@ messageSchema.index({ ownerId: 1, idempotencyKey: 1 }, { unique: true, partialFi
 messageSchema.index({ ownerId: 1, folder: 1, date: -1, _id: -1 });
 messageSchema.index({ accountId: 1, threadKey: 1, date: 1 });
 messageSchema.index({ state: 1, scheduledAt: 1 });
+// Mailbox read paths (migration 060): "all"/scheduled/approval walk, starred/important views,
+// and the covered per-account inbox unread count.
+messageSchema.index({ ownerId: 1, date: -1, _id: -1 });
+messageSchema.index({ ownerId: 1, starred: 1, date: -1, _id: -1 }, { partialFilterExpression: { starred: true } });
+messageSchema.index({ ownerId: 1, important: 1, date: -1, _id: -1 }, { partialFilterExpression: { important: true } });
+messageSchema.index({ ownerId: 1, folder: 1, unread: 1, accountId: 1 });
 const attachmentSchema = new Schema({ ownerId: oid('User', true), accountId: oid('EmailAccount', true), messageId: oid('EmailMessage'), name: String, mime: String, size: Number, sourceKey: String, content: { type: Buffer, select: false } }, { timestamps: true });
 attachmentSchema.index({ ownerId: 1, createdAt: 1 });
 attachmentSchema.index({ messageId: 1, sourceKey: 1 }, { unique: true, partialFilterExpression: { sourceKey: { $type: 'string' } } });

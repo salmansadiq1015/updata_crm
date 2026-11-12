@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import InAppNotification from './inAppNotification.model.js';
+import { ValidationError } from '../../shared/errors/AppError.js';
 
 const DEFAULT_SUMMARY = {
   total: 0,
@@ -8,6 +10,29 @@ const DEFAULT_SUMMARY = {
   byCategory: {},
   pendingActions: [],
 };
+
+const PENDING_ACTION_LIMIT = 5;
+const PENDING_ACTION_CATEGORIES = ['TASK', 'FINANCE', 'MAINTENANCE', 'DOCUMENT', 'PROJECT', 'SCHEDULING'];
+// Rank order of the original $switch: CRITICAL(4) > HIGH(3) > NORMAL(2) > everything else(1).
+// The last bucket covers LOW and null/missing — the only other values the schema enum allows.
+const PENDING_PRIORITY_BUCKETS = ['CRITICAL', 'HIGH', 'NORMAL', { $in: ['LOW', null] }];
+
+function toObjectId(value) {
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  const id = String(value?._id ?? value);
+  return mongoose.isValidObjectId(id) && /^[a-f\d]{24}$/i.test(id) ? new mongoose.Types.ObjectId(id) : value;
+}
+
+function decodeCursor(cursor) {
+  try {
+    const decoded = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf-8'));
+    const sentAt = new Date(decoded?.sentAt);
+    if (!decoded || Number.isNaN(sentAt.getTime()) || !/^[a-f\d]{24}$/i.test(String(decoded._id))) throw new Error('bad cursor');
+    return { sentAt, _id: new mongoose.Types.ObjectId(String(decoded._id)) };
+  } catch {
+    throw new ValidationError('Invalid cursor', [{ field: 'cursor', message: 'Cursor is malformed or expired' }]);
+  }
+}
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -35,13 +60,14 @@ class InAppNotificationRepository {
     }
 
     if (cursor) {
-      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
-      if (decoded) {
-        andFilters.push({ $or: [
-          { sentAt: { $lt: new Date(decoded.sentAt) } },
-          { sentAt: new Date(decoded.sentAt), _id: { $lt: decoded._id } },
-        ] });
-      }
+      const decoded = decodeCursor(cursor);
+      // Keyset on (sentAt desc, _id desc). The redundant `sentAt <= cursor` bound lets the
+      // planner seek straight to the page start in the feed_*_cursor indexes.
+      filter.sentAt = { $lte: decoded.sentAt };
+      andFilters.push({ $or: [
+        { sentAt: { $lt: decoded.sentAt } },
+        { sentAt: decoded.sentAt, _id: { $lt: decoded._id } },
+      ] });
     }
 
     if (andFilters.length > 0) filter.$and = andFilters;
@@ -66,78 +92,66 @@ class InAppNotificationRepository {
     };
   }
 
+  /**
+   * Feed summary. One covered aggregation over the `feed_summary_pending` index
+   * (no document fetch) yields total / unread / priority / per-category counts;
+   * the top-5 pending actions are read per priority bucket in rank order, each an
+   * index-ordered (sentAt desc, _id desc) scan that stops after `limit` hits.
+   */
   async getSummary(userId) {
-    const [summary] = await InAppNotification.aggregate([
-      { $match: { userId, isDismissed: false } },
-      {
-        $facet: {
-          totals: [
-            {
-              $group: {
-                _id: null,
-                total: { $sum: 1 },
-                unread: { $sum: { $cond: [{ $eq: ['$isRead', false] }, 1, 0] } },
-                highPriority: {
-                  $sum: { $cond: [{ $in: ['$priority', ['HIGH', 'CRITICAL']] }, 1, 0] },
-                },
-                critical: { $sum: { $cond: [{ $eq: ['$priority', 'CRITICAL'] }, 1, 0] } },
-              },
-            },
-          ],
-          categories: [
-            {
-              $group: {
-                _id: '$category',
-                total: { $sum: 1 },
-                unread: { $sum: { $cond: [{ $eq: ['$isRead', false] }, 1, 0] } },
-              },
-            },
-          ],
-          pendingActions: [
-            {
-              $match: {
-                isRead: false,
-                category: { $in: ['TASK', 'FINANCE', 'MAINTENANCE', 'DOCUMENT', 'PROJECT', 'SCHEDULING'] },
-              },
-            },
-            {
-              $addFields: {
-                priorityRank: {
-                  $switch: {
-                    branches: [
-                      { case: { $eq: ['$priority', 'CRITICAL'] }, then: 4 },
-                      { case: { $eq: ['$priority', 'HIGH'] }, then: 3 },
-                      { case: { $eq: ['$priority', 'NORMAL'] }, then: 2 },
-                    ],
-                    default: 1,
-                  },
-                },
-              },
-            },
-            { $sort: { priorityRank: -1, sentAt: -1, _id: -1 } },
-            { $limit: 5 },
-            { $project: { priorityRank: 0, __v: 0 } },
-          ],
+    const uid = toObjectId(userId);
+    const [groups, pendingActions] = await Promise.all([
+      InAppNotification.aggregate([
+        { $match: { userId: uid, isDismissed: false } },
+        { $project: { _id: 0, category: 1, isRead: 1, priority: 1 } },
+        {
+          $group: {
+            _id: { category: '$category', isRead: '$isRead', priority: '$priority' },
+            count: { $sum: 1 },
+          },
         },
-      },
+      ]),
+      this._pendingActions(uid),
     ]);
 
-    if (!summary) return DEFAULT_SUMMARY;
+    if (!groups?.length) return { ...DEFAULT_SUMMARY, byCategory: {}, pendingActions: [] };
 
-    const totals = summary.totals?.[0] || {};
-    const byCategory = {};
-    for (const row of summary.categories || []) {
-      if (row._id) byCategory[row._id] = { total: row.total || 0, unread: row.unread || 0 };
+    const summary = { total: 0, unread: 0, highPriority: 0, critical: 0, byCategory: {}, pendingActions };
+    for (const { _id: key = {}, count = 0 } of groups) {
+      const unread = key.isRead === false ? count : 0;
+      summary.total += count;
+      summary.unread += unread;
+      if (key.priority === 'HIGH' || key.priority === 'CRITICAL') summary.highPriority += count;
+      if (key.priority === 'CRITICAL') summary.critical += count;
+      if (key.category) {
+        const row = summary.byCategory[key.category] || { total: 0, unread: 0 };
+        row.total += count;
+        row.unread += unread;
+        summary.byCategory[key.category] = row;
+      }
     }
+    return summary;
+  }
 
-    return {
-      total: totals.total || 0,
-      unread: totals.unread || 0,
-      highPriority: totals.highPriority || 0,
-      critical: totals.critical || 0,
-      byCategory,
-      pendingActions: summary.pendingActions || [],
-    };
+  async _pendingActions(userId, limit = PENDING_ACTION_LIMIT) {
+    const results = [];
+    for (const priority of PENDING_PRIORITY_BUCKETS) {
+      const remaining = limit - results.length;
+      if (remaining <= 0) break;
+      const rows = await InAppNotification.find({
+        userId,
+        isDismissed: false,
+        isRead: false,
+        priority,
+        category: { $in: PENDING_ACTION_CATEGORIES },
+      })
+        .select('-__v')
+        .sort({ sentAt: -1, _id: -1 })
+        .limit(remaining)
+        .lean();
+      results.push(...rows);
+    }
+    return results;
   }
 
   async countUnread(userId) {

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import calendarCache from './calendarCache.js';
 
 const coarseAllocationSchema = new mongoose.Schema(
   {
@@ -65,6 +66,9 @@ coarseAllocationSchema.index(
   { employeeId: 1, projectId: 1, calendarYear: 1, calendarWeek: 1 },
   { unique: true },
 );
+
+// Any write invalidates the cached calendar ranges (calendarCache.js).
+calendarCache.registerInvalidation(coarseAllocationSchema);
 
 const CoarseAllocation = mongoose.model('CoarseAllocation', coarseAllocationSchema);
 export default CoarseAllocation;

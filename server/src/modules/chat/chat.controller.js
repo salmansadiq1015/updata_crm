@@ -120,8 +120,9 @@ class ChatController {
         req.params.roomId,
         req.body.emoji,
         req.user,
-        ''
-      ); // addReaction toggles, so calling it again removes
+        '',
+        { mode: 'remove' },
+      );
       return res.success({ data: reactions });
     } catch (err) { next(err); }
   }

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import calendarCache from './calendarCache.js';
 
 export const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'WAREHOUSE_MAINTENANCE', 'OTHER'];
 export const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'];
@@ -187,12 +188,21 @@ assignmentSchema.index({ startDatetime: 1 });
 assignmentSchema.index({ recurrenceGroupId: 1 });
 assignmentSchema.index({ isDeleted: 1, status: 1 });
 assignmentSchema.index({ createdAt: -1 });
+// Calendar / conflict range reads (migration 059): overlap = end > rangeStart AND
+// start < rangeEnd. Leading with endDatetime bounds the scan to work that has not
+// ended before the range (history grows forever; the plan horizon does not), and
+// startDatetime in the key filters the rest without fetching documents.
+assignmentSchema.index({ isDeleted: 1, endDatetime: 1, startDatetime: 1 });
+assignmentSchema.index({ employeeId: 1, endDatetime: 1, startDatetime: 1 });
 
 // --- Soft-delete pre-hook ---
 assignmentSchema.pre(/^find/, function () {
   if (this.getOptions().includeDeleted) return;
   this.where({ isDeleted: false });
 });
+
+// Any write invalidates the cached calendar ranges (calendarCache.js).
+calendarCache.registerInvalidation(assignmentSchema);
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);
 export default Assignment;

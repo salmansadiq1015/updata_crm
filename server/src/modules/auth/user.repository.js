@@ -6,6 +6,8 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
+import { decodeCursor } from '../../shared/utils/pagination.js';
+import mongoose from 'mongoose';
 
 /**
  * User repository — pure data access.
@@ -18,6 +20,34 @@ const ALLOWED_FILTERS = {
 };
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'firstName', 'lastName', 'email', 'department', 'position', 'status', 'lastLoginAt', '_id'];
+// Sort fields that may be null/missing. MongoDB sorts null lowest, and `$lt`/`$gt` never
+// match null, so the generic cursor would drop (desc) or stop at (asc) those users.
+const NULLABLE_SORT_FIELDS = new Set(['department', 'position', 'lastLoginAt']);
+const DATE_SORT_FIELDS = new Set(['createdAt', 'lastLoginAt']);
+const USER_STATUSES = ['active', 'pending_activation', 'deactivated', 'locked'];
+
+/** Keyset condition for "after this cursor" that is correct for null sort values. */
+function nullSafeCursorQuery(cursor, sortBy, sortOrder) {
+  const decoded = decodeCursor(cursor);
+  if (!decoded || !/^[a-f0-9]{24}$/i.test(String(decoded._id || ''))) return {};
+  const id = new mongoose.Types.ObjectId(decoded._id);
+  const desc = sortOrder === 'desc', op = desc ? '$lt' : '$gt';
+  const raw = decoded[sortBy];
+  if (raw === undefined || raw === null) {
+    // Cursor sits in the null group: desc → rest of the null group; asc → rest of it, then all non-null.
+    return desc
+      ? { [sortBy]: null, _id: { $lt: id } }
+      : { $or: [{ [sortBy]: null, _id: { $gt: id } }, { [sortBy]: { $ne: null } }] };
+  }
+  const value = DATE_SORT_FIELDS.has(sortBy) ? new Date(raw) : raw;
+  return {
+    $or: [
+      { [sortBy]: { [op]: value } },
+      { [sortBy]: value, _id: { [op]: id } },
+      ...(desc ? [{ [sortBy]: null }] : []),
+    ],
+  };
+}
 
 class UserRepository {
   async create(data) {
@@ -73,7 +103,9 @@ class UserRepository {
     const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, resolvedSortBy, sortOrder),
+      ...(NULLABLE_SORT_FIELDS.has(resolvedSortBy)
+        ? (cursor ? nullSafeCursorQuery(cursor, resolvedSortBy, sortOrder) : {})
+        : buildCursorQuery(cursor, resolvedSortBy, sortOrder)),
     };
 
     // Keep cursor $or and search conditions independent; neither may replace the other.
@@ -88,7 +120,17 @@ class UserRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, resolvedSortBy);
+    const response = buildCursorResponse(docs, limit, resolvedSortBy);
+    // encodeCursor omits undefined fields; keep a null marker so the next page stays in order.
+    if (response.pagination.nextCursor && NULLABLE_SORT_FIELDS.has(resolvedSortBy)) {
+      const last = response.data[response.data.length - 1];
+      const value = last[resolvedSortBy] ?? null;
+      response.pagination.nextCursor = Buffer.from(JSON.stringify({
+        _id: String(last._id),
+        [resolvedSortBy]: value instanceof Date ? value.toISOString() : value,
+      })).toString('base64url');
+    }
+    return response;
   }
 
   /**
@@ -182,6 +224,24 @@ class UserRepository {
       status: 'active',
       isDeleted: false,
     });
+  }
+
+  /**
+   * One $group over non-deleted users: totals per status plus users created since
+   * `since`. Served from the {isDeleted, status, createdAt} index (covered).
+   */
+  async statusCounts(since) {
+    const rows = await User.aggregate([
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$status', count: { $sum: 1 }, recent: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, 1, 0] } } } },
+    ]);
+    const byStatus = Object.fromEntries(USER_STATUSES.map((status) => [status, 0]));
+    let total = 0, newThisMonth = 0;
+    for (const row of rows) {
+      total += row.count; newThisMonth += row.recent;
+      if (row._id in byStatus) byStatus[row._id] += row.count;
+    }
+    return { total, byStatus, newThisMonth };
   }
 
   async countAll() {

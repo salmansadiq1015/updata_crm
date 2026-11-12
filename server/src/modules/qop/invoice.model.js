@@ -234,6 +234,8 @@ invoiceSchema.index({ customerId: 1, status: 1, dueDate: 1 });
 invoiceSchema.index({ invoiceType: 1 });
 invoiceSchema.index({ projectId: 1 });
 invoiceSchema.index({ isDeleted: 1, createdAt: -1 });
+// Dashboard revenue window (current + previous period by invoiceDate) — migration 057.
+invoiceSchema.index({ isDeleted: 1, invoiceDate: 1 }, { name: 'dashboard_invoice_date' });
 invoiceSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 invoiceSchema.index(
   { invoiceNumber: 'text', title: 'text', customerName: 'text' },

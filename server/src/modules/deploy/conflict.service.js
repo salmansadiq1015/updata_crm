@@ -47,10 +47,34 @@ class ConflictService {
   async detectConflicts(employeeId, start, end, excludeAssignmentId = null, requirements = {}) {
     const conflicts = [];
 
-    const { default: User } = await import('../auth/user.model.js');
-    const employee = await User.findById(employeeId)
-      .select('status firstName lastName schedulingSkills schedulingCertifications')
-      .lean();
+    const [
+      { default: User },
+      { default: assignmentRepository },
+      { default: availabilityRepository },
+    ] = await Promise.all([
+      import('../auth/user.model.js'),
+      import('./assignment.repository.js'),
+      import('./availability.repository.js'),
+    ]);
+
+    // The five lookups are independent: run them concurrently (this check runs on
+    // every drag-hover/drop in the calendar), then evaluate in the original order.
+    const absenceFrom = new Date(start); absenceFrom.setHours(0, 0, 0, 0);
+    const absenceTo = new Date(end); absenceTo.setHours(23, 59, 59, 999);
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+    const travelWindowStart = new Date(new Date(start).getTime() - MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
+    const travelWindowEnd = new Date(new Date(end).getTime() + MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
+    const [employee, overlapping, absences, availability, nearbyAssignments] = await Promise.all([
+      User.findById(employeeId)
+        .select('status firstName lastName schedulingSkills schedulingCertifications')
+        .lean(),
+      assignmentRepository.findConflicting(employeeId, start, end, excludeAssignmentId),
+      // ABSENCE: single range query over the whole span (not one query per day).
+      availabilityRepository.findAbsences(employeeId, absenceFrom, absenceTo),
+      availabilityRepository.isAvailable(employeeId, startDate),
+      assignmentRepository.findByEmployeeAndDateRange(employeeId, travelWindowStart, travelWindowEnd),
+    ]);
 
     if (!employee || employee.status !== 'active') {
       conflicts.push({
@@ -98,8 +122,6 @@ class ConflictService {
     }
 
     // 1. DOUBLE_BOOKING (SOFT)
-    const { default: assignmentRepository } = await import('./assignment.repository.js');
-    const overlapping = await assignmentRepository.findConflicting(employeeId, start, end, excludeAssignmentId);
     for (const a of overlapping) {
       conflicts.push({
         conflictType: 'DOUBLE_BOOKING',
@@ -112,10 +134,6 @@ class ConflictService {
     // 2. ABSENCE (HARD) — single range query over the whole span instead of one
     // query per day (the per-day loop was O(days) sequential round-trips, which
     // made multi-day assignments — e.g. Bauplan phases — slow enough to time out).
-    const { default: availabilityRepository } = await import('./availability.repository.js');
-    const absenceFrom = new Date(start); absenceFrom.setHours(0, 0, 0, 0);
-    const absenceTo = new Date(end); absenceTo.setHours(23, 59, 59, 999);
-    const absences = await availabilityRepository.findAbsences(employeeId, absenceFrom, absenceTo);
     for (const absence of absences) {
       conflicts.push({
         conflictType: 'ABSENCE',
@@ -125,9 +143,6 @@ class ConflictService {
     }
 
     // 3. WORKING_HOURS (SOFT)
-    const startDate = new Date(start);
-    startDate.setHours(0, 0, 0, 0);
-    const availability = await availabilityRepository.isAvailable(employeeId, startDate);
     if (availability && availability.availabilityType === 'WORKING' && availability.workStart && availability.workEnd) {
       const startTime = formatTime(start);
       const endTime = formatTime(end);
@@ -141,13 +156,6 @@ class ConflictService {
     }
 
     // 4. TRAVEL_TIME (SOFT)
-    const travelWindowStart = new Date(new Date(start).getTime() - MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
-    const travelWindowEnd = new Date(new Date(end).getTime() + MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
-    const nearbyAssignments = await assignmentRepository.findByEmployeeAndDateRange(
-      employeeId,
-      travelWindowStart,
-      travelWindowEnd,
-    );
     const allAssignments = nearbyAssignments.filter(
       (assignment) => !excludeAssignmentId || String(assignment._id) !== String(excludeAssignmentId),
     );

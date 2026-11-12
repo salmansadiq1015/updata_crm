@@ -9,17 +9,16 @@ const srcSet = (base, ext) => WIDTHS.map((w) => `${base}-${w}.${ext} ${w}w`).joi
  * 960/1600/2560 px (`${base}-${width}.{avif,webp}`), so a full-bleed header
  * costs tens of kilobytes. Empty alt, high fetch priority: it is the LCP image.
  */
-export function HeroArt({ base, className, focus = 'object-[70%_50%]' }) {
+export function HeroArt({ base, className, focus = 'object-[70%_50%]', width = 1600, height = 896 }) {
   return (
     <picture className={cn('pointer-events-none absolute inset-0', className)}>
       <source type="image/avif" srcSet={srcSet(base, 'avif')} sizes={SIZES} />
       <source type="image/webp" srcSet={srcSet(base, 'webp')} sizes={SIZES} />
-      {/* eslint-disable-next-line @next/next/no-img-element -- art-directed <picture> with AVIF/WebP sources */}
       <img
         src={`${base}-1600.webp`}
         alt=""
-        width={1600}
-        height={896}
+        width={width}
+        height={height}
         fetchPriority="high"
         decoding="async"
         className={cn('h-full w-full object-cover', focus)}

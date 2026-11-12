@@ -1,5 +1,5 @@
 import inAppNotificationRepository from './inAppNotification.repository.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
+import { bumpNotificationGeneration, cachedNotificationRead } from './notificationFeedCache.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
@@ -7,34 +7,35 @@ const FEED_TTL = { l1Ttl: 15, l2Ttl: 60 };
 const UNREAD_TTL = { l1Ttl: 10, l2Ttl: 30 };
 
 class NotificationFeedService {
+  /**
+   * Feed page + summary. Both are cached under the user's notification
+   * generation (bumped by every InAppNotification write), so a page is never
+   * served stale after a write; the summary is cached once per generation and
+   * shared by every page / filter combination.
+   */
   async getFeed(userId, { cursor, limit = 50, category, isRead, search } = {}) {
-    const cacheKey = `notif:feed:${userId}:${cursor || ''}:${limit}:${category || ''}:${isRead ?? ''}:${search || ''}`;
+    const params = { cursor: cursor || '', limit, category: category || '', isRead: isRead ?? '', search: search || '' };
+    const [feed, summary] = await Promise.all([
+      cachedNotificationRead('feed', userId, params,
+        () => inAppNotificationRepository.findByUserId(userId, { cursor, limit, category, isRead, search }), FEED_TTL),
+      this.getSummary(userId),
+    ]);
 
-    return cacheManager.getOrSet(
-      cacheKey,
-      async () => {
-        const [feed, summary] = await Promise.all([
-          inAppNotificationRepository.findByUserId(userId, { cursor, limit, category, isRead, search }),
-          inAppNotificationRepository.getSummary(userId),
-        ]);
-
-        return {
-          ...feed,
-          summary,
-        };
-      },
-      FEED_TTL,
-    );
+    return {
+      ...feed,
+      summary,
+    };
   }
 
-  async getUnreadCount(userId) {
-    const cacheKey = `notif:unread:${userId}`;
+  async getSummary(userId) {
+    return cachedNotificationRead('summary', userId, undefined,
+      () => inAppNotificationRepository.getSummary(userId), FEED_TTL);
+  }
 
-    return cacheManager.getOrSet(
-      cacheKey,
-      () => inAppNotificationRepository.countUnread(userId),
-      UNREAD_TTL,
-    );
+  /** Hot path (badge polled on every page): one Redis MGET + L1/L2 hit, else an index-only COUNT_SCAN. */
+  async getUnreadCount(userId) {
+    return cachedNotificationRead('unread', userId, undefined,
+      () => inAppNotificationRepository.countUnread(userId), UNREAD_TTL);
   }
 
   async markRead(id, userId) {
@@ -84,9 +85,10 @@ class NotificationFeedService {
     return result;
   }
 
+  // Model middleware already bumps on every write; awaiting here makes the shared (Redis)
+  // bump visible before the response returns, so the client's immediate refetch is fresh.
   async _invalidateFeedCache(userId) {
-    await cacheManager.del(`notif:unread:${userId}`);
-    await cacheManager.invalidatePattern(`notif:feed:${userId}:*`);
+    await bumpNotificationGeneration(userId);
   }
 }
 

@@ -4,6 +4,7 @@ import sessionService from './session.service.js';
 import auditService from './audit.service.js';
 import passwordHistoryRepository from './passwordHistory.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import { invalidateUserListCache, userStatsKey, USER_STATS_TTL } from './userListCache.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
@@ -200,6 +201,8 @@ class UserService {
 
     const updated = await userRepository.updateById(userId, filtered);
     await this._invalidateUserCache(userId);
+    // Names/department are shown in the user list and directory.
+    await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.USER_UPDATED, {
       userId,
@@ -401,6 +404,23 @@ class UserService {
       () => userRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search }),
       LIST_CACHE_TTL,
     );
+  }
+
+  /**
+   * Directory-wide KPIs for the Employee Management page. Same visibility as the
+   * list (all non-deleted users). Cached ≤ 60 s under a generation key bumped on writes.
+   */
+  async getStats() {
+    const key = await userStatsKey();
+    return cacheManager.getOrSet(key, async () => {
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const [counts, roles] = await Promise.all([
+        userRepository.statusCounts(monthStart),
+        roleRepository.count(),
+      ]);
+      return { ...counts, roles };
+    }, USER_STATS_TTL);
   }
 
   /**
@@ -637,7 +657,7 @@ class UserService {
   }
 
   async _invalidateListCache() {
-    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:users:list:*`);
+    await invalidateUserListCache();
   }
 
   async _assertCanChangeAdminRole(existingUser, newRole) {

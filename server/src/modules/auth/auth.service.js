@@ -4,6 +4,7 @@ import sessionService from './session.service.js';
 import auditService from './audit.service.js';
 import passwordHistoryRepository from './passwordHistory.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import { invalidateUserListCache } from './userListCache.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
@@ -567,6 +568,8 @@ class AuthService {
       activationTokenHash: null,
       activationTokenExpires: null,
     });
+    // pending_activation → active changes the user list and Employee Management KPIs.
+    await invalidateUserListCache();
 
     auditService.logEvent({
       eventType: 'account.activated',

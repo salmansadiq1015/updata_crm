@@ -41,7 +41,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs as TabsPrimitive } from 'radix-ui';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useAuth } from '@/shared/hooks/use-auth';
@@ -56,7 +57,10 @@ import {
   DASHBOARD_TABS,
   KPI_CONFIG,
 } from '@/modules/dashboard/data/dashboard-config';
-import { IntelligenceSummary, FeatureOverview } from './dashboard-workspaces';
+import { IntelligenceHeroStats, FeatureOverview } from './dashboard-workspaces';
+import { HeroPill, PageHero, heroButton, pageTabs } from '@/shared/components/page-hero';
+
+const GLASS = 'h-11 rounded-full border-white/15 bg-white/[0.07] px-4 text-white shadow-none backdrop-blur-md hover:bg-white/[0.12] [&_svg]:text-cyan-300 dark:bg-white/[0.07]';
 import styles from './dashboard.module.css';
 import {
   formatDashboardMetric,
@@ -385,46 +389,44 @@ export function PremiumDashboard() {
     : null;
 
   const refreshAll = () => { void refetch(); void intelligence.refetch(); };
+  const selectIntelligence = (id) => { if (!visibleTabs.some(tab => tab.id === id)) setConfigOpen(true); else setActiveTab(id); };
   return (
     <section className={cn(styles.dashboard, 'relative -m-4 min-h-[calc(100dvh-4rem)] text-foreground sm:-m-6')}>
       <div className="mx-auto flex max-w-[1800px] min-w-0 flex-col gap-6 p-4 sm:p-6 lg:p-8">
-        <header className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center">
-          <div className="min-w-0">
-            <p className="mb-2 text-xs font-medium tracking-wide text-primary">{t('dashboard.intelligence.workspace')}</p>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{t('dashboard.intelligence.subtitle')}</p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={range} onValueChange={handleRangeChange}>
-                <SelectTrigger aria-label={t('dashboard.analytics.range')} className="h-10 w-32 rounded-full bg-card shadow-none"><SelectValue /></SelectTrigger>
-                <SelectContent>{DASHBOARD_RANGES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={granularity} onValueChange={setGranularity}>
-                <SelectTrigger aria-label={t('dashboard.analytics.granularity')} className="h-10 w-28 rounded-full bg-card shadow-none"><SelectValue /></SelectTrigger>
-                <SelectContent>{DASHBOARD_GRANULARITIES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
-              </Select>
-              <Popover open={configOpen} onOpenChange={setConfigOpen}>
-                <PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={t('dashboard.config.title')}><Settings2 className="size-4" /></Button></PopoverTrigger>
-                <PopoverContent align="end" className="max-h-[75dvh] w-auto overflow-y-auto p-4"><DashboardConfigPopover hiddenKpis={hiddenKpis} hiddenTabs={hiddenTabs} availableKpis={permittedKpis} availableTabs={permittedTabs} onSave={handleSaveConfig} t={t} /></PopoverContent>
-              </Popover>
-              <Button variant="outline" size="icon" aria-label={t('dashboard.analytics.refresh')} onClick={refreshAll} disabled={isFetching || intelligence.isFetching}><RefreshCw className={cn('size-4', (isFetching || intelligence.isFetching) && 'animate-spin')} /></Button>
-            </div>
-            {updatedAt && <span className="text-xs text-muted-foreground xl:text-end">{t('dashboard.analytics.updatedAt')} {updatedAt}</span>}
-          </div>
-        </header>
+        <PageHero
+          id="dashboard-title"
+          art="/hero/dashboard"
+          icon={LayoutDashboard}
+          eyebrow={t('dashboard.intelligence.workspace')}
+          title={<>{t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}</>}
+          subtitle={t('dashboard.intelligence.subtitle')}
+          status={updatedAt ? <HeroPill tone={isError ? 'warn' : 'ok'}>{t('dashboard.analytics.updatedAt')} {updatedAt}</HeroPill> : null}
+          actions={<>
+            <Select value={range} onValueChange={handleRangeChange}>
+              <SelectTrigger aria-label={t('dashboard.analytics.range')} className={cn(GLASS, 'w-32')}><SelectValue /></SelectTrigger>
+              <SelectContent>{DASHBOARD_RANGES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={granularity} onValueChange={setGranularity}>
+              <SelectTrigger aria-label={t('dashboard.analytics.granularity')} className={cn(GLASS, 'w-28')}><SelectValue /></SelectTrigger>
+              <SelectContent>{DASHBOARD_GRANULARITIES.map(option => <SelectItem key={option.value} value={option.value}>{t(option.labelKey, option.fallback)}</SelectItem>)}</SelectContent>
+            </Select>
+            <Popover open={configOpen} onOpenChange={setConfigOpen}>
+              <PopoverTrigger asChild><button type="button" className={cn(heroButton.ghost, 'w-11 justify-center px-0')} aria-label={t('dashboard.config.title')}><Settings2 aria-hidden="true" /></button></PopoverTrigger>
+              <PopoverContent align="end" className="max-h-[75dvh] w-auto overflow-y-auto p-4"><DashboardConfigPopover hiddenKpis={hiddenKpis} hiddenTabs={hiddenTabs} availableKpis={permittedKpis} availableTabs={permittedTabs} onSave={handleSaveConfig} t={t} /></PopoverContent>
+            </Popover>
+            <button type="button" className={cn(heroButton.ghost, 'w-11 justify-center px-0')} aria-label={t('dashboard.analytics.refresh')} onClick={refreshAll} disabled={isFetching || intelligence.isFetching}><RefreshCw aria-hidden="true" className={cn((isFetching || intelligence.isFetching) && 'animate-spin')} /></button>
+          </>}
+          stats={<IntelligenceHeroStats query={intelligence} t={t} locale={localeCode} onSelect={selectIntelligence} />}
+        />
 
         <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="min-w-0 gap-6">
-          <div className="dashboard-tab-navigation min-w-0 overflow-x-auto border-b border-border pb-1">
-            <TabsList variant="line" aria-label={t('dashboard.config.tabs')} className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-none bg-transparent p-0">
-              {visibleTabs.map(tab => { const Icon = TAB_ICONS[tab.id] || BarChart3; return <TabsTrigger key={tab.id} value={tab.id} className="h-11 gap-2 rounded-none px-3 text-[13px]"><Icon className="size-4" />{t(tab.labelKey, tab.fallback)}</TabsTrigger>; })}
-            </TabsList>
-          </div>
+          <TabsPrimitive.List aria-label={t('dashboard.config.tabs')} className={pageTabs.list}>
+            {visibleTabs.map(tab => { const Icon = TAB_ICONS[tab.id] || BarChart3; return <TabsPrimitive.Trigger key={tab.id} value={tab.id} className={pageTabs.tab}><Icon aria-hidden="true" />{t(tab.labelKey, tab.fallback)}</TabsPrimitive.Trigger>; })}
+          </TabsPrimitive.List>
           <TabsContent value={safeActiveTab} className="m-0 min-w-0 space-y-5">
             {INTELLIGENCE_TABS.has(safeActiveTab) ? <IntelligenceTab name={safeActiveTab} query={intelligence} t={t} locale={localeCode} /> : <>
               <WarningStrip warnings={data?.warnings} t={t} />
               {safeActiveTab === 'overview' && <>
-                <IntelligenceSummary query={intelligence} t={t} locale={localeCode} onSelect={id => { if (!visibleTabs.some(tab => tab.id === id)) setConfigOpen(true); else setActiveTab(id); }} />
                 {isLoading ? <MetricSkeletonGrid count={visibleKpiIds.length || 3} /> : !isError && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data?.overview?.kpis?.filter(item => visibleKpiIds.includes(item.id)).map(item => <MetricCard key={item.id} item={item} locale={localeCode} t={t} />)}</div>}
               </>}
               {isError ? <DashboardError error={error} onRetry={refreshAll} t={t} /> : isLoading ? <DashboardChartSkeleton /> : <DashboardChartPanels activeTab={safeActiveTab} data={data} t={t} locale={localeCode} isFetching={isFetching} />}

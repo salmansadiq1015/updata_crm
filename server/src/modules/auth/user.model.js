@@ -255,6 +255,9 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ role: 1 });
 userSchema.index({ isDeleted: 1, status: 1 });
 userSchema.index({ createdAt: -1 });
+// Employee Management read paths (migration 060): default list order and covered KPI $group.
+userSchema.index({ isDeleted: 1, createdAt: -1, _id: -1 });
+userSchema.index({ isDeleted: 1, status: 1, createdAt: 1 });
 // The short code identifies one person, so it must stay unique — but only
 // among live users: soft-deleted ones must not hold a code hostage.
 userSchema.index(

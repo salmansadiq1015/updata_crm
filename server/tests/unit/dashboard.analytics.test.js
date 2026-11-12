@@ -13,12 +13,16 @@ function aggregateModel(result, error = null) {
       if (error) throw error;
       return Promise.resolve(result);
     }),
+    countDocuments: jest.fn(() => (error ? Promise.reject(error) : Promise.resolve(0))),
   };
 }
+
+const zurichHour = (date) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zurich', hour: '2-digit', hourCycle: 'h23' }).format(date));
 
 function auditModel(result) {
   return {
     aggregate: jest.fn(() => Promise.resolve(result)),
+    countDocuments: jest.fn(() => Promise.resolve(0)),
     find: jest.fn(() => ({
       sort: () => ({
         limit: () => ({
@@ -89,8 +93,9 @@ describe('dashboard analytics service', () => {
 
     expect(filters.range).toBe('30d');
     expect(filters.granularity).toBe('day');
-    expect(filters.startDate.getHours()).toBe(0);
-    expect(filters.endDate.getHours()).toBe(23);
+    // Boundaries are business-time (Europe/Zurich) midnights, whatever the host TZ.
+    expect(zurichHour(filters.startDate)).toBe(0);
+    expect(zurichHour(filters.endDate)).toBe(23);
     expect(Math.ceil((filters.endDate - filters.startDate) / (24 * 60 * 60 * 1000))).toBe(30);
   });
 

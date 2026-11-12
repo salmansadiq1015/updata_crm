@@ -82,6 +82,42 @@ const labels = {
   'hero.automation.title': ['Your best process, running on its own.', 'Ihr bester Prozess – läuft von selbst.', 'Votre meilleur processus, en pilote automatique.', 'أفضل عملياتك، تعمل من تلقاء نفسها.'],
   'hero.automation.templates': ['Browse templates', 'Vorlagen ansehen', 'Parcourir les modèles', 'تصفح القوالب'],
 
+  'emailHero.eyebrow': ['Communication workspace', 'Kommunikations-Workspace', 'Espace de communication', 'مساحة التواصل'],
+  'emailHero.title': ['Email', 'E-Mail', 'E-mail', 'البريد الإلكتروني'],
+  'emailHero.subtitle': ['Your conversations, in focus — connected to your CRM.', 'Ihre Unterhaltungen im Fokus – verbunden mit Ihrem CRM.', 'Vos échanges, au premier plan — reliés à votre CRM.', 'محادثاتك في دائرة التركيز — متصلة بنظام CRM.'],
+  'emailHero.accounts': ['connected accounts', 'verbundene Konten', 'comptes connectés', 'حسابات متصلة'],
+  'emailHero.unread': ['unread', 'ungelesen', 'non lus', 'غير مقروءة'],
+  'emailHero.connect': ['Connect account', 'Konto verbinden', 'Connecter un compte', 'ربط حساب'],
+  'emailHero.new': ['Compose', 'Verfassen', 'Rédiger', 'إنشاء رسالة'],
+
+  'aiHero.eyebrow': ['AI assistant', 'KI-Assistent', 'Assistant IA', 'المساعد الذكي'],
+  'aiHero.title': ['Ask, plan and act — in plain language.', 'Fragen, planen, handeln – in Alltagssprache.', 'Demandez, planifiez, agissez — en langage naturel.', 'اسأل وخطّط ونفّذ — بلغة بسيطة.'],
+  'aiHero.subtitle': ['Your assistant reads the CRM, drafts the work and asks before it changes anything.', 'Ihr Assistent liest das CRM, bereitet die Arbeit vor und fragt, bevor er etwas ändert.', 'Votre assistant lit le CRM, prépare le travail et demande avant de modifier quoi que ce soit.', 'يقرأ مساعدك نظام CRM ويجهّز العمل ويستأذن قبل أن يغيّر أي شيء.'],
+  'aiHero.threads': ['recent conversations', 'letzte Unterhaltungen', 'conversations récentes', 'محادثات حديثة'],
+  'aiHero.new': ['New conversation', 'Neue Unterhaltung', 'Nouvelle conversation', 'محادثة جديدة'],
+
+  'notificationsHero.title': ['What needs you, the moment it matters.', 'Was Sie braucht – genau dann, wenn es zählt.', 'Ce qui vous attend, au moment où ça compte.', 'ما يحتاجك، في اللحظة التي تهم.'],
+  'notificationsHero.unread': ['{count} unread', '{count} ungelesen', '{count} non lues', '{count} غير مقروءة'],
+  'notificationsHero.caughtUp': ['All caught up', 'Alles erledigt', 'Tout est à jour', 'لا شيء جديد'],
+  'notificationsHero.unreadHint': ['Show only unread', 'Nur ungelesene zeigen', 'Afficher les non lues', 'عرض غير المقروءة فقط'],
+  'notificationsHero.highHint': ['Needs attention soon', 'Bald erledigen', 'À traiter bientôt', 'تحتاج إلى انتباه قريبًا'],
+  'notificationsHero.criticalHint': ['Act now', 'Sofort handeln', 'À traiter maintenant', 'تصرّف الآن'],
+
+  'tasksHero.title': ['Every task, moving forward.', 'Jede Aufgabe kommt voran.', 'Chaque tâche avance.', 'كل مهمة تمضي قدمًا.'],
+
+  'schedulingHero.eyebrow': ['Scheduling', 'Einsatzplanung', 'Planification', 'الجدولة'],
+  'schedulingHero.subtitle': ['Plan crews, meetings and field work — and catch conflicts before they happen.', 'Teams, Meetings und Einsätze planen – Konflikte erkennen, bevor sie entstehen.', 'Planifiez équipes, réunions et interventions — et repérez les conflits avant qu’ils surviennent.', 'خطّط للفرق والاجتماعات والعمل الميداني — واكتشف التعارضات قبل حدوثها.'],
+  'schedulingHero.sections': ['Scheduling sections', 'Bereiche der Einsatzplanung', 'Sections de planification', 'أقسام الجدولة'],
+
+  'usersHero.title': ['The people behind every job.', 'Die Menschen hinter jedem Auftrag.', 'Les personnes derrière chaque mission.', 'الأشخاص وراء كل مهمة.'],
+  'usersHero.layout': ['Layout', 'Ansicht', 'Affichage', 'طريقة العرض'],
+  'usersHero.table': ['Table view', 'Tabellenansicht', 'Vue tableau', 'عرض الجدول'],
+  'usersHero.grid': ['Card view', 'Kartenansicht', 'Vue cartes', 'عرض البطاقات'],
+  'usersHero.newThisMonth': ['{count} joined this month', '{count} neu diesen Monat', '{count} arrivés ce mois-ci', '{count} انضموا هذا الشهر'],
+  'usersHero.activeHint': ['Can sign in', 'Können sich anmelden', 'Peuvent se connecter', 'يمكنهم تسجيل الدخول'],
+  'usersHero.pendingHint': ['Invitation not confirmed', 'Einladung nicht bestätigt', 'Invitation non confirmée', 'لم يتم تأكيد الدعوة'],
+  'usersHero.inactive': ['{count} deactivated', '{count} deaktiviert', '{count} désactivés', '{count} معطّلون'],
+
   'simCalls.title': ['SIM call campaigns', 'SIM-Anrufkampagnen', 'Campagnes d’appels SIM', 'حملات الاتصال عبر SIM'],
   'simCalls.subtitle': [
     'Callers phone leads from their own SIM with the Updata Android app. The app guides them through the questions and records answers here. The AI does not speak or listen on SIM calls (Android does not allow it).',

@@ -3,9 +3,9 @@ import calendarService from './calendar.service.js';
 class CalendarController {
   async getCalendarData(req, res, next) {
     try {
-      const { startDate, endDate, employeeIds, teamId, type, status } = req.query;
+      const { startDate, endDate, employeeIds, teamId, type, status } = req._validatedQuery || req.query;
       const filters = {};
-      if (employeeIds) filters.employeeIds = employeeIds.split(',').filter(Boolean);
+      if (employeeIds) filters.employeeIds = String(employeeIds).split(',').filter(Boolean);
       if (teamId) filters.teamId = teamId;
       if (type) filters.type = type;
       if (status) filters.status = status;

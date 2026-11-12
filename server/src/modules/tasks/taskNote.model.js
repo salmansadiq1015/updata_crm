@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import taskCache from './taskCache.js';
 
 const taskNoteSchema = new mongoose.Schema(
   {
@@ -20,6 +21,9 @@ taskNoteSchema.pre(/^find/, function () {
   if (this.getOptions().includeDeleted) return;
   this.where({ isDeleted: false });
 });
+
+// Note/attachment counts are part of the cached task detail.
+taskCache.registerInvalidation(taskNoteSchema);
 
 const TaskNote = mongoose.model('TaskNote', taskNoteSchema);
 export default TaskNote;

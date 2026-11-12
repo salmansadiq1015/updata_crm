@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import taskCache from './taskCache.js';
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf', 'image/jpeg', 'image/png',
@@ -31,5 +32,8 @@ taskAttachmentSchema.pre(/^find/, function () {
 });
 
 export { ALLOWED_MIME_TYPES, MAX_FILE_SIZE };
+// Note/attachment counts are part of the cached task detail.
+taskCache.registerInvalidation(taskAttachmentSchema);
+
 const TaskAttachment = mongoose.model('TaskAttachment', taskAttachmentSchema);
 export default TaskAttachment;

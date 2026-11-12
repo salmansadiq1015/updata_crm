@@ -3,21 +3,12 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertTriangle,
-  ArrowDown,
-  Bell,
-  CheckCheck,
-  ExternalLink,
-  Filter,
-  Inbox,
-  RefreshCw,
-  Search,
-  Settings,
-  Trash2,
+  AlertTriangle, ArrowDown, Bell, BellDot, CheckCheck, ExternalLink, Filter, Inbox, RefreshCw, Search, Settings, ShieldAlert, Trash2,
 } from 'lucide-react';
 import { useInfiniteNotificationFeed, useNotificationMutations } from '../hooks/use-notification-feed';
 import { NotificationSettingsDialog } from './notification-settings-dialog';
-import { PageHeader } from '@/shared/components/page-header';
+import { HeroStat } from '@/shared/components/hero-art';
+import { HeroPill, PageHero, heroButton } from '@/shared/components/page-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -66,43 +57,6 @@ function groupByDay(notifications) {
     groups.get(key).items.push(notification);
   }
   return [...groups.values()];
-}
-
-function SummaryTile({ label, value, sub, tone = 'default' }) {
-  const toneClass = {
-    default: 'border-border bg-card',
-    warning: 'border-orange-500/25 bg-orange-500/5',
-    danger: 'border-red-500/25 bg-red-500/5',
-  }[tone];
-
-  return (
-    <div className={cn('rounded-lg border px-4 py-3', toneClass)}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className="mt-1 flex items-end gap-2">
-        <span className="text-2xl font-semibold tracking-normal">{value}</span>
-        {sub && <span className="pb-1 text-xs text-muted-foreground">{sub}</span>}
-      </div>
-    </div>
-  );
-}
-
-function SummaryStrip({ summary, t }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryTile label={t('notifications.summary.unread', 'Unread')} value={summary.unread} />
-      <SummaryTile
-        label={t('notifications.summary.highPriority', 'High priority')}
-        value={summary.highPriority}
-        tone={summary.highPriority > 0 ? 'warning' : 'default'}
-      />
-      <SummaryTile
-        label={t('notifications.summary.critical', 'Critical')}
-        value={summary.critical}
-        tone={summary.critical > 0 ? 'danger' : 'default'}
-      />
-      <SummaryTile label={t('notifications.summary.total', 'Total')} value={summary.total} sub={t('notifications.summary.active', 'active')} />
-    </div>
-  );
 }
 
 function ActionQueue({ actions, t, onMarkRead }) {
@@ -286,48 +240,41 @@ export function NotificationsCenter() {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
-      <PageHeader
-        title={t('notifications.title', 'Notifications')}
-        description={t('notifications.description', 'Critical tasks, updates, and events')}
-      >
-        <div className="flex items-center gap-2">
+      <PageHero
+        id="notifications-title"
+        art="/hero/notifications"
+        icon={Bell}
+        eyebrow={t('notifications.title', 'Notifications')}
+        title={t('notificationsHero.title', 'What needs you, the moment it matters.')}
+        subtitle={t('notifications.description', 'Critical tasks, updates, and events')}
+        status={<HeroPill tone={summary.critical ? 'warn' : summary.unread ? 'ok' : 'off'}>{summary.unread ? t('notificationsHero.unread', '{count} unread', { count: summary.unread }) : t('notificationsHero.caughtUp', 'All caught up')}</HeroPill>}
+        actions={<>
           <NotificationSettingsDialog>
-            <Button size="icon" variant="ghost" className="h-8 w-8">
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
+            <button type="button" className={cn(heroButton.ghost, 'w-11 justify-center px-0')} aria-label={t('notifications.settings', 'Notification settings')}><Settings aria-hidden="true" /></button>
           </NotificationSettingsDialog>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
-          </Button>
-          {summary.unread > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
-            >
-              <CheckCheck className="h-3.5 w-3.5" />
-              {t('notifications.markAllRead', 'Mark all read')}
-              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                {summary.unread}
-              </span>
-            </Button>
-          )}
-        </div>
-      </PageHeader>
-
-      <SummaryStrip summary={summary} t={t} />
+          <button type="button" className={cn(heroButton.ghost, 'w-11 justify-center px-0')} aria-label={t('common.refresh', 'Refresh')} onClick={() => refetch()} disabled={isFetching}><RefreshCw aria-hidden="true" className={cn(isFetching && 'animate-spin')} /></button>
+          <button type="button" className={heroButton.primary} onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending || !summary.unread}><CheckCheck aria-hidden="true" />{t('notifications.markAllRead', 'Mark all read')}</button>
+        </>}
+        stats={<>
+          <button type="button" onClick={() => setShowUnreadOnly(true)} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50">
+            <HeroStat icon={BellDot} label={t('notifications.summary.unread', 'Unread')} value={summary.unread} hint={t('notificationsHero.unreadHint', 'Show only unread')} loading={isLoading} />
+          </button>
+          <HeroStat icon={AlertTriangle} tone={summary.highPriority ? 'text-amber-300' : 'text-sky-200'} label={t('notifications.summary.highPriority', 'High priority')} value={summary.highPriority} hint={t('notificationsHero.highHint', 'Needs attention soon')} loading={isLoading} />
+          <HeroStat icon={ShieldAlert} tone={summary.critical ? 'text-rose-300' : 'text-emerald-300'} label={t('notifications.summary.critical', 'Critical')} value={summary.critical} hint={t('notificationsHero.criticalHint', 'Act now')} loading={isLoading} />
+          <HeroStat icon={Inbox} tone="text-cyan-300" label={t('notifications.summary.total', 'Total')} value={summary.total} hint={t('notifications.summary.active', 'active')} loading={isLoading} />
+        </>}
+      />
       <ActionQueue actions={summary.pendingActions || []} t={t} onMarkRead={(id) => markRead.mutate(id)} />
 
       <div className="flex flex-col gap-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t('notifications.search.placeholder', 'Search notifications...')}
-            className="h-9 pl-9 text-sm"
+            aria-label={t('notifications.search.placeholder', 'Search notifications...')}
+            className="h-11 rounded-xl ps-10 text-sm"
           />
         </div>
 
@@ -339,11 +286,12 @@ export function NotificationsCenter() {
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
+                aria-pressed={category === cat}
                 className={cn(
-                  'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   category === cat
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'border-transparent bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_8px_20px_-10px_rgba(14,165,233,0.8)]'
+                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >
                 {getNotificationCategoryLabel(cat, t)}

@@ -1,33 +1,65 @@
 import mongoose from 'mongoose';
-import { normalizeAnalyticsFilters, fillTimeline, dateBucketExpression } from './dashboard.service.js';
+import { normalizeAnalyticsFilters, fillTimeline, dateBucketExpression, runAggregate, runCount, leadStatusCounts } from './dashboard.service.js';
 import { ACTIVE_STATUSES } from '../inboundCalling/engine/stateMachine.js';
 
 const sumIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
 const inStates = (field, states) => ({ $in: [`$${field}`, states] });
-const count = (rows) => Number(rows?.[0]?.count) || 0;
 const range = (filters) => ({ createdAt: { $gte: filters.startDate, $lte: filters.endDate } });
-
-async function facet(model, match, facets) {
-  const rows = await model.aggregate([{ $match: match }, { $facet: facets }]);
-  return rows[0] || {};
-}
 
 function breakdown(rows = []) {
   return rows.map(row => ({ id: String(row._id ?? 'unknown'), value: row.count, count: row.count }));
 }
 
+/** Group rows by `keyOf`, summing `count`; sorted by count desc with a stable id tie-break. */
+function countBy(rows, keyOf) {
+  const byKey = new Map();
+  for (const row of rows) {
+    const id = keyOf(row) ?? null;
+    const key = id === null ? '\u0000null' : String(id);
+    const entry = byKey.get(key) || { _id: id, count: 0 };
+    entry.count += Number(row.count) || 0;
+    byKey.set(key, entry);
+  }
+  return [...byKey.values()].sort((a, b) => (b.count - a.count) || String(a._id ?? '').localeCompare(String(b._id ?? '')));
+}
+
+/**
+ * Period activity from ONE indexed pass over the createdAt window: rows are grouped
+ * by (timeline bucket, state) and rolled up into totals, the trend and the state
+ * breakdown — no $facet, no second read.
+ */
 async function activity(model, match, filters, stateField, conditions) {
-  const metrics = Object.fromEntries(Object.entries(conditions).map(([key, condition]) => [key, sumIf(condition)]));
-  const result = await facet(model, { ...match, ...range(filters) }, {
-    totals: [{ $group: { _id: null, total: { $sum: 1 }, ...metrics } }],
-    trend: [{ $group: { _id: dateBucketExpression('createdAt', filters.granularity), total: { $sum: 1 }, ...metrics } }, { $sort: { _id: 1 } }],
-    breakdown: [{ $group: { _id: `$${stateField}`, count: { $sum: 1 } } }, { $sort: { count: -1 } }],
-  });
-  const { _id: _ignored, ...totals } = result.totals?.[0] || {};
+  const metricKeys = Object.keys(conditions);
+  const metrics = Object.fromEntries(metricKeys.map((key) => [key, sumIf(conditions[key])]));
+  const rows = (await runAggregate(model, [
+    { $match: { ...match, ...range(filters) } },
+    {
+      $group: {
+        _id: { bucket: dateBucketExpression('createdAt', filters.granularity), state: `$${stateField}` },
+        total: { $sum: 1 },
+        ...metrics,
+      },
+    },
+  ])) || [];
+
+  const keys = ['total', ...metricKeys];
+  const totals = Object.fromEntries(keys.map((key) => [key, 0]));
+  const trendByBucket = new Map();
+  for (const row of rows) {
+    const bucket = row._id?.bucket;
+    const point = trendByBucket.get(bucket) || Object.fromEntries([['_id', bucket], ...keys.map((key) => [key, 0])]);
+    for (const key of keys) {
+      const value = Number(row[key]) || 0;
+      totals[key] += value;
+      point[key] += value;
+    }
+    trendByBucket.set(bucket, point);
+  }
+
   return {
-    metrics: { total: 0, ...Object.fromEntries(Object.keys(conditions).map(key => [key, 0])), ...totals },
-    trend: fillTimeline(result.trend, filters, ['total', ...Object.keys(conditions)]),
-    breakdown: breakdown(result.breakdown),
+    metrics: totals,
+    trend: fillTimeline([...trendByBucket.values()], filters, keys),
+    breakdown: breakdown(countBy(rows.map((row) => ({ _id: row._id?.state, count: row.total })), (row) => row._id)),
   };
 }
 
@@ -35,7 +67,8 @@ async function activity(model, match, filters, stateField, conditions) {
  * Call test records are excluded. Period metrics use createdAt; inventory/live counts are separate.
  */
 export async function getDashboardIntelligence(rawFilters, viewer, dependencies = {}) {
-  const filters = normalizeAnalyticsFilters(rawFilters, dependencies.now || new Date());
+  const now = dependencies.now || rawFilters?.now || new Date();
+  const filters = normalizeAnalyticsFilters(rawFilters, now);
   const models = dependencies.models;
   const model = name => models ? models[name] : mongoose.model(name);
   const owner = new mongoose.Types.ObjectId(String(viewer.id));
@@ -54,15 +87,16 @@ export async function getDashboardIntelligence(rawFilters, viewer, dependencies 
       awaiting: { $eq: ['$status', 'AWAITING_CONFIRMATION'] }, active: inStates('status', ['PENDING', 'RUNNING']),
     })),
     section('calling', async () => {
-      const [calls, agents, campaigns] = await Promise.all([
+      const [calls, agents, activeAgents, activeCampaigns] = await Promise.all([
         activity(model('CallRecord'), production, filters, 'state', {
           completed: { $eq: ['$state', 'completed'] }, answered: { $ne: [{ $ifNull: ['$answeredAt', null] }, null] },
           qualified: { $eq: ['$qualification', 'qualified'] }, failed: { $eq: ['$state', 'failed'] },
         }),
-        facet(model('CallingAgent'), own, { total: [{ $count: 'count' }], active: [{ $match: { availability: 'active' } }, { $count: 'count' }] }),
-        facet(model('CallCampaign'), production, { active: [{ $match: { status: { $in: ['queued', 'scheduled', 'running', 'paused'] } } }, { $count: 'count' }] }),
+        runCount(model('CallingAgent'), own),
+        runCount(model('CallingAgent'), { ...own, availability: 'active' }),
+        runCount(model('CallCampaign'), { ...production, status: { $in: ['queued', 'scheduled', 'running', 'paused'] } }),
       ]);
-      return { ...calls, inventory: { agents: count(agents.total), activeAgents: count(agents.active), activeCampaigns: count(campaigns.active) } };
+      return { ...calls, inventory: { agents, activeAgents, activeCampaigns } };
     }),
     section('incoming', async () => {
       const scope = viewer.inboundAll ? {} : { $or: [{ createdBy: owner }, { assignedTo: owner }] };
@@ -73,20 +107,22 @@ export async function getDashboardIntelligence(rawFilters, viewer, dependencies 
           aiHandled: { $eq: ['$outcome', 'handled_by_ai'] }, transferred: { $eq: ['$outcome', 'transferred'] },
           qualified: { $eq: ['$qualification.result', 'QUALIFIED'] },
         }),
-        model('InboundCall').aggregate([{ $match: { ...match, status: { $in: [...ACTIVE_STATUSES] } } }, { $count: 'count' }]),
+        runCount(model('InboundCall'), { ...match, status: { $in: [...ACTIVE_STATUSES] } }),
       ]);
-      return { ...calls, scope: viewer.inboundAll ? 'team' : 'personal', inventory: { live: count(live) } };
+      return { ...calls, scope: viewer.inboundAll ? 'team' : 'personal', inventory: { live } };
     }),
     section('leads', async () => {
       const match = { ...own, isDeleted: { $ne: true } };
-      const [leads, inventory, followUps] = await Promise.all([
+      const [leads, pipelineRows, overdueFollowUps] = await Promise.all([
         activity(model('Lead'), match, filters, 'status', {
           qualified: { $eq: ['$status', 'qualified'] }, converted: { $eq: ['$status', 'converted'] },
         }),
-        facet(model('Lead'), match, { total: [{ $count: 'count' }], pipeline: [{ $group: { _id: '$status', count: { $sum: 1 } } }] }),
-        model('LeadFollowUp').aggregate([{ $match: { ownerId: owner, status: { $in: ['open', 'snoozed'] }, nextDueAt: { $lt: dependencies.now || new Date() } } }, { $count: 'count' }]),
+        leadStatusCounts(model('Lead'), match, { cache: !models }),
+        runCount(model('LeadFollowUp'), { ownerId: owner, status: { $in: ['open', 'snoozed'] }, nextDueAt: { $lt: now } }),
       ]);
-      return { ...leads, inventory: { total: count(inventory.total), overdueFollowUps: count(followUps) }, pipeline: breakdown(inventory.pipeline) };
+      const pipeline = countBy(pipelineRows || [], (row) => row._id);
+      const total = pipeline.reduce((sum, row) => sum + row.count, 0);
+      return { ...leads, inventory: { total, overdueFollowUps }, pipeline: breakdown(pipeline) };
     }),
   ]);
   return result;

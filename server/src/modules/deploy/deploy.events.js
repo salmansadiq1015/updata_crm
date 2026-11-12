@@ -1,6 +1,7 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import calendarCache from './calendarCache.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
@@ -15,7 +16,7 @@ export function registerDeployEvents() {
   // --- PROJECT_STATUS_CHANGED ---
   eventBus.on(EVENT_TYPES.PROJECT_STATUS_CHANGED, async (event) => {
     try {
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      await calendarCache.bump();
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:dashboard:*`);
 
       logger.info('Deploy calendar + dashboard caches invalidated after project status change', {
@@ -35,7 +36,7 @@ export function registerDeployEvents() {
   // --- CUSTOMER_UPDATED ---
   eventBus.on(EVENT_TYPES.CUSTOMER_UPDATED, async (event) => {
     try {
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      await calendarCache.bump();
 
       logger.info('Deploy calendar caches invalidated after customer update', {
         module: 'deploy',
@@ -73,7 +74,7 @@ export function registerDeployEvents() {
   // --- SCHEDULE_ASSIGNMENT_MOVED ---
   eventBus.on(EVENT_TYPES.SCHEDULE_ASSIGNMENT_MOVED, async (event) => {
     try {
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      await calendarCache.bump();
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:dashboard:*`);
 
       logger.info('Deploy calendar + dashboard caches invalidated after assignment moved', {
@@ -93,7 +94,7 @@ export function registerDeployEvents() {
   // --- SCHEDULE_ASSIGNMENT_CANCELLED ---
   eventBus.on(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CANCELLED, async (event) => {
     try {
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      await calendarCache.bump();
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:dashboard:*`);
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:coarse:*`);
 
@@ -117,7 +118,7 @@ export function registerDeployEvents() {
   // deploy calendar cache so dispatchers see the updated project work.
   const invalidateCalendarOnScheduleChange = async (event, eventName) => {
     try {
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      await calendarCache.bump();
       logger.info('Deploy calendar caches invalidated after PM schedule change', {
         module: 'deploy',
         action: `event.${eventName}`,

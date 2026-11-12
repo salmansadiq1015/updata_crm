@@ -97,6 +97,8 @@ journalEntrySchema.index({ creditAccountId: 1 });
 journalEntrySchema.index({ referenceType: 1, referenceId: 1 });
 journalEntrySchema.index({ companyId: 1, branchId: 1, entryDate: -1 });
 journalEntrySchema.index({ companyId: 1, currency: 1, entryDate: -1 });
+// Dashboard journal window: amount by reference type, answered from the index alone — migration 057.
+journalEntrySchema.index({ entryDate: 1, referenceType: 1, amount: 1 }, { name: 'dashboard_journal_window' });
 
 // --- Immutability pre-hooks ---
 journalEntrySchema.pre('findOneAndUpdate', function () {

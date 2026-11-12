@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import taskCache from './taskCache.js';
 
 export const TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
 export const TASK_PRIORITIES = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
@@ -92,6 +93,13 @@ taskSchema.index({ assigneeId: 1, status: 1, dueDate: 1, isDeleted: 1 });
 taskSchema.index({ projectId: 1, status: 1, sortOrder: 1 }, { sparse: true });
 taskSchema.index({ createdBy: 1, isDeleted: 1 });
 taskSchema.index({ inPool: 1, isDeleted: 1 });
+// Tasks workspace read paths (migration 059): the default list/board (top-level
+// tasks in manual order), its "assigned to me" variant, and the dashboard's
+// "recently completed by me" block. Without them each first page was a 50k-doc
+// COLLSCAN + in-memory sort.
+taskSchema.index({ parentTaskId: 1, isDeleted: 1, sortOrder: 1, _id: 1 });
+taskSchema.index({ assigneeId: 1, parentTaskId: 1, isDeleted: 1, sortOrder: 1, _id: 1 });
+taskSchema.index({ completedBy: 1, status: 1, completedAt: -1, _id: -1 });
 
 // Validation: projectId and orderId are mutually exclusive
 taskSchema.pre('validate', function () {
@@ -105,6 +113,9 @@ taskSchema.pre(/^find/, function () {
   if (this.getOptions().includeDeleted) return;
   this.where({ isDeleted: false });
 });
+
+// Every write (any module, any Mongoose path) invalidates the cached task reads.
+taskCache.registerInvalidation(taskSchema);
 
 const Task = mongoose.model('Task', taskSchema);
 export default Task;

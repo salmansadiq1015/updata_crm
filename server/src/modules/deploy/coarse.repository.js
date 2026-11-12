@@ -68,7 +68,7 @@ class CoarseRepository {
     if (projectId) filter.projectId = projectId;
 
     return CoarseAllocation.find(filter)
-      .sort({ calendarWeek: 1 })
+      .sort({ calendarWeek: 1, _id: 1 })
       .populate(POPULATE_FIELDS)
       .lean();
   }

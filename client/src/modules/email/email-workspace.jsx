@@ -15,6 +15,8 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import api from '@/lib/api/client';
 import { emailApi, recipients, replyRecipients, replySubject } from './email-api';
 import styles from './email.module.css';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { BandChip, PageBand, heroButton } from '@/shared/components/page-hero';
 const folders = [['inbox', 'Inbox', Inbox], ['starred', 'Starred', Star], ['important', 'Important', Flag], ['sent', 'Sent', Send], ['drafts', 'Drafts', FileEdit], ['scheduled', 'Scheduled', Clock3], ['approval', 'Needs approval', ShieldCheck], ['archive', 'Archive', Archive], ['spam', 'Spam', ShieldAlert], ['trash', 'Trash', Trash2]];
 const initials = text => (text || '?').replace(/<.*>/, '').trim().slice(0, 2).toUpperCase();
 const sender = text => (text || 'Unknown sender').replace(/<.*>/, '').replace(/"/g, '').trim();
@@ -25,7 +27,7 @@ function IconButton({ icon: Icon, label, ...props }) { return <button type="butt
 function ErrorState({ error, retry }) { return <div className={styles.error} role="alert"><ShieldAlert size={18} /><span>{error?.message || 'Something went wrong. Please try again.'}</span>{retry && <button onClick={retry}>Retry</button>}</div>; }
 function Modal({ title, description, children, onClose, wide = false }) { return <Dialog open onOpenChange={open => !open && onClose()}><DialogContent className={`${styles.modal} ${wide ? styles.wideModal : ''}`}><div className={styles.modalHeading}><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></div><div className={styles.modalBody}>{children}</div></DialogContent></Dialog>; }
 export default function EmailWorkspace({ initialMessageId = null }) {
-  const { user } = useAuth(), { hasPermission, permissions } = usePermissions(), qc = useQueryClient();
+  const { user } = useAuth(), { hasPermission, permissions } = usePermissions(), qc = useQueryClient(), { t } = useLanguage();
   const permissionsReady = Boolean(permissions.length || user?.role?.name === 'Admin' || user?.role === 'Admin');
   const can = action => permissionsReady && hasPermission(`email:${action}`), baseKey = ['email', user?._id || user?.id];
   const [accountId, setAccountId] = useState(''), [folder, setFolder] = useState('inbox'), [query, setQuery] = useState(''), [debounced, setDebounced] = useState('');
@@ -78,7 +80,17 @@ export default function EmailWorkspace({ initialMessageId = null }) {
   };
   if (!can('read')) return <div className={styles.empty}><ShieldCheck /><h2>Email access required</h2><p>Ask your administrator for access to the email workspace.</p></div>;
   return <div className={styles.workspace}>
-    <header className={styles.heading}><div><div className={styles.eyebrow}><span /> COMMUNICATION WORKSPACE</div><h1>Email <span className={styles.beta}>Connected to your CRM</span></h1><p>Your conversations, in focus.</p></div><div className={styles.headingActions}><span className={styles.shortcut}>C <span>compose</span> / <span>search</span></span>{can('manage') && <Button variant="outline" onClick={() => setConnect(true)}><Plus size={16} /> Connect account</Button>}</div></header>
+    <PageBand
+      className="mb-4"
+      id="email-title"
+      art="/hero/email"
+      icon={Mail}
+      eyebrow={t('emailHero.eyebrow', 'Communication workspace')}
+      title={t('emailHero.title', 'Email')}
+      subtitle={t('emailHero.subtitle', 'Your conversations, in focus — connected to your CRM.')}
+      chips={<><BandChip icon={Mail} value={accountList.filter(a => a.status === 'connected').length} label={t('emailHero.accounts', 'connected accounts')} /><BandChip icon={Inbox} value={(activeAccount ? [activeAccount] : accountList).reduce((sum, a) => sum + (a.unreadCount || 0), 0)} label={t('emailHero.unread', 'unread')} /></>}
+      actions={<>{can('manage') && <button type="button" className={heroButton.ghost} onClick={() => setConnect(true)}><Plus aria-hidden="true" />{t('emailHero.connect', 'Connect account')}</button>}<button type="button" className={heroButton.primary} onClick={() => compose()} disabled={!can('write')}><Plus aria-hidden="true" />{t('emailHero.new', 'Compose')}</button></>}
+    />
     <div className={`${styles.shell} ${selected ? styles.hasSelection : ''}`}>
       <aside className={`${styles.folders} ${mobileFolders ? styles.foldersOpen : ''}`} aria-label="Mail folders">
         <div className={styles.brand}><span className={styles.brandIcon}><Mail size={19} /></span><div><strong>Your mail</strong><small>{accountList.length} connected account{accountList.length === 1 ? '' : 's'}</small></div><IconButton icon={X} label="Close folders" onClick={() => setMobileFolders(false)} /></div>

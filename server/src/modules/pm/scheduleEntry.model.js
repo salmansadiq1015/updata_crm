@@ -81,6 +81,13 @@ scheduleEntrySchema.index({ projectId: 1, sortOrder: 1 });
 scheduleEntrySchema.index({ status: 1 });
 scheduleEntrySchema.index({ predecessorId: 1 });
 scheduleEntrySchema.index({ isDeleted: 1 });
+// Scheduling calendar overlay (internal-team entries in a date range, migration 059):
+// one index per $or branch — phases overlap by end/start, milestones by date. No
+// entryType prefix: with a shared prefix the planner served the milestone branch
+// from the phase index (every milestone fetched). Milestones have no endDate and
+// phases no milestoneDate, so each branch's range bounds skip the other kind.
+scheduleEntrySchema.index({ endDate: 1, startDate: 1 });
+scheduleEntrySchema.index({ milestoneDate: 1 });
 
 // --- Soft-delete pre-hook ---
 scheduleEntrySchema.pre(/^find/, function () {

@@ -1,6 +1,6 @@
 import taskRepository from './task.repository.js';
 import taskAccessService from './taskAccess.service.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
+import taskCache from './taskCache.js';
 import logger from '../../shared/logger/index.js';
 
 const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
@@ -13,11 +13,13 @@ function countStatus(statuses = [], status) {
 
 class TaskDashboardService {
   async getDashboard(userId, { projectId, orderId, upcomingDays = 7 } = {}) {
-    const contextKey = [projectId || 'all-projects', orderId || 'all-orders', upcomingDays].join(':');
-    const cacheKey = `tasks:dashboard:${userId}:${contextKey}`;
+    // Cached under the task write generation: completing/creating a task (from any
+    // module) refreshes the tiles at once instead of after the TTL.
+    const scope = { userId: String(userId), projectId: projectId || null, orderId: orderId || null, upcomingDays };
 
-    return cacheManager.getOrSet(
-      cacheKey,
+    return taskCache.getOrSet(
+      'dashboard',
+      scope,
       async () => {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -39,7 +41,7 @@ class TaskDashboardService {
             status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
-            .sort({ dueDate: 1 })
+            .sort({ dueDate: 1, _id: 1 })
             .limit(20)
             .lean(),
 
@@ -50,7 +52,7 @@ class TaskDashboardService {
             status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
-            .sort({ dueDate: 1 })
+            .sort({ dueDate: 1, _id: 1 })
             .lean(),
 
           Task.find({
@@ -60,7 +62,7 @@ class TaskDashboardService {
             status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
-            .sort({ dueDate: 1 })
+            .sort({ dueDate: 1, _id: 1 })
             .limit(20)
             .lean(),
 
@@ -71,7 +73,7 @@ class TaskDashboardService {
             completedAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
             isDeleted: false,
           })
-            .sort({ completedAt: -1 })
+            .sort({ completedAt: -1, _id: -1 })
             .limit(10)
             .lean(),
         ]);
@@ -83,11 +85,13 @@ class TaskDashboardService {
   }
 
   async getStats(userId, { projectId, orderId } = {}) {
-    const contextKey = [projectId || 'all-projects', orderId || 'all-orders'].join(':');
-    const cacheKey = `tasks:stats:${userId}:${contextKey}`;
+    const scope = { userId: String(userId), projectId: projectId || null, orderId: orderId || null };
 
-    return cacheManager.getOrSet(
-      cacheKey,
+    // Four index-only counts (COUNT_SCAN / covered IXSCAN on the assignee indexes):
+    // measured faster than one $group pass, which must FETCH every task of the user.
+    return taskCache.getOrSet(
+      'stats',
+      scope,
       async () => {
         const Task = (await import('./task.model.js')).default;
         const now = new Date();

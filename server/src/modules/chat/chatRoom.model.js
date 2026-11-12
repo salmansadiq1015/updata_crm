@@ -11,7 +11,9 @@ const chatRoomSchema = new Schema({
   customerId:      { type: Schema.Types.ObjectId, ref: 'Customer', default: null },
   teamId:          { type: Schema.Types.ObjectId, default: null },
   departmentId:    { type: Schema.Types.ObjectId, default: null },
-  members:         [{ userId: { type: Schema.Types.ObjectId, ref: 'User' }, joinedAt: { type: Date, default: Date.now } }],
+  // lastReadAt: read horizon written by markRoomRead — every countable message (not own, not
+  // deleted) sent before it is already in readBy, so unread counts / mark-read only scan newer ones.
+  members:         [{ userId: { type: Schema.Types.ObjectId, ref: 'User' }, joinedAt: { type: Date, default: Date.now }, lastReadAt: { type: Date } }],
   createdBy:       { type: Schema.Types.ObjectId, ref: 'User' },
   lastMessageId:   { type: Schema.Types.ObjectId, ref: 'ChatMessage', default: null },
   lastMessageAt:   { type: Date, default: null },

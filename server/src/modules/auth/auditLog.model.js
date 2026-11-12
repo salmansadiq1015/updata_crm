@@ -61,6 +61,9 @@ auditLogSchema.index({ userId: 1, timestamp: -1 });
 auditLogSchema.index({ eventType: 1, timestamp: -1 });
 auditLogSchema.index({ timestamp: -1 });
 auditLogSchema.index({ result: 1, timestamp: -1 });
+// Dashboard audit window: trend + result/event/module breakdowns answered from the index
+// alone (covered, no document fetch) — migration 057.
+auditLogSchema.index({ timestamp: 1, result: 1, eventType: 1, module: 1 }, { name: 'dashboard_audit_window' });
 
 // TTL index for automatic retention cleanup
 const retentionSeconds = (config.audit?.retentionDays || 730) * 86400;

@@ -8,6 +8,9 @@ import { AiChatMain } from './ai-chat-main';
 import { generateId } from '@/lib/utils/ids';
 import { buildAiRouteContext } from '../../utils/ai-route-context';
 import { useLiveVoiceStore } from '../../voice-live/live-voice-store';
+import { MessagesSquare, Plus, Sparkles } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { BandChip, PageBand, heroButton } from '@/shared/components/page-hero';
 
 function newThreadId() {
   return generateId();
@@ -20,6 +23,7 @@ function replacePath(path) {
 
 export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } = {}) {
   const pathname = usePathname();
+  const { t } = useLanguage();
   // selectedThreadId = thread currently shown in main area
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ?? null);
   // currentThreadId = thread new messages are sent into (may differ from selected while browsing history)
@@ -82,7 +86,20 @@ export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } 
   }, [initialPrompt, dispatch]);
 
   return (
-    <div className="flex h-full bg-background overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:gap-4 sm:p-4">
+      <div className={selectedThreadId ? 'hidden md:block' : undefined}>
+        <PageBand
+          id="ai-assistant-title"
+          art="/hero/ai"
+          icon={Sparkles}
+          eyebrow={t('aiHero.eyebrow', 'AI assistant')}
+          title={t('aiHero.title', 'Ask, plan and act — in plain language.')}
+          subtitle={t('aiHero.subtitle', 'Your assistant reads the CRM, drafts the work and asks before it changes anything.')}
+          chips={<BandChip icon={MessagesSquare} value={chat.threads?.length ?? 0} label={t('aiHero.threads', 'recent conversations')} />}
+          actions={<button type="button" className={heroButton.primary} onClick={handleNewChat}><Plus aria-hidden="true" />{t('aiHero.new', 'New conversation')}</button>}
+        />
+      </div>
+    <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-background shadow-[0_8px_30px_-18px_rgba(15,23,42,0.35)]">
       <AiChatSidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((v) => !v)}
@@ -115,6 +132,7 @@ export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } 
         voiceSession={chat.voiceSession}
         onThreadSelected={handleThreadSelected}
       />
+    </div>
     </div>
   );
 }

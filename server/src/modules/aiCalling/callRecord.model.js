@@ -206,6 +206,8 @@ callRecordSchema.index({ createdBy: 1, 'intelligence.pendingReview': 1, endedAt:
 // without an in-memory sort, and per-agent analytics over its campaigns (SORT_MERGE on $in).
 callRecordSchema.index({ createdBy: 1, createdAt: -1 }, { name: 'owner_recent_calls' });
 callRecordSchema.index({ createdBy: 1, campaignId: 1, createdAt: -1 }, { name: 'owner_campaign_calls' });
+// Mobile dashboard "calls completed today" (owner + endedAt range) — migration 057.
+callRecordSchema.index({ createdBy: 1, endedAt: 1 }, { name: 'dashboard_owner_ended' });
 callRecordSchema.index({ 'handoff.offeredTo': 1, 'handoff.status': 1 }, { partialFilterExpression: { 'handoff.status': 'ringing' }, name: 'handoff_ringing' });
 
 export default mongoose.model('CallRecord', callRecordSchema);

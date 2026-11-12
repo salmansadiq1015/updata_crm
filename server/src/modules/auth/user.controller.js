@@ -96,6 +96,15 @@ class UserController {
     }
   }
 
+  /** GET /users/stats — directory-wide KPIs (not just the current page). */
+  async stats(req, res, next) {
+    try {
+      return res.success({ data: await userService.getStats() });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async assignmentTargets(req, res, next) {
     try {
       const targets = await userService.listAssignmentTargets();
@@ -176,6 +185,8 @@ class UserController {
 
       // Invalidate user cache so fetchMe returns fresh data with new avatarFileId
       await cacheManager.del(`auth:user:${targetUserId}`);
+      // The user list/directory embed avatarFileId.
+      await userService._invalidateListCache();
 
       // Return the presigned URL for immediate use
       const avatarUrl = await fileService.getDownloadUrl(result._id);
@@ -215,6 +226,7 @@ class UserController {
 
       // Invalidate user cache so fetchMe returns fresh data without avatar
       await cacheManager.del(`auth:user:${targetUserId}`);
+      await userService._invalidateListCache();
 
       return res.success({ message: 'Avatar removed successfully' });
     } catch (err) {

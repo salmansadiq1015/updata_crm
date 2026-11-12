@@ -34,6 +34,7 @@ export const ENDPOINTS = Object.freeze({
   },
   USERS: {
     LIST: '/users',
+    STATS: '/users/stats',
     DIRECTORY: '/users/directory',
     ASSIGNMENT_TARGETS: '/users/assignment-targets',
     BY_ID: (id) => `/users/${id}`,

@@ -90,7 +90,7 @@ class ScheduleRepository {
         populate: { path: 'siteId', select: 'name street postalCode city' },
       })
       .populate({ path: 'responsibleTeamId', select: 'firstName lastName' })
-      .sort({ startDate: 1, milestoneDate: 1 })
+      .sort({ startDate: 1, milestoneDate: 1, _id: 1 })
       .lean();
   }
 

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import calendarCache from './calendarCache.js';
 
 export const AVAILABILITY_TYPES = ['WORKING', 'VACATION', 'SICK', 'PUBLIC_HOLIDAY', 'COMPANY_CLOSURE', 'OTHER_ABSENCE'];
 
@@ -43,6 +44,9 @@ const employeeAvailabilitySchema = new mongoose.Schema(
 
 // --- Indexes ---
 employeeAvailabilitySchema.index({ employeeId: 1, date: 1 }, { unique: true });
+
+// Any write invalidates the cached calendar ranges (calendarCache.js).
+calendarCache.registerInvalidation(employeeAvailabilitySchema);
 
 const EmployeeAvailability = mongoose.model('EmployeeAvailability', employeeAvailabilitySchema);
 export default EmployeeAvailability;

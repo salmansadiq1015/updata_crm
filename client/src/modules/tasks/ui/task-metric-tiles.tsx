@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 export type TaskMetricFilter = 'open' | 'completedThisWeek' | 'overdue' | null;
 
 const ACCENTS = {
-  violet: { text: 'text-violet-600 dark:text-violet-400', surface: 'bg-violet-500/10', border: 'border-violet-500/20' },
+  violet: { text: 'text-blue-600 dark:text-sky-300', surface: 'bg-blue-500/10', border: 'border-blue-500/20' },
   emerald: { text: 'text-emerald-600 dark:text-emerald-400', surface: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   rose: { text: 'text-rose-600 dark:text-rose-400', surface: 'bg-rose-500/10', border: 'border-rose-500/20' },
   sky: { text: 'text-sky-600 dark:text-sky-400', surface: 'bg-sky-500/10', border: 'border-sky-500/20' },

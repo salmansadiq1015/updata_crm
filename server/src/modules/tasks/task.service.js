@@ -1,7 +1,7 @@
 import taskRepository from './task.repository.js';
 import taskListRepository from './taskList.repository.js';
 import taskAccessService from './taskAccess.service.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
+import taskCache from './taskCache.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
@@ -11,7 +11,6 @@ import { TASK_STATUSES, MAX_SUBTASK_DEPTH } from './task.model.js';
 
 // Statuses that count as "offen" for an object's task overview.
 const OPEN_TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD'];
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
@@ -118,23 +117,23 @@ class TaskService {
   }
 
   async getById(id, userId, { isAdmin = false } = {}) {
-    const cacheKey = `tasks:task:${id}`;
-    const task = await cacheManager.getOrSet(
-      cacheKey,
+    const task = await taskCache.getOrSet(
+      'task',
+      String(id),
       async () => {
         const t = await taskRepository.findById(id);
         if (!t) return null;
 
         // Lazy aggregation for counts
-        const [subtasks, notes, attachments] = await Promise.all([
-          taskRepository.findByParentId(id),
+        const [subtaskCount, notes, attachments] = await Promise.all([
+          taskRepository.countByParentId(id),
           this._countNotes(id),
           this._countAttachments(id),
         ]);
 
         return {
           ...t,
-          subtaskCount: subtasks.length,
+          subtaskCount,
           noteCount: notes,
           attachmentCount: attachments,
         };
@@ -214,39 +213,25 @@ class TaskService {
   }
 
   async list(queryParams, userId, { isAdmin = false } = {}) {
-    const { cursor, limit, sortBy, sortOrder, ...filters } = queryParams;
+    const { cursor, limit, sortBy, sortOrder, ...rawFilters } = queryParams;
+    const filters = Object.fromEntries(Object.entries(rawFilters).filter(([, v]) => v !== undefined));
 
-    // Admins see everything — no access filter applied
-    if (isAdmin) {
-      const filterKey = Object.entries(filters)
-        .filter(([, v]) => v !== undefined)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}=${v}`)
-        .join('&');
-      const cacheKey = `tasks:tasks:list:admin:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${filterKey}`;
-      return cacheManager.getOrSet(
-        cacheKey,
-        () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters }),
-        LIST_TTL,
-      );
-    }
-
-    // Non-admins get central visibility: all non-locked tasks, plus their own
-    // locked ones (the repository access filter enforces this). Locked tasks of
-    // other users are excluded, so no per-list access check is needed here.
-    const scopedFilters = {
-      ...filters,
-      accessUserId: userId,
+    // Admins see everything — no access filter applied. Non-admins get central
+    // visibility: all non-locked tasks, plus their own locked ones (the repository
+    // access filter enforces this), so no per-list access check is needed here.
+    const scopedFilters = isAdmin ? filters : { ...filters, accessUserId: userId };
+    const scope = {
+      viewer: isAdmin ? 'admin' : String(userId),
+      cursor: cursor || null,
+      limit,
+      sortBy,
+      sortOrder,
+      filters,
     };
-    const filterKey = Object.entries(filters)
-      .filter(([, v]) => v !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('&');
-    const cacheKey = `tasks:tasks:list:${userId}:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${filterKey}`;
 
-    return cacheManager.getOrSet(
-      cacheKey,
+    return taskCache.getOrSet(
+      'list',
+      scope,
       () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters: scopedFilters }),
       LIST_TTL,
     );
@@ -1197,12 +1182,17 @@ class TaskService {
     }
   }
 
-  async _invalidateTaskCache(id) {
-    await cacheManager.del(`tasks:task:${id}`);
+  // Task reads are cached under one write generation (taskCache.js). The Task /
+  // TaskNote / TaskAttachment model hooks already bump it on every write; these
+  // explicit bumps keep the call sites self-documenting and cover raw-driver paths.
+  // (Previously: a Redis SCAN + a full L1 flush — every module's L1 — per write, and
+  // the dashboard/stats tiles were never invalidated at all.)
+  async _invalidateTaskCache(_id) {
+    await taskCache.bump();
   }
 
-  async _invalidateListTasksCache(listId) {
-    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}tasks:tasks:list:*`);
+  async _invalidateListTasksCache(_listId) {
+    await taskCache.bump();
   }
 }
 

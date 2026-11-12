@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { HeroStat } from '@/shared/components/hero-art';
 import { ArrowUpRight, Bot, PhoneCall, PhoneIncoming, UserPlus, Users, FolderKanban, FileText, ClipboardList, CalendarClock, WalletCards, Radar, MessageSquare, ChevronDown } from 'lucide-react';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { navSectionDefs } from '@/layout/navigation';
@@ -34,6 +35,19 @@ export function IntelligenceSummary({ query, t, locale, onSelect }) {
       })}
     </div>
   </section>;
+}
+
+/** The same four AI & growth figures as glass tiles for the page header (PageHero stats). */
+export function IntelligenceHeroStats({ query, t, locale, onSelect }) {
+  const { hasPermission } = usePermissions();
+  const items = INTELLIGENCE.filter(item => hasPermission(item.permission));
+  return items.map(({ id, icon, metric, hint }) => {
+    const section = query.data?.[id];
+    const value = section?.available ? section.metrics?.[metric] : null;
+    return <button type="button" key={id} onClick={() => onSelect(id)} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50" aria-label={`${t('dashboard.intelligence.viewAnalytics')}: ${t(`dashboard.intelligence.${id}`)}`}>
+      <HeroStat icon={icon} label={t(`dashboard.intelligence.${id}`)} value={value == null ? '—' : formatDashboardNumber(value, locale)} hint={section?.error || query.isError ? t('dashboard.intelligence.unavailable') : t(`dashboard.intelligence.${hint}`)} loading={query.isLoading} />
+    </button>;
+  });
 }
 
 export function FeatureOverview({ data, intelligence, t, locale }) {

@@ -2,6 +2,7 @@ import roleRepository from './role.repository.js';
 import permissionRepository from './permission.repository.js';
 import userRepository from './user.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
+import { invalidateUserListCache } from './userListCache.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
@@ -150,6 +151,8 @@ class RoleService {
   async _invalidateCache() {
     await cacheManager.del('auth:roles:all');
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:role:*`);
+    // User list rows embed the populated role name; the stats include the role count.
+    await invalidateUserListCache();
   }
 
   /**

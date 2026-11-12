@@ -6,10 +6,10 @@ import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ClipboardList, RefreshCw, X } from 'lucide-react';
+import { BarChart3, ChevronDown, ClipboardList, ListTodo, RefreshCw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTaskAnalyticsPreference } from '../hooks/use-task-analytics-preference';
 import { TaskMetricTiles, type TaskMetricFilter } from './task-metric-tiles';
+import { PageBand, heroButton } from '@/shared/components/page-hero';
 import { TaskTimeReport } from './task-time-report';
 import { TaskDashboardPage } from './task-dashboard-page';
 import { TaskBulkActionBar } from './task-bulk-action-bar';
@@ -81,7 +81,8 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   }, [setSidebarCollapsed]);
   const setSearch = useTaskWorkspaceStore((state) => state.setSearch);
   const setStatus = useTaskWorkspaceStore((state) => state.setStatus);
-  const [analyticsOpen, setAnalyticsOpen] = useTaskAnalyticsPreference();
+  // Two tabs: the task list (default) and the analytics that used to sit above it.
+  const [tab, setTab] = useState<'tasks' | 'analytics'>('tasks');
   const [timeReportOpen, setTimeReportOpen] = useState(false);
 
   // Which tile is driving the list. Derived rather than stored, so the tiles
@@ -92,6 +93,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
 
   const applyMetricFilter = (filter: TaskMetricFilter) => {
     clearFilters();
+    setTab('tasks'); // a tile filters the list, so show the list
     if (!filter) return;
     setAssigneeFilter('ME');
     setSavedView(filter === 'open' ? 'active' : filter);
@@ -289,94 +291,101 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
       />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-4 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary"><ClipboardList className="h-5 w-5" /></span>
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold tracking-tight">{(listsQuery.data ?? []).find((list) => list.id === listId)?.name ?? t('tasks.title', 'Tasks')}</h1>
-              <p className="hidden text-xs text-muted-foreground sm:block">{t('tasks.workspaceSubtitle', 'Plan, prioritize, and move work forward.')}</p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" disabled={tasksQuery.isFetching} onClick={() => void queryClient.invalidateQueries({ queryKey: ['tasks'] })}>
-            <RefreshCw className={cn('h-3.5 w-3.5', tasksQuery.isFetching && 'animate-spin')} />
-            {t('common.refresh', 'Refresh')}
-          </Button>
-        </header>
-        <TaskCommandBar
-          activeView={activeView}
-          search={search}
-          status={status}
-          priority={priority}
-          assigneeFilter={assigneeFilter}
-          users={usersQuery.data ?? []}
-          currentUserId={currentUserId}
-          isStale={tasksQuery.isStale}
-          hasError={tasksQuery.isError}
-          isFetching={tasksQuery.isFetching}
-          onViewChange={setActiveView}
-          onSearchChange={setSearch}
-          onStatusChange={setStatus}
-          onPriorityChange={setPriority}
-          onAssigneeFilterChange={setAssigneeFilter}
-          department={department}
-          onDepartmentChange={setDepartment}
-          onCreateTask={(title) => mutations.createTask.mutateAsync(title)}
-          pageSize={pageSize}
-          onPageSizeChange={setPageSize}
-        />
-        {/* The former dashboard, merged in: the status tiles head the list and
-            filter it, the analysis blocks fold away. */}
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="space-y-3 bg-muted/15 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
-            <h2 className="font-semibold text-foreground">{t('tasks.personalOverview', 'Your workload')}</h2>
-            <span>{t('tasks.personalScope', 'Personal totals across all lists')}</span>
-          </div>
-          <TaskMetricTiles active={metricFilter} onSelect={applyMetricFilter} />
-
-          <button
-            type="button"
-            aria-expanded={analyticsOpen}
-            aria-controls="task-workspace-analysis"
-            onClick={() => setAnalyticsOpen(!analyticsOpen)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', analyticsOpen && 'rotate-180')} />
-            {analyticsOpen
-              ? t('tasks.dashboard.hideAnalysis', 'Analyse ausblenden')
-              : t('tasks.dashboard.showAnalysis', 'Analyse anzeigen')}
-          </button>
-
-          {analyticsOpen && <div id="task-workspace-analysis"><TaskDashboardPage embedded /></div>}
-          <div><button type="button" aria-expanded={timeReportOpen} aria-controls="task-workspace-time-report" onClick={() => setTimeReportOpen(value => !value)} className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"><ChevronDown className={cn('h-3.5 w-3.5 transition-transform', timeReportOpen && 'rotate-180')} />{t('tasks.time.report', 'Task time report')}</button></div>
-          {timeReportOpen && <div id="task-workspace-time-report"><TaskTimeReport /></div>}
+        <div className="shrink-0 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
+          <PageBand
+            id="tasks-title"
+            art="/hero/tasks"
+            icon={ClipboardList}
+            eyebrow={t('tasks.title', 'Tasks')}
+            title={(listsQuery.data ?? []).find((list) => list.id === listId)?.name ?? t('tasksHero.title', 'Every task, moving forward.')}
+            subtitle={t('tasks.workspaceSubtitle', 'Plan, prioritize, and move work forward.')}
+            actions={<button type="button" className={heroButton.ghost} disabled={tasksQuery.isFetching} onClick={() => void queryClient.invalidateQueries({ queryKey: ['tasks'] })}><RefreshCw aria-hidden="true" className={cn(tasksQuery.isFetching && 'animate-spin')} />{t('common.refresh', 'Refresh')}</button>}
+          />
+        </div>
+        <div role="tablist" aria-label={t('tasks.tabs.aria', 'Tasks and analytics')} className="flex shrink-0 gap-1 border-b border-border px-4 sm:px-5">
+          {([
+            { id: 'tasks', icon: ListTodo, label: t('tasks.tabs.tasks', 'Tasks') },
+            { id: 'analytics', icon: BarChart3, label: t('tasks.tabs.analytics', 'Analytics') },
+          ] as const).map(({ id, icon: Icon, label }) => (
+            <button key={id} type="button" role="tab" id={`tasks-tab-${id}`} aria-selected={tab === id} aria-controls={`tasks-panel-${id}`} onClick={() => setTab(id)}
+              className={cn('relative -mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+                tab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+              <Icon className={cn('h-4 w-4', tab === id && 'text-primary')} aria-hidden="true" />
+              {label}
+              {id === 'tasks' && <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">{tasks.length}{tasksQuery.hasNextPage ? '+' : ''}</span>}
+            </button>
+          ))}
         </div>
 
-        <main aria-label={t('tasks.title', 'Tasks')} className="min-h-80 px-4 pb-4 sm:px-5 sm:pb-5">
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-theme-sm">
-            <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-              <span className="text-xs font-medium text-muted-foreground" aria-live="polite">{t('tasks.loadedCount', '{count} tasks loaded', { count: tasks.length })}{tasksQuery.hasNextPage ? '+' : ''}</span>
-              {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />{t('tasks.clearFilters', 'Clear filters')}</Button>}
-            </div>
-            {tasksQuery.isError && tasksQuery.data && <div role="status" className="flex items-center justify-between gap-3 border-b border-warning/20 bg-warning/5 px-4 py-3 text-xs text-muted-foreground">
-              {t('tasks.cachedWarning', 'Showing saved tasks. Refresh to try loading the latest changes.')}
-              <Button size="sm" variant="outline" onClick={() => void tasksQuery.refetch()} disabled={tasksQuery.isFetching}>{t('common.retry', 'Retry')}</Button>
-            </div>}
-            <div className="h-[max(24rem,55vh)] min-h-80">
-            {content}
-            </div>
-          </div>
-        </main>
-        </div>
-        {/* Microsoft-To-Do-style capture row: always available in the list
-            view, including when the list is empty. */}
-        {activeView === 'list' && (
-          <div className="shrink-0 border-t border-border bg-card px-3 py-2">
-            <TaskQuickAdd
-              asRow
-              onCreate={(title) => mutations.createTask.mutateAsync(title)}
-              label={t('tasks.addTaskRow', 'Aufgabe hinzufügen')}
+        {tab === 'tasks' ? (
+          <>
+            <TaskCommandBar
+              activeView={activeView}
+              search={search}
+              status={status}
+              priority={priority}
+              assigneeFilter={assigneeFilter}
+              users={usersQuery.data ?? []}
+              currentUserId={currentUserId}
+              isStale={tasksQuery.isStale}
+              hasError={tasksQuery.isError}
+              isFetching={tasksQuery.isFetching}
+              onViewChange={setActiveView}
+              onSearchChange={setSearch}
+              onStatusChange={setStatus}
+              onPriorityChange={setPriority}
+              onAssigneeFilterChange={setAssigneeFilter}
+              department={department}
+              onDepartmentChange={setDepartment}
+              onCreateTask={(title) => mutations.createTask.mutateAsync(title)}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
             />
+            <main id="tasks-panel-tasks" role="tabpanel" aria-labelledby="tasks-tab-tasks" className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+              <div className="flex min-h-80 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-theme-sm">
+                <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+                  <span className="text-xs font-medium text-muted-foreground" aria-live="polite">{t('tasks.loadedCount', '{count} tasks loaded', { count: tasks.length })}{tasksQuery.hasNextPage ? '+' : ''}</span>
+                  {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />{t('tasks.clearFilters', 'Clear filters')}</Button>}
+                </div>
+                {tasksQuery.isError && tasksQuery.data && <div role="status" className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/20 bg-warning/5 px-4 py-3 text-xs text-muted-foreground">
+                  {t('tasks.cachedWarning', 'Showing saved tasks. Refresh to try loading the latest changes.')}
+                  <Button size="sm" variant="outline" onClick={() => void tasksQuery.refetch()} disabled={tasksQuery.isFetching}>{t('common.retry', 'Retry')}</Button>
+                </div>}
+                <div className="min-h-0 flex-1">
+                  {content}
+                </div>
+              </div>
+            </main>
+            {/* Microsoft-To-Do-style capture row: always available in the list
+                view, including when the list is empty. */}
+            {activeView === 'list' && (
+              <div className="shrink-0 border-t border-border bg-card px-3 py-2">
+                <TaskQuickAdd
+                  asRow
+                  onCreate={(title) => mutations.createTask.mutateAsync(title)}
+                  label={t('tasks.addTaskRow', 'Aufgabe hinzufügen')}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div id="tasks-panel-analytics" role="tabpanel" aria-labelledby="tasks-tab-analytics" className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+            <div className="space-y-4 p-4 sm:p-5">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
+                  <h2 className="font-semibold text-foreground">{t('tasks.personalOverview', 'Your workload')}</h2>
+                  <span>{t('tasks.personalScope', 'Personal totals across all lists')}</span>
+                </div>
+                <TaskMetricTiles active={metricFilter} onSelect={applyMetricFilter} />
+              </div>
+              <TaskDashboardPage embedded />
+              <div>
+                <button type="button" aria-expanded={timeReportOpen} aria-controls="task-workspace-time-report" onClick={() => setTimeReportOpen((value) => !value)} className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', timeReportOpen && 'rotate-180')} />{t('tasks.time.report', 'Task time report')}
+                </button>
+              </div>
+              {timeReportOpen && <div id="task-workspace-time-report"><TaskTimeReport /></div>}
+            </div>
           </div>
         )}
       </section>

@@ -29,10 +29,16 @@ function isAdmin(user) {
 }
 
 async function findUsersForTarget(targetId) {
-  if (!targetId) return [];
-  const target = String(targetId);
-  const clauses = [{ department: target }];
-  if (mongoose.isValidObjectId(target)) clauses.push({ 'preferences.preferredDepartmentId': target });
+  return findUsersForTargets([targetId]);
+}
+
+/** Active users of any of the targets (department name/id or preferred department id) in one query. */
+async function findUsersForTargets(targetIds) {
+  const targets = [...new Set((targetIds || []).filter(Boolean).map(String))];
+  if (!targets.length) return [];
+  const objectIds = targets.filter((target) => mongoose.isValidObjectId(target));
+  const clauses = [{ department: { $in: targets } }];
+  if (objectIds.length) clauses.push({ 'preferences.preferredDepartmentId': { $in: objectIds } });
 
   const users = await User.find({
     isDeleted: false,
@@ -44,6 +50,7 @@ async function findUsersForTarget(targetId) {
 }
 
 async function collectAssignments(assignments, set) {
+  const targets = [];
   for (const assignment of assignments || []) {
     addId(set, assignment.employeeId);
     addId(set, assignment.createdBy);
@@ -52,10 +59,12 @@ async function collectAssignments(assignments, set) {
     if (assignment.assignmentTargetType === 'EMPLOYEE') {
       addId(set, assignment.assignmentTargetId);
     } else if (assignment.assignmentTargetId) {
-      const targetUsers = await findUsersForTarget(assignment.assignmentTargetId);
-      targetUsers.forEach((id) => addId(set, id));
+      targets.push(assignment.assignmentTargetId);
     }
   }
+  // One query for all team/department targets instead of one per assignment.
+  const targetUsers = await findUsersForTargets(targets);
+  targetUsers.forEach((id) => addId(set, id));
 }
 
 const chatAccessService = {

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { cachedLeadAggregate } from '../crm/leadCache.js';
 
 const TIMEZONE = 'Europe/Zurich';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -27,50 +28,99 @@ const OPEN_INVOICE_STATUSES = ['DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', '
 const OPEN_AP_STATUSES = ['RECORDED', 'APPROVED', 'PARTIALLY_PAID', 'DISPUTED'];
 const ACTIVE_ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED'];
 
+/* ------------------------------------------------------------------------- *
+ * Business-calendar date math
+ *
+ * Day/week/month boundaries are computed in the business time zone
+ * (Europe/Zurich) — the same zone MongoDB uses for `$dateToString` bucket
+ * keys — independent of the server process TZ. Mixing the two (local-TZ
+ * boundaries vs Zurich bucket keys) silently dropped late-evening records from
+ * the trend and shifted period totals on any host not running in Zurich time.
+ * A "civil date" is a plain { year, month (1-12), day } in that zone.
+ * ------------------------------------------------------------------------- */
+
+const zoneFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hourCycle: 'h23',
+});
+const dayLabelFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+const monthLabelFormatter = new Intl.DateTimeFormat('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+
+function zonedParts(instant) {
+  const parts = {};
+  for (const part of zoneFormatter.formatToParts(instant)) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  return parts;
+}
+
+/** Offset (ms) of the business zone from UTC at `epochMs`. */
+function zoneOffsetAt(epochMs) {
+  const wholeSeconds = Math.floor(epochMs / 1000) * 1000;
+  const p = zonedParts(new Date(wholeSeconds));
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - wholeSeconds;
+}
+
+export function civilDate(value) {
+  const p = zonedParts(new Date(value));
+  return { year: p.year, month: p.month, day: p.day };
+}
+
+/** Business date (YYYY-MM-DD, Europe/Zurich) — cache keys roll over at local midnight. */
+export function businessDateKey(now = new Date()) {
+  const { year, month, day } = civilDate(now);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function civilFromUtcMs(epochMs) {
+  const date = new Date(epochMs);
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function civilUtcMs(civil) {
+  return Date.UTC(civil.year, civil.month - 1, civil.day);
+}
+
+function addCivilDays(civil, days) {
+  return civilFromUtcMs(Date.UTC(civil.year, civil.month - 1, civil.day + days));
+}
+
+/** Calendar-month arithmetic, clamping to the target month's last day (31 Mar - 1m = 28/29 Feb). */
+function addCivilMonths(civil, months) {
+  const first = civilFromUtcMs(Date.UTC(civil.year, civil.month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(first.year, first.month, 0)).getUTCDate();
+  return { ...first, day: Math.min(civil.day, lastDay) };
+}
+
+/** UTC instant of 00:00 business time on `civil` (midnight always exists in Europe/Zurich). */
+function zonedMidnight(civil) {
+  const wallClock = civilUtcMs(civil);
+  let instant = wallClock - zoneOffsetAt(wallClock);
+  instant = wallClock - zoneOffsetAt(instant);
+  return new Date(instant);
+}
+
 function startOfDay(value) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return zonedMidnight(civilDate(value));
 }
 
 function endOfDay(value) {
-  const date = new Date(value);
-  date.setHours(23, 59, 59, 999);
-  return date;
+  return new Date(zonedMidnight(addCivilDays(civilDate(value), 1)).getTime() - 1);
 }
 
-function subtractDays(value, days) {
-  const date = new Date(value);
-  date.setDate(date.getDate() - days);
-  return date;
+function weekStart(civil) {
+  const weekday = new Date(civilUtcMs(civil)).getUTCDay();
+  return addCivilDays(civil, -(weekday === 0 ? 6 : weekday - 1));
 }
 
-function subtractMonths(value, months) {
-  const date = new Date(value);
-  date.setMonth(date.getMonth() - months);
-  return date;
-}
-
-function addBucket(value, granularity) {
-  const date = new Date(value);
-  if (granularity === 'month') {
-    date.setMonth(date.getMonth() + 1);
-    return startOfDay(date);
-  }
-  date.setDate(date.getDate() + (granularity === 'week' ? 7 : 1));
-  return startOfDay(date);
-}
-
-function getWeekStart(value) {
-  const date = startOfDay(value);
-  const day = date.getDay();
-  const offset = day === 0 ? 6 : day - 1;
-  date.setDate(date.getDate() - offset);
-  return date;
-}
-
-function getIsoWeekKey(value) {
-  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+function getIsoWeekKey(civil) {
+  const date = new Date(civilUtcMs(civil));
   const day = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
@@ -78,31 +128,29 @@ function getIsoWeekKey(value) {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-function getBucketKey(value, granularity) {
-  const date = granularity === 'week' ? getWeekStart(value) : startOfDay(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  if (granularity === 'month') return `${year}-${month}`;
-  if (granularity === 'week') return getIsoWeekKey(date);
-  return `${year}-${month}-${day}`;
+function getBucketKey(civil, granularity) {
+  const month = String(civil.month).padStart(2, '0');
+  if (granularity === 'month') return `${civil.year}-${month}`;
+  if (granularity === 'week') return getIsoWeekKey(civil);
+  return `${civil.year}-${month}-${String(civil.day).padStart(2, '0')}`;
 }
 
 function getBucketLabel(key, granularity) {
   if (granularity === 'month') {
     const [year, month] = key.split('-').map(Number);
-    return new Intl.DateTimeFormat('en-GB', { month: 'short', year: '2-digit' }).format(
-      new Date(year, month - 1, 1),
-    );
+    return monthLabelFormatter.format(new Date(Date.UTC(year, month - 1, 1)));
   }
   if (granularity === 'week') return key.replace('-W', ' W');
   const [year, month, day] = key.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(
-    new Date(year, month - 1, day),
-  );
+  return dayLabelFormatter.format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+/**
+ * Period filters. The current period is the last N calendar days / months
+ * ending today (business time); the previous period is the equally long span
+ * immediately before it, so period-over-period deltas compare like with like.
+ * `now` is carried along (not sent to clients) for "as of now" cut-offs.
+ */
 export function normalizeAnalyticsFilters(raw = {}, now = new Date()) {
   if (raw?.startDate instanceof Date && raw?.endDate instanceof Date) {
     return raw;
@@ -110,14 +158,14 @@ export function normalizeAnalyticsFilters(raw = {}, now = new Date()) {
 
   const range = DASHBOARD_RANGE_PRESETS[raw?.range] ? raw.range : '30d';
   const preset = DASHBOARD_RANGE_PRESETS[range];
-  const endDate = endOfDay(now);
-  const startDate = preset.months
-    ? startOfDay(subtractMonths(endDate, preset.months))
-    : startOfDay(subtractDays(endDate, preset.days - 1));
-  const previousEndDate = new Date(startDate.getTime() - 1);
-  const previousStartDate = preset.months
-    ? startOfDay(subtractMonths(startDate, preset.months))
-    : startOfDay(subtractDays(startDate, preset.days));
+  const today = civilDate(now);
+  const startCivil = preset.months
+    ? addCivilDays(addCivilMonths(today, -preset.months), 1)
+    : addCivilDays(today, -(preset.days - 1));
+  const previousStartCivil = preset.months
+    ? addCivilMonths(startCivil, -preset.months)
+    : addCivilDays(startCivil, -preset.days);
+  const startDate = zonedMidnight(startCivil);
   const granularity = SUPPORTED_GRANULARITIES.has(raw?.granularity)
     ? raw.granularity
     : preset.defaultGranularity;
@@ -126,9 +174,10 @@ export function normalizeAnalyticsFilters(raw = {}, now = new Date()) {
     range,
     granularity,
     startDate,
-    endDate,
-    previousStartDate,
-    previousEndDate,
+    endDate: endOfDay(now),
+    previousStartDate: zonedMidnight(previousStartCivil),
+    previousEndDate: new Date(startDate.getTime() - 1),
+    now: new Date(now),
   };
 }
 
@@ -139,17 +188,31 @@ export function calculateDelta(current, previous) {
   return Math.round(((currentValue - previousValue) / previousValue) * 1000) / 10;
 }
 
-function createBuckets(filters) {
-  const buckets = [];
-  const first = filters.granularity === 'week'
-    ? getWeekStart(filters.startDate)
-    : startOfDay(filters.startDate);
+const bucketCache = new Map();
 
-  for (let cursor = first; cursor <= filters.endDate; cursor = addBucket(cursor, filters.granularity)) {
-    const key = getBucketKey(cursor, filters.granularity);
-    buckets.push({ key, label: getBucketLabel(key, filters.granularity) });
+/** Timeline buckets (memoized per period; callers copy before mutating). */
+function createBuckets(filters) {
+  const cacheKey = `${filters.granularity}:${filters.startDate.getTime()}:${filters.endDate.getTime()}`;
+  const cached = bucketCache.get(cacheKey);
+  if (cached) return cached;
+
+  const granularity = filters.granularity;
+  const last = civilUtcMs(civilDate(filters.endDate));
+  let cursor = civilDate(filters.startDate);
+  if (granularity === 'week') cursor = weekStart(cursor);
+  if (granularity === 'month') cursor = { ...cursor, day: 1 };
+
+  const buckets = [];
+  while (civilUtcMs(cursor) <= last) {
+    const key = getBucketKey(cursor, granularity);
+    buckets.push(Object.freeze({ key, label: getBucketLabel(key, granularity) }));
+    cursor = granularity === 'month'
+      ? addCivilMonths(cursor, 1)
+      : addCivilDays(cursor, granularity === 'week' ? 7 : 1);
   }
 
+  if (bucketCache.size > 64) bucketCache.clear();
+  bucketCache.set(cacheKey, buckets);
   return buckets;
 }
 
@@ -225,15 +288,6 @@ export function dateBucketExpression(field, granularity) {
   };
 }
 
-function groupByDate(field, granularity, accumulators) {
-  return {
-    $group: {
-      _id: dateBucketExpression(field, granularity),
-      ...accumulators,
-    },
-  };
-}
-
 function sumExpression(fields) {
   const fieldList = Array.isArray(fields) ? fields : [fields];
   return fieldList.reduceRight((fallback, field) => ({ $ifNull: [`$${field}`, fallback] }), 0);
@@ -242,14 +296,6 @@ function sumExpression(fields) {
 function roundMetric(value) {
   const number = Number(value) || 0;
   return Math.round(number * 100) / 100;
-}
-
-function countFrom(rows) {
-  return Number(rows?.[0]?.count) || 0;
-}
-
-function sumFrom(rows, key = 'value') {
-  return roundMetric(rows?.[0]?.[key]);
 }
 
 function normalizeBreakdown(rows = [], valueKey = 'count') {
@@ -268,17 +314,166 @@ function humanize(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-async function runAggregate(model, pipeline) {
-  const aggregate = model.aggregate(pipeline);
-  if (aggregate && typeof aggregate.allowDiskUse === 'function') {
-    return aggregate.allowDiskUse(true);
+/* ------------------------------------------------------------------------- *
+ * Query plumbing
+ *
+ * Every source is read with index-friendly queries: a bounded date window
+ * (`windowAggregate`) for period metrics/trends, one `$group` pass for status
+ * inventories, and `countDocuments` for plain counts. No `$facet` over a whole
+ * collection (a leading `$facet` cannot use an index and drags every document
+ * through every branch), no `$lookup`, no per-row queries.
+ *
+ * All dashboard DB work goes through one small concurrency gate so a cold
+ * snapshot never occupies the whole Mongo pool (maxPoolSize 10) and starves
+ * regular API requests.
+ * ------------------------------------------------------------------------- */
+
+const DB_CONCURRENCY = 4;
+let activeQueries = 0;
+const queryQueue = [];
+
+function acquireQuerySlot() {
+  if (activeQueries < DB_CONCURRENCY) {
+    activeQueries += 1;
+    return Promise.resolve();
   }
-  return aggregate;
+  return new Promise((resolve) => queryQueue.push(resolve));
 }
 
-async function runFacet(model, facets) {
-  const result = await runAggregate(model, [{ $facet: facets }]);
-  return result?.[0] || {};
+function releaseQuerySlot() {
+  const next = queryQueue.shift();
+  if (next) next();
+  else activeQueries -= 1;
+}
+
+async function gated(fn) {
+  await acquireQuerySlot();
+  try {
+    return await fn();
+  } finally {
+    releaseQuerySlot();
+  }
+}
+
+export async function runAggregate(model, pipeline) {
+  return gated(async () => {
+    const aggregate = model.aggregate(pipeline);
+    if (aggregate && typeof aggregate.allowDiskUse === 'function') {
+      return aggregate.allowDiskUse(true);
+    }
+    return aggregate;
+  });
+}
+
+export async function runCount(model, filter) {
+  return gated(async () => Number(await model.countDocuments(filter)) || 0);
+}
+
+const asExpression = (field) => (typeof field === 'string' ? `$${field}` : field);
+
+/** `field` (name or expression) is a BSON date inside [from, to] — the expression twin of a `$match` range. */
+function dateBetween(field, from, to) {
+  const value = asExpression(field);
+  return { $and: [{ $eq: [{ $type: value }, 'date'] }, { $gte: [value, from] }, { $lte: [value, to] }] };
+}
+
+/** `field` is a BSON date strictly before `bound` (null / missing never count). */
+function dateBefore(field, bound) {
+  const value = asExpression(field);
+  return { $and: [{ $eq: [{ $type: value }, 'date'] }, { $lt: [value, bound] }] };
+}
+
+/** `field` is a BSON date strictly after `bound`. */
+function dateAfter(field, bound) {
+  const value = asExpression(field);
+  return { $and: [{ $eq: [{ $type: value }, 'date'] }, { $gt: [value, bound] }] };
+}
+
+/**
+ * "As of now" cut-off for overdue / upcoming metrics. Overdue means due before
+ * this instant — the rule the Tasks and AR modules use — not "before the end of
+ * today", which counted everything due later today as already overdue.
+ */
+function asOf(filters) {
+  return filters.now instanceof Date ? filters.now : new Date();
+}
+
+function sumIf(condition, value = 1) {
+  return { $sum: { $cond: [condition, value, 0] } };
+}
+
+function inValues(field, values) {
+  return { $in: [`$${field}`, values] };
+}
+
+function toNumber(value) {
+  return Number(value) || 0;
+}
+
+/** Sum `keys` across grouped rows (optionally filtered). */
+function sumRows(rows, keys, predicate = () => true) {
+  const totals = Object.fromEntries(keys.map((key) => [key, 0]));
+  rows.forEach((row) => {
+    if (!predicate(row)) return;
+    keys.forEach((key) => {
+      totals[key] += toNumber(row[key]);
+    });
+  });
+  return totals;
+}
+
+/**
+ * Roll grouped rows up by `keyOf(row)` into breakdown rows `{ _id, count, value }`,
+ * sorted by `sortKey` desc with a deterministic id tie-break.
+ */
+function rollup(rows, keyOf, { count = 'count', value = null, predicate = () => true, sortKey = 'count', limit = null } = {}) {
+  const byKey = new Map();
+  rows.forEach((row) => {
+    if (!predicate(row)) return;
+    const id = keyOf(row) ?? null;
+    const mapKey = id === null ? '\u0000null' : String(id);
+    const entry = byKey.get(mapKey) || { _id: id, count: 0, value: 0 };
+    entry.count += toNumber(row[count]);
+    if (value) entry.value += toNumber(row[value]);
+    byKey.set(mapKey, entry);
+  });
+  const sorted = [...byKey.values()].sort((a, b) => (
+    (b[sortKey] - a[sortKey]) || String(a._id ?? '').localeCompare(String(b._id ?? ''))
+  ));
+  return limit ? sorted.slice(0, limit) : sorted;
+}
+
+/**
+ * One indexed pass over the period window. Documents in the current period are
+ * grouped per timeline bucket; documents in the previous period collapse into a
+ * single `_id: null` row. `field` must be indexed (optionally behind the
+ * equality prefix in `match`).
+ */
+async function windowAggregate(model, match, field, filters, accumulators, { previous = true } = {}) {
+  const rows = await runAggregate(model, [
+    {
+      $match: {
+        ...match,
+        [field]: { $gte: previous ? filters.previousStartDate : filters.startDate, $lte: filters.endDate },
+      },
+    },
+    {
+      $group: {
+        _id: {
+          $cond: [{ $gte: [`$${field}`, filters.startDate] }, dateBucketExpression(field, filters.granularity), null],
+        },
+        ...accumulators,
+      },
+    },
+  ]);
+  const keys = Object.keys(accumulators);
+  const trend = (rows || []).filter((row) => row?._id !== null && row?._id !== undefined);
+  const previousRow = (rows || []).find((row) => row?._id === null || row?._id === undefined) || {};
+  return {
+    trend,
+    current: sumRows(trend, keys),
+    previous: sumRows([previousRow], keys),
+  };
 }
 
 function getDashboardModels() {
@@ -315,10 +510,10 @@ async function getLegacyStats(models) {
   const todayEnd = endOfDay(new Date());
 
   const [customers, projects, openQuotes, todayTasks] = await Promise.all([
-    models.Customer.countDocuments({ isDeleted: false }),
-    models.Project.countDocuments({ isDeleted: false }),
-    models.Quotation.countDocuments({ isDeleted: false, status: { $in: OPEN_QUOTATION_STATUSES } }),
-    models.Task.countDocuments({
+    runCount(models.Customer, { isDeleted: false }),
+    runCount(models.Project, { isDeleted: false }),
+    runCount(models.Quotation, { isDeleted: false, status: { $in: OPEN_QUOTATION_STATUSES } }),
+    runCount(models.Task, {
       isDeleted: false,
       status: { $in: ['OPEN', 'IN_PROGRESS'] },
       dueDate: { $gte: todayStart, $lte: todayEnd },
@@ -326,6 +521,20 @@ async function getLegacyStats(models) {
   ]);
 
   return { customers, projects, openQuotes, todayTasks };
+}
+
+/**
+ * Lead counts per status for `match`. Leads are the one source with an exact
+ * write-generation cache (leadCache.js: every Lead write through Mongoose bumps
+ * it), so the O(leads) group is reused across viewers and endpoints until a lead
+ * actually changes. `cache: false` (injected test models) computes directly.
+ */
+export async function leadStatusCounts(Lead, match, { cache = true } = {}) {
+  const compute = async () => (await runAggregate(Lead, [
+    { $match: match },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ])) || [];
+  return cache ? cachedLeadAggregate('dashboard-status-counts', match, compute) : compute();
 }
 
 /**
@@ -345,16 +554,13 @@ export async function getMobileCrmStats(actor, dependencies = {}) {
   const actorId = new mongoose.Types.ObjectId(actor);
 
   const [leadRows, activeCampaigns, callsCompletedToday] = await Promise.all([
-    models.Lead.aggregate([
-      { $match: { isDeleted: false } },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]),
-    models.CallCampaign.countDocuments({
+    leadStatusCounts(models.Lead, { isDeleted: false }, { cache: !dependencies.models }),
+    runCount(models.CallCampaign, {
       createdBy: actorId,
       isTest: false,
       status: { $in: ['scheduled', 'running', 'paused'] },
     }),
-    models.CallRecord.countDocuments({
+    runCount(models.CallRecord, {
       createdBy: actorId,
       isTest: false,
       endedAt: { $gte: todayStart, $lte: todayEnd },
@@ -363,7 +569,7 @@ export async function getMobileCrmStats(actor, dependencies = {}) {
   ]);
 
   const leads = { total: 0, new: 0, contacted: 0, qualified: 0, unqualified: 0, converted: 0 };
-  for (const row of leadRows) {
+  for (const row of leadRows || []) {
     const count = Number(row?.count) || 0;
     if (Object.hasOwn(leads, row?._id)) leads[row._id] = count;
     leads.total += count;
@@ -381,531 +587,478 @@ export async function getMobileCrmStats(actor, dependencies = {}) {
 
 async function getCustomerAnalytics(Customer, filters) {
   const match = { isDeleted: false };
-  const facet = await runFacet(Customer, {
-    total: [{ $match: match }, { $count: 'count' }],
-    active: [{ $match: { ...match, status: 'active' } }, { $count: 'count' }],
-    newCurrent: [{ $match: { ...match, ...rangeMatch('createdAt', filters) } }, { $count: 'count' }],
-    newPrevious: [{ $match: { ...match, ...rangeMatch('createdAt', filters, true) } }, { $count: 'count' }],
-    byType: [
+  const [total, active, inventory, window] = await Promise.all([
+    runCount(Customer, match),
+    runCount(Customer, { ...match, status: 'active' }),
+    runAggregate(Customer, [
       { $match: match },
-      { $group: { _id: { $ifNull: ['$type', 'unknown'] }, count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    topCities: [
-      { $match: { ...match, city: { $nin: [null, ''] } } },
-      { $group: { _id: '$city', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 6 },
-    ],
-    trend: [
-      { $match: { ...match, ...rangeMatch('createdAt', filters) } },
-      groupByDate('createdAt', filters.granularity, { customers: { $sum: 1 } }),
-      { $sort: { _id: 1 } },
-    ],
-  });
+      { $group: { _id: { type: '$type', city: '$city' }, count: { $sum: 1 } } },
+    ]),
+    windowAggregate(Customer, match, 'createdAt', filters, { customers: { $sum: 1 } }),
+  ]);
 
-  const newCurrent = countFrom(facet.newCurrent);
-  const newPrevious = countFrom(facet.newPrevious);
+  const rows = inventory || [];
+  const newCurrent = window.current.customers;
+  const newPrevious = window.previous.customers;
 
   return {
-    total: countFrom(facet.total),
-    active: countFrom(facet.active),
+    total,
+    active,
     newCurrent,
     newPrevious,
     delta: calculateDelta(newCurrent, newPrevious),
-    byType: normalizeBreakdown(facet.byType),
-    topCities: normalizeBreakdown(facet.topCities),
-    trend: fillTimeline(facet.trend, filters, ['customers']),
+    byType: normalizeBreakdown(rollup(rows, (row) => row._id?.type ?? 'unknown')),
+    topCities: normalizeBreakdown(rollup(rows, (row) => row._id?.city, {
+      predicate: (row) => row._id?.city != null && row._id.city !== '',
+      limit: 6,
+    })),
+    trend: fillTimeline(window.trend, filters, ['customers']),
   };
 }
 
 async function getProjectAnalytics(Project, filters) {
   const match = { isDeleted: false };
-  const activeMatch = { ...match, status: { $in: ACTIVE_PROJECT_STATUSES } };
-  const facet = await runFacet(Project, {
-    total: [{ $match: match }, { $count: 'count' }],
-    active: [{ $match: activeMatch }, { $count: 'count' }],
-    newCurrent: [{ $match: { ...match, ...rangeMatch('createdAt', filters) } }, { $count: 'count' }],
-    newPrevious: [{ $match: { ...match, ...rangeMatch('createdAt', filters, true) } }, { $count: 'count' }],
-    completedCurrent: [
-      { $match: { ...match, status: { $in: ['COMPLETED', 'INVOICED'] }, ...rangeMatch('updatedAt', filters) } },
-      { $count: 'count' },
-    ],
-    budget: [
-      { $match: activeMatch },
-      { $group: { _id: null, value: { $sum: sumExpression('estimatedBudget') } } },
-    ],
-    overdue: [
-      { $match: { ...activeMatch, plannedEndDate: { $lt: filters.endDate } } },
-      { $count: 'count' },
-    ],
-    onHold: [{ $match: { ...match, status: 'ON_HOLD' } }, { $count: 'count' }],
-    byStatus: [
+  const budget = sumExpression('estimatedBudget');
+  const isActive = inValues('status', ACTIVE_PROJECT_STATUSES);
+  const [inventory, window] = await Promise.all([
+    runAggregate(Project, [
       { $match: match },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    byType: [
-      { $match: match },
-      { $group: { _id: '$projectType', count: { $sum: 1 }, value: { $sum: sumExpression('estimatedBudget') } } },
-      { $sort: { count: -1 } },
-    ],
-    trend: [
-      { $match: { ...match, ...rangeMatch('createdAt', filters) } },
-      groupByDate('createdAt', filters.granularity, {
-        projects: { $sum: 1 },
-        budget: { $sum: sumExpression('estimatedBudget') },
-      }),
-      { $sort: { _id: 1 } },
-    ],
-  });
+      {
+        $group: {
+          _id: { status: '$status', type: '$projectType' },
+          count: { $sum: 1 },
+          budget: { $sum: budget },
+          overdue: sumIf({ $and: [isActive, dateBefore('plannedEndDate', asOf(filters))] }),
+          completed: sumIf({
+            $and: [inValues('status', ['COMPLETED', 'INVOICED']), dateBetween('updatedAt', filters.startDate, filters.endDate)],
+          }),
+          // Active at the end of the previous period: existed then and is still
+          // active, or has been closed since (updatedAt is the closing proxy,
+          // the same one `completed` uses).
+          activePrevious: sumIf({
+            $and: [
+              dateBefore('createdAt', filters.startDate),
+              {
+                $or: [
+                  isActive,
+                  { $and: [inValues('status', ['COMPLETED', 'INVOICED', 'ARCHIVED']), dateAfter('updatedAt', filters.previousEndDate)] },
+                ],
+              },
+            ],
+          }),
+        },
+      },
+    ]),
+    windowAggregate(Project, match, 'createdAt', filters, { projects: { $sum: 1 }, budget: { $sum: budget } }),
+  ]);
 
-  const newCurrent = countFrom(facet.newCurrent);
-  const newPrevious = countFrom(facet.newPrevious);
+  const rows = inventory || [];
+  const active = (row) => ACTIVE_PROJECT_STATUSES.includes(row._id?.status);
+  const totals = sumRows(rows, ['count', 'overdue', 'completed', 'activePrevious']);
+  const activeTotals = sumRows(rows, ['count', 'budget'], active);
+  const newCurrent = window.current.projects;
+  const newPrevious = window.previous.projects;
 
   return {
-    total: countFrom(facet.total),
-    active: countFrom(facet.active),
+    total: totals.count,
+    active: activeTotals.count,
+    activePrevious: totals.activePrevious,
     newCurrent,
     newPrevious,
     delta: calculateDelta(newCurrent, newPrevious),
-    completed: countFrom(facet.completedCurrent),
-    budget: sumFrom(facet.budget),
-    overdue: countFrom(facet.overdue),
-    onHold: countFrom(facet.onHold),
-    byStatus: normalizeBreakdown(facet.byStatus),
-    byType: normalizeBreakdown(facet.byType, 'value'),
-    trend: fillTimeline(facet.trend, filters, ['projects', 'budget']),
+    completed: totals.completed,
+    budget: roundMetric(activeTotals.budget),
+    overdue: totals.overdue,
+    onHold: sumRows(rows, ['count'], (row) => row._id?.status === 'ON_HOLD').count,
+    byStatus: normalizeBreakdown(rollup(rows, (row) => row._id?.status)),
+    byType: normalizeBreakdown(rollup(rows, (row) => row._id?.type, { value: 'budget' }), 'value'),
+    trend: fillTimeline(window.trend, filters, ['projects', 'budget']),
   };
 }
+
+const MONEY = sumExpression(['grandTotalRounded', 'grandTotal']);
 
 async function getSalesAnalytics(models, filters) {
   const quoteMatch = { isDeleted: false };
   const orderMatch = { isDeleted: false };
   const invoiceMatch = { isDeleted: false };
+  const accepted = inValues('status', ['ACCEPTED', 'CONVERTED']);
+  // Decision dates come from the status stamps; updatedAt (any later edit) is only
+  // the fallback for legacy quotes without a stamp.
+  const acceptedOn = { $ifNull: ['$acceptedAt', '$updatedAt'] };
+  const declinedOn = { $ifNull: ['$declinedAt', '$updatedAt'] };
+  const amountDue = sumExpression('amountDue');
+  const issuedBeforePeriod = dateBefore('invoiceDate', filters.startDate);
 
-  const [quotes, orders, invoices] = await Promise.all([
-    runFacet(models.Quotation, {
-      total: [{ $match: quoteMatch }, { $count: 'count' }],
-      open: [{ $match: { ...quoteMatch, status: { $in: OPEN_QUOTATION_STATUSES } } }, { $count: 'count' }],
-      openValue: [
-        { $match: { ...quoteMatch, status: { $in: OPEN_QUOTATION_STATUSES } } },
-        { $group: { _id: null, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) } } },
-      ],
-      acceptedCurrent: [
-        { $match: { ...quoteMatch, status: { $in: ['ACCEPTED', 'CONVERTED'] }, ...rangeMatch('updatedAt', filters) } },
-        { $count: 'count' },
-      ],
-      acceptedPrevious: [
-        { $match: { ...quoteMatch, status: { $in: ['ACCEPTED', 'CONVERTED'] }, ...rangeMatch('updatedAt', filters, true) } },
-        { $count: 'count' },
-      ],
-      declinedCurrent: [
-        { $match: { ...quoteMatch, status: 'DECLINED', ...rangeMatch('updatedAt', filters) } },
-        { $count: 'count' },
-      ],
-      byStatus: [
-        { $match: quoteMatch },
-        { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) } } },
-        { $sort: { count: -1 } },
-      ],
-      trend: [
-        { $match: { ...quoteMatch, ...rangeMatch('createdAt', filters) } },
-        groupByDate('createdAt', filters.granularity, {
-          quotes: { $sum: 1 },
-          quoteValue: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) },
-        }),
-        { $sort: { _id: 1 } },
-      ],
+  const [quoteRows, quoteWindow, orderRows, orderWindow, invoiceRows, invoiceWindow] = await Promise.all([
+    runAggregate(models.Quotation, [
+      { $match: quoteMatch },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          value: { $sum: MONEY },
+          acceptedCurrent: sumIf({ $and: [accepted, dateBetween(acceptedOn, filters.startDate, filters.endDate)] }),
+          acceptedPrevious: sumIf({ $and: [accepted, dateBetween(acceptedOn, filters.previousStartDate, filters.previousEndDate)] }),
+          declinedCurrent: sumIf({ $and: [{ $eq: ['$status', 'DECLINED'] }, dateBetween(declinedOn, filters.startDate, filters.endDate)] }),
+        },
+      },
+    ]),
+    windowAggregate(models.Quotation, quoteMatch, 'createdAt', filters, {
+      quotes: { $sum: 1 },
+      quoteValue: { $sum: MONEY },
+    }, { previous: false }),
+    runAggregate(models.Order, [
+      { $match: orderMatch },
+      { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: MONEY } } },
+    ]),
+    windowAggregate(models.Order, orderMatch, 'createdAt', filters, {
+      orders: { $sum: 1 },
+      orderValue: { $sum: MONEY },
+      billableValue: { $sum: { $cond: [{ $ne: ['$status', 'CANCELLED'] }, MONEY, 0] } },
     }),
-    runFacet(models.Order, {
-      total: [{ $match: orderMatch }, { $count: 'count' }],
-      current: [{ $match: { ...orderMatch, ...rangeMatch('createdAt', filters) } }, { $count: 'count' }],
-      previous: [{ $match: { ...orderMatch, ...rangeMatch('createdAt', filters, true) } }, { $count: 'count' }],
-      valueCurrent: [
-        { $match: { ...orderMatch, status: { $ne: 'CANCELLED' }, ...rangeMatch('createdAt', filters) } },
-        { $group: { _id: null, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) } } },
-      ],
-      byStatus: [
-        { $match: orderMatch },
-        { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) } } },
-        { $sort: { count: -1 } },
-      ],
-      trend: [
-        { $match: { ...orderMatch, ...rangeMatch('createdAt', filters) } },
-        groupByDate('createdAt', filters.granularity, {
-          orders: { $sum: 1 },
-          orderValue: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) },
-        }),
-        { $sort: { _id: 1 } },
-      ],
-    }),
-    runFacet(models.Invoice, {
-      total: [{ $match: invoiceMatch }, { $count: 'count' }],
-      currentRevenue: [
-        { $match: { ...invoiceMatch, status: { $nin: ['CANCELLED', 'WRITTEN_OFF'] }, ...rangeMatch('invoiceDate', filters) } },
-        { $group: { _id: null, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) }, count: { $sum: 1 } } },
-      ],
-      previousRevenue: [
-        { $match: { ...invoiceMatch, status: { $nin: ['CANCELLED', 'WRITTEN_OFF'] }, ...rangeMatch('invoiceDate', filters, true) } },
-        { $group: { _id: null, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) }, count: { $sum: 1 } } },
-      ],
-      outstanding: [
-        { $match: { ...invoiceMatch, status: { $in: OPEN_INVOICE_STATUSES } } },
-        { $group: { _id: null, value: { $sum: sumExpression('amountDue') }, count: { $sum: 1 } } },
-      ],
-      overdue: [
-        { $match: { ...invoiceMatch, status: { $in: OPEN_INVOICE_STATUSES }, dueDate: { $lt: filters.endDate } } },
-        { $group: { _id: null, value: { $sum: sumExpression('amountDue') }, count: { $sum: 1 } } },
-      ],
-      byStatus: [
-        { $match: invoiceMatch },
-        { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) } } },
-        { $sort: { count: -1 } },
-      ],
-      trend: [
-        { $match: { ...invoiceMatch, status: { $nin: ['CANCELLED', 'WRITTEN_OFF'] }, ...rangeMatch('invoiceDate', filters) } },
-        groupByDate('invoiceDate', filters.granularity, {
-          invoices: { $sum: 1 },
-          revenue: { $sum: sumExpression(['grandTotalRounded', 'grandTotal']) },
-        }),
-        { $sort: { _id: 1 } },
-      ],
+    runAggregate(models.Invoice, [
+      { $match: invoiceMatch },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          value: { $sum: MONEY },
+          due: { $sum: amountDue },
+          overdueCount: sumIf(dateBefore('dueDate', asOf(filters))),
+          overdueValue: sumIf(dateBefore('dueDate', asOf(filters)), amountDue),
+          // Receivables open at the end of the previous period: issued by then and
+          // still open (current amount due), or paid only after it (full amount).
+          dueIssuedBeforePeriod: sumIf(issuedBeforePeriod, amountDue),
+          paidAfterPreviousPeriod: sumIf({ $and: [issuedBeforePeriod, dateAfter('paidAt', filters.previousEndDate)] }, MONEY),
+        },
+      },
+    ]),
+    windowAggregate(models.Invoice, { ...invoiceMatch, status: { $nin: ['CANCELLED', 'WRITTEN_OFF'] } }, 'invoiceDate', filters, {
+      invoices: { $sum: 1 },
+      revenue: { $sum: MONEY },
     }),
   ]);
 
-  const acceptedCurrent = countFrom(quotes.acceptedCurrent);
-  const acceptedPrevious = countFrom(quotes.acceptedPrevious);
-  const declinedCurrent = countFrom(quotes.declinedCurrent);
-  const revenue = sumFrom(invoices.currentRevenue);
-  const previousRevenue = sumFrom(invoices.previousRevenue);
+  const quotes = quoteRows || [];
+  const quoteTotals = sumRows(quotes, ['count', 'acceptedCurrent', 'acceptedPrevious', 'declinedCurrent']);
+  const openQuotes = sumRows(quotes, ['count', 'value'], (row) => OPEN_QUOTATION_STATUSES.includes(row._id));
+  const { acceptedCurrent, acceptedPrevious, declinedCurrent } = quoteTotals;
   const quoteDecisionTotal = acceptedCurrent + declinedCurrent;
+
+  const orders = orderRows || [];
+  const ordersCurrent = orderWindow.current.orders;
+  const ordersPrevious = orderWindow.previous.orders;
+
+  const invoices = invoiceRows || [];
+  const openInvoice = (row) => OPEN_INVOICE_STATUSES.includes(row._id);
+  const outstanding = sumRows(invoices, ['count', 'due', 'overdueCount', 'overdueValue', 'dueIssuedBeforePeriod'], openInvoice);
+  const paidSincePreviousPeriod = sumRows(invoices, ['paidAfterPreviousPeriod'], (row) => row._id === 'PAID');
+  const revenue = roundMetric(invoiceWindow.current.revenue);
+  const previousRevenue = roundMetric(invoiceWindow.previous.revenue);
 
   return {
     quotations: {
-      total: countFrom(quotes.total),
-      open: countFrom(quotes.open),
-      openValue: sumFrom(quotes.openValue),
+      total: quoteTotals.count,
+      open: openQuotes.count,
+      openValue: roundMetric(openQuotes.value),
       acceptedCurrent,
       acceptedPrevious,
       acceptedDelta: calculateDelta(acceptedCurrent, acceptedPrevious),
       conversionRate: quoteDecisionTotal > 0 ? Math.round((acceptedCurrent / quoteDecisionTotal) * 1000) / 10 : 0,
-      byStatus: normalizeBreakdown(quotes.byStatus, 'value'),
-      trend: fillTimeline(quotes.trend, filters, ['quotes', 'quoteValue']),
+      byStatus: normalizeBreakdown(rollup(quotes, (row) => row._id, { value: 'value' }), 'value'),
+      trend: fillTimeline(quoteWindow.trend, filters, ['quotes', 'quoteValue']),
     },
     orders: {
-      total: countFrom(orders.total),
-      current: countFrom(orders.current),
-      previous: countFrom(orders.previous),
-      delta: calculateDelta(countFrom(orders.current), countFrom(orders.previous)),
-      valueCurrent: sumFrom(orders.valueCurrent),
-      byStatus: normalizeBreakdown(orders.byStatus, 'value'),
-      trend: fillTimeline(orders.trend, filters, ['orders', 'orderValue']),
+      total: sumRows(orders, ['count']).count,
+      current: ordersCurrent,
+      previous: ordersPrevious,
+      delta: calculateDelta(ordersCurrent, ordersPrevious),
+      valueCurrent: roundMetric(orderWindow.current.billableValue),
+      byStatus: normalizeBreakdown(rollup(orders, (row) => row._id, { value: 'value' }), 'value'),
+      trend: fillTimeline(orderWindow.trend, filters, ['orders', 'orderValue']),
     },
     invoices: {
-      total: countFrom(invoices.total),
+      total: sumRows(invoices, ['count']).count,
       revenue,
       previousRevenue,
       revenueDelta: calculateDelta(revenue, previousRevenue),
-      invoiceCount: countFrom(invoices.currentRevenue),
-      outstanding: sumFrom(invoices.outstanding),
-      outstandingCount: countFrom(invoices.outstanding),
-      overdue: sumFrom(invoices.overdue),
-      overdueCount: countFrom(invoices.overdue),
-      byStatus: normalizeBreakdown(invoices.byStatus, 'value'),
-      trend: fillTimeline(invoices.trend, filters, ['invoices', 'revenue']),
+      invoiceCount: invoiceWindow.current.invoices,
+      outstanding: roundMetric(outstanding.due),
+      outstandingPrevious: roundMetric(outstanding.dueIssuedBeforePeriod + paidSincePreviousPeriod.paidAfterPreviousPeriod),
+      outstandingCount: outstanding.count,
+      overdue: roundMetric(outstanding.overdueValue),
+      overdueCount: outstanding.overdueCount,
+      byStatus: normalizeBreakdown(rollup(invoices, (row) => row._id, { value: 'value' }), 'value'),
+      trend: fillTimeline(invoiceWindow.trend, filters, ['invoices', 'revenue']),
     },
   };
 }
 
 async function getTaskAnalytics(Task, filters) {
-  const match = { isDeleted: false };
-  const facet = await runFacet(Task, {
-    total: [{ $match: match }, { $count: 'count' }],
-    open: [{ $match: { ...match, status: { $in: ACTIVE_TASK_STATUSES } } }, { $count: 'count' }],
-    overdue: [
-      { $match: { ...match, status: { $in: ACTIVE_TASK_STATUSES }, dueDate: { $lt: filters.endDate } } },
-      { $count: 'count' },
+  const isActive = inValues('status', ACTIVE_TASK_STATUSES);
+  const isCompleted = { $eq: ['$status', 'COMPLETED'] };
+  const todayStart = startOfDay(filters.endDate);
+  const closedAfterPreviousPeriod = {
+    $or: [
+      { $and: [isCompleted, dateAfter({ $ifNull: ['$completedAt', '$updatedAt'] }, filters.previousEndDate)] },
+      { $and: [{ $eq: ['$status', 'CANCELLED'] }, dateAfter('updatedAt', filters.previousEndDate)] },
     ],
-    dueToday: [
-      { $match: { ...match, status: { $in: ACTIVE_TASK_STATUSES }, dueDate: { $gte: startOfDay(filters.endDate), $lte: filters.endDate } } },
-      { $count: 'count' },
-    ],
-    completedCurrent: [
-      { $match: { ...match, status: 'COMPLETED', ...rangeMatch('completedAt', filters) } },
-      { $count: 'count' },
-    ],
-    completedPrevious: [
-      { $match: { ...match, status: 'COMPLETED', ...rangeMatch('completedAt', filters, true) } },
-      { $count: 'count' },
-    ],
-    byStatus: [
-      { $match: match },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    byPriority: [
-      { $match: { ...match, status: { $in: ACTIVE_TASK_STATUSES } } },
-      { $group: { _id: '$priority', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    createdTrend: [
-      { $match: { ...match, ...rangeMatch('createdAt', filters) } },
-      groupByDate('createdAt', filters.granularity, { created: { $sum: 1 } }),
-      { $sort: { _id: 1 } },
-    ],
-    completedTrend: [
-      { $match: { ...match, status: 'COMPLETED', ...rangeMatch('completedAt', filters) } },
-      groupByDate('completedAt', filters.granularity, { completed: { $sum: 1 } }),
-      { $sort: { _id: 1 } },
-    ],
-  });
+  };
+  // Task has no index that serves `isDeleted` + these fields, so read the live
+  // set exactly once and derive every metric from a single $group.
+  const rows = (await runAggregate(Task, [
+    { $match: { isDeleted: false } },
+    {
+      $group: {
+        _id: {
+          status: '$status',
+          priority: '$priority',
+          created: {
+            $cond: [dateBetween('createdAt', filters.startDate, filters.endDate), dateBucketExpression('createdAt', filters.granularity), null],
+          },
+          completed: {
+            $cond: [
+              { $and: [isCompleted, dateBetween('completedAt', filters.startDate, filters.endDate)] },
+              dateBucketExpression('completedAt', filters.granularity),
+              null,
+            ],
+          },
+        },
+        count: { $sum: 1 },
+        // Same rules as the Tasks module: overdue = due before now; due today =
+        // due on today's business date (a task due earlier today is both).
+        overdue: sumIf({ $and: [isActive, dateBefore('dueDate', asOf(filters))] }),
+        dueToday: sumIf({ $and: [isActive, dateBetween('dueDate', todayStart, filters.endDate)] }),
+        completedPrevious: sumIf({ $and: [isCompleted, dateBetween('completedAt', filters.previousStartDate, filters.previousEndDate)] }),
+        // Open at the end of the previous period: existed then and is still open,
+        // or was completed / cancelled only afterwards.
+        openPrevious: sumIf({
+          $and: [dateBefore('createdAt', filters.startDate), { $or: [isActive, closedAfterPreviousPeriod] }],
+        }),
+      },
+    },
+  ])) || [];
 
-  const completedCurrent = countFrom(facet.completedCurrent);
-  const completedPrevious = countFrom(facet.completedPrevious);
+  const active = (row) => ACTIVE_TASK_STATUSES.includes(row._id?.status);
+  const totals = sumRows(rows, ['count', 'overdue', 'dueToday', 'completedPrevious', 'openPrevious']);
+  const completedCurrent = sumRows(rows, ['count'], (row) => row._id?.completed != null).count;
+  const completedPrevious = totals.completedPrevious;
+  const createdTrend = rollup(rows, (row) => row._id?.created, { predicate: (row) => row._id?.created != null })
+    .map((row) => ({ _id: row._id, created: row.count }));
+  const completedTrend = rollup(rows, (row) => row._id?.completed, { predicate: (row) => row._id?.completed != null })
+    .map((row) => ({ _id: row._id, completed: row.count }));
 
   return {
-    total: countFrom(facet.total),
-    open: countFrom(facet.open),
-    overdue: countFrom(facet.overdue),
-    dueToday: countFrom(facet.dueToday),
+    total: totals.count,
+    open: sumRows(rows, ['count'], active).count,
+    openPrevious: totals.openPrevious,
+    overdue: totals.overdue,
+    dueToday: totals.dueToday,
     completedCurrent,
     completedPrevious,
     completedDelta: calculateDelta(completedCurrent, completedPrevious),
-    byStatus: normalizeBreakdown(facet.byStatus),
-    byPriority: normalizeBreakdown(facet.byPriority),
+    byStatus: normalizeBreakdown(rollup(rows, (row) => row._id?.status)),
+    byPriority: normalizeBreakdown(rollup(rows, (row) => row._id?.priority, { predicate: active })),
     trend: mergeTimelines(filters, [
-      { rows: facet.createdTrend, metrics: ['created'] },
-      { rows: facet.completedTrend, metrics: ['completed'] },
+      { rows: createdTrend, metrics: ['created'] },
+      { rows: completedTrend, metrics: ['completed'] },
     ]),
   };
 }
+
+const ASSIGNMENT_HOURS = { $divide: [{ $subtract: ['$endDatetime', '$startDatetime'] }, 3600000] };
 
 async function getSchedulingAnalytics(Assignment, filters) {
   const match = { isDeleted: false };
   const todayStart = startOfDay(filters.endDate);
   const todayEnd = endOfDay(filters.endDate);
   const nextWeekEnd = endOfDay(new Date(filters.endDate.getTime() + 7 * DAY_MS));
-  const facet = await runFacet(Assignment, {
-    total: [{ $match: match }, { $count: 'count' }],
-    today: [
-      { $match: { ...match, startDatetime: { $gte: todayStart, $lte: todayEnd } } },
-      { $count: 'count' },
-    ],
-    upcoming: [
-      { $match: { ...match, status: { $in: ACTIVE_ASSIGNMENT_STATUSES }, startDatetime: { $gt: todayEnd, $lte: nextWeekEnd } } },
-      { $count: 'count' },
-    ],
-    unconfirmed: [
-      { $match: { ...match, status: 'PLANNED', startDatetime: { $gte: filters.endDate } } },
-      { $count: 'count' },
-    ],
-    rangeHours: [
-      { $match: { ...match, startDatetime: { $gte: filters.startDate, $lte: filters.endDate }, status: { $ne: 'CANCELLED' } } },
-      { $project: { hours: { $divide: [{ $subtract: ['$endDatetime', '$startDatetime'] }, 3600000] } } },
-      { $group: { _id: null, value: { $sum: '$hours' }, count: { $sum: 1 } } },
-    ],
-    byStatus: [
+  const notCancelled = { $ne: ['$status', 'CANCELLED'] };
+
+  const [total, unconfirmed, todayPrevious, inventory, windowRows] = await Promise.all([
+    runCount(Assignment, match),
+    // Still-unconfirmed appointments that have not started yet (from now, not from tomorrow).
+    runCount(Assignment, { ...match, status: 'PLANNED', startDatetime: { $gte: asOf(filters) } }),
+    // "Today" one period earlier: the last day of the previous period.
+    runCount(Assignment, { ...match, startDatetime: { $gte: startOfDay(filters.previousEndDate), $lte: filters.previousEndDate } }),
+    runAggregate(Assignment, [
       { $match: match },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    byType: [
-      { $match: match },
-      { $group: { _id: '$assignmentType', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ],
-    trend: [
-      { $match: { ...match, startDatetime: { $gte: filters.startDate, $lte: filters.endDate } } },
+      { $group: { _id: { status: '$status', type: '$assignmentType' }, count: { $sum: 1 } } },
+    ]),
+    // One indexed read of [period start, today + 7d]: the period trend/hours,
+    // today's appointments and the upcoming week.
+    runAggregate(Assignment, [
+      { $match: { ...match, startDatetime: { $gte: filters.startDate, $lte: nextWeekEnd } } },
       {
-        $project: {
-          startDatetime: 1,
-          hours: { $divide: [{ $subtract: ['$endDatetime', '$startDatetime'] }, 3600000] },
+        $group: {
+          _id: {
+            $cond: [{ $lte: ['$startDatetime', filters.endDate] }, dateBucketExpression('startDatetime', filters.granularity), null],
+          },
+          assignments: { $sum: 1 },
+          hours: { $sum: ASSIGNMENT_HOURS },
+          billableHours: sumIf(notCancelled, ASSIGNMENT_HOURS),
+          today: sumIf(dateBetween('startDatetime', todayStart, todayEnd)),
+          upcoming: sumIf({
+            $and: [inValues('status', ACTIVE_ASSIGNMENT_STATUSES), dateAfter('startDatetime', todayEnd), dateBetween('startDatetime', todayEnd, nextWeekEnd)],
+          }),
         },
       },
-      groupByDate('startDatetime', filters.granularity, {
-        assignments: { $sum: 1 },
-        hours: { $sum: '$hours' },
-      }),
-      { $sort: { _id: 1 } },
-    ],
-  });
+    ]),
+  ]);
+
+  const rows = inventory || [];
+  const window = windowRows || [];
+  const inPeriod = (row) => row?._id !== null && row?._id !== undefined;
+  const windowTotals = sumRows(window, ['today', 'upcoming']);
 
   return {
-    total: countFrom(facet.total),
-    today: countFrom(facet.today),
-    upcoming: countFrom(facet.upcoming),
-    unconfirmed: countFrom(facet.unconfirmed),
-    hours: sumFrom(facet.rangeHours),
-    byStatus: normalizeBreakdown(facet.byStatus),
-    byType: normalizeBreakdown(facet.byType),
-    trend: fillTimeline(facet.trend, filters, ['assignments', 'hours']),
+    total,
+    today: windowTotals.today,
+    todayPrevious,
+    upcoming: windowTotals.upcoming,
+    unconfirmed,
+    hours: roundMetric(sumRows(window, ['billableHours'], inPeriod).billableHours),
+    byStatus: normalizeBreakdown(rollup(rows, (row) => row._id?.status)),
+    byType: normalizeBreakdown(rollup(rows, (row) => row._id?.type)),
+    trend: fillTimeline(window.filter(inPeriod), filters, ['assignments', 'hours']),
   };
 }
 
 async function getAccountingAnalytics(models, filters) {
-  const [ap, bank, journal] = await Promise.all([
-    runFacet(models.ApInvoice, {
-      open: [
-        { $match: { isDeleted: false, status: { $in: OPEN_AP_STATUSES } } },
-        { $group: { _id: null, value: { $sum: sumExpression('outstandingAmount') }, count: { $sum: 1 } } },
-      ],
-      overdue: [
-        { $match: { isDeleted: false, status: { $in: OPEN_AP_STATUSES }, dueDate: { $lt: filters.endDate } } },
-        { $group: { _id: null, value: { $sum: sumExpression('outstandingAmount') }, count: { $sum: 1 } } },
-      ],
-      byStatus: [
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: sumExpression('outstandingAmount') } } },
-        { $sort: { count: -1 } },
-      ],
-    }),
-    runFacet(models.BankTransaction, {
-      unmatched: [{ $match: { reconciliationStatus: 'UNMATCHED' } }, { $count: 'count' }],
-      cashTrend: [
-        { $match: { ...rangeMatch('transactionDate', filters) } },
-        groupByDate('transactionDate', filters.granularity, {
-          bankTransactions: { $sum: 1 },
-          cashMovement: { $sum: sumExpression('amount') },
-        }),
-        { $sort: { _id: 1 } },
-      ],
-      byStatus: [
-        { $group: { _id: '$reconciliationStatus', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ],
-    }),
-    runFacet(models.JournalEntry, {
-      current: [
-        { $match: { ...rangeMatch('entryDate', filters) } },
-        { $group: { _id: null, value: { $sum: sumExpression('amount') }, count: { $sum: 1 } } },
-      ],
-      previous: [
-        { $match: { ...rangeMatch('entryDate', filters, true) } },
-        { $group: { _id: null, value: { $sum: sumExpression('amount') }, count: { $sum: 1 } } },
-      ],
-      byReferenceType: [
-        { $match: { ...rangeMatch('entryDate', filters) } },
-        { $group: { _id: '$referenceType', count: { $sum: 1 }, value: { $sum: sumExpression('amount') } } },
-        { $sort: { value: -1 } },
-        { $limit: 8 },
-      ],
-    }),
+  const outstandingAmount = sumExpression('outstandingAmount');
+  const amount = sumExpression('amount');
+  const issuedBeforePeriod = dateBefore('invoiceDate', filters.startDate);
+  const [apRows, bankRows, bankWindow, journalRows] = await Promise.all([
+    runAggregate(models.ApInvoice, [
+      { $match: { isDeleted: false } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          value: { $sum: outstandingAmount },
+          overdueCount: sumIf(dateBefore('dueDate', asOf(filters))),
+          overdueValue: sumIf(dateBefore('dueDate', asOf(filters)), outstandingAmount),
+          // Payables open at the end of the previous period (AP has no paidAt;
+          // updatedAt is the settlement proxy for PAID bills).
+          outstandingIssuedBeforePeriod: sumIf(issuedBeforePeriod, outstandingAmount),
+          paidAfterPreviousPeriod: sumIf(
+            { $and: [issuedBeforePeriod, dateAfter('updatedAt', filters.previousEndDate)] },
+            sumExpression('totalAmount'),
+          ),
+        },
+      },
+    ]),
+    runAggregate(models.BankTransaction, [
+      { $group: { _id: '$reconciliationStatus', count: { $sum: 1 } } },
+    ]),
+    windowAggregate(models.BankTransaction, {}, 'transactionDate', filters, {
+      bankTransactions: { $sum: 1 },
+      cashMovement: { $sum: amount },
+    }, { previous: false }),
+    runAggregate(models.JournalEntry, [
+      { $match: { entryDate: { $gte: filters.previousStartDate, $lte: filters.endDate } } },
+      {
+        $group: {
+          _id: { current: { $gte: ['$entryDate', filters.startDate] }, type: '$referenceType' },
+          value: { $sum: amount },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
 
-  const journalAmount = sumFrom(journal.current);
-  const previousJournalAmount = sumFrom(journal.previous);
+  const ap = apRows || [];
+  const openAp = sumRows(ap, ['count', 'value', 'overdueCount', 'overdueValue', 'outstandingIssuedBeforePeriod'], (row) => OPEN_AP_STATUSES.includes(row._id));
+  const paidAp = sumRows(ap, ['paidAfterPreviousPeriod'], (row) => row._id === 'PAID');
+  const bank = bankRows || [];
+  const journal = journalRows || [];
+  const isCurrent = (row) => row._id?.current === true;
+  const journalCurrent = sumRows(journal, ['value', 'count'], isCurrent);
+  const journalPrevious = sumRows(journal, ['value'], (row) => !isCurrent(row));
+  const journalAmount = roundMetric(journalCurrent.value);
+  const previousJournalAmount = roundMetric(journalPrevious.value);
 
   return {
-    openPayables: sumFrom(ap.open),
-    openPayablesCount: countFrom(ap.open),
-    overduePayables: sumFrom(ap.overdue),
-    overduePayablesCount: countFrom(ap.overdue),
-    unmatchedBankTransactions: countFrom(bank.unmatched),
+    openPayables: roundMetric(openAp.value),
+    openPayablesPrevious: roundMetric(openAp.outstandingIssuedBeforePeriod + paidAp.paidAfterPreviousPeriod),
+    openPayablesCount: openAp.count,
+    overduePayables: roundMetric(openAp.overdueValue),
+    overduePayablesCount: openAp.overdueCount,
+    unmatchedBankTransactions: sumRows(bank, ['count'], (row) => row._id === 'UNMATCHED').count,
     journalAmount,
-    journalCount: countFrom(journal.current),
+    journalCount: journalCurrent.count,
     journalDelta: calculateDelta(journalAmount, previousJournalAmount),
-    payablesByStatus: normalizeBreakdown(ap.byStatus, 'value'),
-    bankByStatus: normalizeBreakdown(bank.byStatus),
-    journalByReferenceType: normalizeBreakdown(journal.byReferenceType, 'value'),
-    cashTrend: fillTimeline(bank.cashTrend, filters, ['bankTransactions', 'cashMovement']),
-  };
-}
-
-function buildFindChain(rows) {
-  return {
-    sort: () => ({
-      limit: () => ({
-        select: () => ({
-          lean: async () => rows,
-        }),
-      }),
-    }),
+    payablesByStatus: normalizeBreakdown(rollup(ap, (row) => row._id, { value: 'value' }), 'value'),
+    bankByStatus: normalizeBreakdown(rollup(bank, (row) => row._id)),
+    journalByReferenceType: normalizeBreakdown(
+      rollup(journal, (row) => row._id?.type, { value: 'value', predicate: isCurrent, sortKey: 'value', limit: 8 }),
+      'value',
+    ),
+    cashTrend: fillTimeline(bankWindow.trend, filters, ['bankTransactions', 'cashMovement']),
   };
 }
 
 async function getSystemAnalytics(models, filters) {
-  const [users, audit, recentActivity] = await Promise.all([
-    runFacet(models.User, {
-      total: [{ $match: { isDeleted: false } }, { $count: 'count' }],
-      active: [{ $match: { isDeleted: false, status: 'active' } }, { $count: 'count' }],
-      byStatus: [
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ],
-    }),
-    runFacet(models.AuditLog, {
-      successCurrent: [
-        { $match: { result: 'success', ...rangeMatch('timestamp', filters) } },
-        { $count: 'count' },
-      ],
-      failureCurrent: [
-        { $match: { result: 'failure', ...rangeMatch('timestamp', filters) } },
-        { $count: 'count' },
-      ],
-      failurePrevious: [
-        { $match: { result: 'failure', ...rangeMatch('timestamp', filters, true) } },
-        { $count: 'count' },
-      ],
-      byEvent: [
-        { $match: { ...rangeMatch('timestamp', filters) } },
-        { $group: { _id: '$eventType', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 8 },
-      ],
-      byModule: [
-        { $match: { ...rangeMatch('timestamp', filters) } },
-        { $group: { _id: '$module', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ],
-      trend: [
-        { $match: { ...rangeMatch('timestamp', filters) } },
-        {
-          $group: {
-            _id: {
-              bucket: dateBucketExpression('timestamp', filters.granularity),
-              result: '$result',
-            },
-            count: { $sum: 1 },
+  const [userRows, auditRows, failurePrevious, recentActivity] = await Promise.all([
+    runAggregate(models.User, [
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    // One indexed pass over the period: success/failure totals, the event and
+    // module breakdowns and the trend are all roll-ups of these groups.
+    runAggregate(models.AuditLog, [
+      { $match: rangeMatch('timestamp', filters) },
+      {
+        $group: {
+          _id: {
+            bucket: dateBucketExpression('timestamp', filters.granularity),
+            result: '$result',
+            eventType: '$eventType',
+            module: '$module',
           },
+          count: { $sum: 1 },
         },
-        {
-          $group: {
-            _id: '$_id.bucket',
-            successes: { $sum: { $cond: [{ $eq: ['$_id.result', 'success'] }, '$count', 0] } },
-            failures: { $sum: { $cond: [{ $eq: ['$_id.result', 'failure'] }, '$count', 0] } },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ],
-    }),
-    models.AuditLog.find
-      ? models.AuditLog
-          .find({})
-          .sort({ timestamp: -1 })
-          .limit(6)
-          .select('timestamp eventType email result module')
-          .lean()
-      : buildFindChain([]).sort().limit().select().lean(),
+      },
+    ]),
+    runCount(models.AuditLog, { result: 'failure', ...rangeMatch('timestamp', filters, true) }),
+    typeof models.AuditLog.find === 'function'
+      ? gated(() => models.AuditLog
+        .find({})
+        .sort({ timestamp: -1 })
+        .limit(6)
+        .select('timestamp eventType email result module')
+        .lean())
+      : [],
   ]);
 
-  const failures = countFrom(audit.failureCurrent);
-  const previousFailures = countFrom(audit.failurePrevious);
+  const users = userRows || [];
+  const audit = auditRows || [];
+  const byResult = (result) => (row) => row._id?.result === result;
+  const failures = sumRows(audit, ['count'], byResult('failure')).count;
+  const trendByBucket = new Map();
+  audit.forEach((row) => {
+    const bucket = row._id?.bucket;
+    const point = trendByBucket.get(bucket) || { _id: bucket, successes: 0, failures: 0 };
+    if (row._id?.result === 'success') point.successes += toNumber(row.count);
+    if (row._id?.result === 'failure') point.failures += toNumber(row.count);
+    trendByBucket.set(bucket, point);
+  });
+  const trend = [...trendByBucket.values()];
 
   return {
     users: {
-      total: countFrom(users.total),
-      active: countFrom(users.active),
-      byStatus: normalizeBreakdown(users.byStatus),
+      total: sumRows(users, ['count']).count,
+      active: sumRows(users, ['count'], (row) => row._id === 'active').count,
+      byStatus: normalizeBreakdown(rollup(users, (row) => row._id)),
     },
     audit: {
-      successes: countFrom(audit.successCurrent),
+      successes: sumRows(audit, ['count'], byResult('success')).count,
       failures,
-      failureDelta: calculateDelta(failures, previousFailures),
-      byEvent: normalizeBreakdown(audit.byEvent),
-      byModule: normalizeBreakdown(audit.byModule),
-      trend: fillTimeline(audit.trend, filters, ['successes', 'failures']),
+      failureDelta: calculateDelta(failures, failurePrevious),
+      byEvent: normalizeBreakdown(rollup(audit, (row) => row._id?.eventType, { limit: 8 })),
+      byModule: normalizeBreakdown(rollup(audit, (row) => row._id?.module)),
+      trend: fillTimeline(trend, filters, ['successes', 'failures']),
       recent: (recentActivity || []).map((entry) => ({
         id: String(entry._id || `${entry.eventType}-${entry.timestamp}`),
         timestamp: entry.timestamp,
@@ -918,51 +1071,32 @@ async function getSystemAnalytics(models, filters) {
   };
 }
 
+/**
+ * Overview KPI: `value` is the metric now, `previousValue` the same metric at the
+ * end of the previous period, and `delta` the % change between them — so the
+ * "vs previous period" badge always compares like with like.
+ */
+function kpi(id, value, previousValue, format = 'number') {
+  const current = roundMetric(value);
+  const previous = roundMetric(previousValue);
+  return { id, value: current, previousValue: previous, delta: calculateDelta(current, previous), format };
+}
+
 function buildOverview({ customers, projects, sales, tasks, scheduling, accounting, system }) {
   return {
     kpis: [
-      {
-        id: 'revenue',
-        value: sales.invoices.revenue,
-        previousValue: sales.invoices.previousRevenue,
-        delta: sales.invoices.revenueDelta,
-        format: 'currency',
-      },
-      {
-        id: 'customers',
-        value: customers.total,
-        previousValue: customers.total - customers.newPrevious,
-        delta: customers.delta,
-        format: 'number',
-      },
-      {
-        id: 'projects',
-        value: projects.active,
-        previousValue: Math.max(0, projects.active - projects.newPrevious),
-        delta: projects.delta,
-        format: 'number',
-      },
-      {
-        id: 'openTasks',
-        value: tasks.open,
-        previousValue: Math.max(0, tasks.open - tasks.completedPrevious),
-        delta: tasks.completedDelta,
-        format: 'number',
-      },
-      {
-        id: 'scheduleToday',
-        value: scheduling.today,
-        previousValue: 0,
-        delta: 0,
-        format: 'number',
-      },
-      {
-        id: 'outstanding',
-        value: sales.invoices.outstanding + accounting.openPayables,
-        previousValue: 0,
-        delta: 0,
-        format: 'currency',
-      },
+      kpi('revenue', sales.invoices.revenue, sales.invoices.previousRevenue, 'currency'),
+      // Customer base then = today's base minus the customers added this period.
+      kpi('customers', customers.total, Math.max(0, customers.total - customers.newCurrent)),
+      kpi('projects', projects.active, projects.activePrevious ?? 0),
+      kpi('openTasks', tasks.open, tasks.openPrevious ?? 0),
+      kpi('scheduleToday', scheduling.today, scheduling.todayPrevious ?? 0),
+      kpi(
+        'outstanding',
+        sales.invoices.outstanding + accounting.openPayables,
+        (sales.invoices.outstandingPrevious ?? 0) + (accounting.openPayablesPrevious ?? 0),
+        'currency',
+      ),
     ],
     featureMix: [
       { id: 'crm', label: 'CRM', value: customers.active, count: customers.active },
@@ -1008,21 +1142,21 @@ export async function getAnalyticsSnapshot(rawFilters = {}, dependencies = {}) {
       total: 0, active: 0, newCurrent: 0, newPrevious: 0, delta: 0, byType: [], topCities: [], trend: fillTimeline([], filters, ['customers']),
     }, () => getCustomerAnalytics(models.Customer, filters)),
     withWarning(warnings, 'projects', {
-      total: 0, active: 0, newCurrent: 0, newPrevious: 0, delta: 0, completed: 0, budget: 0, overdue: 0, onHold: 0, byStatus: [], byType: [], trend: fillTimeline([], filters, ['projects', 'budget']),
+      total: 0, active: 0, activePrevious: 0, newCurrent: 0, newPrevious: 0, delta: 0, completed: 0, budget: 0, overdue: 0, onHold: 0, byStatus: [], byType: [], trend: fillTimeline([], filters, ['projects', 'budget']),
     }, () => getProjectAnalytics(models.Project, filters)),
     withWarning(warnings, 'sales', {
       quotations: { total: 0, open: 0, openValue: 0, acceptedCurrent: 0, acceptedPrevious: 0, acceptedDelta: 0, conversionRate: 0, byStatus: [], trend: fillTimeline([], filters, ['quotes', 'quoteValue']) },
       orders: { total: 0, current: 0, previous: 0, delta: 0, valueCurrent: 0, byStatus: [], trend: fillTimeline([], filters, ['orders', 'orderValue']) },
-      invoices: { total: 0, revenue: 0, previousRevenue: 0, revenueDelta: 0, invoiceCount: 0, outstanding: 0, outstandingCount: 0, overdue: 0, overdueCount: 0, byStatus: [], trend: fillTimeline([], filters, ['invoices', 'revenue']) },
+      invoices: { total: 0, revenue: 0, previousRevenue: 0, revenueDelta: 0, invoiceCount: 0, outstanding: 0, outstandingPrevious: 0, outstandingCount: 0, overdue: 0, overdueCount: 0, byStatus: [], trend: fillTimeline([], filters, ['invoices', 'revenue']) },
     }, () => getSalesAnalytics(models, filters)),
     withWarning(warnings, 'tasks', {
-      total: 0, open: 0, overdue: 0, dueToday: 0, completedCurrent: 0, completedPrevious: 0, completedDelta: 0, byStatus: [], byPriority: [], trend: fillTimeline([], filters, ['created', 'completed']),
+      total: 0, open: 0, openPrevious: 0, overdue: 0, dueToday: 0, completedCurrent: 0, completedPrevious: 0, completedDelta: 0, byStatus: [], byPriority: [], trend: fillTimeline([], filters, ['created', 'completed']),
     }, () => getTaskAnalytics(models.Task, filters)),
     withWarning(warnings, 'scheduling', {
-      total: 0, today: 0, upcoming: 0, unconfirmed: 0, hours: 0, byStatus: [], byType: [], trend: fillTimeline([], filters, ['assignments', 'hours']),
+      total: 0, today: 0, todayPrevious: 0, upcoming: 0, unconfirmed: 0, hours: 0, byStatus: [], byType: [], trend: fillTimeline([], filters, ['assignments', 'hours']),
     }, () => getSchedulingAnalytics(models.Assignment, filters)),
     withWarning(warnings, 'accounting', {
-      openPayables: 0, openPayablesCount: 0, overduePayables: 0, overduePayablesCount: 0, unmatchedBankTransactions: 0, journalAmount: 0, journalCount: 0, journalDelta: 0, payablesByStatus: [], bankByStatus: [], journalByReferenceType: [], cashTrend: fillTimeline([], filters, ['bankTransactions', 'cashMovement']),
+      openPayables: 0, openPayablesPrevious: 0, openPayablesCount: 0, overduePayables: 0, overduePayablesCount: 0, unmatchedBankTransactions: 0, journalAmount: 0, journalCount: 0, journalDelta: 0, payablesByStatus: [], bankByStatus: [], journalByReferenceType: [], cashTrend: fillTimeline([], filters, ['bankTransactions', 'cashMovement']),
     }, () => getAccountingAnalytics(models, filters)),
     withWarning(warnings, 'system', {
       users: { total: 0, active: 0, byStatus: [] },

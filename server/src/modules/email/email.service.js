@@ -51,9 +51,13 @@ export async function messageFor(ownerId, messageId, bcc = false) {
   return m;
 }
 export async function listAccounts(ownerId) {
-  const accounts = await EmailAccount.find({ ownerId }).sort({ createdAt: 1 }).lean();
-  const counts = await EmailMessage.aggregate([{ $match: { ownerId: new ObjectId(String(ownerId)), unread: true, folder: 'inbox' } }, { $group: { _id: '$accountId', count: { $sum: 1 } } }]);
-  return accounts.map(a => ({ ...publicAccount(a), unreadCount: counts.find(c => String(c._id) === String(a._id))?.count || 0 }));
+  // Unread counts are answered from the {ownerId, folder, unread, accountId} index (covered).
+  const [accounts, counts] = await Promise.all([
+    EmailAccount.find({ ownerId }).sort({ createdAt: 1 }).lean(),
+    EmailMessage.aggregate([{ $match: { ownerId: new ObjectId(String(ownerId)), folder: 'inbox', unread: true } }, { $group: { _id: '$accountId', count: { $sum: 1 } } }]),
+  ]);
+  const unread = new Map(counts.map(c => [String(c._id), c.count]));
+  return accounts.map(a => ({ ...publicAccount(a), unreadCount: unread.get(String(a._id)) || 0 }));
 }
 export async function connectImap(ownerId, input) {
   const { address, name, ...credentials } = input;
@@ -104,6 +108,19 @@ export function messageFilter(ownerId, p) {
   if (p.q) filter.$or = ['subject', 'text', 'from', 'to'].map(field => ({ [field]: { $regex: escaped(p.q), $options: 'i' } }));
   return filter;
 }
+const threadOf = m => `${m.accountId}\u0000${m.threadKey}`;
+// $in on both keys (a cheap superset of the exact pairs, filtered by key afterwards) gives
+// single index bounds on {accountId, threadKey, date}; a per-pair $or makes the planner
+// sub-plan every branch, which costs more than the reads themselves.
+const threadMatch = threads => ({ accountId: { $in: [...new Map(threads.map(t => [String(t.accountId), t.accountId])).values()] }, threadKey: { $in: [...new Set(threads.map(t => t.threadKey))] } });
+/**
+ * One row per conversation (its latest matching message), newest first, keyset-paged on
+ * that latest message. Instead of grouping the whole mailbox on every page, messages are
+ * walked newest-first on the {ownerId, folder|-, date, _id} index (lean, no bodies) and the
+ * first occurrence of each thread is taken until limit+1 threads are found. Threads that
+ * still have a matching message at/above the cursor were shown on an earlier page and are
+ * dropped. Counts and the latest documents are then loaded for the page's threads only.
+ */
 export async function listMessages(ownerId, query) {
   const p = searchSchema.parse(query), filter = messageFilter(ownerId, p);
   let cursor;
@@ -111,12 +128,42 @@ export async function listMessages(ownerId, query) {
     try { cursor = JSON.parse(Buffer.from(p.cursor, 'base64url').toString()); if (!/^[a-f0-9]{24}$/i.test(cursor.id) || Number.isNaN(Date.parse(cursor.date))) throw new Error(); }
     catch { throw new ValidationError('Invalid message cursor'); }
   }
-  // Group first: one row per conversation, with a cursor on the latest message.
-  const pipeline = [{ $match: filter }, { $sort: { date: -1, _id: -1 } }, { $group: { _id: { accountId: '$accountId', threadKey: '$threadKey' }, latest: { $first: '$$ROOT' }, count: { $sum: 1 }, unreadCount: { $sum: { $cond: ['$unread', 1, 0] } } } }, { $replaceRoot: { newRoot: { $mergeObjects: ['$latest', { conversationCount: '$count', unreadCount: '$unreadCount' }] } } }];
-  if (cursor) pipeline.push({ $match: { $or: [{ date: { $lt: new Date(cursor.date) } }, { date: new Date(cursor.date), _id: { $lt: new ObjectId(cursor.id) } }] } });
-  pipeline.push({ $sort: { date: -1, _id: -1 } }, { $limit: p.limit + 1 }, { $project: { html: 0, text: 0, bcc: 0 } });
-  const rows = await EmailMessage.aggregate(pipeline), more = rows.length > p.limit, items = rows.slice(0, p.limit), last = items.at(-1);
-  return { items, nextCursor: more ? Buffer.from(JSON.stringify({ date: last.date, id: last._id })).toString('base64url') : null };
+  const at = cursor && new Date(cursor.date), atId = cursor && new ObjectId(cursor.id);
+  const below = cursor ? [{ date: { $lte: at } }, { $or: [{ date: { $lt: at } }, { _id: { $lt: atId } }] }] : [];
+  const atOrAbove = cursor ? [{ date: { $gte: at } }, { $or: [{ date: { $gt: at } }, { _id: { $gte: atId } }] }] : [];
+  const want = p.limit + 1, threads = [], seen = new Set();
+  let pending = [];
+  const accept = async () => {
+    if (!pending.length) return;
+    let keep = pending;
+    if (cursor) {
+      const shown = await EmailMessage.find({ $and: [filter, ...atOrAbove, threadMatch(pending)] }).select('accountId threadKey').lean();
+      const drop = new Set(shown.map(threadOf)); // superset rows of foreign pairs never match a pending key
+      keep = pending.filter(t => !drop.has(t.key));
+    }
+    threads.push(...keep); pending = [];
+  };
+  const scan = EmailMessage.find(below.length ? { $and: [filter, ...below] } : filter).sort({ date: -1, _id: -1 }).select('accountId threadKey date').lean().cursor({ batchSize: Math.min(500, Math.max(50, want * 3)) });
+  try {
+    for (let m = await scan.next(); m; m = await scan.next()) {
+      const key = threadOf(m);
+      if (seen.has(key)) continue;
+      seen.add(key); pending.push({ key, accountId: m.accountId, threadKey: m.threadKey, _id: m._id });
+      if (threads.length + pending.length >= want) { await accept(); if (threads.length >= want) break; }
+    }
+    await accept();
+  } finally { await scan.close(); }
+  const page = threads.slice(0, p.limit);
+  if (!page.length) return { items: [], nextCursor: null };
+  // Bodies (html/text) never leave the list; bcc is select:false on the model.
+  const [docs, counts] = await Promise.all([
+    EmailMessage.find({ _id: { $in: page.map(t => t._id) } }).select('-html -text').lean(),
+    EmailMessage.aggregate([{ $match: { $and: [filter, threadMatch(page)] } }, { $group: { _id: { accountId: '$accountId', threadKey: '$threadKey' }, count: { $sum: 1 }, unreadCount: { $sum: { $cond: ['$unread', 1, 0] } } } }]),
+  ]);
+  const byId = new Map(docs.map(d => [String(d._id), d])), byThread = new Map(counts.map(c => [threadOf(c._id), c]));
+  const items = page.map(t => ({ ...byId.get(String(t._id)), conversationCount: byThread.get(t.key)?.count || 0, unreadCount: byThread.get(t.key)?.unreadCount || 0 })).filter(i => i._id);
+  const more = threads.length > p.limit, last = items.at(-1);
+  return { items, nextCursor: more && last ? Buffer.from(JSON.stringify({ date: last.date, id: last._id })).toString('base64url') : null };
 }
 export async function conversation(ownerId, messageId) {
   const message = await messageFor(ownerId, messageId);

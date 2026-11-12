@@ -3,8 +3,10 @@ import ChatMessage from '../mobile/chatMessage.model.js';
 import chatRoomRepository from './chatRoom.repository.js';
 import ChatRoom from './chatRoom.model.js';
 import User from '../auth/user.model.js';
+import Lead from '../crm/lead.model.js';
 import chatAccessService from './chatAccess.service.js';
-import { NotFoundError, AuthorizationError } from '../../shared/errors/AppError.js';
+import { AppError, NotFoundError, AuthorizationError } from '../../shared/errors/AppError.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
 function userIdOf(user) {
   return String(user?._id ?? user);
@@ -13,6 +15,29 @@ function userIdOf(user) {
 function missingMemberIds(room, memberIds) {
   const existing = new Set((room.members || []).map(member => String(member.userId?._id ?? member.userId)));
   return memberIds.filter(id => !existing.has(String(id)));
+}
+
+/**
+ * Unread counts for many rooms in one aggregation. Rooms whose member entry carries a
+ * read horizon (members.lastReadAt, set by markRoomRead) only scan messages sent at or
+ * after it — an index range on { roomId, sentAt } — instead of the room's whole history.
+ * Rooms without a horizon (never marked read since this field exists) scan as before.
+ */
+async function countUnreadByRoom(rooms, userId) {
+  const uid = new mongoose.Types.ObjectId(userId);
+  const branches = [];
+  const unbounded = [];
+  for (const room of rooms) {
+    const member = (room.members || []).find(m => String(m.userId?._id ?? m.userId) === userId);
+    if (member?.lastReadAt) branches.push({ roomId: room._id, sentAt: { $gte: new Date(member.lastReadAt) } });
+    else unbounded.push(room._id);
+  }
+  if (unbounded.length) branches.push({ roomId: { $in: unbounded } });
+  const unread = await ChatMessage.aggregate([
+    { $match: { $or: branches, senderId: { $ne: uid }, 'readBy.userId': { $ne: uid }, isDeleted: false } },
+    { $group: { _id: '$roomId', count: { $sum: 1 } } },
+  ]);
+  return new Map(unread.map(item => [String(item._id), item.count]));
 }
 
 const chatRoomService = {
@@ -56,12 +81,27 @@ const chatRoomService = {
     const canReadLeads = hasLeadRooms && await chatAccessService.canReadLeads(user);
     const rooms = allRooms.filter(room => !(room.roomType === 'LEAD' || room.leadIds?.length) || canReadLeads);
     if (!rooms.length) return [];
-    const unread = await ChatMessage.aggregate([
-      { $match: { roomId: { $in: rooms.map(room => room._id) }, senderId: { $ne: new mongoose.Types.ObjectId(userId) }, 'readBy.userId': { $ne: new mongoose.Types.ObjectId(userId) }, isDeleted: false } },
-      { $group: { _id: '$roomId', count: { $sum: 1 } } },
-    ]);
-    const counts = new Map(unread.map(item => [String(item._id), item.count]));
+    const counts = await countUnreadByRoom(rooms, userId);
     return rooms.map(room => ({ ...room, unreadCount: counts.get(String(room._id)) || 0 }));
+  },
+
+  /**
+   * Ids of the active rooms the user may read — same visibility as listRoomsForUser
+   * (lead-linked rooms need lead:read) without populating rooms or counting unread.
+   */
+  async listAccessibleRoomIds(user) {
+    const userId = userIdOf(user);
+    const rooms = await ChatRoom.find({ 'members.userId': userId, isActive: true }).select('_id roomType leadIds').lean();
+    const maybeLinked = rooms.filter(room => room.roomType === 'LEAD' || room.leadIds?.length);
+    if (!maybeLinked.length || await chatAccessService.canReadLeads(user)) return rooms.map(room => room._id);
+    // listRoomsForUser treats a non-LEAD room as lead-linked only while one of its leads still exists.
+    const leadIds = [...new Set(maybeLinked.filter(room => room.roomType !== 'LEAD').flatMap(room => room.leadIds.map(String)))];
+    const liveLeads = leadIds.length
+      ? new Set((await Lead.find({ _id: { $in: leadIds }, isDeleted: { $ne: true } }).select('_id').lean()).map(lead => String(lead._id)))
+      : new Set();
+    return rooms
+      .filter(room => room.roomType !== 'LEAD' && !(room.leadIds || []).some(id => liveLeads.has(String(id))))
+      .map(room => room._id);
   },
 
   async getRoomById(roomId) {
@@ -126,19 +166,13 @@ const chatRoomService = {
   async joinByCode(joinCode, user) {
     const room = await chatRoomRepository.findByJoinCode(joinCode);
     if (!room) {
-      const err = new Error('Invalid or expired join code');
-      err.status = 404;
-      throw err;
+      throw new AppError('Invalid or expired join code', 404, ERROR_CODES.NOT_FOUND);
     }
     if (room.roomType !== 'GROUP') {
-      const err = new Error('Code is not for a group room');
-      err.status = 400;
-      throw err;
+      throw new AppError('Code is not for a group room', 400, ERROR_CODES.VALIDATION_ERROR);
     }
     if (room.joinCodeExpiresAt && new Date(room.joinCodeExpiresAt) < new Date()) {
-      const err = new Error('Join code has expired');
-      err.status = 410;
-      throw err;
+      throw new AppError('Join code has expired', 410, ERROR_CODES.VALIDATION_ERROR);
     }
     await chatAccessService.assertLinkedRoomAccess(room, user);
     const userId = userIdOf(user);
@@ -150,9 +184,7 @@ const chatRoomService = {
   async leaveRoom(roomId, userId) {
     const room = await chatRoomRepository.findById(roomId);
     if (!room) {
-      const err = new Error('Room not found');
-      err.status = 404;
-      throw err;
+      throw new AppError('Room not found', 404, ERROR_CODES.NOT_FOUND);
     }
     if (!room.members.some(member => String(member.userId?._id || member.userId) === String(userId))) throw new AuthorizationError('You are not a member of this chat room');
     await chatRoomRepository.removeMember(roomId, userId);
@@ -178,16 +210,12 @@ const chatRoomService = {
   async refreshJoinCode(roomId, requesterId) {
     const room = await chatRoomRepository.findById(roomId);
     if (!room) {
-      const err = new Error('Room not found');
-      err.status = 404;
-      throw err;
+      throw new AppError('Room not found', 404, ERROR_CODES.NOT_FOUND);
     }
     if (room.roomType !== 'GROUP') throw new AuthorizationError('Join codes are only available for group conversations');
     const isAdmin = room.admins?.some(a => String(a._id || a) === String(requesterId));
     if (!isAdmin) {
-      const err = new Error('Only admins can refresh the join code');
-      err.status = 403;
-      throw err;
+      throw new AppError('Only admins can refresh the join code', 403, ERROR_CODES.FORBIDDEN);
     }
     const joinCode = String(Math.floor(1000 + Math.random() * 9000));
     const joinCodeExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);

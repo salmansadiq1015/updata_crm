@@ -5,6 +5,7 @@ export const queryKeys = {
   users: {
     all: () => ['users'],
     list: (filters) => ['users', 'list', filters],
+    stats: () => ['users', 'stats'],
     directory: (params) => ['users', 'directory', params],
     assignmentTargets: () => ['users', 'assignmentTargets'],
     detail: (id) => ['users', 'detail', id],

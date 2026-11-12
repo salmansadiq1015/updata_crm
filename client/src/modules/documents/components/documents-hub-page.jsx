@@ -13,6 +13,7 @@ import { PERMISSIONS } from '@/shared/constants/permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { intlLocaleFor } from '@/lib/i18n/locale-config';
 import { cn } from '@/lib/utils';
+import { pageTabs } from '@/shared/components/page-hero';
 import { showError, showSuccess } from '@/lib/toast';
 import { downloadFromUrl } from '@/lib/api/download';
 import { useAiStore } from '@/modules/ai/store/ai-store';
@@ -178,7 +179,7 @@ export function DocumentsHubPage() {
         onSection={(id) => setParams({ section: id === 'documents' ? null : id })}
       />
 
-      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 [scrollbar-width:none]" role="tablist" aria-label={t('documents.hub.sections', 'Sections')}>
+      <div className={pageTabs.list} role="tablist" aria-label={t('documents.hub.sections', 'Sections')}>
         {SECTIONS.map(({ id, icon: Icon, key, fallback, tone }) => {
           const active = section === id;
           const count = sectionCount(id);
@@ -189,11 +190,11 @@ export function DocumentsHubPage() {
               role="tab"
               aria-selected={active}
               onClick={() => setParams({ section: id === 'documents' ? null : id })}
-              className={cn('inline-flex flex-1 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition sm:flex-none', active ? 'bg-muted text-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground')}
+              className={cn(pageTabs.tab, 'flex-1 justify-center sm:flex-none')}
             >
-              <Icon className={cn('size-4', active && tone)} aria-hidden="true" />
+              <Icon className={cn(!active && tone)} aria-hidden="true" />
               {t(key, fallback)}
-              {count != null ? <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-background' : 'bg-muted')}>{nf.format(count)}</span> : null}
+              {count != null ? <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-white/25 text-white' : 'bg-muted')}>{nf.format(count)}</span> : null}
             </button>
           );
         })}

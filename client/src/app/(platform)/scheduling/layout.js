@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { ErrorBoundary } from '@/shared/components/error-boundary';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { PageBand, pageTabs } from '@/shared/components/page-hero';
 import { CalendarDays, LayoutDashboard, Grid3X3, AlertTriangle, Video } from 'lucide-react';
 
 const TABS = [
@@ -19,33 +20,33 @@ const TABS = [
 export default function SchedulingLayout({ children }) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  const active = TABS.find(({ href }) => pathname === href || pathname?.startsWith(`${href}/`)) ?? TABS[0];
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col h-full">
-        <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 print:hidden">
-          <div className="flex items-center gap-1 px-4 h-10">
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div className="shrink-0 space-y-4 print:hidden">
+          <PageBand
+            id="scheduling-title"
+            art="/hero/calendar"
+            icon={CalendarDays}
+            eyebrow={t('schedulingHero.eyebrow', 'Scheduling')}
+            title={t(active.labelKey, active.fallback)}
+            subtitle={t('schedulingHero.subtitle', 'Plan crews, meetings and field work — and catch conflicts before they happen.')}
+          />
+          <nav aria-label={t('schedulingHero.sections', 'Scheduling sections')} className={pageTabs.list}>
             {TABS.map(({ href, labelKey, fallback, icon: Icon }) => {
-              const isActive = pathname === href || (href === '/scheduling/calendar' && pathname === '/scheduling');
+              const isActive = href === active.href;
               return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-                    isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
+                <Link key={href} href={href} aria-current={isActive ? 'page' : undefined} className={cn(pageTabs.tab, isActive && pageTabs.active)}>
+                  <Icon aria-hidden="true" />
                   {t(labelKey, fallback)}
                 </Link>
               );
             })}
-          </div>
-        </nav>
-        <div className="flex-1 overflow-auto">
+          </nav>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
           {children}
         </div>
       </div>

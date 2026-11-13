@@ -48,6 +48,8 @@ export const ENDPOINTS = Object.freeze({
     AVATAR: (id) => `/users/${id}/avatar`,
     BULK_UPDATE: '/users/bulk-update',
     BULK_DELETE: '/users/bulk-delete',
+    BULK_DEACTIVATE: '/users/bulk-deactivate',
+    RESEND_INVITATION: (id) => `/users/${id}/resend-invitation`,
     SESSIONS: (id) => `/users/${id}/sessions`,
   },
   ROLES: {
@@ -1014,6 +1016,7 @@ export const ENDPOINTS = Object.freeze({
   // Paired-phone calling (server/src/modules/pairedPhone): the owner's phone via the ESP32 gateway.
   PAIRED_PHONE: {
     GATEWAY_PACKAGE: '/paired-phone/gateway-package',
+    FIRMWARE_PACKAGE: '/paired-phone/firmware-package',
     SETUP: (id) => `/paired-phone/devices/${id}/setup`,
     AUDIO_TEST: (id) => `/paired-phone/devices/${id}/audio-test`,
     AUDIO_TEST_RESULT: (id, callId) => `/paired-phone/devices/${id}/audio-test/${callId}`,

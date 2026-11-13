@@ -5,11 +5,12 @@ import service from './pairedPhone.service.js';
 import * as schemas from './pairedPhone.validation.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import { validate } from '../../shared/validation/validate.js';
-import { downloadGateway } from './gatewayPackage.js';
+import { downloadGateway, downloadFirmware } from './gatewayPackage.js';
 
 /** Owner routes: /api/v1/paired-phone */
 const router = Router();
 router.get('/gateway-package', authenticate, requirePermission('ai-calling:write'), downloadGateway);
+router.get('/firmware-package', authenticate, requirePermission('ai-calling:write'), downloadFirmware);
 router.get('/devices', authenticate, requirePermission('ai-calling:read'), controller.listDevices);
 router.post('/devices/pairing-code', authenticate, requirePermission('ai-calling:write'), validate(schemas.createPairingCode), controller.createPairingCode);
 router.get('/devices/:id', authenticate, requirePermission('ai-calling:read'), validate(schemas.deviceId), controller.getDevice);

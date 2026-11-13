@@ -1,6 +1,7 @@
 import express from 'express';
 import { readFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
+import { runWithAccessContext } from '../../src/shared/security/requestAccessContext.js';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import sharp from 'sharp';
@@ -395,6 +396,31 @@ describe('agent campaign execution through the existing calling engine', () => {
 });
 
 describe('saved agent browser test snapshots', () => {
+  it('uses an assigned shared lead without changing it or dialing a phone', async () => {
+    const agent = await service.create(fullInput(), actor);
+    const shared = await lead({ createdBy: outsider });
+    const assigned = await service.assign(agent._id, { leadIds: [String(shared._id)], version: agent.version }, actor);
+    const before = await Lead.findById(shared._id).lean();
+    expect(assigned.assignedLeadIds.map(String)).toContain(String(shared._id));
+    const snapshot = await service.prepareTest(agent._id, actor);
+    expect(snapshot.isTest).toBe(true);
+    expect(snapshot.selection.leadIds.map(String)).toEqual([String(shared._id)]);
+    expect(await Lead.findById(shared._id).lean()).toEqual(before);
+    expect(dial).not.toHaveBeenCalled();
+    await expect(service.prepareTest(agent._id, outsider)).rejects.toThrow();
+  });
+
+  it('refuses unavailable or out-of-scope assignments before creating a browser snapshot', async () => {
+    const { agent, selected } = await ready();
+    await expect(runWithAccessContext({ scope: { filter: { _id: new mongoose.Types.ObjectId() } } },
+      () => service.prepareTest(agent._id, actor))).rejects.toThrow('Assign a lead');
+    expect(await Campaign.countDocuments({ isTest: true })).toBe(0);
+    await Lead.updateOne({ _id: selected._id }, { $set: { isDeleted: true } });
+    await expect(service.prepareTest(agent._id, actor)).rejects.toThrow('Assign a lead');
+    expect(await Campaign.countDocuments({ isTest: true })).toBe(0);
+    expect(dial).not.toHaveBeenCalled();
+  });
+
   it('creates one isolated current-version snapshot, preserves the source lead and refuses telephone launch', async () => {
     const { agent, selected } = await ready();
     const before = await Lead.findById(selected._id).lean();

@@ -6,14 +6,15 @@
   "description": "Paired-phone gateway: connection lifecycle, ESP32 HFP bridge host (src/esp32, bin/esp32-probe.mjs, esp32/firmware), macOS probe (macos/), Linux BlueZ probe (linux/).",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "package:gateway": "node scripts/package-gateway.mjs",
+    "package:gateway": "node scripts/package-gateway.mjs && node scripts/package-firmware.mjs",
     "test:macos": "sh macos/test.sh",
     "test:linux": "python3 -m unittest discover -s linux/tests",
     "test:linux:docker": "sh linux/test-docker.sh",
     "test:esp32:firmware": "sh esp32/firmware/test/host/run.sh",
     "build:esp32": "bash esp32/idf.sh build",
     "flash:esp32": "bash esp32/idf.sh flash",
-    "verify:esp32": "node bin/esp32-verify.mjs"
+    "verify:esp32": "node bin/esp32-verify.mjs",
+    "release:firmware": "npm run build:esp32 && node scripts/package-firmware.mjs --snapshot-build"
   },
   "engines": {
     "node": ">=20.0.0"

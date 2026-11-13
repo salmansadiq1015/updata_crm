@@ -18,6 +18,20 @@ const labels = {
   "workflowPages.common.status": ["Status", "Status", "Statut", "الحالة"],
   "workflowPages.common.viewAll": ["View all", "Alle anzeigen", "Tout afficher", "عرض الكل"],
 
+  // Workflow table management
+  "workflowPages.list.selectPage": ["Select all workflows on this page", "Alle Workflows auf dieser Seite auswählen", "Sélectionner tous les workflows de cette page", "تحديد كل سير العمل في هذه الصفحة"],
+  "workflowPages.list.select": ["Select workflow", "Workflow auswählen", "Sélectionner le workflow", "تحديد سير العمل"],
+  "workflowPages.list.selectName": ["Select {name}", "{name} auswählen", "Sélectionner {name}", "تحديد {name}"],
+  "workflowPages.list.selected": ["{count} selected on this page", "{count} auf dieser Seite ausgewählt", "{count} sélectionnés sur cette page", "تم تحديد {count} في هذه الصفحة"],
+  "workflowPages.list.bulkDelete": ["Delete selected", "Auswahl löschen", "Supprimer la sélection", "حذف المحدد"],
+  "workflowPages.list.delete": ["Delete", "Löschen", "Supprimer", "حذف"],
+  "workflowPages.list.deleteTitle": ["Delete {count} workflow(s)?", "{count} Workflows löschen ?", "Supprimer {count} workflow(s) ?", "حذف {count} من سير العمل؟"],
+  "workflowPages.list.deleteHint": ["Unused drafts are permanently deleted. Workflows with published versions or execution history are archived; running executions finish normally and history remains available.", "Ungenutzte Entwürfe werden endgültig gelöscht. Workflows mit veröffentlichten Versionen oder Ausführungsverlauf werden archiviert. Laufende Ausführungen werden normal beendet und der Verlauf bleibt verfügbar.", "Les brouillons inutilisés sont définitivement supprimés. Les workflows avec des versions publiées ou un historique sont archivés ; les exécutions en cours se terminent normalement et leur historique reste accessible.", "تُحذف المسودات غير المستخدمة نهائيًا. تتم أرشفة سير العمل ذات الإصدارات المنشورة أو سجل التنفيذ؛ تكتمل عمليات التنفيذ الجارية بشكل طبيعي ويظل السجل متاحًا."],
+  "workflowPages.list.deleteResult": ["{deleted} deleted · {archived} archived · {failed} failed", "{deleted} gelöscht · {archived} archiviert · {failed} fehlgeschlagen", "{deleted} supprimés · {archived} archivés · {failed} en échec", "تم حذف {deleted} · تمت أرشفة {archived} · فشل {failed}"],
+  "workflowPages.list.refresh": ["Refresh", "Aktualisieren", "Actualiser", "تحديث"],
+  "workflowPages.list.pageSize": ["Rows per page", "Zeilen pro Seite", "Lignes par page", "صفوف لكل صفحة"],
+  "workflowPages.list.rows": ["{count} per page", "{count} pro Seite", "{count} par page", "{count} لكل صفحة"],
+
   // Charts
   "workflowPages.chart.started": ["Started", "Gestartet", "Démarrées", "بدأت"],
   "workflowPages.chart.completed": ["Completed", "Abgeschlossen", "Terminées", "اكتملت"],

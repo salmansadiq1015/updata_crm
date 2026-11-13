@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { passwordSchema } from './auth.validation.js';
 import { objectId, cursorPagination, idParam } from '../../shared/validation/commonSchemas.js';
 import { ValidationError } from '../../shared/errors/AppError.js';
 import * as aiCallingSchemas from '../aiCalling/aiCalling.validation.js';
@@ -11,6 +12,7 @@ const preferredDepartmentId = objectId.allow(null);
 export const createUserSchema = {
   body: Joi.object({
     email: Joi.string().email().required().lowercase().trim().max(255),
+    password: passwordSchema.optional(),
     firstName: Joi.string().required().trim().max(100),
     lastName: Joi.string().required().trim().max(100),
     salutation: Joi.string().valid('herr', 'frau').allow('', null),
@@ -37,6 +39,7 @@ export const updateUserSchema = {
     id: objectId.required(),
   }),
   body: Joi.object({
+    password: passwordSchema.optional(),
     email: Joi.string().email().lowercase().trim().max(255),
     firstName: Joi.string().trim().max(100),
     lastName: Joi.string().trim().max(100),
@@ -57,7 +60,7 @@ export const updateUserSchema = {
     status: Joi.string().valid('active', 'deactivated', 'locked'),
     schedulingSkills: schedulingCapabilitySchema,
     schedulingCertifications: schedulingCapabilitySchema,
-  }),
+  }).min(1),
 };
 
 export const updateMeSchema = {
@@ -122,7 +125,7 @@ export const assignUserProjectSchema = {
 
 export const bulkUpdateSchema = {
   body: Joi.object({
-    ids: Joi.array().items(objectId).min(1).max(100).required(),
+    ids: Joi.array().items(objectId).unique().min(1).max(100).required(),
     data: Joi.object({
       roleId: objectId,
       language: Joi.string().valid('de', 'en', 'fr', 'it'),
@@ -134,7 +137,7 @@ export const bulkUpdateSchema = {
 
 export const bulkDeleteSchema = {
   body: Joi.object({
-    ids: Joi.array().items(objectId).min(1).max(100).required(),
+    ids: Joi.array().items(objectId).unique().min(1).max(100).required(),
   }),
 };
 

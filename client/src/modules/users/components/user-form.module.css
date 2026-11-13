@@ -1,0 +1,42 @@
+.dialog {
+  width: min(780px, calc(100vw - 32px));
+  max-width: 780px;
+  max-height: min(880px, 92dvh);
+  border-radius: 24px;
+  box-shadow: 0 32px 100px rgb(0 0 0 / 28%);
+}
+.header {
+  gap: 8px;
+  padding: 28px 32px 24px;
+  padding-inline-end: 64px;
+  border-bottom: 0;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 70%);
+}
+.eyebrow { display: flex; align-items: center; gap: 7px; color: var(--primary); font-size: 11px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
+.stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 16px 24px; border-block: 1px solid var(--border); background: color-mix(in srgb, var(--muted) 22%, transparent); }
+.step { display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; padding: 10px 8px; border: 1px solid transparent; border-radius: 12px; color: var(--muted-foreground); font-size: 12px; font-weight: 550; transition: background 150ms, border-color 150ms; }
+.step:disabled { opacity: .5; }
+.step[aria-current='step'] { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 22%, transparent); background: color-mix(in srgb, var(--primary) 9%, transparent); box-shadow: 0 2px 6px rgb(0 0 0 / 3%); }
+.stepNumber { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; background: var(--muted); font-size: 11px; }
+.step[aria-current='step'] .stepNumber { background: var(--primary); color: var(--primary-foreground); }
+.completed .stepNumber { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
+.body { min-height: 300px; padding: 28px 32px 32px; overflow-y: auto; }
+.body :global([data-slot='input']), .body :global([data-slot='select-trigger']) { min-height: 44px; border-radius: 10px; background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.sectionHeading { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.sectionIcon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary); }
+.passwordPanel { grid-column: 1 / -1; margin-top: 8px; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--muted) 22%, transparent); }
+.passwordGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.passwordInput { position: relative; }
+.passwordInput input { padding-inline-end: 44px; }
+.passwordToggle { position: absolute; top: 6px; inset-inline-end: 6px; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 32px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--muted) 24%, transparent); }
+@media (max-width: 640px) {
+  .dialog { width: calc(100vw - 20px); max-height: 94dvh; border-radius: 20px; }
+  .header { padding: 24px 20px 20px; padding-inline-end: 54px; }
+  .stepper { gap: 3px; padding: 12px; }
+  .step { flex-direction: column; gap: 6px; padding: 8px 2px; font-size: 10px; }
+  .body { min-height: 260px; padding: 24px 20px; }
+  .passwordPanel { padding: 16px; }
+  .passwordGrid { grid-template-columns: minmax(0, 1fr); }
+  .footer { padding: 16px 20px; }
+}

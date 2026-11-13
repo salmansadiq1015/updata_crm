@@ -330,14 +330,15 @@ describe('B. human takeover', () => {
     expect((await PairedDevice.findById(d.deviceId).lean()).currentCallId).toBeNull();
   });
 
-  it('takeover never downgrades a call the AI completed', async () => {
+  it('takeover before the AI finalizes the call requires review even when questionnaire answers are complete', async () => {
     const { d, job, call } = await liveCall({ answered: true });
     await ai.agentDisclose(job.callId);
     await ai.agentRecordAnswer(job.callId, { fieldKey: 'active', rawAnswer: 'yes' });
     await pp.requestCallControl(owner, call._id, 'takeover');
     await ev(d, job.callId, 'command_done', { type: 'takeover' }).expect(200);
     await ev(d, job.callId, 'ended', { reason: 'remote_hangup' }).expect(200);
-    expect(await callOf(call)).toMatchObject({ disposition: 'answered_completed', qualification: 'qualified', reviewRequired: true });
+    // Recording answers does not finalize the AI conversation. A takeover interrupts it.
+    expect(await callOf(call)).toMatchObject({ disposition: 'interrupted', qualification: 'review', reviewRequired: true });
   });
 
   it('repeated takeover requests and a duplicated command_done are idempotent', async () => {

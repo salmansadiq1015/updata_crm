@@ -238,3 +238,20 @@ transient, most likely Bluetooth activity during early boot, and is not proven.
 4. Start the gateway again. Every board start is now logged as `board_boot` with its reset reason.
    Crashes, watchdog resets and brownouts also appear in the CRM as a device error
    (`BOARD_RESET_<REASON>`).
+
+## Compiled firmware distribution (no repository access for end users)
+
+CRM Setup guide provides a separate authenticated **Download ESP32 firmware**
+button. It serves `dist/updata-esp32-firmware.tgz` with three compiled images,
+`manifest.json`, `flash_args` and `INSTALL.txt`. No firmware/CRM source, device
+NVS, keys, backups or SDK is included. End users need Python/esptool, not ESP-IDF
+or GitHub access. See `esp32/BINARY-INSTALL.md` for the installation procedure.
+
+Maintainers build on the pinned ESP-IDF v5.5.6 SDK and run
+`npm run release:firmware`. This snapshots only the build's three allowlisted
+images and hashes into `firmware-release/`. Review and commit those release
+files together. Do not snapshot device flash. Normal `npm run package:gateway`
+(and the deployment's `npm run build:phone-gateway`) packages both gateway and
+firmware. It verifies hashes and rejects missing, corrupt or incompatible
+release files; no SDK is required on the production host. Rebuild/install the
+API and client together for the firmware download route and updated guide.

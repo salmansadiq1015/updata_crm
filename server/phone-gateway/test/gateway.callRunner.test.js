@@ -186,6 +186,45 @@ test('nobody answers → ring timeout → hang up → not_answered', async () =>
   c.end();
 });
 
+test('phone rejects DIAL before its USB acknowledgement: report the refusal without resurrecting the runner', async (t) => {
+  const c = await setup();
+  t.after(c.end);
+  c.device.dial = async () => {
+    c.device.emit('event', { name: 'dial_result', callRef: c.job.callRef, ok: false, cme: 3 });
+    return { result: 'ok' };
+  };
+  const result = await c.runner.start();
+  assert.equal(result.result, 'not_dialed');
+  assert.equal(c.runner.phase, 'done');
+  assert.deepEqual(c.ob.types(), ['dial_refused']);
+  assert.equal(c.ob.events[0].data.code, 'phone_rejected_3');
+  assert.equal(c.runner.timers.size, 0);
+  assert.ok(c.leg.closed);
+});
+
+test('phone never reports outgoing setup: timeout is a dial failure, not a lead no-answer', async (t) => {
+  const c = await setup({}, {}, { ringTimeoutSeconds: 0.03 });
+  t.after(c.end);
+  c.device.dial = async () => ({ result: 'ok' });
+  const result = await c.runner.start();
+  assert.equal(result.result, 'ended');
+  assert.deepEqual(c.ob.types(), ['dialing', 'failed']);
+  assert.equal(c.ob.events.at(-1).data.reason, 'dial_not_started');
+});
+
+test('stale dial responses and late rejection after answer do not interrupt an active call', async (t) => {
+  const c = await setup();
+  t.after(() => { if (c.runner.phase !== 'done') c.runner.finish('test_cleanup'); c.end(); });
+  const done = c.runner.start();
+  await c.device.waitForState((s) => s.call === 1, 1000);
+  c.device.emit('event', { name: 'dial_result', callRef: c.job.callRef + 1, ok: false, cme: 3 });
+  c.device.emit('event', { name: 'dial_result', callRef: c.job.callRef, ok: false, cme: 3 });
+  assert.equal(c.runner.phase, 'active');
+  assert.ok(!c.ob.types().includes('dial_refused'));
+  await c.leg.close();
+  await done;
+});
+
 test('firmware refuses a dial signed for another session → dial_refused, nothing dialed', async () => {
   const c = await setup({}, {}, { mac: Buffer.alloc(32, 1).toString('hex') });
   const res = await c.runner.start();

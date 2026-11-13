@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "version": "0.1.4",
+  "chip": "esp32",
+  "idf": "v5.5.6",
+  "flashSize": "4MB",
+  "flashMode": "dio",
+  "flashFrequency": "40m",
+  "images": [
+    {
+      "file": "bootloader.bin",
+      "offset": "0x1000",
+      "size": 18352,
+      "sha256": "4661122249caf9760c33f9cb6c02ba85d7ed1cd425a08bc361acb1a0b787fe8d"
+    },
+    {
+      "file": "partition-table.bin",
+      "offset": "0x8000",
+      "size": 3072,
+      "sha256": "5295e8c42d6fb5f95e4e8a185932c6191d27cfc5078322475347e40e71af815a"
+    },
+    {
+      "file": "updata_hfp_bridge.bin",
+      "offset": "0x10000",
+      "size": 676336,
+      "sha256": "14b80ba935f3e66b4fafa0ff4e48ff80999d3b8a9e353a237b8fca9f4c82d55a"
+    }
+  ]
+}

@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { createUserSchema } from '@/modules/users/validations/user';
+import { buildUserFormSchema } from '@/modules/users/validations/user';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
-import { Separator } from '@/components/ui/separator';
+import styles from './user-form.module.css';
 import { cn } from '@/lib/utils';
 import {
   DEPARTMENT_POSITION_PRESETS,
@@ -22,7 +22,7 @@ import { getPresetDisplayLabel, getUserRoleLabel } from '@/modules/users/utils/u
 import { getPreferredDepartmentId } from '@/modules/users/utils/project-assignment';
 import {
   Loader2, User, Mail, Shield, MapPin, Briefcase,
-  ChevronLeft, Check, ArrowRight, AlertTriangle, ShieldCheck,
+  ChevronLeft, Check, ArrowRight, AlertTriangle, ShieldCheck, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 
 const EMPTY_TEAM_VALUE = '__none';
@@ -35,32 +35,37 @@ function splitCapabilities(value) {
 }
 
 const STEPS = [
-  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persönlich', icon: User, fields: ['firstName', 'lastName', 'birthDate', 'initials'] },
-  { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
-  { id: 'work', labelKey: 'users.step.work', fallback: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
-  { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'addressSupplement', 'zip', 'city', 'country'] },
-  { id: 'access', labelKey: 'users.step.access', fallback: 'Zugang', icon: Shield, fields: ['roleId', 'language'] },
+  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Personal', icon: User, fields: ['firstName', 'lastName', 'birthDate', 'initials'] },
+  { id: 'contact', labelKey: 'users.step.contact', fallback: 'Contact', icon: Mail, fields: ['email', 'phone'] },
+  { id: 'work', labelKey: 'users.step.work', fallback: 'Work', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
+  { id: 'address', labelKey: 'users.step.address', fallback: 'Address', icon: MapPin, fields: ['street', 'addressSupplement', 'zip', 'city', 'country'] },
+  { id: 'access', labelKey: 'users.step.access', fallback: 'Access', icon: Shield, fields: ['roleId', 'language', 'password', 'confirmPassword'] },
 ];
 
 function getStepLabel(step, t) {
   return t(step.labelKey, step.fallback);
 }
 
-export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = [], assignmentTargets = [], isLoading }) {
-  const { t } = useLanguage();
+export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = [], assignmentTargets = [], isLoading, canManageRole = true }) {
+  const { t, locale } = useLanguage();
+  const defaultLanguage = ['de', 'en', 'fr', 'it'].includes(locale) ? locale : 'en';
+  const defaultCountry = t('users.countryExample', 'Switzerland');
   const isEdit = !!defaultValues?._id;
   const defaultRoleId = roles.find((r) => r.name === 'User')?._id || '';
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const schema = useMemo(() => buildUserFormSchema(t, { isEdit }), [t, isEdit]);
   const [currentStep, setCurrentStep] = useState(0);
   const [pendingPresetRoleName, setPendingPresetRoleName] = useState(null);
 
-  const { register, handleSubmit, reset, setValue, getValues, control, formState: { errors }, trigger } = useForm({
-    resolver: zodResolver(createUserSchema),
+  const { register, handleSubmit, reset, setValue, getValues, control, formState: { errors, isSubmitting }, trigger } = useForm({
+    resolver: zodResolver(schema),
     defaultValues: {
       firstName: '', lastName: '', salutation: '', birthDate: '', initials: '',
-      email: '', phone: '',
+      email: '', phone: '', password: '', confirmPassword: '',
       department: '', position: '', skills: '', certifications: '',
-      street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
-      roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
+      street: '', addressSupplement: '', city: '', zip: '', country: defaultCountry,
+      roleId: defaultRoleId, language: defaultLanguage, preferredDepartmentId: null,
       ...defaultValues,
     },
   });
@@ -74,6 +79,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         birthDate: defaultValues.birthDate ? String(defaultValues.birthDate).slice(0, 10) : '',
         initials: defaultValues.initials || '',
         email: defaultValues.email || '',
+        password: '', confirmPassword: '',
         phone: defaultValues.phone || '',
         department: defaultValues.department || '',
         position: defaultValues.position || '',
@@ -81,23 +87,23 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         addressSupplement: defaultValues.addressSupplement || '',
         city: defaultValues.city || '',
         zip: defaultValues.zip || '',
-        country: defaultValues.country || 'Schweiz',
+        country: defaultValues.country || '',
         skills: (defaultValues.schedulingSkills || []).join(', '),
         certifications: (defaultValues.schedulingCertifications || []).join(', '),
         roleId: defaultValues.role?._id || defaultValues.roleId || '',
         preferredDepartmentId: getPreferredDepartmentId(defaultValues),
-        language: defaultValues.language || 'de',
+        language: defaultValues.language || defaultLanguage,
       });
     } else {
       reset({
         firstName: '', lastName: '', salutation: '', birthDate: '', initials: '',
-        email: '', phone: '',
+        email: '', phone: '', password: '', confirmPassword: '',
         department: '', position: '', skills: '', certifications: '',
-        street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
-        roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
+        street: '', addressSupplement: '', city: '', zip: '', country: defaultCountry,
+        roleId: defaultRoleId, language: defaultLanguage, preferredDepartmentId: null,
       });
     }
-  }, [defaultValues, reset, defaultRoleId, open]);
+  }, [defaultValues, reset, defaultRoleId, open, defaultLanguage, defaultCountry]);
 
   const selectedSalutation = useWatch({ control, name: 'salutation' });
   const selectedDepartment = useWatch({ control, name: 'department' });
@@ -172,8 +178,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (roles.length === 0) {
       return {
         tone: 'pending',
-        title: t('users.rolePreset.pendingTitle', 'Rolle wird vorbereitet'),
-        description: t('users.rolePreset.pendingDesc', '{role} wird angewendet, sobald Rollen geladen sind.', {
+        title: t('users.rolePreset.pendingTitle', "Role pending"),
+        description: t('users.rolePreset.pendingDesc', "{role} will be applied once roles are loaded.", {
           role: presetRoleLabel,
         }),
       };
@@ -182,8 +188,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (isMappedRoleMissing) {
       return {
         tone: 'warning',
-        title: t('users.rolePreset.missingTitle', 'Standardrolle fehlt'),
-        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfügbar. Wählen Sie im Zugang-Schritt eine Rolle manuell aus.', {
+        title: t('users.rolePreset.missingTitle', "Default role missing"),
+        description: t('users.rolePreset.missingDesc', "The role {role} is not available. Select a role manually in the Access step.", {
           role: presetRoleLabel,
         }),
       };
@@ -192,10 +198,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (isManualRoleOverride) {
       return {
         tone: 'override',
-        title: t('users.rolePreset.overrideTitle', 'Manuell angepasst'),
-        description: t('users.rolePreset.overrideDesc', '{defaultRole} wäre die Standardrolle für diese Position. Aktuell ist {currentRole} ausgewählt.', {
+        title: t('users.rolePreset.overrideTitle', "Manually adjusted"),
+        description: t('users.rolePreset.overrideDesc', "{defaultRole} is the default role for this position. {currentRole} is currently selected.", {
           defaultRole: presetRoleLabel,
-          currentRole: getUserRoleLabel(currentRole?.name, t) || t('users.roleOther', 'eine andere Rolle'),
+          currentRole: getUserRoleLabel(currentRole?.name, t) || t('users.roleOther', "another role"),
         }),
       };
     }
@@ -203,8 +209,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (isPresetRoleApplied) {
       return {
         tone: 'applied',
-        title: t('users.rolePreset.appliedTitle', 'Zugriff automatisch gesetzt'),
-        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden über die Rolle {role} angewendet.', {
+        title: t('users.rolePreset.appliedTitle', "Access set automatically"),
+        description: t('users.rolePreset.appliedDesc', "Permissions are applied through the {role} role.", {
           role: getUserRoleLabel(mappedRole.name, t),
         }),
       };
@@ -285,26 +291,39 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   };
 
   const handleDialogOpenChange = (nextOpen) => {
+    if (isLoading || isSubmitting) return;
+    setShowPassword(false);
+    setShowConfirmation(false);
     setCurrentStep(0);
     setPendingPresetRoleName(null);
     onOpenChange(nextOpen);
   };
 
-  const handleFormSubmit = (data) => {
+  const handleFormSubmit = async (data) => {
     // Creating walks the wizard step by step; editing can be saved from any step.
     if (!isEdit && currentStep < STEPS.length - 1) {
       return;
     }
-    const { skills, certifications, ...rest } = data;
-    onSubmit({
-      ...rest,
-      salutation: data.salutation || null,
-      preferredDepartmentId: data.preferredDepartmentId || null,
-      schedulingSkills: splitCapabilities(skills),
-      schedulingCertifications: splitCapabilities(certifications),
-    });
-    handleDialogOpenChange(false);
-    reset();
+    const { skills, certifications, confirmPassword: _confirmPassword, ...rest } = data;
+    if (isEdit && !canManageRole) delete rest.roleId;
+    if (isEdit && (!canManageRole || !rest.password)) delete rest.password;
+    try {
+      await onSubmit({
+        ...rest,
+        birthDate: data.birthDate || null,
+        salutation: data.salutation || null,
+        preferredDepartmentId: data.preferredDepartmentId || null,
+        schedulingSkills: splitCapabilities(skills),
+        schedulingCertifications: splitCapabilities(certifications),
+      });
+      onOpenChange(false);
+      setShowPassword(false);
+      setShowConfirmation(false);
+      setCurrentStep(0);
+      reset();
+    } catch {
+      // The mutation shows the API error; preserve the form so it can be corrected.
+    }
   };
 
   // With free navigation an invalid field can sit on a step we are not looking
@@ -327,72 +346,38 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col"
+      <DialogContent className={cn(styles.dialog, 'p-0 gap-0 overflow-hidden flex flex-col')}
         onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-          <DialogTitle className="text-lg font-bold">
+        <DialogHeader className={cn(styles.header, 'shrink-0')}>
+          <div className={styles.eyebrow}><ShieldCheck className="size-3.5" />{t('users.formEyebrow', 'People & access')}</div>
+          <DialogTitle className="text-2xl font-semibold tracking-tight">
             {isEdit ? t('users.editUser') : t('users.newUser')}
           </DialogTitle>
           <DialogDescription className="text-sm">
             {isEdit
-              ? (t('users.editDesc') || 'Benutzerinformationen bearbeiten.')
-              : (t('users.createDesc') || 'Neuen Benutzer erstellen. Eine Aktivierungs-E-Mail wird gesendet.')
+              ? (t('users.editDesc', "Edit user information."))
+              : t('users.createWithPasswordDesc', 'Create a profile, set access and choose a secure password.')
             }
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step indicator */}
-        <div className="px-6 pb-4 shrink-0">
-          <div className="flex items-center gap-1">
-            {STEPS.map((s, i) => {
-              const StepIcon = s.icon;
-              const isCompleted = i < currentStep;
-              const isCurrent = i === currentStep;
-              return (
-                <div key={s.id} className="flex items-center flex-1">
-                  <button
-                    type="button"
-                    onClick={() => (isEdit || i < currentStep) && setCurrentStep(i)}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg transition-all w-full',
-                      isCurrent && 'bg-primary/10 text-primary',
-                      isCompleted && 'text-emerald-600 cursor-pointer hover:bg-emerald-500/5',
-                      !isCurrent && !isCompleted && (isEdit
-                        ? 'text-muted-foreground cursor-pointer hover:bg-muted'
-                        : 'text-muted-foreground/50'),
-                    )}
-                    disabled={!isEdit && i > currentStep}
-                  >
-                    <div className={cn(
-                      'h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold transition-all',
-                      isCurrent && 'bg-primary text-primary-foreground shadow-sm shadow-primary/30',
-                      isCompleted && 'bg-emerald-500 text-white',
-                      !isCurrent && !isCompleted && (isEdit
-                        ? 'bg-muted text-muted-foreground'
-                        : 'bg-muted text-muted-foreground/50'),
-                    )}>
-                      {isCompleted ? <Check className="h-3.5 w-3.5" /> : i + 1}
-                    </div>
-                    <span className="text-xs font-medium hidden sm:block truncate">{getStepLabel(s, t)}</span>
-                  </button>
-                  {i < STEPS.length - 1 && (
-                    <div className={cn(
-                      'h-px w-4 shrink-0 mx-0.5',
-                      i < currentStep ? 'bg-emerald-500' : 'bg-border',
-                    )} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <Separator className="shrink-0" />
+        <nav data-slot="user-form-steps" className={styles.stepper} aria-label={t('users.formSteps', 'User setup steps')}>
+          {STEPS.map((s, i) => (
+            <button key={s.id} type="button" aria-current={i === currentStep ? 'step' : undefined}
+              disabled={(!isEdit && i > currentStep) || isSubmitting || isLoading}
+              onClick={() => setCurrentStep(i)}
+              className={cn(styles.step, i < currentStep && styles.completed)}>
+              <span className={styles.stepNumber}>{i < currentStep ? <Check className="size-3.5" /> : i + 1}</span>
+              <span className="truncate">{getStepLabel(s, t)}</span>
+            </button>
+          ))}
+        </nav>
 
         {/* Form content */}
         <form
+          data-slot="user-form"
           onSubmit={handleSubmit(handleFormSubmit, handleInvalid)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && currentStep < STEPS.length - 1 && e.target.tagName !== 'TEXTAREA') {
@@ -401,16 +386,16 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
           }}
           className="flex flex-col flex-1 min-h-0"
         >
-          <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto">
+          <div className={cn(styles.body, 'flex-1 min-h-0')}>
             {/* Step header */}
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center">
+            <div className={styles.sectionHeading}>
+              <div className={styles.sectionIcon}>
                 <step.icon className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold">{getStepLabel(step, t)}</h3>
+                <h3 className="text-base font-semibold tracking-tight">{getStepLabel(step, t)}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {t('users.stepCounter', 'Schritt {current} von {total}', {
+                  {t('users.stepCounter', "Step {current} of {total}", {
                     current: currentStep + 1,
                     total: STEPS.length,
                   })}
@@ -421,22 +406,22 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 1: Personal */}
             {currentStep === 0 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.salutation', 'Anrede')}>
+                <FormField label={t('users.salutation', "Salutation")}>
                   <Select
                     value={selectedSalutation || SALUTATION_NONE}
                     onValueChange={(v) => setValue('salutation', v === SALUTATION_NONE ? '' : v, { shouldValidate: true })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('users.salutationPlaceholder', 'Anrede wählen')} />
+                      <SelectValue placeholder={t('users.salutationPlaceholder', "Select salutation")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={SALUTATION_NONE}>{t('users.salutationNone', 'Keine Angabe')}</SelectItem>
-                      <SelectItem value="herr">{t('users.salutationHerr', 'Herr')}</SelectItem>
-                      <SelectItem value="frau">{t('users.salutationFrau', 'Frau')}</SelectItem>
+                      <SelectItem value={SALUTATION_NONE}>{t('users.salutationNone', "None")}</SelectItem>
+                      <SelectItem value="herr">{t('users.salutationHerr', "Mr")}</SelectItem>
+                      <SelectItem value="frau">{t('users.salutationFrau', "Ms")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormField>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label={t('users.firstName')} error={errors.firstName?.message} required>
                     <Input placeholder="Max" {...register('firstName')} autoFocus />
                   </FormField>
@@ -444,14 +429,14 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     <Input placeholder="Muster" {...register('lastName')} />
                   </FormField>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField label={t('users.birthDate', 'Geburtsdatum')} error={errors.birthDate?.message}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField label={t('users.birthDate', "Date of birth")} error={errors.birthDate?.message}>
                     <Input type="date" {...register('birthDate')} />
                   </FormField>
                   <FormField
-                    label={t('users.initials', 'Kürzel')}
+                    label={t('users.initials', "Initials")}
                     error={errors.initials?.message}
-                    description={t('users.initialsHint', 'z.B. Timo Schweizer = TS')}
+                    description={t('users.initialsHint', "e.g. Timo Schweizer = TS")}
                   >
                     <Input placeholder="TS" maxLength={5} className="uppercase" {...register('initials')} />
                   </FormField>
@@ -466,7 +451,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   <Input type="email" placeholder="max.muster@updata.ai" {...register('email')} autoFocus />
                 </FormField>
                 <FormField
-                  label={`${t('users.phone')} (${t('common.optional', 'optional')})`}
+                  label={`${t('users.phone')} (${t('common.optional', "optional")})`}
                   error={errors.phone?.message}
                 >
                   <Input placeholder="+41 79 123 45 67" {...register('phone')} />
@@ -477,10 +462,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 3: Work */}
             {currentStep === 2 && (
               <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-right-4 duration-300 sm:grid-cols-2">
-                <FormField label={t('users.department') || 'Abteilung'}>
+                <FormField label={t('users.department', "Department")}>
                   <Select value={selectedDepartment || ''} onValueChange={handleDepartmentChange}>
                     <SelectTrigger autoFocus>
-                      <SelectValue placeholder={t('users.departmentPlaceholder') || 'z.B. Technik'} />
+                      <SelectValue placeholder={t('users.departmentPlaceholder', "e.g. Engineering")} />
                     </SelectTrigger>
                     <SelectContent>
                       {departmentOptions.map((department) => (
@@ -491,14 +476,14 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     </SelectContent>
                   </Select>
                 </FormField>
-                <FormField label={t('users.position') || 'Position'}>
+                <FormField label={t('users.position', "Position")}>
                   <Select
                     value={selectedPosition || ''}
                     onValueChange={handlePositionChange}
                     disabled={!selectedDepartment || positionOptions.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('users.positionPlaceholder') || 'z.B. Projektleiter'} />
+                      <SelectValue placeholder={t('users.positionPlaceholder', "e.g. Project Manager")} />
                     </SelectTrigger>
                     <SelectContent>
                       {positionOptions.map((position) => (
@@ -513,7 +498,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   <RolePresetNotice notice={rolePresetNotice} className="sm:col-span-2" />
                 )}
                 <FormField
-                  label={t('users.preferredTeam') || 'Bevorzugtes Team'}
+                  label={t('users.preferredTeam', "Preferred team")}
                   className="sm:col-span-2"
                 >
                   <Select
@@ -527,11 +512,11 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     disabled={assignmentTargets.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team für Projektzuweisungen wählen'} />
+                      <SelectValue placeholder={t('users.preferredTeamPlaceholder', "Select team for project assignments")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EMPTY_TEAM_VALUE}>
-                        {t('users.noPreferredTeam') || 'Kein Team'}
+                        {t('users.noPreferredTeam', "No team")}
                       </SelectItem>
                       {assignmentTargets.map((target) => (
                         <SelectItem key={target._id || target.id} value={target._id || target.id}>
@@ -542,22 +527,22 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </Select>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {assignmentTargets.length === 0
-                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfügbar.')
-                      : (t('users.preferredTeamHint') || 'Dieses Team wird verwendet, wenn der Benutzer einem Projekt als Team zugewiesen wird.')}
+                      ? (t('users.preferredTeamUnavailable', "No active teams available."))
+                      : (t('users.preferredTeamHint', "This team is used when the user is assigned to a project as team work."))}
                   </p>
                 </FormField>
 
-                <FormField label={t('users.skills', 'Skills / Qualifikationen')} className="sm:col-span-2">
-                  <Input placeholder={t('users.skillsPlaceholder', 'z.B. Wärmepumpe, Gasheizung, Solar')} {...register('skills')} />
+                <FormField label={t('users.skills', "Skills / Qualifications")} className="sm:col-span-2">
+                  <Input placeholder={t('users.skillsPlaceholder', "e.g. heat pump, gas heating, solar")} {...register('skills')} />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {t('users.skillsHint', 'Mit Komma trennen — Grundlage für die Einsatzplanung.')}
+                    {t('users.skillsHint', "Separate with commas — basis for deployment planning.")}
                   </p>
                 </FormField>
 
-                <FormField label={t('users.certifications', 'Zertifikate / Kompetenzen')} className="sm:col-span-2">
-                  <Input placeholder={t('users.certificationsPlaceholder', 'z.B. Kältemittel-Zertifikat, Schweissausweis')} {...register('certifications')} />
+                <FormField label={t('users.certifications', "Certificates / Competences")} className="sm:col-span-2">
+                  <Input placeholder={t('users.certificationsPlaceholder', "e.g. refrigerant cert., welding license")} {...register('certifications')} />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {t('users.certificationsHint', 'Mit Komma trennen.')}
+                    {t('users.certificationsHint', "Separate with commas.")}
                   </p>
                 </FormField>
               </div>
@@ -566,34 +551,34 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 4: Address */}
             {currentStep === 3 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.street') || 'Strasse'}>
-                  <Input placeholder="Musterstrasse 1" {...register('street')} autoFocus />
+                <FormField label={t('users.street', "Street")}>
+                  <Input placeholder={t('users.streetExample', 'Example Street 1')} {...register('street')} autoFocus />
                 </FormField>
                 <FormField
-                  label={`${t('users.addressSupplement', 'Adresszusatz')} (${t('common.optional', 'optional')})`}
+                  label={`${t('users.addressSupplement', "Address supplement")} (${t('common.optional', "optional")})`}
                   error={errors.addressSupplement?.message}
                 >
-                  <Input placeholder="z.B. Postfach 123, c/o Verwaltung Müller AG" {...register('addressSupplement')} />
+                  <Input placeholder={t('users.addressSupplementExample', 'PO Box 123, c/o Example Ltd')} {...register('addressSupplement')} />
                 </FormField>
                 <div className="grid grid-cols-3 gap-4">
-                  <FormField label={t('users.zip') || 'PLZ'}>
+                  <FormField label={t('users.zip', "ZIP")}>
                     <Input placeholder="3000" {...register('zip')} />
                   </FormField>
-                  <FormField label={t('users.city') || 'Ort'} className="col-span-2">
+                  <FormField label={t('users.city', "City")} className="col-span-2">
                     <Input placeholder="Bern" {...register('city')} />
                   </FormField>
                 </div>
-                <FormField label={t('users.country') || 'Land'}>
-                  <Input placeholder="Schweiz" {...register('country')} />
+                <FormField label={t('users.country', "Country")}>
+                  <Input placeholder={t('users.countryExample', 'Switzerland')} {...register('country')} />
                 </FormField>
               </div>
             )}
 
             {/* Step 5: Access */}
             {currentStep === 4 && (
-              <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.role')} error={errors.roleId?.message} required>
-                  <Select value={selectedRoleId || ''} onValueChange={handleRoleChange}>
+                  <Select value={selectedRoleId || ''} onValueChange={handleRoleChange} disabled={isEdit && !canManageRole}>
                     <SelectTrigger>
                       <SelectValue placeholder={t('users.selectRole')} />
                     </SelectTrigger>
@@ -610,29 +595,57 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="de">Deutsch</SelectItem>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="fr">Francais</SelectItem>
-                      <SelectItem value="it">Italiano</SelectItem>
+                      <SelectItem value="de">{t('users.languageNames.de', 'German')}</SelectItem>
+                      <SelectItem value="en">{t('users.languageNames.en', 'English')}</SelectItem>
+                      <SelectItem value="fr">{t('users.languageNames.fr', 'French')}</SelectItem>
+                      <SelectItem value="it">{t('users.languageNames.it', 'Italian')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormField>
                 {rolePresetNotice && (
-                  <RolePresetNotice notice={rolePresetNotice} className="col-span-2" />
+                  <RolePresetNotice notice={rolePresetNotice} className="sm:col-span-2" />
                 )}
+                {(!isEdit || canManageRole) && <section className={styles.passwordPanel} aria-label={t('users.credentials', 'Sign-in credentials')}>
+                  <div className="flex items-start gap-3">
+                    <KeyRound className="size-4 mt-0.5 text-primary" />
+                    <div>
+                      <h4 className="text-sm font-semibold">{t('users.credentials', 'Sign-in credentials')}</h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{isEdit ? t('users.passwordUpdateHint', 'Leave both fields blank to keep the current password. Setting a new password signs the user out of all sessions and replaces outstanding setup or reset links.') : t('users.passwordSetupHint', 'The user can sign in immediately with their email and this password.')}</p>
+                    </div>
+                  </div>
+                  <div className={styles.passwordGrid}>
+                    <FormField label={t('users.password', 'Password')} required={!isEdit} error={errors.password?.message}>
+                      <div className={styles.passwordInput}>
+                        <Input aria-label={t('users.password', 'Password')} type={showPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} {...register('password')} />
+                        <Button type="button" variant="ghost" size="icon" className={cn(styles.passwordToggle, 'size-8')} aria-pressed={showPassword}
+                          aria-label={t(showPassword ? 'users.hidePassword' : 'users.showPassword', showPassword ? 'Hide password' : 'Show password')} onClick={() => setShowPassword((value) => !value)}>
+                          {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </Button>
+                      </div>
+                    </FormField>
+                    <FormField label={t('users.confirmPassword', 'Confirm password')} required={!isEdit} error={errors.confirmPassword?.message}>
+                      <div className={styles.passwordInput}>
+                        <Input aria-label={t('users.confirmPassword', 'Confirm password')} type={showConfirmation ? 'text' : 'password'} autoComplete="new-password" maxLength={128} {...register('confirmPassword')} />
+                        <Button type="button" variant="ghost" size="icon" className={cn(styles.passwordToggle, 'size-8')} aria-pressed={showConfirmation}
+                          aria-label={t(showConfirmation ? 'users.hideConfirmation' : 'users.showConfirmation', showConfirmation ? 'Hide confirmation' : 'Show confirmation')} onClick={() => setShowConfirmation((value) => !value)}>
+                          {showConfirmation ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </Button>
+                      </div>
+                    </FormField>
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{t('users.passwordRequirements', 'Use 10–128 characters with uppercase and lowercase letters, a number and a symbol.')}</p>
+                </section>}
               </div>
             )}
           </div>
 
-          <Separator className="shrink-0" />
-
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0 bg-muted/40 border-t border-border/60 rounded-b-2xl">
+          <div className={cn(styles.footer, 'shrink-0')}>
             <div>
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurück')}
+                  {t('common.back', "Back")}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => handleDialogOpenChange(false)}>
@@ -643,7 +656,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
             <div className="flex items-center gap-2">
               {/* Progress dots */}
-              <div className="flex items-center gap-1 mr-2">
+              <div className="hidden sm:flex items-center gap-1 mr-2" aria-hidden="true">
                 {STEPS.map((_, i) => (
                   <div
                     key={i}
@@ -666,12 +679,12 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     goNext();
                   }}
                 >
-                  {t('common.next', 'Weiter')}
+                  {t('common.next', "Next")}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               )}
               {(isLastStep || isEdit) && (
-                <Button type="submit" className="rounded-lg h-9 px-5 gap-1.5 shadow-sm" disabled={isLoading}>
+                <Button type="submit" className="rounded-lg h-9 px-5 gap-1.5 shadow-sm" disabled={isLoading || isSubmitting}>
                   {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {isEdit ? t('users.save') : t('users.create')}
                 </Button>

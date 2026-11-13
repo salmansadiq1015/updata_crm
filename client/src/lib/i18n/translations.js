@@ -1,3 +1,5 @@
+import { userExperienceTranslations } from './user-experience-translations';
+import { userManagementTranslations } from './user-management-translations';
 import { taskTimeTranslations } from './task-time-translations';
 import { chatWorkspaceTranslations } from './chat-workspace-translations';
 import { taskWorkspaceTranslations } from './task-workspace-translations';
@@ -1256,6 +1258,7 @@ const baseTranslations = {
     ...fleetTranslations.de,
     ...documentHubTranslations.de,
     ...pageHeroTranslations.de,
+    ...userManagementTranslations.de,
     ...smsOpsTranslations.de,
     ...leadsQualityTranslations.de,
     // Navbar
@@ -6323,6 +6326,7 @@ const baseTranslations = {
     ...fleetTranslations.en,
     ...documentHubTranslations.en,
     ...pageHeroTranslations.en,
+    ...userManagementTranslations.en,
     ...smsOpsTranslations.en,
     ...leadsQualityTranslations.en,
     // Navbar
@@ -11398,6 +11402,7 @@ const baseTranslations = {
     ...fleetTranslations.fr,
     ...documentHubTranslations.fr,
     ...pageHeroTranslations.fr,
+    ...userManagementTranslations.fr,
     ...dashboardAnalyticsTranslations.fr,
     ...dashboardIntelligenceTranslations.fr,
     ...taskWorkspaceTranslations.fr,
@@ -11566,6 +11571,7 @@ const baseTranslations = {
     ...fleetTranslations.ar,
     ...documentHubTranslations.ar,
     ...pageHeroTranslations.ar,
+    ...userManagementTranslations.ar,
     ...dashboardAnalyticsTranslations.ar,
     ...dashboardIntelligenceTranslations.ar,
     ...taskWorkspaceTranslations.ar,
@@ -11712,8 +11718,16 @@ const baseTranslations = {
   },
 };
 
-export const translations = {
+const userLocalizedTranslations = {
   ...baseTranslations,
-  fr: completeLocale(baseTranslations.en, baseTranslations.fr, 'fr'),
-  ar: completeLocale(baseTranslations.en, baseTranslations.ar, 'ar'),
+  de: { ...baseTranslations.de, ...userExperienceTranslations.de },
+  en: { ...baseTranslations.en, ...userExperienceTranslations.en },
+  fr: { ...baseTranslations.fr, ...userExperienceTranslations.fr },
+  ar: { ...baseTranslations.ar, ...userExperienceTranslations.ar },
+};
+
+export const translations = {
+  ...userLocalizedTranslations,
+  fr: completeLocale(userLocalizedTranslations.en, userLocalizedTranslations.fr, 'fr'),
+  ar: completeLocale(userLocalizedTranslations.en, userLocalizedTranslations.ar, 'ar'),
 };

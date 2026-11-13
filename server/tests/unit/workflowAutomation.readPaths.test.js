@@ -52,6 +52,26 @@ async function seedRun(workflow, lead, { status = 'completed', outcome = null, c
   return _id;
 }
 
+describe('workflow management', () => {
+  it('paginates and filters workflows with stable totals and keeps published history after deletion', async () => {
+    const draft = await wf.create({ name: 'Unused draft' }, actor);
+    const published = await seedWorkflow('Published flow');
+    const lead = await seedLead();
+    const runId = await seedRun(published, lead, { status: 'waiting' });
+    const first = await wf.list({ limit: 1, sortBy: 'name', sortOrder: 'asc' });
+    expect(first.pagination).toEqual({ page: 1, limit: 1, total: 2, pages: 2 });
+    expect(first.items[0].name).toBe('Published flow');
+    expect((await wf.list({ page: 2, limit: 1, sortBy: 'name', sortOrder: 'asc' })).items[0]._id).toEqual(draft._id);
+    expect((await wf.list({ search: 'Unused', status: 'draft' })).pagination.total).toBe(1);
+    expect(await wf.remove(draft._id, actor)).toEqual({ deleted: true });
+    expect(await M.Workflow.findById(draft._id)).toBeNull();
+    expect(await wf.remove(published._id, actor)).toEqual({ archived: true });
+    expect((await wf.list()).pagination.total).toBe(0);
+    expect((await wf.list({ status: 'archived' })).items[0].name).toBe('Published flow');
+    expect((await M.WorkflowRun.findById(runId).lean()).status).toBe('waiting');
+  });
+});
+
 describe('listRuns', () => {
   it('returns the last step and step count without step outputs, context or visits', async () => {
     const w = await seedWorkflow(); const lead = await seedLead();

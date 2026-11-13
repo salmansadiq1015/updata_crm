@@ -11,8 +11,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
-export function ConfirmDialog({ open, onOpenChange, title, description, onConfirm, loading = false, isLoading = false, variant = 'destructive', confirmText = 'Bestätigen', cancelText = 'Abbrechen' }) {
+export function ConfirmDialog({ open, onOpenChange, title, description, onConfirm, loading = false, isLoading = false, variant = 'destructive', confirmText = '', cancelText = '' }) {
+  const { t } = useLanguage();
   const busy = loading || isLoading;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -33,11 +35,11 @@ export function ConfirmDialog({ open, onOpenChange, title, description, onConfir
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            {cancelText}
+            {cancelText || t('common.cancel', 'Cancel')}
           </Button>
           <Button variant={variant} onClick={onConfirm} disabled={busy} className="gap-2">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {confirmText}
+            {confirmText || t('common.confirm', 'Confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LanguageProvider } from '@/lib/i18n/language-context';
 import { leadSchema } from '@/modules/leads/schemas/lead-schemas';
@@ -60,8 +60,7 @@ beforeEach(() => {
   mocks.presets.mockResolvedValue([{ _id: 'preset:aria', presetId: 'aria', name: 'Aria', category: 'people', description: 'Warm, confident', url: '/avatars/agents/aria-v1.webp' }, { _id: 'preset:orbit', presetId: 'orbit', name: 'Orbit', category: 'ai', url: '/avatars/agents/orbit-v1.webp' }]);
   mocks.images.mockResolvedValue({ data: [], pagination: { page: 1, total: 0, pages: 0 } });
 });
-function open(element: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+function open(element: React.ReactNode, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   return render(<LanguageProvider initialLocale="en"><QueryClientProvider client={client}>{element}</QueryClientProvider></LanguageProvider>);
 }
 
@@ -364,5 +363,75 @@ describe('agent header browser testing', () => {
     open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
     await screen.findByRole('heading', { name: agent.name });
     expect(screen.queryByRole('button', { name: 'Test agent' })).toBeNull();
+  });
+});
+
+describe('browser test assignment recovery', () => {
+  it('clears an earlier browser-test error after saving a lead assignment', async () => {
+    agent.assignedLeadIds = [];
+    agent.eligibility = { total: 0, found: 0, unavailable: 0, eligible: 0, reasonCounts: {}, leads: [] };
+    const selected = leadSchema.parse(makeLeadDTO({ id: 'new-test-lead', name: 'Browser test contact' }));
+    mocks.leadList.mockResolvedValue({ data: [selected], pagination: { hasNext: false, nextCursor: null, total: 1 } });
+    mocks.prepareTest.mockRejectedValueOnce(new Error('Assign a lead to this agent to provide browser test context.'));
+    open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Assign a lead');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Leads' }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Browser test contact' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review 1 assignments' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm assignments' }));
+    await waitFor(() => expect(mocks.assign).toHaveBeenCalledWith('agent-1', ['new-test-lead'], 1));
+    await waitFor(() => expect(screen.queryByText('Assign a lead to this agent to provide browser test context.')).toBeNull());
+    expect(mocks.launch).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('agent workspace refresh recovery', () => {
+  it('clears an obsolete test error when the saved agent version changes and can retry the browser test', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mocks.prepareTest.mockRejectedValueOnce(new Error('Assign a lead to this agent to provide browser test context.'));
+    open(<CallingAgentWorkspace id={agent._id} onBack={vi.fn()} onLaunch={vi.fn()} onCampaign={vi.fn()} />, client);
+    fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Assign a lead');
+    act(() => client.setQueryData(['ai-calling', 'agent', agent._id], { ...agent }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Assign a lead');
+    agent = { ...agent, version: 2 };
+    act(() => client.setQueryData(['ai-calling', 'agent', agent._id], agent));
+    await waitFor(() => expect(screen.queryByText('Assign a lead to this agent to provide browser test context.')).toBeNull());
+    mocks.prepareTest.mockResolvedValueOnce({ _id: 'test-snapshot', agentConfig: agent.agentConfig });
+    fireEvent.click(screen.getByRole('button', { name: 'Test agent' }));
+    expect(await screen.findByRole('dialog', { name: 'Saved agent browser test' })).toBeVisible();
+    expect(mocks.launch).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it('refreshes pristine settings when polling returns a newer agent version', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    open(<CallingAgentWorkspace id={agent._id} initialTab="settings" onBack={vi.fn()} onLaunch={vi.fn()} onCampaign={vi.fn()} />, client);
+    expect(await screen.findByLabelText('Agent name *')).toHaveValue('Sarah Sales');
+    agent = { ...agent, version: 2, name: 'Updated agent' };
+    act(() => client.setQueryData(['ai-calling', 'agent', agent._id], agent));
+    await waitFor(() => expect(screen.getByLabelText('Agent name *')).toHaveValue('Updated agent'));
+    expect(screen.queryByText(/changed since you opened/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+  });
+
+  it('preserves unsaved settings, blocks stale saves and lets the user explicitly load the new version', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    open(<CallingAgentWorkspace id={agent._id} initialTab="settings" onBack={vi.fn()} onLaunch={vi.fn()} onCampaign={vi.fn()} />, client);
+    fireEvent.change(await screen.findByLabelText('Agent name *'), { target: { value: 'Local draft' } });
+    agent = { ...agent, version: 2, name: 'Updated agent' };
+    act(() => client.setQueryData(['ai-calling', 'agent', agent._id], agent));
+    expect(screen.getByLabelText('Agent name *')).toHaveValue('Local draft');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled());
+    expect(mocks.update).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard edits and load latest settings' }));
+    expect(screen.getByLabelText('Agent name *')).toHaveValue('Updated agent');
+    expect(screen.queryByText(/changed since you opened/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Agent name *'), { target: { value: 'Current draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith('agent-1', expect.objectContaining({ version: 2, name: 'Current draft' })));
   });
 });

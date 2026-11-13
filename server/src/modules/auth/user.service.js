@@ -8,9 +8,10 @@ import { invalidateUserListCache, userStatsKey, USER_STATS_TTL } from './userLis
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import {
   hashPassword,
+  comparePassword,
   generateTempPassword,
   generateActivationToken,
 } from '../../shared/utils/crypto.js';
@@ -62,6 +63,7 @@ class UserService {
    * Admin creates a new user.
    */
   async createUser(data, createdBy, meta = {}) {
+    await this._validateAssignmentTarget(data.preferredDepartmentId);
     // If no roleId provided, assign default 'User' role
     if (!data.roleId) {
       const defaultRole = await roleRepository.findByName('User');
@@ -76,12 +78,9 @@ class UserService {
 
     await assertInitialsAvailable(data.initials);
 
-    // Generate temporary password
-    const tempPassword = generateTempPassword();
-    const hashedPassword = await hashPassword(tempPassword);
-
-    // Generate activation token
-    const { token: activationToken, hashedToken, expires } = generateActivationToken();
+    // Direct password setup and invitation setup are separate creation paths.
+    const hashedPassword = await hashPassword(data.password || generateTempPassword());
+    const invitation = data.password ? null : generateActivationToken();
 
     const user = await userRepository.create({
       email: data.email,
@@ -106,28 +105,28 @@ class UserService {
       schedulingSkills: data.schedulingSkills || [],
       schedulingCertifications: data.schedulingCertifications || [],
       role: data.roleId,
-      status: 'pending_activation',
-      activationTokenHash: hashedToken,
-      activationTokenExpires: expires,
+      // Access is enabled by default; the invitation still sets the user's password.
+      status: 'active',
+      activationTokenHash: invitation?.hashedToken || null,
+      activationTokenExpires: invitation?.expires || null,
+      passwordChangedAt: data.password ? new Date() : null,
     });
 
     // Save initial password to history
     await passwordHistoryRepository.create(user._id, hashedPassword);
 
-    // Enqueue activation email
-    const activationUrl = `${config.client.uri}/activate?token=${activationToken}`;
-    try {
-      await queueManager.addJob('auth-email', 'send-activation-email', {
-        email: data.email,
-        name: data.firstName,
-        activationUrl,
-      });
-    } catch (err) {
-      logger.warn('Failed to enqueue activation email', {
-        module: 'auth',
-        action: 'createUser',
-        error: { message: err.message },
-      });
+    // Never send a password by email. Invitation-only creation retains its existing flow.
+    if (invitation) {
+      const activationUrl = `${config.client.uri}/activate?token=${invitation.token}`;
+      try {
+        await queueManager.addJob('auth-email', 'send-activation-email', {
+          email: data.email, name: data.firstName, activationUrl,
+        });
+      } catch (err) {
+        logger.warn('Failed to enqueue activation email', {
+          module: 'auth', action: 'createUser', error: { message: err.message },
+        });
+      }
     }
 
     await this._invalidateListCache();
@@ -178,7 +177,9 @@ class UserService {
    * Get own profile.
    */
   async getMe(userId) {
-    return this.getById(userId);
+    const user = await userRepository.findById(userId, { populateRole: { permissions: true } });
+    if (!user) throw new NotFoundError('User', userId);
+    return this._enrichWithAvatarUrl(user);
   }
 
   /**
@@ -196,10 +197,10 @@ class UserService {
     }
 
     if (Object.keys(filtered).length === 0) {
-      return this.getById(userId);
+      return this.getMe(userId);
     }
 
-    const updated = await userRepository.updateById(userId, filtered);
+    await userRepository.updateById(userId, filtered);
     await this._invalidateUserCache(userId);
     // Names/department are shown in the user list and directory.
     await this._invalidateListCache();
@@ -210,7 +211,7 @@ class UserService {
       updatedBy: userId,
     }, { source: 'auth:users' });
 
-    return this._enrichWithAvatarUrl(updated);
+    return this.getMe(userId);
   }
 
   /**
@@ -222,7 +223,9 @@ class UserService {
 
     if (data.initials !== undefined) await assertInitialsAvailable(data.initials, id);
 
+    await this._validateAssignmentTarget(data.preferredDepartmentId);
     const updateData = { ...data };
+    delete updateData.password;
 
     // Normalize empty salutation to null (Mongoose enum only allows herr/frau/null).
     if (Object.prototype.hasOwnProperty.call(updateData, 'salutation') && !updateData.salutation) {
@@ -238,7 +241,42 @@ class UserService {
       delete updateData.roleId;
     }
 
+    await this._assertStatusChangeAllowed([existing], updateData, updatedBy);
+    if (updateData.status === 'active') {
+      updateData.failedLoginAttempts = 0;
+      updateData.lockedUntil = null;
+    }
+    if (data.password !== undefined) {
+      const secrets = await userRepository.findById(id, { includeSecrets: true });
+      const history = await passwordHistoryRepository.findRecentByUser(id, 5);
+      for (const entry of [secrets, ...history]) {
+        if (entry?.passwordHash && await comparePassword(data.password, entry.passwordHash)) {
+          throw new ValidationError('Password was used recently. Choose a different password.', [
+            { field: 'password', message: 'Cannot reuse any of the last 5 passwords' },
+          ]);
+        }
+      }
+      updateData.passwordHash = await hashPassword(data.password);
+      updateData.passwordChangedAt = new Date();
+      updateData.activationTokenHash = null;
+      updateData.activationTokenExpires = null;
+      updateData.resetTokenHash = null;
+      updateData.resetTokenExpires = null;
+      await passwordHistoryRepository.create(id, secrets.passwordHash);
+    }
     const updated = await userRepository.updateById(id, applyPreferredDepartmentPatch(updateData));
+    if (data.password !== undefined) {
+      await sessionService.revokeAllUserSessions(id);
+      auditService.logEvent({
+        eventType: 'password.changed', userId: updatedBy,
+        ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent, result: 'success',
+        details: { targetUserId: id, method: 'admin' },
+      });
+      eventBus.publish(EVENT_TYPES.AUTH_PASSWORD_CHANGED, { userId: id, method: 'admin' }, { source: 'auth:users' });
+    }
+    if (data.status && data.status !== 'active') {
+      await sessionService.revokeAllUserSessions(id);
+    }
     await this._invalidateUserCache(id);
     await this._invalidateListCache();
 
@@ -296,7 +334,7 @@ class UserService {
     }
 
     // Check if this is the last active admin
-    if (user.role?.name === 'Admin') {
+    if (user.role?.name === 'Admin' && user.status === 'active') {
       const adminRole = await roleRepository.findByName('Admin');
       if (adminRole) {
         const adminCount = await userRepository.countActiveAdmins(adminRole._id);
@@ -341,8 +379,7 @@ class UserService {
   }
 
   /**
-   * Reactivate a previously deactivated/locked user. Pending invitations must
-   * still use the account activation flow so password setup is not bypassed.
+   * Enable account access independently of invitation password setup.
    */
   async activateUser(id, activatedBy, meta = {}) {
     const user = await userRepository.findById(id, { includeDeleted: true });
@@ -350,10 +387,6 @@ class UserService {
 
     if (user.status === 'active' && !user.isDeleted) {
       return user;
-    }
-
-    if (user.status === 'pending_activation' && !user.isDeleted) {
-      throw new ConflictError('Pending users must complete invitation activation before admin reactivation');
     }
 
     const updated = await userRepository.activate(id);
@@ -439,7 +472,9 @@ class UserService {
       throw new NotFoundError('Users', missing.join(', '));
     }
 
+    await this._validateAssignmentTarget(data.preferredDepartmentId);
     const updateData = { ...data };
+    delete updateData.password;
 
     // If roleId is provided, validate it and map to role field
     let newRole = null;
@@ -451,7 +486,15 @@ class UserService {
       delete updateData.roleId;
     }
 
+    await this._assertStatusChangeAllowed(users, updateData, updatedBy);
+    if (updateData.status === 'active') {
+      updateData.failedLoginAttempts = 0;
+      updateData.lockedUntil = null;
+    }
     const modifiedCount = await userRepository.bulkUpdate(ids, applyPreferredDepartmentPatch(updateData));
+    if (data.status && data.status !== 'active') {
+      for (const id of ids) await sessionService.revokeAllUserSessions(id);
+    }
 
     // Invalidate caches for all affected users
     for (const id of ids) {
@@ -498,12 +541,12 @@ class UserService {
 
     // Validate all users exist
     const users = await userRepository.findByIds(ids);
-    if (users.length === 0) {
-      throw new NotFoundError('Users', ids.join(', '));
+    if (users.length !== ids.length) {
+      throw new NotFoundError('Users', ids.filter((id) => !users.some((u) => String(u._id) === String(id))).join(', '));
     }
 
     // Check none of them is the last admin
-    const adminUsers = users.filter((u) => u.role?.name === 'Admin');
+    const adminUsers = users.filter((u) => u.role?.name === 'Admin' && u.status === 'active' && !u.isDeleted);
     if (adminUsers.length > 0) {
       const adminRole = await roleRepository.findByName('Admin');
       if (adminRole) {
@@ -555,6 +598,78 @@ class UserService {
     });
 
     return { deactivatedCount };
+  }
+
+  /** Remove directory entries while preserving references on historical records. */
+  async deleteUser(id, deletedBy, meta = {}) {
+    return this.bulkDeleteUsers([id], deletedBy, meta);
+  }
+
+  async bulkDeleteUsers(ids, deletedBy, meta = {}) {
+    const uniqueIds = [...new Set(ids.map(String))];
+    const users = await userRepository.findByIds(uniqueIds);
+    if (users.length !== uniqueIds.length) {
+      throw new NotFoundError('Users', uniqueIds.filter((id) => !users.some((u) => String(u._id) === id)).join(', '));
+    }
+    await this._assertActiveAdminRemains(users, 'delete');
+    const deletedCount = await userRepository.bulkSoftDelete(uniqueIds);
+    for (const id of uniqueIds) {
+      await sessionService.revokeAllUserSessions(id);
+      await this._invalidateUserCache(id);
+      await cacheManager.del(`auth:permissions:${id}`);
+    }
+    await this._invalidateListCache();
+    eventBus.publish(EVENT_TYPES.USER_DELETED, {
+      userIds: uniqueIds, deletedBy, bulk: uniqueIds.length > 1,
+    }, { source: 'auth:users' });
+    auditService.logEvent({
+      eventType: 'user.deleted', userId: deletedBy,
+      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: 'success', details: { targetUserIds: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async resendInvitation(id, sentBy, meta = {}) {
+    const user = await userRepository.findById(id, { includeSecrets: true });
+    if (!user) throw new NotFoundError('User', id);
+    if (!user.activationTokenHash || !['active', 'pending_activation'].includes(user.status)) {
+      throw new ConflictError('Invitation can only be resent for an enabled account awaiting password setup');
+    }
+    const { token, hashedToken, expires } = generateActivationToken();
+    await userRepository.updateById(id, { activationTokenHash: hashedToken, activationTokenExpires: expires });
+    await queueManager.addJob('auth-email', 'send-activation-email', {
+      email: user.email, name: user.firstName, activationUrl: `${config.client.uri}/activate?token=${token}`,
+    });
+    auditService.logEvent({
+      eventType: 'user.invitation_resent', userId: sentBy,
+      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: 'success', details: { targetUserId: id },
+    });
+    return { sent: true };
+  }
+
+  async _validateAssignmentTarget(id) {
+    if (!id) return;
+    const { default: Department } = await import('../qop/department.model.js');
+    if (!await Department.exists({ _id: id, isActive: true })) throw new NotFoundError('Active department', id);
+  }
+
+  async _assertActiveAdminRemains(users, action) {
+    const activeAdmins = users.filter((u) => u.role?.name === 'Admin' && u.status === 'active' && !u.isDeleted);
+    if (!activeAdmins.length) return;
+    const role = await roleRepository.findByName('Admin');
+    if (role && await userRepository.countActiveAdmins(role._id) <= activeAdmins.length) {
+      throw new ConflictError(`Cannot ${action} the last active admin user`);
+    }
+  }
+
+  async _assertStatusChangeAllowed(users, data, actorId) {
+    if (!data.status || data.status === 'active') return;
+    if (users.some((u) => String(u._id) === String(actorId) && u.role?.name === 'Admin')) {
+      throw new ConflictError('Cannot disable your own admin account');
+    }
+    await this._assertActiveAdminRemains(users, 'disable');
   }
 
   async listAssignedProjects(id, queryParams = {}) {

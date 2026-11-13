@@ -15,6 +15,7 @@ import { CtaSection } from '@/components/landing/cta-section';
 import { LandingFooter } from '@/components/landing/landing-footer';
 import { LandingMotionProvider } from '@/components/landing/landing-motion-provider';
 import { AICallingSection } from '@/components/landing/ai-calling-section';
+import { WorkflowAutomationSection } from '@/components/landing/workflow-automation-section';
 import { PlatformIntelligence, PlatformAssurance } from '@/components/landing/platform-assurance';
 
 export const metadata = {
@@ -57,6 +58,7 @@ export default function HomePage() {
           <LeadGenerationSection />
           <CrmSection />
           <AICallingSection />
+          <WorkflowAutomationSection />
           <PlatformIntelligence />
           <OperationsSection />
           <TeamWorkspaceSection />

@@ -7,6 +7,8 @@ import { connectTestDb, clearTestDb, disconnectTestDb } from '../setup.js';
 let permissions = ['users:read'];
 jest.unstable_mockModule('../../src/shared/middleware/authenticate.js', () => ({
   authenticate: (req, _res, next) => { req.user = { _id: '507f1f77bcf86cd799439011', role: { name: 'Manager' } }; next(); },
+  loadUserPermissions: async () => permissions,
+  satisfiesPermission: (held, required) => held.includes(required),
   requirePermission: (p) => (_req, res, next) => (permissions.includes(p) ? next() : res.sendStatus(403)),
 }));
 jest.unstable_mockModule('../../src/modules/auth/session.service.js', () => ({ default: { revokeAllUserSessions: jest.fn(async () => 0) } }));

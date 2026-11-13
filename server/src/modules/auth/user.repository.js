@@ -75,7 +75,11 @@ class UserRepository {
         : { path: 'role', select: 'name permissions isSystem uiConfig' });
     }
 
-    return query.lean();
+    if (!options.includeSecrets) query = query.select('+activationTokenHash');
+    const user = await query.lean();
+    if (!user || options.includeSecrets) return user;
+    const { activationTokenHash, ...safeUser } = user;
+    return { ...safeUser, invitationPending: Boolean(activationTokenHash) };
   }
 
   async findByEmail(email, options = {}) {
@@ -90,7 +94,9 @@ class UserRepository {
     }
 
     if (options.populateRole !== false) {
-      query = query.populate('role', 'name permissions isSystem uiConfig');
+      query = query.populate('permissions' in (options.populateRole || {})
+        ? { path: 'role', populate: { path: 'permissions' } }
+        : { path: 'role', select: 'name permissions isSystem uiConfig' });
     }
 
     return query.lean();
@@ -117,10 +123,11 @@ class UserRepository {
       .sort(sort)
       .limit(limit + 1)
       .populate('role', 'name')
-      .select('-__v')
+      .select('-__v').select('+activationTokenHash')
       .lean();
 
-    const response = buildCursorResponse(docs, limit, resolvedSortBy);
+    const safeDocs = docs.map(({ activationTokenHash, ...user }) => ({ ...user, invitationPending: Boolean(activationTokenHash) }));
+    const response = buildCursorResponse(safeDocs, limit, resolvedSortBy);
     // encodeCursor omits undefined fields; keep a null marker so the next page stays in order.
     if (response.pagination.nextCursor && NULLABLE_SORT_FIELDS.has(resolvedSortBy)) {
       const last = response.data[response.data.length - 1];
@@ -268,7 +275,7 @@ class UserRepository {
   async bulkSoftDelete(ids) {
     const result = await User.updateMany(
       { _id: { $in: ids }, isDeleted: false },
-      { $set: { isDeleted: true, deletedAt: new Date(), status: 'deactivated' } },
+      { $set: { isDeleted: true, deletedAt: new Date(), status: 'deactivated', isOnline: false, activationTokenHash: null, activationTokenExpires: null, resetTokenHash: null, resetTokenExpires: null } },
     );
     return result.modifiedCount;
   }

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Bluetooth, ChevronDown, Copy, Cpu, Download, Headphones, HelpCircle, KeyRound, Laptop, Loader2, PlugZap, RefreshCw, Settings2, Smartphone, Unplug, Volume2 } from 'lucide-react';
+import { AlertTriangle, Bluetooth, ChevronDown, Copy, Download, Headphones, HelpCircle, KeyRound, Laptop, Loader2, PlugZap, RefreshCw, Settings2, Unplug, Volume2 } from 'lucide-react';
+import { BridgeSetupInstructions, UsbConnectionHelp, type BridgePlatform } from './bridge-setup-instructions';
 import { pairedPhoneApi } from '../services/paired-phone-api';
 import { pairedKeys } from '../hooks/use-paired-phone';
 import { pairedPhoneConnection } from '../paired-phone-connection';
@@ -76,6 +77,7 @@ export function BridgeSetupControls({ device: d, now, apiBase, onVerifyAudio }: 
     {command && ['pending', 'running'].includes(command.state) && !activeCommand && <p role="alert" className="text-xs text-amber-600">The computer did not finish in time. Check that the gateway is running, then try again.</p>}
     {command && ['failed', 'expired'].includes(command.state) && <p role="alert" className="text-xs text-amber-600">{command.state === 'expired' ? 'The computer did not finish in time. Check that the gateway is running, then try again.' : command.message || 'That step did not finish. Check the USB cable and phone Bluetooth, then try again.'}</p>}
     {action.isError && <p role="alert" className="text-xs text-rose-600">{errorMessage(action.error)}</p>}
+    {connection.gatewayOnline && connection.board !== 'connected' && <UsbConnectionHelp profile={d.id} reportedPort={d.board.port} platform={d.gateway.platform === 'win32' ? 'windows' : d.gateway.platform === 'linux' ? 'linux' : 'mac'} />}
     {setupOpen && <section aria-label="Phone setup" className="space-y-4 rounded-xl border border-border p-4">
       <p className="text-xs text-muted-foreground">Keep the bridge plugged into your computer. Normal reconnects do not need BOOT, a new key, or a reboot.</p>
       <div className="space-y-2"><h4 className="text-sm font-semibold">1. Pair your Android phone</h4>
@@ -137,8 +139,10 @@ export function BridgeAudioTestControls({ device: d, disabled }: { device: Paire
   </div>;
 }
 
-export function GatewayInstallSteps({ profile }: { profile?: string }) {
-  const [platform, setPlatform] = useState('mac');
+export function GatewayInstallSteps({ profile, platform: selectedPlatform, onPlatformChange }: { profile?: string; platform?: BridgePlatform; onPlatformChange?: (platform: BridgePlatform) => void }) {
+  const [localPlatform, setLocalPlatform] = useState<BridgePlatform>('mac');
+  const platform = selectedPlatform ?? localPlatform;
+  const setPlatform = onPlatformChange ?? setLocalPlatform;
   const download = useMutation({ mutationFn: pairedPhoneApi.downloadGateway, onSuccess: blob => {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'updata-phone-gateway.tgz'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   } });
@@ -146,12 +150,12 @@ export function GatewayInstallSteps({ profile }: { profile?: string }) {
     <h4 className="flex items-center gap-2 text-sm font-semibold"><Laptop className="h-4 w-4 text-brand-500" aria-hidden="true" />1. Prepare your computer</h4>
     <p className="leading-relaxed text-muted-foreground">The gateway is a small program that connects this website to your USB bridge. Install it once on the computer you will use for calls.</p>
     <label className="flex flex-wrap items-center gap-2 font-medium">Your computer
-      <select aria-label="Your computer" value={platform} onChange={e => setPlatform(e.target.value)} className="rounded-lg border border-border bg-card p-2">
+      <select aria-label="Your computer" value={platform} onChange={e => setPlatform(e.target.value as BridgePlatform)} className="rounded-lg border border-border bg-card p-2">
         <option value="mac">Mac (macOS)</option><option value="windows">Windows</option><option value="linux">Linux</option>
       </select>
     </label>
     <ol className="list-decimal space-y-2 ps-4 leading-relaxed">
-      <li><strong>Install Node.js 20 or newer.</strong> This runs the gateway. If you are unsure whether it is installed, ask the person who manages your computer to check.</li>
+      <li><strong>Install Node.js 20 or newer.</strong> Download a supported LTS version from <a href="https://nodejs.org/en/download" target="_blank" rel="noreferrer" className="text-brand-600 underline dark:text-brand-400">the official Node.js website</a>. This runs the gateway. Reopen Terminal after installing it.</li>
       <li><button type="button" className={`${button} my-1 text-brand-600 dark:text-brand-400`} disabled={download.isPending} onClick={() => download.mutate()}>{download.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}Download gateway</button><p>Extract the downloaded file into a permanent folder, then open its <strong>package</strong> folder. You should see <strong>bin</strong>, <strong>src</strong> and <strong>package.json</strong>.</p></li>
       <li><strong>Open a command window in that folder.</strong> {platform === 'mac' ? 'In Terminal, type cd followed by a space. Drag the package folder from Finder into Terminal, then press Enter.' : platform === 'windows' ? 'In File Explorer, open the package folder, right-click empty space and choose Open in Terminal.' : 'In your file manager, open the package folder, right-click empty space and choose Open in Terminal.'}</li>
       <li>Paste <code className="rounded bg-muted px-1.5 py-0.5">npm ci --omit=dev</code> and press Enter. Wait for installation to finish, then use the phone’s pairing command. If it says Node or npm is not found, close Terminal after installing Node.js and open it again.</li>
@@ -183,21 +187,11 @@ function GatewayFolderInstructions() {
 
 export function BridgeSetupGuide({ apiBase }: { apiBase: string }) {
   const [open, setOpen] = useState(false);
+  const [platform, setPlatform] = useState<BridgePlatform>('mac');
   return <div><button type="button" className={button} onClick={() => setOpen(!open)} aria-expanded={open}><HelpCircle className="h-4 w-4" aria-hidden="true" />Setup guide<ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" /></button>
     {open && <section aria-label="Phone bridge setup guide" className="mt-3 space-y-4 rounded-xl border border-border p-4 text-sm">
-      <div><h3 className="font-semibold">Get your phone ready for calls</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Follow these steps in order. The phone card shows which checks have passed and what to do next. Your phone connections are private to your CRM account.</p></div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[{ icon: Smartphone, title: 'Android + active SIM', detail: 'Turn on Bluetooth, choose the SIM used for calls, and check calling credit.' }, { icon: Cpu, title: 'Prepared USB bridge', detail: 'Use a classic ESP32-WROOM-32 and a USB data cable. Ask your installer to load Updata firmware. S2, S3, C3 and C6 boards do not work.' }, { icon: Laptop, title: 'Computer + internet', detail: 'Keep this computer awake, online and connected to the bridge during calls.' }].map(({ icon: Icon, title, detail }) => <div key={title} className="rounded-xl border border-border bg-muted/20 p-3"><Icon className="mb-2 h-5 w-5 text-brand-500" aria-hidden="true" /><p className="text-xs font-semibold">{title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p></div>)}
-      </div>
-      <GatewayInstallSteps />
-      <ol className="space-y-3 text-xs leading-relaxed">
-        <li className="rounded-lg bg-muted/30 p-3"><strong className="text-sm">2. Add your phone and link its computer</strong><p className="mt-1 text-muted-foreground">Choose Add paired phone, give it a name and create a code. Copy the pairing command, then the start command into Terminal. Keep Terminal open. A saved phone that is offline can use Reconnect gateway; if its computer settings are lost, choose Link computer on the same card.</p></li>
-        <li className="rounded-lg bg-muted/30 p-3"><strong className="flex items-center gap-2 text-sm"><KeyRound className="h-4 w-4 text-brand-500" aria-hidden="true" />3. Save the security key</strong><p className="mt-1 text-muted-foreground">Open Phone setup on the phone card. Hold the BOOT button on the USB bridge, choose Save security key, and release BOOT after success. This lets your CRM authorize calls. Normal reconnects keep the saved key.</p></li>
-        <li className="rounded-lg bg-muted/30 p-3"><strong className="flex items-center gap-2 text-sm"><Bluetooth className="h-4 w-4 text-brand-500" aria-hidden="true" />4. Connect Android Bluetooth</strong><p className="mt-1 text-muted-foreground">Choose Pair a new phone. On Android, open Bluetooth settings, select the Updata Phone Bridge name shown on the card, and allow Phone calls. Then choose Connect phone in CRM. Pairing stays available for two minutes.</p></li>
-        <li className="rounded-lg bg-muted/30 p-3"><strong className="flex items-center gap-2 text-sm"><Headphones className="h-4 w-4 text-brand-500" aria-hidden="true" />5. Check that both sides can hear</strong><p className="mt-1 text-muted-foreground">Open Sound &amp; test call and enter a second phone number you own, with its country code (for example +923001234567). Answer that phone and speak to the AI. After a successful test, choose Verify call audio and confirm both checks. Your phone is ready when all five checks pass.</p></li>
-      </ol>
-      <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 text-xs leading-relaxed"><strong>Still offline?</strong> Check that the gateway is running on the computer attached to your bridge. If USB is missing, try a data cable and another USB port. If Bluetooth is missing, turn on Phone calls for the bridge in Android settings. If the gateway download or AI service is missing, ask your CRM administrator to finish installation.</div>
-      <details className="text-xs"><summary className="cursor-pointer font-medium">Help for your installer</summary><p className="mt-2 leading-relaxed text-muted-foreground">Gateway requires Node.js 20+ and Updata firmware on a classic ESP32-WROOM-32. First firmware installation needs the installer’s verified image and board backup. The gateway package contains the computer program; it does not install bridge firmware. Pair against <code className="break-all">{apiBase}</code>. Use gateway 0.4.0+ for separate phone profiles. For macOS login startup, copy the service command in the phone’s Reconnect gateway panel. Linux and Windows users should keep the gateway Terminal open.</p></details>
+      <div><h3 className="font-semibold">Get your phone ready for calls</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Follow these steps in order on the computer plugged into your ESP32. Stop at any failed checkpoint and use the matching recovery instructions. Your phone connections are private to your CRM account.</p></div>
+      <BridgeSetupInstructions apiBase={apiBase} platform={platform} installSteps={<GatewayInstallSteps platform={platform} onPlatformChange={setPlatform} />} />
     </section>}
   </div>;
 }

@@ -67,6 +67,7 @@ export function useWorkflowMutations() {
     setStatus: useMutation({ mutationFn: ({ id, status }: { id: string; status: 'published' | 'paused' | 'archived' }) => workflowApi.setStatus(id, status), ...options }),
     duplicate: useMutation({ mutationFn: (id: string) => workflowApi.duplicate(id), ...options }),
     remove: useMutation({ mutationFn: (id: string) => workflowApi.remove(id), ...options }),
+    removeMany: useMutation({ mutationFn: workflowApi.removeMany, ...options }),
     rollback: useMutation({ mutationFn: ({ id, version }: { id: string; version: number }) => workflowApi.rollback(id, version), ...options }),
   };
 }

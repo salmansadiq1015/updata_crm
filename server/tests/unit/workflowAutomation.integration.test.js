@@ -191,6 +191,31 @@ describe('Workflow Automation — AI calling end to end', () => {
   });
 });
 
+describe('Workflow Automation — tasks', () => {
+  it('creates a task through the real task service, avoids replay duplicates, and allows completion', async () => {
+    // The application registers these populated task references during startup.
+    await Promise.all([import('../../src/modules/pm/project.model.js'), import('../../src/modules/qop/order.model.js'), import('../../src/modules/meetings/meeting.model.js'), import('../../src/modules/crm/site.model.js'), import('../../src/modules/qop/department.model.js')]);
+    const User = (await import('../../src/modules/auth/user.model.js')).default;
+    await User.create({ _id: actor, firstName: 'Workflow', lastName: 'Owner', email: 'workflow-owner@example.test', passwordHash: 'x'.repeat(60), status: 'active', role: new mongoose.Types.ObjectId() });
+    const published = await createPublished({
+      nodes: [n('t', 'trigger.manual'), n('task', 'task.create', { title: 'Follow up {{lead.name}}', assignee: 'owner', priority: 'HIGH', dueInHours: 24 }), n('end', 'end', { outcome: 'completed' })],
+      edges: [e('t', 'out', 'task'), e('task', 'out', 'end')],
+    });
+    const lead = await makeLead();
+    await startCampaign(published._id, [lead._id]);
+    const run = await waitFor(async () => { const r = await runOf(lead._id); return ['completed', 'failed'].includes(r?.status) && r; });
+    if (run.status !== 'completed') throw new Error(JSON.stringify(run.error));
+    const Task = (await import('../../src/modules/tasks/task.model.js')).default;
+    const task = await Task.findOne({ 'source.type': 'WORKFLOW', 'source.refId': run._id }).lean();
+    expect(task).toMatchObject({ title: 'Follow up Müller AG', priority: 'HIGH', status: 'OPEN' });
+    await runner.advance(run._id);
+    expect(await Task.countDocuments({ 'source.refId': run._id })).toBe(1);
+    const tasks = (await import('../../src/modules/tasks/task.service.js')).default;
+    const completed = await tasks.complete(task._id, actor);
+    expect(completed.status).toBe('COMPLETED');
+  });
+});
+
 describe('Workflow Automation — reliability', () => {
   async function delayWorkflow() {
     return createPublished({
@@ -617,6 +642,19 @@ describe('Workflow Automation — custom fields, schedules, fallbacks, email sig
 });
 
 describe('Workflow Automation — full check (analyze)', () => {
+  it('reports an offline paired phone as unavailable even when its audio was verified previously', async () => {
+    const PairedDevice = (await import('../../src/modules/pairedPhone/pairedDevice.model.js')).default;
+    const phone = await PairedDevice.create({ name: 'Offline verified phone', createdBy: actor, audioVerifiedAt: new Date(), lastHeartbeatAt: new Date(Date.now() - 60_000), board: { connected: false }, state: { hfp: 'disconnected' } });
+    const agent = await agents.create(agentInput(), actor);
+    await (await import('../../src/modules/aiCalling/callingAgent.model.js')).default.updateOne({ _id: agent._id }, { $set: { transport: 'paired_phone', pairedDeviceId: phone._id } });
+    const graph = { nodes: [n('t', 'trigger.manual'), n('call', 'ai.call', { agentId: String(agent._id) }), n('end', 'end', { outcome: 'completed' })], edges: [e('t', 'out', 'call'), ...['answered', 'unanswered', 'failed', 'blocked'].map((port) => e('call', port, 'end'))] };
+    const created = await wf.create({ name: 'Phone readiness', graph }, actor);
+    const report = await wf.analyze(created._id, {});
+    expect(report.channels.voice).toMatchObject({ ready: false, reason: 'The laptop gateway is offline' });
+    expect(report.status).not.toBe('ready');
+    expect(dial).not.toHaveBeenCalled();
+  });
+
   it('reports per-step problems, unready channels and open paths — and creates or sends nothing', async () => {
     const sarah = await agents.create(agentInput(), actor);
     const created = await wf.create({ name: 'Check me', graph: {

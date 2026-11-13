@@ -338,14 +338,12 @@ export const requirePermission = (permission) => {
     }
 
     try {
-      // Load permissions from cache or DB
-      const permissions = await _loadPermissions(req.user);
-
-      // Admin role has all permissions
+      // Admin role has all permissions, even when its explicit permission list is empty.
       if (req.user.role?.name === 'Admin') {
         return next();
       }
 
+      const permissions = await _loadPermissions(req.user);
       if (!satisfiesPermission(permissions, permission)) {
         // Log permission denied
         auditService.logEvent({

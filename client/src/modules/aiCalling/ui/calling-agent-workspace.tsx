@@ -41,14 +41,14 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
   const health = useTelephonyHealth();
   const [testCampaign, setTestCampaign] = useState<import('../types/ai-calling-types').Campaign | null>(null);
   const [preparingTest, setPreparingTest] = useState(false);
-  const [testError, setTestError] = useState<string | null>(null);
+  const [testError, setTestError] = useState<{ message: string; agentId: string; version: number } | null>(null);
   const [incomingTest, setIncomingTest] = useState(false);
   const testAgent = async () => {
     // Incoming-only agents are tested as a caller (receptionist mode); a campaign test needs questions.
     if (query.data?.usage === 'inbound') { setTestError(null); setIncomingTest(true); return; }
     setPreparingTest(true); setTestError(null);
     try { setTestCampaign(await callingAgentApi.prepareTest(id)); }
-    catch (error) { setTestError(readableError(error)); }
+    catch (error) { setTestError({ message: readableError(error), agentId: id, version: query.data?.version ?? 0 }); }
     finally { setPreparingTest(false); }
   };
   const [tab, setTab] = useState(initialTab);
@@ -64,7 +64,7 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
     <button className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => { if (dirty) setPendingTab('back'); else onBack(); }}><ArrowLeft className="h-3.5 w-3.5" />Back to Calling Agents</button>
     <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-3xl border border-sky-400/15 bg-card p-5 shadow-2xl shadow-blue-950/40 sm:p-6"><span aria-hidden className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-cyan-400/10 blur-3xl" /><span aria-hidden className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-blue-600/15 blur-3xl" /><div className="relative flex min-w-0 items-center gap-4"><AgentAvatar name={agent.name} url={agent.avatarUrl} large /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">{agent.name}</h1><StatusPill status={agent.availability} /></div><p className="mt-1 text-sm font-medium text-primary/85">{agent.title || 'Calling agent'}</p><p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{agent.description}</p></div></div><div className="relative flex w-full flex-wrap items-start gap-3 sm:w-auto">{canManage && <button type="button" className={secondaryClass} disabled={dirty || preparingTest} onClick={() => void testAgent()}>{preparingTest ? <Loader2 className="size-4 animate-spin" /> : <Mic className="size-4" />}{t('voicePolicy.testAgent', 'Test agent')}</button>}<AgentWorkspaceStart agent={agent} canManage={canManage} dirty={dirty} onLaunch={onLaunch} onCampaign={onCampaign} onHistory={() => setTab('history')} /></div></header>
     {pendingTab && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-400/25 p-3 text-xs text-amber-200"><span className="flex-1">You have unsaved changes. Stay to save them, or discard them before leaving.</span><button className={secondaryClass} onClick={() => setPendingTab(null)}>Keep editing</button><button className={secondaryClass} onClick={() => { setDirty(false); if (pendingTab === 'back') onBack(); else setTab(pendingTab); setPendingTab(null); }}>Discard changes</button></div>}
-    {testError && <p role="alert" className="text-sm text-rose-500">{testError}</p>}
+    {testError?.agentId === id && testError.version === agent.version && <p role="alert" className="text-sm text-rose-500">{testError.message}</p>}
     {incomingTest && query.data && <IncomingAgentTestDialog agentId={id} agentName={query.data.name} onClose={() => setIncomingTest(false)} />}
     {testCampaign && <AgentTestStudio campaigns={[testCampaign]} telephony={health.data} onClose={() => setTestCampaign(null)} onCreateCampaign={() => { setTestCampaign(null); setTab('leads'); }} />}
     <AgentTabs label="Agent workspace" value={tab} onChange={changeTab} items={[{ value: 'overview', label: 'Overview' }, { value: 'questions', label: 'Questions' }, { value: 'leads', label: 'Leads' }, { value: 'followup', label: t('aiFollowUp.tab', 'Follow-up Automation') }, { value: 'settings', label: 'Settings' }, { value: 'analytics', label: 'Call Analytics' }, { value: 'intelligence', label: 'Knowledge & Transfer' }, { value: 'experiments', label: 'Experiments' }, { value: 'history', label: 'Campaign History' }].filter(item => agent.usage !== 'inbound' || !INBOUND_ONLY_HIDDEN.has(item.value))}>
@@ -77,7 +77,7 @@ export function CallingAgentWorkspace({ id, onBack, onLaunch, onCampaign, initia
         <p className="flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />Last updated {new Date(agent.updatedAt).toLocaleString()}</p>
       </>}
       {(tab === 'questions' || tab === 'settings') && <AgentConfiguration key={tab} agent={agent} section={tab} canManage={canManage} onDirty={setDirty} />}
-      {tab === 'leads' && <AgentLeads agent={agent} canManage={canManage} onDirty={setDirty} />}
+      {tab === 'leads' && <AgentLeads agent={agent} canManage={canManage} onDirty={setDirty} onSaved={() => setTestError(null)} />}
       {tab === 'followup' && <AgentFollowUpAutomation agent={agent} canManage={canManage} onDirty={setDirty} />}
       {tab === 'analytics' && (agent.usage === 'inbound' || agent.usage === 'both' ? <AgentAnalyticsBySource agentId={id} usage={agent.usage} /> : <AgentCallAnalytics agentId={id} />)}
       {tab === 'intelligence' && <AgentIntelligenceSettings key={agent.version} agent={agent} canManage={canManage} />}
@@ -186,13 +186,26 @@ function AgentConfiguration({ agent, section, canManage, onDirty }: { agent: Cal
   const [subtab, setSubtab] = useState(agent.usage === 'inbound' ? 'inbound' : 'identity');
   const [error, setError] = useState<string | null>(null);
   const { update } = useAgentMutations();
+  const stale = agent.version > version;
+  // Polling can update the header while an untouched editor still has its old draft.
+  // Sync only newer versions and pristine forms; never roll back a just-saved draft.
+  if (stale && JSON.stringify(draft) === base && !update.isPending) {
+    const latest = toInput(agent);
+    setDraft(latest); setBase(JSON.stringify(latest)); setVersion(agent.version);
+    setAvatarUrl(agent.avatarUrl); setError(null);
+  }
+  const loadLatest = () => {
+    const latest = toInput(agent);
+    setDraft(latest); setBase(JSON.stringify(latest)); setVersion(agent.version);
+    setAvatarUrl(agent.avatarUrl); setError(null); onDirty(false);
+  };
   const change = (next: CallingAgentInput) => { setDraft(next); onDirty(JSON.stringify(next) !== base); };
   const save = async () => { setError(null); try {
     const saved = await update.mutateAsync({ id: agent._id, version, ...draft, agentConfig: { ...draft.agentConfig, agentName: draft.name }, ...(draft.inbound ? { inbound: inboundPayload(draft.inbound) as CallingAgentInput['inbound'] } : {}) });
     setDraft(toInput(saved)); setBase(JSON.stringify(toInput(saved))); setVersion(saved.version); onDirty(false); showSuccess('Agent configuration saved');
   } catch (e) { setError(readableError(e)); } };
   return <div className="space-y-5">
-    {agent.version !== version && <p role="alert" className="text-sm text-amber-300">This agent changed since you opened the editor. Reopen this tab to load the latest version before saving.</p>}
+    {stale && <div role="alert" className="space-y-2 text-sm text-amber-300"><p>This agent changed since you opened the editor. Your unsaved edits are kept. Load the latest settings before saving.</p><button type="button" className={secondaryClass} onClick={loadLatest}>Discard edits and load latest settings</button></div>}
     <fieldset disabled={!canManage || update.isPending} className="min-w-0 space-y-5 disabled:opacity-60">
       {section === 'questions' ? <AgentQuestionTabs value={draft} onChange={change} /> : <AgentTabs label="Agent settings" value={subtab} onChange={setSubtab} items={[{ value: 'identity', label: 'Identity & avatar' }, { value: 'voice', label: 'Voice & instructions' }, { value: 'behavior', label: 'Calling behavior' }, { value: 'inbound', label: t('inbound.agent.tab', 'Incoming calls') }]}>
         {subtab === 'identity' && <div className={panelClass}><AgentIdentityFields value={draft} onChange={change} avatarUrl={avatarUrl} onAvatarChange={setAvatarUrl} /><label className="mt-5 block text-xs font-medium text-muted-foreground">Agent availability<select aria-label="Agent availability" className="mt-2 w-full rounded-lg border border-border bg-card p-2.5 text-sm" value={draft.availability} onChange={e => change({ ...draft, availability: e.target.value as CallingAgentInput['availability'] })}>{['draft', 'active', 'paused', 'archived'].map(value => <option value={value} key={value}>{value}</option>)}</select></label><p className="mt-2 text-xs text-muted-foreground">Availability controls future launches. Manage running campaigns separately.</p></div>}
@@ -202,11 +215,11 @@ function AgentConfiguration({ agent, section, canManage, onDirty }: { agent: Cal
       </AgentTabs>}
     </fieldset>
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Saved changes apply to future campaigns. Existing campaigns retain their configuration.</p><button className={primaryClass} disabled={!canManage || update.isPending || JSON.stringify(draft) === base} onClick={() => void save()}>{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save {section === 'questions' ? 'questions' : 'settings'}</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Saved changes apply to future campaigns. Existing campaigns retain their configuration.</p><button className={primaryClass} disabled={!canManage || update.isPending || stale || JSON.stringify(draft) === base} onClick={() => void save()}>{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save {section === 'questions' ? 'questions' : 'settings'}</button></div>
   </div>;
 }
 
-function AgentLeads({ agent, canManage, onDirty }: { agent: CallingAgent; canManage: boolean; onDirty: (dirty: boolean) => void }) {
+function AgentLeads({ agent, canManage, onDirty, onSaved }: { agent: CallingAgent; canManage: boolean; onDirty: (dirty: boolean) => void; onSaved: () => void }) {
   const [selected, setSelected] = useState(() => new Map<string, Lead>(agent.eligibility.leads.map(l => [l.leadId, { id: l.leadId, name: l.name, phone: l.phone, status: l.status as LeadStatus } as Lead])));
   const [version, setVersion] = useState(agent.version);
   const [baseIds, setBaseIds] = useState(() => [...agent.assignedLeadIds].sort().join(','));
@@ -219,7 +232,7 @@ function AgentLeads({ agent, canManage, onDirty }: { agent: CallingAgent; canMan
   const change = (next: Map<string, Lead>) => { setSelected(next); setReview(false); onDirty([...next.keys()].sort().join(',') !== baseIds); };
   const save = async () => { try {
     const result = await assign.mutateAsync({ id: agent._id, leadIds: [...selected.keys()], version });
-    setVersion(result.version); setBaseIds([...selected.keys()].sort().join(',')); onDirty(false); setReview(false); showSuccess('Lead assignments saved');
+    setVersion(result.version); setBaseIds([...selected.keys()].sort().join(',')); onDirty(false); setReview(false); onSaved(); showSuccess('Lead assignments saved');
   } catch (e) { setError(readableError(e)); } };
   return <div className={`${panelClass} space-y-4`}><div><h2 className="font-semibold">Assign leads</h2><p className="mt-1 text-xs text-muted-foreground">Manage this agent&apos;s default selection. Removing an assignment keeps CRM records and previous campaign results.</p></div>
     <fieldset disabled={!canManage || assign.isPending} className="min-w-0"><CampaignLeadPicker purpose="assignment" onBusyChange={setSelectionBusy} selected={selected} onChange={change} /></fieldset>

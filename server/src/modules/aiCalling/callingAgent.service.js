@@ -1,4 +1,5 @@
 import CampaignRecipient from './campaignRecipient.model.js';
+import { currentLeadAccessFilter } from '../../shared/security/requestAccessContext.js';
 import Lead from '../crm/lead.model.js';
 import crypto from 'node:crypto';
 import { findAvatarPreset } from './agentAvatarPresets.js';
@@ -265,7 +266,12 @@ class CallingAgentService {
   async prepareTest(id, actor) {
     const agent = await this.owned(id, actor);
     assertQuestionnaire(agent.questionnaire);
-    const lead = await Lead.findOne({ _id: { $in: agent.assignedLeadIds || [] }, createdBy: actor, isDeleted: { $ne: true } }).select('_id').lean();
+    // Creation records provenance; shared CRM leads are valid test context too.
+    // Keep the current governance scope and the saved assignment authoritative.
+    const lead = await Lead.findOne({ $and: [
+      { _id: { $in: agent.assignedLeadIds || [] }, isDeleted: { $ne: true } },
+      currentLeadAccessFilter(),
+    ] }).sort({ _id: 1 }).select('_id').lean();
     if (!lead) throw new ValidationError('Assign a lead to this agent to provide browser test context. The test never changes the lead.');
     const launchKey = `browser-test-${id}-${agent.version}`;
     let campaign;

@@ -15,6 +15,7 @@ import { PageHero, heroButton } from '@/shared/components/page-hero';
 import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
+import { UserDeleteDialog } from '@/modules/users/components/user-delete-dialog';
 import { UserForm } from '@/modules/users/components/user-form';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { PermissionGate } from '@/shared/components/permission-gate';
@@ -28,10 +29,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { usePermissions } from '@/shared/hooks/use-permissions';
-import { getUserDateLocale, getUserRoleLabel } from '@/modules/users/utils/user-display';
+import { getUserDateLocale, getUserRoleLabel, getUserDepartmentLabel } from '@/modules/users/utils/user-display';
 import { cn } from '@/lib/utils';
 import {
-  Plus, Pencil, UserX, UserCheck, Eye, Download,
+  Plus, Pencil, UserX, UserCheck, Eye, Download, Trash2,
   Users, UserCheck2, UserMinus, Clock, Shield,
   LayoutGrid, List, Search, Filter, X, Mail,
   MoreHorizontal, Copy, Phone, Briefcase, ChevronRight,
@@ -62,6 +63,7 @@ export function UsersTable() {
   const [requestedAction, setRequestedAction] = useQueryState('action');
   const { hasPermission } = usePermissions();
   const canCreateUser = hasPermission('users:write');
+  const canManageUserStatus = hasPermission('users:admin');
 
   useEffect(() => {
     if (requestedAction !== 'create') return;
@@ -75,6 +77,7 @@ export function UsersTable() {
   const [targetUser, setTargetUser] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
+  const [deleteIds, setDeleteIds] = useState([]);
   const debouncedGlobalFilter = useDebounce(globalFilter, 300);
   // Totals across all employees (the list below is paged, so it cannot count them).
   const statsQuery = useQuery({ queryKey: queryKeys.users.stats(), queryFn: () => apiClient.get(ENDPOINTS.USERS.STATS).then((res) => res?.data ?? res), staleTime: 30_000 });
@@ -96,6 +99,8 @@ export function UsersTable() {
     hasNext,
     hasPrev,
     isFetching,
+    isError: usersFailed,
+    refetch: refetchUsers,
     onNext,
     onPrev,
     reset: resetCursor,
@@ -118,29 +123,30 @@ export function UsersTable() {
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roles.all() });
   };
 
   const createMutation = useMutation({
     mutationFn: (data) => userService.createUser(data),
-    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastCreated', 'Benutzer erstellt')); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastCreated', "User created")); },
     onError: (err) => showError(err.message),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => userService.updateUser(id, data),
-    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastUpdated', 'Benutzer aktualisiert')); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastUpdated', "User updated")); },
     onError: (err) => showError(err.message),
   });
 
   const deactivateMutation = useMutation({
     mutationFn: (id) => userService.deactivateUser(id),
-    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastDeactivated', 'Benutzer deaktiviert')); setConfirmOpen(false); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastDeactivated', "User deactivated")); setConfirmOpen(false); },
     onError: (err) => showError(err.message),
   });
 
   const activateMutation = useMutation({
     mutationFn: (id) => userService.activateUser(id),
-    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastActivated', 'Benutzer aktiviert')); setConfirmOpen(false); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastActivated', "User activated")); setConfirmOpen(false); },
     onError: (err) => showError(err.message),
   });
 
@@ -148,20 +154,20 @@ export function UsersTable() {
     mutationFn: ({ ids, data }) => userService.bulkUpdate(ids, data),
     onSuccess: (res) => {
       invalidateAll();
-      showSuccess(t('users.toastBulkUpdated', '{count} Benutzer aktualisiert', {
-        count: res?.modifiedCount || t('users.bulkAll', 'Alle'),
+      showSuccess(t('users.toastBulkUpdated', "{count} users updated", {
+        count: res?.modifiedCount ?? 0,
       }));
       setRowSelection({});
     },
     onError: (err) => showError(err.message),
   });
 
-  const bulkDeleteMutation = useMutation({
-    mutationFn: (ids) => userService.bulkDelete(ids),
+  const bulkDeactivateMutation = useMutation({
+    mutationFn: (ids) => userService.bulkDeactivate(ids),
     onSuccess: (res) => {
       invalidateAll();
-      showSuccess(t('users.toastBulkDeactivated', '{count} Benutzer deaktiviert', {
-        count: res?.deactivatedCount || t('users.bulkAll', 'Alle'),
+      showSuccess(t('users.toastBulkDeactivated', "{count} users deactivated", {
+        count: res?.deactivatedCount ?? 0,
       }));
       setRowSelection({});
       setBulkDeactivateOpen(false);
@@ -179,7 +185,7 @@ export function UsersTable() {
   const activeCount = users.filter((u) => u.status === 'active' || u.isActive).length;
   const pendingCount = users.filter((u) => u.status === 'pending_activation').length;
   const inactiveCount = users.filter((u) => u.status === 'deactivated' || (!u.isActive && u.status !== 'active' && u.status !== 'pending_activation' && u.status !== 'locked')).length;
-  const selectedIds = Object.keys(rowSelection);
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
   const hasActiveFilters = statusFilter !== 'all' || roleFilter !== 'all';
   const dateLocale = getUserDateLocale(locale);
 
@@ -214,11 +220,11 @@ export function UsersTable() {
     },
     {
       accessorKey: 'department',
-      header: t('users.department') || 'Abteilung',
+      header: t('users.department', "Department"),
       size: 140,
       Cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {row.original.department || '\u2014'}
+          {getUserDepartmentLabel(row.original.department, t) || '\u2014'}
         </span>
       ),
     },
@@ -252,7 +258,8 @@ export function UsersTable() {
                 setTargetUser(u);
                 setConfirmOpen(true);
               }}
-              disabled={u.status === 'pending_activation' || u.status === 'locked'}
+              disabled={!canManageUserStatus}
+              aria-label={`${t(isUserActive ? 'users.deactivate' : 'users.activate')} ${u.firstName} ${u.lastName}`}
             />
             <span className={cn('text-xs font-medium', s.textColor)}>
               {t(s.labelKey, s.fallback)}
@@ -275,18 +282,12 @@ export function UsersTable() {
         );
       },
     },
-  ], [dateLocale, t]);
+  ], [canManageUserStatus, dateLocale, t]);
 
-  const handleSubmit = (data) => {
-    if (editUser) {
-      updateMutation.mutate({ id: editUser._id, data }, {
-        onSuccess: () => setEditUser(null),
-      });
-    } else {
-      createMutation.mutate(data, {
-        onSuccess: () => setEditUser(null),
-      });
-    }
+  const handleSubmit = async (data) => {
+    if (editUser) await updateMutation.mutateAsync({ id: editUser._id, data });
+    else await createMutation.mutateAsync(data);
+    setEditUser(null);
   };
 
   const handleToggleActive = () => {
@@ -303,6 +304,7 @@ export function UsersTable() {
   };
 
   const clearFilters = () => {
+    setRowSelection({});
     setStatusFilter('all');
     setRoleFilter('all');
     setGlobalFilter('');
@@ -311,7 +313,7 @@ export function UsersTable() {
 
   const targetIsActive = targetUser?.isActive || targetUser?.status === 'active';
   const targetUserName = [targetUser?.firstName, targetUser?.lastName].filter(Boolean).join(' ')
-    || t('users.thisUser', 'dieser Benutzer');
+    || t('users.thisUser', "this user");
 
   return (
     <div className="space-y-6">
@@ -321,7 +323,7 @@ export function UsersTable() {
         icon={Users}
         eyebrow={t('sidebar.employmentManagement', 'Employee Management')}
         title={t('usersHero.title', 'The people behind every job.')}
-        subtitle={t('users.titleDesc') || 'Mitarbeiter anlegen, bearbeiten, Rollen zuweisen und Zugriff verwalten.'}
+        subtitle={t('users.titleDesc', "Create, edit employees, assign roles and manage access.")}
         actions={<>
           <div role="group" aria-label={t('usersHero.layout', 'Layout')} className="flex h-11 items-center rounded-full border border-white/15 bg-white/[0.07] p-1 backdrop-blur-md">
             {[['table', List, t('usersHero.table', 'Table view')], ['grid', LayoutGrid, t('usersHero.grid', 'Card view')]].map(([mode, Icon, label]) => (
@@ -336,12 +338,12 @@ export function UsersTable() {
           </PermissionGate>
         </>}
         stats={<>
-          <HeroStat icon={Users} label={t('users.total') || 'Gesamt'} value={num(stats?.total)} hint={stats?.newThisMonth != null ? t('usersHero.newThisMonth', '{count} joined this month', { count: num(stats.newThisMonth) }) : undefined} loading={statsQuery.isLoading} />
+          <HeroStat icon={Users} label={t('users.total', "Total")} value={num(stats?.total)} hint={stats?.newThisMonth != null ? t('usersHero.newThisMonth', '{count} joined this month', { count: num(stats.newThisMonth) }) : undefined} loading={statsQuery.isLoading} />
           <button type="button" onClick={() => setStatusFilter('active')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/50">
             <HeroStat icon={UserCheck2} tone="text-emerald-300" label={t('users.active')} value={num(stats?.byStatus?.active)} hint={t('usersHero.activeHint', 'Can sign in')} loading={statsQuery.isLoading} />
           </button>
           <button type="button" onClick={() => setStatusFilter('pending_activation')} className="rounded-2xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50">
-            <HeroStat icon={Clock} tone="text-amber-300" label={t('users.pending') || 'Nicht aktiviert'} value={num(stats?.byStatus?.pending_activation)} hint={t('usersHero.pendingHint', 'Invitation not confirmed')} loading={statsQuery.isLoading} />
+            <HeroStat icon={Clock} tone="text-amber-300" label={t('users.pending', "Not activated")} value={num(stats?.byStatus?.pending_activation)} hint={t('usersHero.pendingHint', 'Invitation not confirmed')} loading={statsQuery.isLoading} />
           </button>
           <HeroStat icon={Shield} tone="text-cyan-300" label={t('roles.title')} value={num(stats?.roles ?? roles.length)} hint={t('usersHero.inactive', '{count} deactivated', { count: num(stats?.byStatus?.deactivated) })} loading={statsQuery.isLoading} />
         </>}
@@ -356,7 +358,7 @@ export function UsersTable() {
 
         <div className="w-px h-5 bg-border/60" />
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => { setRowSelection({}); setStatusFilter(value); }}>
           <SelectTrigger className={cn(
             'w-[170px] text-xs rounded-full border-dashed',
             statusFilter !== 'all' && 'border-primary/40 bg-primary/5 text-primary'
@@ -367,7 +369,7 @@ export function UsersTable() {
             <SelectItem value="all">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-                {t('users.allStatus') || 'Alle Status'}
+                {t('users.allStatus', "All Status")}
               </span>
             </SelectItem>
             <SelectItem value="active">
@@ -379,25 +381,25 @@ export function UsersTable() {
             <SelectItem value="pending_activation">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                {t('users.pending') || 'Nicht aktiviert'}
+                {t('users.pending', "Not activated")}
               </span>
             </SelectItem>
             <SelectItem value="deactivated">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-                {t('users.deactivated') || 'Deaktiviert'}
+                {t('users.deactivated', "Deactivated")}
               </span>
             </SelectItem>
             <SelectItem value="locked">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-red-500" />
-                {t('users.locked') || 'Gesperrt'}
+                {t('users.locked', "Locked")}
               </span>
             </SelectItem>
           </SelectContent>
         </Select>
 
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <Select value={roleFilter} onValueChange={(value) => { setRowSelection({}); setRoleFilter(value); }}>
           <SelectTrigger className={cn(
             'w-[170px] text-xs rounded-full border-dashed',
             roleFilter !== 'all' && 'border-primary/40 bg-primary/5 text-primary'
@@ -408,7 +410,7 @@ export function UsersTable() {
             <SelectItem value="all">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-                {t('users.allRoles') || 'Alle Rollen'}
+                {t('users.allRoles', "All Roles")}
               </span>
             </SelectItem>
             {roles.map((r, i) => {
@@ -435,7 +437,7 @@ export function UsersTable() {
               onClick={clearFilters}
             >
               <X className="h-3 w-3" />
-              {t('users.resetFilters') || 'Zurücksetzen'}
+              {t('users.resetFilters', "Reset filters")}
             </Button>
           </>
         )}
@@ -444,7 +446,7 @@ export function UsersTable() {
       {/* ── Bulk Actions Bar ── */}
       {selectedIds.length > 0 && (
         <BulkActionsBar count={selectedIds.length} onClear={() => setRowSelection({})}>
-          <PermissionGate permission="users:write">
+          <PermissionGate permission="users:admin">
             <Select onValueChange={handleBulkRoleChange}>
               <SelectTrigger className="w-[160px] text-xs">
                 <SelectValue placeholder={t('users.changeRole')} />
@@ -457,8 +459,12 @@ export function UsersTable() {
             </Select>
           </PermissionGate>
           <PermissionGate permission="users:admin">
+            <Button variant="outline" size="sm" disabled={bulkUpdateMutation.isPending}
+              onClick={() => bulkUpdateMutation.mutate({ ids: selectedIds, data: { status: 'active' } })}>
+              <UserCheck className="h-3.5 w-3.5 mr-1" />{t('users.activate')}
+            </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
               className="h-8 text-xs"
               onClick={() => setBulkDeactivateOpen(true)}
@@ -466,10 +472,17 @@ export function UsersTable() {
               <UserMinus className="h-3.5 w-3.5 mr-1" />
               {t('users.deactivate')}
             </Button>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteIds(selectedIds)}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" />{t('users.delete', 'Delete')}
+            </Button>
           </PermissionGate>
         </BulkActionsBar>
       )}
 
+      {usersFailed && <div role="alert" className="flex items-center gap-3 rounded-lg border border-destructive/30 p-4">
+        <p>{t('users.loadError', 'Unable to load user data.')}</p>
+        <Button variant="outline" onClick={() => refetchUsers()}>{t('common.retry', "Retry")}</Button>
+      </div>}
       {/* ── Content: Table or Grid ── */}
       {viewMode === 'table' ? (
         <DataTableShell
@@ -480,26 +493,26 @@ export function UsersTable() {
           sorting={sorting}
           onSortingChange={setSorting}
           globalFilter={globalFilter}
-          onGlobalFilterChange={setGlobalFilter}
-          enableRowSelection
+          onGlobalFilterChange={(value) => { setRowSelection({}); setGlobalFilter(value); }}
+          enableRowSelection={canManageUserStatus}
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
           onRowClick={(u) => router.push(`/settings/users/${u._id}`)}
           cursorPagination={{
             pageSize,
-            onPageSizeChange: setPageSize,
+            onPageSizeChange: (size) => { setRowSelection({}); setPageSize(size); },
             hasNext,
             hasPrev,
             isFetching,
-            onNext,
-            onPrev,
+            onNext: () => { setRowSelection({}); onNext(); },
+            onPrev: () => { setRowSelection({}); onPrev(); },
           }}
           renderTopToolbarCustomActions={() => null}
           renderRowActions={({ row }) => {
             const u = row.original;
             const isActive = u.status === 'active' || u.isActive;
             return (
-              <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+              <div className="flex items-center gap-0.5">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -527,43 +540,27 @@ export function UsersTable() {
                 </PermissionGate>
 
                 <PermissionGate permission="users:admin">
-                  {(() => {
-                    // A pending user hasn't confirmed their e-mail yet and a locked
-                    // user is blocked — neither can be toggled here (mirrors the
-                    // status-column Switch). Show the action muted with a reason.
-                    const isPending = u.status === 'pending_activation';
-                    const isLocked = u.status === 'locked';
-                    const toggleBlocked = isPending || isLocked;
-                    return (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-disabled={toggleBlocked}
-                              className={cn('h-8 w-8 rounded-lg', toggleBlocked && 'cursor-not-allowed hover:bg-transparent')}
-                              onClick={() => { if (toggleBlocked) return; setTargetUser(u); setConfirmOpen(true); }}
-                            >
-                              {toggleBlocked
-                                ? <UserCheck className="h-3.5 w-3.5 text-muted-foreground/40" />
-                                : isActive
-                                  ? <UserX className="h-3.5 w-3.5 text-destructive" />
-                                  : <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                              }
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {isPending
-                              ? t('users.activatePendingHint', 'Benutzer muss zuerst seine E-Mail bestätigen')
-                              : isLocked
-                                ? t('users.activateLockedHint', 'Benutzer ist gesperrt')
-                                : isActive ? t('users.deactivate') : t('users.activate')}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    );
-                  })()}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label={`${t('users.delete', 'Delete')} ${u.firstName} ${u.lastName}`} onClick={() => setDeleteIds([u._id])}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={isActive ? t('users.deactivate') : t('users.activate')}
+                          className="h-8 w-8 rounded-lg"
+                          onClick={() => { setTargetUser(u); setConfirmOpen(true); }}
+                        >
+                          {isActive
+                            ? <UserX className="h-3.5 w-3.5 text-destructive" />
+                            : <UserCheck className="h-3.5 w-3.5 text-emerald-600" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{isActive ? t('users.deactivate') : t('users.activate')}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </PermissionGate>
               </div>
             );
@@ -575,8 +572,12 @@ export function UsersTable() {
           isLoading={isFetching && users.length === 0}
           onEdit={(u) => { setEditUser(u); setFormOpen(true); }}
           onToggle={(u) => { setTargetUser(u); setConfirmOpen(true); }}
+          onDelete={(u) => setDeleteIds([u._id])}
+          canSelect={canManageUserStatus}
+          rowSelection={rowSelection}
+          onSelect={(id, checked) => setRowSelection((previous) => ({ ...previous, [id]: checked }))}
           globalFilter={globalFilter}
-          onGlobalFilterChange={setGlobalFilter}
+          onGlobalFilterChange={(value) => { setRowSelection({}); setGlobalFilter(value); }}
         />
       )}
 
@@ -589,6 +590,7 @@ export function UsersTable() {
         roles={roles}
         assignmentTargets={assignmentTargets}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        canManageRole={canManageUserStatus}
       />
 
       <ConfirmDialog
@@ -597,8 +599,8 @@ export function UsersTable() {
         title={targetIsActive ? t('users.confirmDeactivate') : t('users.confirmActivate')}
         description={
           targetIsActive
-            ? t('users.confirmDeactivateDesc', 'Möchten Sie {name} wirklich deaktivieren?', { name: targetUserName })
-            : t('users.confirmActivateDesc', 'Möchten Sie {name} wirklich aktivieren?', { name: targetUserName })
+            ? t('users.confirmDeactivateDesc', "Do you really want to deactivate {name}?", { name: targetUserName })
+            : t('users.confirmActivateDesc', "Do you really want to activate {name}?", { name: targetUserName })
         }
         onConfirm={handleToggleActive}
         loading={deactivateMutation.isPending || activateMutation.isPending}
@@ -606,13 +608,17 @@ export function UsersTable() {
         variant={targetIsActive ? 'destructive' : 'default'}
       />
 
+      <UserDeleteDialog ids={deleteIds} open={deleteIds.length > 0}
+        onOpenChange={(open) => { if (!open) setDeleteIds([]); }}
+        onDeleted={() => { setRowSelection({}); resetCursor(); }} />
+
       <ConfirmDialog
         open={bulkDeactivateOpen}
         onOpenChange={setBulkDeactivateOpen}
-        title={t('users.bulkConfirmDeactivateTitle', '{count} Benutzer deaktivieren?', { count: selectedIds.length })}
-        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewählten Benutzer werden deaktiviert und können sich nicht mehr anmelden.')}
-        onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
-        loading={bulkDeleteMutation.isPending}
+        title={t('users.bulkConfirmDeactivateTitle', "Deactivate {count} users?", { count: selectedIds.length })}
+        description={t('users.bulkConfirmDeactivateDesc', "The selected users will be deactivated and will no longer be able to sign in.")}
+        onConfirm={() => bulkDeactivateMutation.mutate(selectedIds)}
+        loading={bulkDeactivateMutation.isPending}
         confirmText={t('users.deactivateAll')}
         variant="destructive"
       />
@@ -621,7 +627,7 @@ export function UsersTable() {
 }
 
 /* ── Card Grid View ── */
-function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlobalFilterChange }) {
+function UserCardGrid({ users, isLoading, onEdit, onToggle, onDelete, canSelect, rowSelection, onSelect, globalFilter, onGlobalFilterChange }) {
   const { t } = useLanguage();
   if (isLoading) {
     return (
@@ -682,6 +688,10 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
               user={user}
               onEdit={() => onEdit(user)}
               onToggle={() => onToggle(user)}
+              onDelete={() => onDelete(user)}
+              canSelect={canSelect}
+              selected={Boolean(rowSelection[user._id])}
+              onSelect={(checked) => onSelect(user._id, checked)}
             />
           ))}
         </div>
@@ -690,15 +700,12 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
   );
 }
 
-function UserCard({ user, onEdit, onToggle }) {
+function UserCard({ user, onEdit, onToggle, onDelete, canSelect, selected, onSelect }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const initials = `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const status = statusConfig[user.status] || statusConfig.active;
   const isActive = user.status === 'active' || user.isActive;
-  const isPending = user.status === 'pending_activation';
-  const isLocked = user.status === 'locked';
-  const toggleBlocked = isPending || isLocked;
   const lastLogin = user.lastLoginAt || user.lastLogin;
   const dateLocale = getUserDateLocale(locale);
 
@@ -711,6 +718,10 @@ function UserCard({ user, onEdit, onToggle }) {
       <div className={cn('h-1', isActive ? 'bg-linear-to-r from-primary/60 to-primary/20' : 'bg-linear-to-r from-muted-foreground/20 to-transparent')} />
 
       <div className="p-5">
+        {canSelect && <label className="flex items-center gap-2 mb-3 text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} />
+          {t('users.selectUser', 'Select {name}', { name: `${user.firstName} ${user.lastName}` })}
+        </label>}
         {/* Header: Avatar + Name + Actions */}
         <div className="flex items-start justify-between mb-4">
           <Link href={`/settings/users/${user._id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 group/link min-w-0">
@@ -733,7 +744,7 @@ function UserCard({ user, onEdit, onToggle }) {
           {/* Quick Actions */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 -mr-1">
+              <Button variant="ghost" size="icon" aria-label={`${t('common.actions', "Actions")} ${user.firstName} ${user.lastName}`} onClick={(e) => e.stopPropagation()} className="h-7 w-7 rounded-md -mt-0.5 -mr-1">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -750,28 +761,22 @@ function UserCard({ user, onEdit, onToggle }) {
                   {t('common.edit')}
                 </DropdownMenuItem>
               </PermissionGate>
-              <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(user.email); showSuccess(t('users.toastEmailCopied', 'E-Mail kopiert')); }} className="gap-2">
+              <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(user.email); showSuccess(t('users.toastEmailCopied', "Email copied")); }} className="gap-2">
                 <Copy className="h-3.5 w-3.5" />
                 {t('users.copyEmail')}
               </DropdownMenuItem>
               <PermissionGate permission="users:admin">
                 <DropdownMenuSeparator />
-                {toggleBlocked ? (
-                  <DropdownMenuItem disabled className="gap-2">
-                    <UserCheck className="h-3.5 w-3.5" />
-                    {isPending
-                      ? t('users.activatePendingHint', 'Benutzer muss zuerst seine E-Mail bestätigen')
-                      : t('users.activateLockedHint', 'Benutzer ist gesperrt')}
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    onClick={onToggle}
-                    className={cn('gap-2', isActive ? 'text-destructive focus:text-destructive' : 'text-emerald-600 focus:text-emerald-600')}
-                  >
-                    {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                    {isActive ? t('users.deactivate') : t('users.activate')}
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onClick={onDelete} className="gap-2 text-destructive focus:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5" />{t('users.delete', 'Delete')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onToggle}
+                  className={cn('gap-2', isActive ? 'text-destructive focus:text-destructive' : 'text-emerald-600 focus:text-emerald-600')}
+                >
+                  {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                  {isActive ? t('users.deactivate') : t('users.activate')}
+                </DropdownMenuItem>
               </PermissionGate>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -792,7 +797,7 @@ function UserCard({ user, onEdit, onToggle }) {
               <div className="h-5 w-5 rounded bg-muted flex items-center justify-center shrink-0">
                 <Briefcase className="h-3 w-3 text-muted-foreground" />
               </div>
-              <span className="text-xs text-muted-foreground">{user.department}</span>
+              <span className="text-xs text-muted-foreground">{getUserDepartmentLabel(user.department, t)}</span>
             </div>
           )}
           {/* Status pill */}

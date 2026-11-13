@@ -1,3 +1,5 @@
+import { getDepartmentPreset, getPositionPreset } from '../constants/department-position-presets';
+
 const ROLE_LABEL_KEYS = Object.freeze({
   Admin: 'users.roles.admin',
   Projektleiter: 'users.roles.projectLead',
@@ -27,8 +29,19 @@ export function getPresetDisplayLabel(option, t) {
 }
 
 export function getUserDateLocale(locale) {
+  if (locale === 'ar') return 'ar';
   if (locale === 'en') return 'en-GB';
   if (locale === 'fr') return 'fr-CH';
   if (locale === 'it') return 'it-CH';
-  return 'de-CH';
+  if (locale === 'de') return 'de-CH';
+  return 'en-GB';
+}
+
+
+export function getUserDepartmentLabel(department, t) {
+  return getPresetDisplayLabel(getDepartmentPreset(department), t) || department || '';
+}
+
+export function getUserPositionLabel(department, position, t) {
+  return getPresetDisplayLabel(getPositionPreset(department, position), t) || position || '';
 }

@@ -15,6 +15,7 @@ import { HANDLERS } from './engine/handlers.js';
 import { normalizeConfig } from './engine/nodeConfig.js';
 import { findTrigger } from './engine/graph.js';
 import logger from '../../shared/logger/index.js';
+import pairedPhoneService from '../pairedPhone/pairedPhone.service.js';
 
 const MAX_PATHS = 200;
 const SHOW_PATHS = 40;
@@ -96,10 +97,14 @@ async function channelReadiness(graph) {
       for (const a of agents) {
         try {
           await withTimeout(calling.assertLaunchAvailable({ transport: a.transport || 'cloud_sip', pairedDeviceId: a.pairedDeviceId || null }, a.createdBy), 8000, 'calling');
-          perAgent[String(a._id)] = { ready: true, reason: null };
+          if (a.transport === 'paired_phone') {
+            const phone = await withTimeout(pairedPhoneService.readiness(a.pairedDeviceId, new Date()), 8000, 'phone');
+            perAgent[String(a._id)] = { ready: phone.ok, reason: phone.ok ? null : (phone.messages?.[0] || phone.reasons?.[0] || 'phone_unavailable') };
+          } else perAgent[String(a._id)] = { ready: true, reason: null };
         } catch (error) { perAgent[String(a._id)] = { ready: false, reason: error.message || 'unavailable' }; }
       }
     }
+    for (const id of agentIds) if (!perAgent[id]) perAgent[id] = { ready: false, reason: 'agent_missing' };
     const failing = Object.values(perAgent).find((r) => !r.ready);
     out.voice = { nodes: used.voice, ready: agentIds.length > 0 && !failing, reason: failing?.reason || (agentIds.length ? null : 'no_agent'), agents: perAgent };
   }

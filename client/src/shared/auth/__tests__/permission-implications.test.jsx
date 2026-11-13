@@ -30,3 +30,18 @@ describe('client permission implications (mirror of the server map)', () => {
     expect(result.current.hasPermission('ai-calling:read')).toBe(false);
   });
 });
+
+
+describe('user administration access', () => {
+  it.each([undefined, [], ['507f1f77bcf86cd799439011']])('Admin has all permissions with explicit permissions %j', (permissions) => {
+    auth.user = { role: { name: 'Admin' }, permissions };
+    const { result } = renderHook(() => usePermissions());
+    expect(result.current.hasAllPermissions(['users:read', 'users:write', 'users:admin', 'roles:admin', 'audit:read'])).toBe(true);
+    expect(result.current.isAdmin).toBe(true);
+  });
+  it.each([undefined, [], ['507f1f77bcf86cd799439011'], [null]])('does not grant non-admins access for unloaded/unusable permissions %j', (permissions) => {
+    auth.user = { role: { name: 'Technician' }, permissions };
+    const { result } = renderHook(() => usePermissions());
+    expect(result.current.hasAnyPermission(['users:write', 'users:admin', 'roles:admin'])).toBe(false);
+  });
+});

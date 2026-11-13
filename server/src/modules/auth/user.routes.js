@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
 import userController from './user.controller.js';
+import roleRepository from './role.repository.js';
 import { validate } from '../../shared/validation/validate.js';
-import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
+import { authenticate, requirePermission, loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
 import { uploadLimiter } from '../../shared/middleware/rateLimiter.js';
 import {
   createUserSchema,
@@ -113,12 +114,18 @@ router.patch(
 );
 
 router.post(
-  '/bulk-delete',
+  '/bulk-deactivate',
   authenticate,
   requirePermission('users:admin'),
   validate(bulkDeleteSchema),
   (req, res, next) => userController.bulkDeactivate(req, res, next),
 );
+
+router.post('/bulk-delete', authenticate, requirePermission('users:admin'), validate(bulkDeleteSchema),
+  (req, res, next) => userController.bulkDelete(req, res, next));
+
+router.post('/:id/resend-invitation', authenticate, requirePermission('users:admin'), validate(userIdParamSchema),
+  (req, res, next) => userController.resendInvitation(req, res, next));
 
 // --- Admin user management ---
 
@@ -192,6 +199,18 @@ router.post(
   authenticate,
   requirePermission('users:write'),
   validate(createUserSchema),
+  async (req, res, next) => {
+    try {
+      const role = await roleRepository.findById(req.body.roleId);
+      if (req.user.role?.name !== 'Admin' && role) {
+        const heldPermissions = await loadUserPermissions(req.user);
+        const grantsMoreAccess = role.name === 'Admin' || role.permissions.some((permission) =>
+          !satisfiesPermission(heldPermissions, `${permission.module}:${permission.action}`));
+        if (grantsMoreAccess) return requirePermission('users:admin')(req, res, next);
+      }
+      next();
+    } catch (error) { next(error); }
+  },
   (req, res, next) => userController.create(req, res, next),
 );
 
@@ -228,7 +247,7 @@ router.post(
  *         description: User not found
  *   delete:
  *     tags: [Users]
- *     summary: Deactivate a user
+ *     summary: Delete a user from the directory (retains historical references)
  *     parameters:
  *       - in: path
  *         name: id
@@ -237,7 +256,7 @@ router.post(
  *           type: string
  *     responses:
  *       200:
- *         description: User deactivated
+ *         description: User deleted
  *       404:
  *         description: User not found
  */
@@ -254,6 +273,7 @@ router.patch(
   authenticate,
   requirePermission('users:write'),
   validate(updateUserSchema),
+  (req, res, next) => (req.body.status !== undefined || req.body.roleId !== undefined || req.body.password !== undefined) ? requirePermission('users:admin')(req, res, next) : next(),
   (req, res, next) => userController.update(req, res, next),
 );
 
@@ -294,7 +314,7 @@ router.delete(
   authenticate,
   requirePermission('users:admin'),
   validate(userIdParamSchema),
-  (req, res, next) => userController.deactivate(req, res, next),
+  (req, res, next) => userController.delete(req, res, next),
 );
 
 /**

@@ -12,7 +12,7 @@ export function LandingFooter() {
     {
       title: 'product',
       links: [
-        ['dashboard', '/dashboard'], ['leadgen', '/lead-generation'], ['crm', '/crm/customers'], ['projects', '/projects'], ['ai', '/ai'], ['calling', '/calling-engine'],
+        ['dashboard', '/dashboard'], ['leadgen', '/lead-generation'], ['crm', '/crm/customers'], ['projects', '/projects'], ['ai', '/ai'], ['calling', '/calling-engine'], ['workflowAutomation', '/workflow-automation'],
       ],
     },
     {
@@ -30,7 +30,7 @@ export function LandingFooter() {
             <a href={`mailto:${SUPPORT_EMAIL}`} className="mt-5 inline-flex items-center gap-2 text-xs font-medium text-slate-400 transition-colors hover:text-white"><Mail className="size-3.5" />{SUPPORT_EMAIL}</a>
           </div>
 
-          {groups.map((group) => <div key={group.title}><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t(`landing.footer.${group.title}`)}</h3><ul className="mt-4 space-y-3">{group.links.map(([label, href]) => <li key={label}><Link href={href} className="text-xs text-slate-400 transition-colors hover:text-white">{label === 'calling' ? 'AI Calling Agent' : t(`landing.footer.${label}`)}</Link></li>)}</ul></div>)}
+          {groups.map((group) => <div key={group.title}><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t(`landing.footer.${group.title}`)}</h3><ul className="mt-4 space-y-3">{group.links.map(([label, href]) => <li key={label}><Link href={href} className="text-xs text-slate-400 transition-colors hover:text-white">{label === 'calling' ? 'AI Calling Agent' : label === 'workflowAutomation' ? t('landing.nav.workflowAutomation', 'Workflow Automation') : t(`landing.footer.${label}`)}</Link></li>)}</ul></div>)}
 
           <div><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('landing.footer.company')}</h3><ul className="mt-4 space-y-3"><li><Link href="/about" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.about')}</Link></li><li><Link href="/contact" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.contact')}</Link></li><li><Link href="/support" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.support')}</Link></li></ul></div>
           <div><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('landing.footer.legal')}</h3><ul className="mt-4 space-y-3"><li><Link href="/privacy" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.privacy')}</Link></li><li><Link href="/terms" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.terms')}</Link></li><li><Link href="/security" className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-white"><ShieldCheck className="size-3" />{t('landing.footer.security')}</Link></li></ul></div>

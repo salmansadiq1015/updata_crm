@@ -15,14 +15,11 @@ export function usePermissions() {
 
   const usablePermissions = rawPermissions.filter((p) => {
     if (typeof p === 'string') return !isObjectId(p);
+    if (!p || typeof p !== 'object') return false;
     if (p.module && p.action) return true;
     if (p.key) return true;
     return false;
   });
-
-  // If no usable permissions found but user is authenticated,
-  // grant all access — the backend enforces real permissions on every API call.
-  const noPermissionsLoaded = usablePermissions.length === 0 && !!user;
 
   const heldKeys = usablePermissions.map((p) => {
     if (typeof p === 'string') return p;
@@ -32,15 +29,13 @@ export function usePermissions() {
 
   // Held directly OR implied by a held coarse permission — the same rule the API applies.
   const hasPermission = (perm) => {
-    if (adminRole || noPermissionsLoaded) return true;
+    if (adminRole) return true;
     return satisfiesPermission(heldKeys, perm);
   };
 
   const hasAnyPermission = (perms) => perms.some((p) => hasPermission(p));
   const hasAllPermissions = (perms) => perms.every((p) => hasPermission(p));
-  const isAdmin = adminRole || (noPermissionsLoaded
-    ? (user?.role?.name === 'Admin' || user?.role === 'Admin')
-    : (hasPermission('users:admin') && hasPermission('roles:admin')));
+  const isAdmin = adminRole || (hasPermission('users:admin') && hasPermission('roles:admin'));
 
   return { permissions: usablePermissions, hasPermission, hasAnyPermission, hasAllPermissions, isAdmin };
 }

@@ -10,7 +10,8 @@ afterEach(() => vi.unstubAllEnvs());
 test('sitemap entries are canonical public documents, not private routes or invented revision dates', () => {
   vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
   const entries = sitemap();
-  expect(entries).toHaveLength(8);
+  expect(entries).toHaveLength(9);
+  expect(entries.map(entry => new URL(entry.url).pathname)).toContain('/workflow-automation');
   expect(new Set(entries.map(entry => entry.url)).size).toBe(entries.length);
   expect(entries.map(entry => new URL(entry.url).pathname)).toEqual(PUBLIC_PAGE_PATHS);
   for (const entry of entries) {

@@ -47,6 +47,7 @@ export class CallRunner {
     this.answeredAt = null;
     this.firstAiAudioMs = null;
     this.sawSetup = false;
+    this.dialRequested = false;
     this.audioOn = false;
     this.receivedPhoneAudio = false;
     this.hangupReason = null;
@@ -104,25 +105,30 @@ export class CallRunner {
     this.attachLeg();
 
     try {
+      this.dialRequested = true;
       await this.device.dial({ callRef: job.callRef, counter: job.counter, number: job.number, mac: Buffer.from(job.mac, 'hex') });
     } catch (err) {
+      if (this.phase === 'done') return this.done;
       this.emit('dial_refused', { code: String(err.code || 'refused').slice(0, 60) });
       await this.leg.close();
       return this.finish('not_dialed');
     }
+    // A phone response may arrive before the USB command acknowledgement.
+    if (this.phase === 'done') return this.done;
     this.phase = 'dialing';
     this.emit('dialing');
     if (this.leg.disconnectReason != null || this.leg.closed) {
       this.onRoomClosed(this.leg.disconnectReason);
       return this.done;
     }
-    this.timer('ring', (job.ringTimeoutSeconds || 45) * 1000, () => this.hangup('not_answered'));
+    this.timer('ring', (job.ringTimeoutSeconds || 45) * 1000, () => this.hangup(this.sawSetup || this.answeredAt !== null ? 'not_answered' : 'dial_not_started'));
     this.timer('max', ((job.maxCallSeconds || 300) + 60) * 1000, () => this.hangup('max_duration'));
     this.statsTimer = setInterval(() => this.sendStats(), this.o.statsEveryMs);
     return this.done;
   }
 
   attachDevice() {
+    this.on(this.device, 'event', (event) => this.onDeviceEvent(event));
     this.on(this.device, 'state', (s) => this.onState(s));
     this.on(this.device, 'audio', ({ pcm }) => this.onPhoneAudio(pcm));
     this.on(this.device, 'lost', (reason) => this.unknown(`ESP32 link lost: ${reason}`));
@@ -136,6 +142,17 @@ export class CallRunner {
   }
 
   // ---- phone side ---------------------------------------------------------------------------
+
+  onDeviceEvent(event) {
+    if (!this.dialRequested || event.name !== 'dial_result' || event.callRef !== this.job.callRef
+      || this.phase === 'done' || this.phase === 'hanging_up') return;
+    this.log('phone_dial_result', { accepted: event.ok === true, phoneCode: event.cme });
+    // Once setup/answer has been observed, a late AT response cannot end this call.
+    if (event.ok !== false || this.sawSetup || this.answeredAt !== null) return;
+    const code = Number.isInteger(event.cme) && event.cme >= 0 && event.cme <= 255 ? event.cme : 255;
+    this.emit('dial_refused', { code: `phone_rejected_${code}` });
+    this.finish('not_dialed', `phone_rejected_${code}`);
+  }
 
   onState(s) {
     if (this.phase === 'done') return;
@@ -342,7 +359,7 @@ export class CallRunner {
 
   end(reason) {
     if (this.phase === 'done') return;
-    this.emit('ended', { reason });
+    this.emit(reason === 'dial_not_started' ? 'failed' : 'ended', { reason });
     this.finish('ended', reason);
   }
 

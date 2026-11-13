@@ -24,6 +24,18 @@ export const workflowApi = {
   update: async (id: string, input: { name?: string; description?: string; graph?: WorkflowGraph; baseRevision?: number; settings?: Partial<WorkflowSettings>; isTemplate?: boolean }) =>
     unwrap<Workflow>(await api.patch(`${root}/${id}`, input)),
   remove: async (id: string) => unwrap<{ deleted?: boolean; archived?: boolean }>(await api.delete(`${root}/${id}`)),
+  // Reuse the audited single-workflow deletion contract; bound concurrent writes.
+  removeMany: async (ids: string[]) => {
+    const results: Array<{ id: string; deleted?: boolean; archived?: boolean; failed?: boolean }> = [];
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 5) {
+      const batch = unique.slice(i, i + 5);
+      const settled = await Promise.allSettled(batch.map((id) => workflowApi.remove(id)));
+      settled.forEach((result, index) => results.push(result.status === 'fulfilled'
+        ? { id: batch[index], ...result.value } : { id: batch[index], failed: true }));
+    }
+    return results;
+  },
   validate: async (id: string, graph?: WorkflowGraph) => unwrap<ValidationResult>(await api.post(`${root}/${id}/validate`, graph ? { graph } : {})),
   analyze: async (id: string, input: { graph?: WorkflowGraph; leadId?: string | null }) => unwrap<WorkflowCheckReport>(await api.post(`${root}/${id}/analyze`, input)),
   test: async (id: string, input: { leadId: string; graph?: WorkflowGraph; options?: TestRunOptions }) => unwrap<TestRunResult>(await api.post(`${root}/${id}/test`, input)),

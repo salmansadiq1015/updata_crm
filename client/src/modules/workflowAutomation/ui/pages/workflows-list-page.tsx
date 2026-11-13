@@ -2,14 +2,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Archive, Copy, GitBranch, MoreHorizontal, Pause, PencilRuler, Play, Plus, Search } from 'lucide-react';
+import { Archive, Copy, GitBranch, MoreHorizontal, Pause, PencilRuler, Play, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { PageHeader } from '@/shared/components/page-header';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useWorkflowMutations, useWorkflows } from '../../hooks/use-workflows';
@@ -29,10 +31,43 @@ export function WorkflowsListPage() {
   const canPublish = hasPermission('workflow:publish');
   const [filters, setFilters] = useState<ListFilters>({ search: '', status: '', sortBy: 'updatedAt', sortOrder: 'desc', page: 1, limit: 20 });
   const [archiveTarget, setArchiveTarget] = useState<WorkflowListItem | null>(null);
-  const query = useWorkflows(filters);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteTargets, setDeleteTargets] = useState<string[]>([]);
+  const [deleteResult, setDeleteResult] = useState<string>('');
+  const search = useDebounce(filters.search, 300);
+  const query = useWorkflows({ ...filters, search });
   const m = useWorkflowMutations();
-  const set = (patch: Partial<ListFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }));
+  const set = (patch: Partial<ListFilters>) => {
+    setSelected(new Set());
+    setFilters((f) => ({ ...f, page: 1, ...patch }));
+  };
   const rows = query.data?.data || [];
+
+  const busy = m.removeMany.isPending;
+  const selectionDisabled = filters.search !== search || busy || query.isPlaceholderData || query.isError;
+  const allSelected = rows.length > 0 && rows.every((w) => selected.has(w._id));
+  const toggle = (id: string, checked: boolean) => setSelected((previous) => {
+    const next = new Set(previous);
+    if (checked) next.add(id); else next.delete(id);
+    return next;
+  });
+  const lastPage = Math.max(1, query.data?.pagination.pages || 1);
+  // A deletion or another user's edit can remove the final page. Reconcile before rendering it.
+  if (query.data && !query.isPlaceholderData && (filters.page || 1) > lastPage) {
+    setFilters({ ...filters, page: lastPage });
+    setSelected(new Set());
+  }
+  const deleteWorkflows = () => {
+    if (!deleteTargets.length || busy) return;
+    m.removeMany.mutate(deleteTargets, { onSuccess: (results) => {
+      const failed = results.filter((r) => r.failed);
+      setSelected(new Set(failed.map((r) => r.id)));
+      setDeleteTargets([]);
+      setDeleteResult(t('workflowPages.list.deleteResult', '{deleted} deleted · {archived} archived · {failed} failed', {
+        deleted: results.filter((r) => r.deleted).length, archived: results.filter((r) => r.archived).length, failed: failed.length,
+      }));
+    } });
+  };
 
   const duplicate = (w: WorkflowListItem) => m.duplicate.mutate(w._id, { onSuccess: (copy) => router.push(`/automation/workflows/${copy._id}`) });
 
@@ -46,16 +81,16 @@ export function WorkflowsListPage() {
         <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:p-4 dark:border-white/10">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input value={filters.search} onChange={(e) => set({ search: e.target.value })} placeholder={t('workflowPages.list.search', 'Search workflows…')} className="ps-9" aria-label={t('workflowPages.list.search', 'Search workflows…')} />
+            <Input value={filters.search} maxLength={80} disabled={busy} onChange={(e) => set({ search: e.target.value })} placeholder={t('workflowPages.list.search', 'Search workflows…')} className="ps-9" aria-label={t('workflowPages.list.search', 'Search workflows…')} />
           </div>
-          <Select value={filters.status || 'all'} onValueChange={(v) => set({ status: v === 'all' ? '' : (v as WorkflowStatus) })}>
+          <Select disabled={busy} value={filters.status || 'all'} onValueChange={(v) => set({ status: v === 'all' ? '' : (v as WorkflowStatus) })}>
             <SelectTrigger className="sm:w-44" aria-label={t('workflowPages.common.status', 'Status')}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('workflowPages.list.allStatuses', 'All statuses')}</SelectItem>
               {STATUSES.map((s) => <SelectItem key={s} value={s}>{t(`workflow.status.${s}`, s)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={`${filters.sortBy}:${filters.sortOrder}`} onValueChange={(v) => { const [sortBy, sortOrder] = v.split(':'); set({ sortBy: sortBy as ListFilters['sortBy'], sortOrder: sortOrder as 'asc' | 'desc' }); }}>
+          <Select disabled={busy} value={`${filters.sortBy}:${filters.sortOrder}`} onValueChange={(v) => { const [sortBy, sortOrder] = v.split(':'); set({ sortBy: sortBy as ListFilters['sortBy'], sortOrder: sortOrder as 'asc' | 'desc' }); }}>
             <SelectTrigger className="sm:w-52" aria-label={t('workflowPages.list.sort', 'Sort')}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="updatedAt:desc">{t('workflowPages.list.sortRecent', 'Recently modified')}</SelectItem>
@@ -66,6 +101,15 @@ export function WorkflowsListPage() {
           </Select>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 dark:border-white/10">
+          {canWrite && <>
+            <Checkbox aria-label={t('workflowPages.list.selectPage', 'Select all workflows on this page')} checked={allSelected ? true : selected.size ? 'indeterminate' : false} disabled={selectionDisabled || !rows.length} onCheckedChange={(checked) => setSelected(checked === true ? new Set(rows.map((w) => w._id)) : new Set())} />
+            <span className="text-sm text-muted-foreground">{t('workflowPages.list.selected', '{count} selected on this page', { count: selected.size })}</span>
+            <Button variant="destructive" size="sm" disabled={!selected.size || selectionDisabled} onClick={() => setDeleteTargets([...selected])}><Trash2 className="me-2 size-4" />{t('workflowPages.list.bulkDelete', 'Delete selected')}</Button>
+          </>}
+          <Button variant="ghost" size="sm" className="ms-auto" disabled={query.isFetching || busy} onClick={() => void query.refetch()}><RefreshCw className="me-2 size-4" />{t('workflowPages.list.refresh', 'Refresh')}</Button>
+        </div>
+        {deleteResult && <p role="status" className="px-4 py-3 text-sm">{deleteResult}</p>}
         {query.isLoading ? <div className="space-y-2 p-4">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
           : query.isError ? <div className="p-4"><ErrorBlock onRetry={() => query.refetch()} /></div>
           : rows.length === 0 ? (
@@ -76,9 +120,10 @@ export function WorkflowsListPage() {
           ) : (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" aria-label={t('workflow.nav.workflows', 'Workflows')} aria-busy={query.isFetching}>
                   <thead className="text-start text-xs text-muted-foreground">
                     <tr className="border-b dark:border-white/10">
+                      {canWrite && <th className="w-10 px-4 py-2.5"><span className="sr-only">{t('workflowPages.list.select', 'Select workflow')}</span></th>}
                       <th className="px-5 py-2.5 text-start font-medium">{t('workflowPages.list.colName', 'Workflow')}</th>
                       <th className="px-3 py-2.5 text-start font-medium">{t('workflowPages.common.status', 'Status')}</th>
                       <th className="px-3 py-2.5 text-start font-medium">{t('workflowPages.list.colTrigger', 'Trigger')}</th>
@@ -91,8 +136,9 @@ export function WorkflowsListPage() {
                   <tbody className="divide-y dark:divide-white/10">
                     {rows.map((w) => (
                       <tr key={w._id} data-testid="workflow-row" className="group cursor-pointer transition-colors hover:bg-muted/40" onClick={() => router.push(`/automation/workflows/${w._id}`)}>
+                        {canWrite && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}><Checkbox aria-label={t('workflowPages.list.selectName', 'Select {name}', { name: w.name })} checked={selected.has(w._id)} disabled={selectionDisabled} onCheckedChange={(checked) => toggle(w._id, checked === true)} /></td>}
                         <td className="max-w-[320px] px-5 py-3">
-                          <p className="truncate font-medium group-hover:text-primary">{w.name}</p>
+                          <Link href={`/automation/workflows/${w._id}`} className="block truncate font-medium group-hover:text-primary">{w.name}</Link>
                           <p className="truncate text-xs text-muted-foreground">{w.description || (w.publishedVersion ? t('workflow.common.version', 'v{version}', { version: w.publishedVersion }) : t('workflowPages.list.neverPublished', 'Not published yet'))}</p>
                         </td>
                         <td className="px-3 py-3"><div className="flex items-center gap-1.5"><WorkflowStatusBadge status={w.status} />{w.publishedVersion ? <span className="text-xs text-muted-foreground">{t('workflow.common.version', 'v{version}', { version: w.publishedVersion })}</span> : null}</div></td>
@@ -107,7 +153,7 @@ export function WorkflowsListPage() {
                           <span className="block truncate">{personName(w.updatedBy) || personName(w.createdBy)}</span>
                         </td>
                         <td className="px-3 py-3 text-end" onClick={(e) => e.stopPropagation()}>
-                          <RowActions w={w} canWrite={canWrite} canPublish={canPublish} onDuplicate={duplicate} onArchive={setArchiveTarget} onStatus={(status) => m.setStatus.mutate({ id: w._id, status })} />
+                          <RowActions w={w} canWrite={canWrite} canPublish={canPublish} onDuplicate={duplicate} onArchive={setArchiveTarget} onDelete={(w) => setDeleteTargets([w._id])} busy={busy} onStatus={(status) => m.setStatus.mutate({ id: w._id, status })} />
                         </td>
                       </tr>
                     ))}
@@ -117,6 +163,7 @@ export function WorkflowsListPage() {
               <ul className="divide-y md:hidden dark:divide-white/10">
                 {rows.map((w) => (
                   <li key={w._id} data-testid="workflow-card" className="flex items-start gap-3 p-4">
+                    {canWrite && <Checkbox aria-label={t('workflowPages.list.selectName', 'Select {name}', { name: w.name })} checked={selected.has(w._id)} disabled={selectionDisabled} onCheckedChange={(checked) => toggle(w._id, checked === true)} />}
                     <Link href={`/automation/workflows/${w._id}`} className="min-w-0 flex-1">
                       <p className="truncate font-medium">{w.name}</p>
                       <p className="truncate text-xs text-muted-foreground">{nodeLabel(w.triggerType)} · {formatRelative(w.updatedAt, locale)}</p>
@@ -126,15 +173,31 @@ export function WorkflowsListPage() {
                         <span>{formatPercent(w.stats?.successRate ?? null, locale)}</span>
                       </div>
                     </Link>
-                    <RowActions w={w} canWrite={canWrite} canPublish={canPublish} onDuplicate={duplicate} onArchive={setArchiveTarget} onStatus={(status) => m.setStatus.mutate({ id: w._id, status })} />
+                    <RowActions w={w} canWrite={canWrite} canPublish={canPublish} onDuplicate={duplicate} onArchive={setArchiveTarget} onDelete={(w) => setDeleteTargets([w._id])} busy={busy} onStatus={(status) => m.setStatus.mutate({ id: w._id, status })} />
                   </li>
                 ))}
               </ul>
             </>
           )}
-        <div className="px-4 pb-4 sm:px-5"><Pager pagination={query.data?.pagination} onPage={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
+          <Select value={String(filters.limit)} disabled={busy} onValueChange={(value) => set({ limit: Number(value) })}>
+            <SelectTrigger className="w-40" aria-label={t('workflowPages.list.pageSize', 'Rows per page')}><SelectValue /></SelectTrigger>
+            <SelectContent>{[10, 20, 50, 100].map((limit) => <SelectItem key={limit} value={String(limit)}>{t('workflowPages.list.rows', '{count} per page', { count: limit })}</SelectItem>)}</SelectContent>
+          </Select>
+          <div className={query.isPlaceholderData || busy ? 'pointer-events-none opacity-50' : ''} inert={query.isPlaceholderData || busy}><Pager pagination={query.data?.pagination} onPage={(page) => set({ page })} /></div>
+        </div>
       </Panel>
 
+      <ConfirmDialog
+        open={deleteTargets.length > 0}
+        onOpenChange={(open: boolean) => !open && !busy && setDeleteTargets([])}
+        title={t('workflowPages.list.deleteTitle', 'Delete {count} workflow(s)?', { count: deleteTargets.length })}
+        description={t('workflowPages.list.deleteHint', 'Unused drafts are permanently deleted. Workflows with published versions or execution history are archived; running executions finish normally and history remains available.')}
+        confirmText={t('workflowPages.list.delete', 'Delete')}
+        cancelText={t('workflowPages.common.cancel', 'Cancel')}
+        loading={busy}
+        onConfirm={deleteWorkflows}
+      />
       <ConfirmDialog
         open={Boolean(archiveTarget)}
         onOpenChange={(open: boolean) => !open && setArchiveTarget(null)}
@@ -149,15 +212,15 @@ export function WorkflowsListPage() {
   );
 }
 
-function RowActions({ w, canWrite, canPublish, onDuplicate, onArchive, onStatus }: {
-  w: WorkflowListItem; canWrite: boolean; canPublish: boolean;
+function RowActions({ w, canWrite, canPublish, onDuplicate, onArchive, onDelete, busy, onStatus }: {
+  w: WorkflowListItem; canWrite: boolean; canPublish: boolean; busy: boolean; onDelete: (w: WorkflowListItem) => void;
   onDuplicate: (w: WorkflowListItem) => void; onArchive: (w: WorkflowListItem) => void; onStatus: (s: 'published' | 'paused') => void;
 }) {
   const { t } = useLanguage();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8" aria-label={t('workflowPages.common.actions', 'Actions')}><MoreHorizontal className="size-4" /></Button>
+        <Button variant="ghost" size="icon" className="size-8" disabled={busy} aria-label={t('workflowPages.common.actions', 'Actions')}><MoreHorizontal className="size-4" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem asChild><Link href={`/automation/workflows/${w._id}`} className="gap-2"><PencilRuler className="size-4" />{t('workflowPages.list.openBuilder', 'Open builder')}</Link></DropdownMenuItem>
@@ -165,6 +228,7 @@ function RowActions({ w, canWrite, canPublish, onDuplicate, onArchive, onStatus 
         {canWrite && <DropdownMenuItem className="gap-2" onSelect={() => onDuplicate(w)}><Copy className="size-4" />{t('workflowPages.list.duplicate', 'Duplicate')}</DropdownMenuItem>}
         {canPublish && w.status === 'published' && <DropdownMenuItem className="gap-2" onSelect={() => onStatus('paused')}><Pause className="size-4" />{t('workflowPages.list.pause', 'Pause new enrollments')}</DropdownMenuItem>}
         {canPublish && w.status === 'paused' && w.publishedVersion && <DropdownMenuItem className="gap-2" onSelect={() => onStatus('published')}><Play className="size-4" />{t('workflowPages.list.reactivate', 'Reactivate')}</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onSelect={() => onDelete(w)}><Trash2 className="size-4" />{t('workflowPages.list.delete', 'Delete')}</DropdownMenuItem>}
         {canPublish && w.status !== 'archived' && (
           <>
             <DropdownMenuSeparator />

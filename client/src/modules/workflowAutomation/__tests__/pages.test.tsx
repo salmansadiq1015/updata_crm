@@ -8,6 +8,8 @@ import type { ReactNode } from 'react';
  * manual controls, audited run action), analytics KPIs. Data hooks are mocked; the components,
  * permissions logic and formatting are real.
  */
+const removeMany = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
+const workflowFilters = vi.hoisted(() => vi.fn());
 const runAction = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
 const state = vi.hoisted(() => ({
   workflows: { data: undefined as unknown, isLoading: false, isError: false, refetch: vi.fn() },
@@ -31,12 +33,12 @@ vi.mock('@/shared/hooks/use-permissions', () => ({
 }));
 vi.mock('../ui/shared/workflow-diagram', () => ({ WorkflowDiagram: () => <div data-testid="diagram" /> }));
 vi.mock('../hooks/use-workflows', () => ({
-  useWorkflows: () => state.workflows,
+  useWorkflows: (filters: unknown) => { workflowFilters(filters); return state.workflows; },
   useWorkflowRun: () => state.run,
   useWorkflowAnalytics: () => state.analytics,
   useWorkflowCatalog: () => ({ data: { nodes: [{ type: 'ai.call', category: 'ai', outputs: ['answered', 'unanswered', 'failed', 'blocked'], defaults: {} }] } }),
   useRunAction: () => runAction,
-  useWorkflowMutations: () => ({ duplicate: { mutate: vi.fn(), isPending: false }, setStatus: { mutate: vi.fn(), isPending: false } }),
+  useWorkflowMutations: () => ({ removeMany, duplicate: { mutate: vi.fn(), isPending: false }, setStatus: { mutate: vi.fn(), isPending: false } }),
 }));
 
 const { WorkflowsListPage } = await import('../ui/pages/workflows-list-page');
@@ -51,6 +53,8 @@ const workflowRow = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   runAction.mutate.mockClear();
+  removeMany.mutate.mockClear();
+  workflowFilters.mockClear();
   state.permissions = new Set(['workflow:read', 'workflow:write', 'workflow:publish', 'workflow:execute']);
 });
 
@@ -68,6 +72,40 @@ describe('workflows list', () => {
     expect(within(rows[1]).getByText('Not published yet')).toBeTruthy();
   });
 
+  it('selects the current page, confirms deletion, and retains failed items for retry', async () => {
+    state.workflows = { ...state.workflows, data: { data: [workflowRow(), workflowRow({ _id: 'wf2', name: 'Recovery' })], pagination: { page: 1, limit: 20, total: 2, pages: 1 } } };
+    render(<WorkflowsListPage />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all workflows on this page' }));
+    expect(screen.getByText('2 selected on this page')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+    expect(removeMany.mutate).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Unused drafts are permanently deleted/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(removeMany.mutate).toHaveBeenCalledWith(['wf1', 'wf2'], expect.anything());
+    const { act } = await import('@testing-library/react');
+    act(() => removeMany.mutate.mock.calls[0][1].onSuccess([{ id: 'wf1', archived: true }, { id: 'wf2', failed: true }]));
+    expect(screen.getByRole('status').textContent).toContain('0 deleted · 1 archived · 1 failed');
+    expect(screen.getByText('1 selected on this page')).toBeTruthy();
+  });
+
+  it('clears selection on page and search changes and sends server pagination filters', async () => {
+    state.workflows = { ...state.workflows, data: { data: [workflowRow()], pagination: { page: 1, limit: 20, total: 40, pages: 2 } } };
+    render(<WorkflowsListPage />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all workflows on this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(workflowFilters).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+    expect(screen.getByText('0 selected on this page')).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search workflows…' }), { target: { value: 'Recovery' } });
+    await waitFor(() => expect(workflowFilters).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'Recovery', page: 1 })));
+  });
+
+  it('moves back to the last page when deletion leaves the current page empty', async () => {
+    state.workflows = { ...state.workflows, data: { data: [], pagination: { page: 2, limit: 20, total: 20, pages: 1 } } };
+    render(<WorkflowsListPage />);
+    await waitFor(() => expect(workflowFilters).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })));
+  });
+
   it('shows the empty state with a create action', () => {
     state.workflows = { ...state.workflows, data: { data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } } };
     render(<WorkflowsListPage />);
@@ -80,6 +118,8 @@ describe('workflows list', () => {
     state.workflows = { ...state.workflows, data: { data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } } };
     render(<WorkflowsListPage />);
     expect(screen.queryByRole('link', { name: 'Create workflow' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete selected' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 });
 

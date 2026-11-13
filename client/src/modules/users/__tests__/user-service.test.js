@@ -65,3 +65,19 @@ describe('userService', () => {
     expect(result).toEqual([{ _id: 'team-1', id: 'team-1', name: 'Service', code: 'SVC' }]);
   });
 });
+
+
+describe('user deletion, deactivation and invitations', () => {
+  it('uses distinct endpoints for deletion and deactivation', async () => {
+    apiClient.delete.mockResolvedValue({ data: { deletedCount: 1 } });
+    apiClient.post.mockResolvedValue({ data: { deletedCount: 2 } });
+    await userService.deleteUser('one');
+    await userService.bulkDelete(['one', 'two']);
+    await userService.bulkDeactivate(['one', 'two']);
+    await userService.resendInvitation('one');
+    expect(apiClient.delete).toHaveBeenCalledWith('/users/one');
+    expect(apiClient.post).toHaveBeenCalledWith('/users/bulk-delete', { ids: ['one', 'two'] });
+    expect(apiClient.post).toHaveBeenCalledWith('/users/bulk-deactivate', { ids: ['one', 'two'] });
+    expect(apiClient.post).toHaveBeenCalledWith('/users/one/resend-invitation');
+  });
+});

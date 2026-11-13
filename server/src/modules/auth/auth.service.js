@@ -56,7 +56,7 @@ class AuthService {
     }
 
     // Fetch user with secret fields
-    const user = await userRepository.findByEmail(normalizedEmail, { includeSecrets: true });
+    const user = await userRepository.findByEmail(normalizedEmail, { includeSecrets: true, populateRole: { permissions: true } });
 
     // Timing-safe: always compare even if user not found
     const passwordValid = await comparePasswordTimingSafe(
@@ -428,7 +428,11 @@ class AuthService {
       passwordChangedAt: new Date(),
       resetTokenHash: null,
       resetTokenExpires: null,
+      activationTokenHash: null,
+      activationTokenExpires: null,
     });
+    await cacheManager.del(`auth:user:${userDoc._id}`);
+    await invalidateUserListCache();
 
     // Revoke all sessions
     await sessionService.revokeAllUserSessions(userDoc._id);
@@ -542,7 +546,8 @@ class AuthService {
     const user = await User.findOne({
       activationTokenHash: hashedToken,
       activationTokenExpires: { $gt: new Date() },
-      status: 'pending_activation',
+      // Admins control access; either enabled or legacy pending accounts can set a password.
+      status: { $in: ['pending_activation', 'active'] },
     }).select('+passwordHash +activationTokenHash +activationTokenExpires');
 
     if (!user) {
@@ -567,8 +572,11 @@ class AuthService {
       status: 'active',
       activationTokenHash: null,
       activationTokenExpires: null,
+      resetTokenHash: null,
+      resetTokenExpires: null,
     });
-    // pending_activation → active changes the user list and Employee Management KPIs.
+    // Password setup changes invitation state and may activate legacy pending users.
+    await cacheManager.del(`auth:user:${user._id}`);
     await invalidateUserListCache();
 
     auditService.logEvent({

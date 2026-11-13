@@ -3,6 +3,7 @@
 export const PUBLIC_PAGE_PATHS = Object.freeze([
   '/',
   '/calling-engine',
+  '/workflow-automation',
   '/about',
   '/contact',
   '/support',

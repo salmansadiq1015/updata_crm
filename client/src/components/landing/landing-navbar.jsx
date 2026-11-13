@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowUpRight, BriefcaseBusiness, ChevronDown, Globe2, LayoutDashboard, LogOut, Menu, Phone, ShieldCheck, Sparkles, Target, UserRound, Users, X } from 'lucide-react';
+import { ArrowUpRight, BriefcaseBusiness, ChevronDown, Globe2, LayoutDashboard, LogOut, Menu, Phone, ShieldCheck, Sparkles, Target, UserRound, Users, Workflow, X } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -90,7 +90,7 @@ export function LandingNavbar() {
   }, []);
 
   useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 1280px)');
+    const desktop = window.matchMedia('(min-width: 1440px)');
     const onResize = () => { if (desktop.matches) setMenuOpen(false); };
     desktop.addEventListener('change', onResize);
     return () => desktop.removeEventListener('change', onResize);
@@ -100,6 +100,7 @@ export function LandingNavbar() {
     { label: t('experience.leads.nav'), href: `${homeAnchor}#crm`, icon: Users },
     { label: t('landing.nav.leadGeneration'), href: `${homeAnchor}#lead-generation`, icon: Target },
     { label: 'AI Calling Agent', href: '/calling-engine', icon: Phone },
+    { label: t('landing.nav.workflowAutomation', 'Workflow Automation'), href: '/workflow-automation', icon: Workflow },
     { label: t('landing.nav.ai'), href: `${homeAnchor}#intelligence`, icon: Sparkles },
   ];
   const solutionLinks = [
@@ -128,6 +129,7 @@ export function LandingNavbar() {
           <NavigationMenu label={t('landing.nav.product')} links={productLinks} dir={dir} />
           <NavigationMenu label={t('landing.nav.solutions')} links={solutionLinks} dir={dir} />
           <Link href="/calling-engine" aria-current={pathname === '/calling-engine' ? 'page' : undefined} className={styles.navLink}>AI Calling Agent</Link>
+          <Link href="/workflow-automation" aria-current={pathname === '/workflow-automation' ? 'page' : undefined} className={styles.navLink}>{t('landing.nav.workflowAutomation', 'Workflow Automation')}</Link>
           {directLinks.map(link => <a key={link.href} href={link.href} className={styles.navLink}>{link.label}</a>)}
         </nav>
         <div className={styles.actions}>

@@ -24,6 +24,10 @@ export const pairedPhoneApi = {
     const response = await apiClient.get(ENDPOINTS.PAIRED_PHONE.GATEWAY_PACKAGE, { responseType: 'blob' });
     return (response as unknown as { data: Blob }).data;
   },
+  async downloadFirmware(): Promise<Blob> {
+    const response = await apiClient.get(ENDPOINTS.PAIRED_PHONE.FIRMWARE_PACKAGE, { responseType: 'blob' });
+    return (response as unknown as { data: Blob }).data;
+  },
   async devices(): Promise<PairedDevice[]> {
     return unwrap<PairedDevice[]>(await apiClient.get(ENDPOINTS.PAIRED_PHONE.DEVICES));
   },

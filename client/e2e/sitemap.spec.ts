@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const origin = 'https://updata-crm.vercel.app';
-const paths = ['/', '/calling-engine', '/about', '/contact', '/support', '/security', '/privacy', '/terms'];
+const paths = ['/', '/calling-engine', '/workflow-automation', '/about', '/contact', '/support', '/security', '/privacy', '/terms'];
 
 test('XML sitemap matches indexable public pages and their canonical URLs', async ({ page, request }) => {
   await page.goto('/');

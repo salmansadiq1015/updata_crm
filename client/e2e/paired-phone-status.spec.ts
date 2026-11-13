@@ -263,3 +263,31 @@ test('archives a phone through its three-dot menu and restores its saved setup',
   expect(current.name).toBe('Connection UI test');
   expect(current.board.bdaddr).toBe(bridge().board.bdaddr);
 });
+
+for (const width of [390, 1440]) {
+  test(`${width}px: complete setup guide explains USB recovery, switches OS commands and serves its PDF`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await mockCrm(page, () => [bridge()]);
+    await openCalling(page);
+    await page.getByRole('button', { name: 'Setup guide', exact: true }).click();
+    const guide = page.getByRole('region', { name: 'Phone bridge setup guide' });
+    await expect(guide.getByRole('heading', { name: '2. Make sure the ESP32 answers over USB' })).toBeVisible();
+    await guide.getByRole('combobox', { name: 'Your computer' }).selectOption('windows');
+    await expect(guide.getByText('node bin/esp32-probe.mjs info --port COM5', { exact: true }).first()).toBeVisible();
+    await guide.getByText('New board firmware: download and install without source code', { exact: true }).click();
+    await expect(guide.getByRole('button', { name: 'Download ESP32 firmware' })).toBeVisible();
+    await page.route('**/api/v1/paired-phone/firmware-package', async route => {
+      await route.fulfill({ contentType: 'application/gzip', body: Buffer.from('binary-firmware-fixture') });
+    });
+    const firmwareDownload = page.waitForEvent('download');
+    await guide.getByRole('button', { name: 'Download ESP32 firmware' }).click();
+    expect((await firmwareDownload).suggestedFilename()).toBe('updata-esp32-firmware.tgz');
+    await expect(guide.getByText(/Stop unless this is an unsecured original ESP32 with 4 MB flash/)).toBeVisible();
+    await expect(guide.getByRole('heading', { name: '5. Pair Android Bluetooth' })).toBeVisible();
+    const pdfPath = await guide.getByRole('link', { name: 'Download complete ESP32 setup PDF' }).getAttribute('href');
+    const pdf = await page.request.get(pdfPath!);
+    expect(pdf.ok()).toBe(true);
+    expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}

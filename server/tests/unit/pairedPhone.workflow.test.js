@@ -586,6 +586,33 @@ describe('a full paired-phone call', () => {
     expect(b).toMatchObject({ counter: 2, callRef: 2 });
   });
 
+  it('reports the phone-side rejection code and releases the device', async () => {
+    const d = await readyDevice();
+    const campaign = await pairedCampaign(d.deviceId);
+    await startAndTick(campaign);
+    const job = (await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data;
+    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'dial_refused', data: { code: 'phone_rejected_3' } }).expect(200);
+    const call = await CallRecord.findOne().lean();
+    expect(call.resultsProcessedAt).toBeTruthy();
+    expect(call.failureCode).toBe('FIRMWARE_PHONE_REJECTED_3');
+    expect(call.failureMessage).toMatch(/phone rejected.*Bluetooth response 3/i);
+    expect((await PairedDevice.findById(d.deviceId).lean()).currentCallId).toBeNull();
+  });
+
+  it('reports missing outgoing setup as a phone dial failure instead of a lead no-answer', async () => {
+    const d = await readyDevice();
+    const campaign = await pairedCampaign(d.deviceId);
+    await startAndTick(campaign);
+    const job = (await d.gw('/calls/claim').send({ sessionNonce: NONCE }).expect(200)).body.data;
+    await d.gw(`/calls/${job.callId}/events`).send({ eventId: crypto.randomUUID(), type: 'failed', data: { reason: 'dial_not_started' } }).expect(200);
+    const call = await CallRecord.findOne().lean();
+    expect(call.resultsProcessedAt).toBeTruthy();
+    expect(call.state).toBe('failed');
+    expect(call.failureCode).toBe('PHONE_DIAL_NOT_STARTED');
+    expect(call.failureMessage).toMatch(/never reported an outgoing call/);
+    expect((await PairedDevice.findById(d.deviceId).lean()).currentCallId).toBeNull();
+  });
+
   it.each(['unauthorized', 'no_session', 'session_changed', 'agent_not_ready', 'agent_failed', 'room_closed_before_dial', 'livekit_unavailable'])('dial refusal %s fails the call without holding the device', async code => {
     const d = await readyDevice();
     const campaign = await pairedCampaign(d.deviceId);

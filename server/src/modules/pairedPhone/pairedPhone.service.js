@@ -651,7 +651,13 @@ class PairedPhoneService {
         const reason = String(data.reason || '');
         eventType = type === 'failed' ? 'failed'
           : ({ not_answered: 'no-answer', busy: 'busy', rejected: 'busy' })[reason] || 'completed';
-        await CallRecord.updateOne({ _id: call._id }, { $set: { 'gateway.state': 'ended', 'gateway.endReason': reason.slice(0, 60) || type } });
+        await CallRecord.updateOne({ _id: call._id }, { $set: {
+          'gateway.state': 'ended', 'gateway.endReason': reason.slice(0, 60) || type,
+          ...(type === 'failed' && reason === 'dial_not_started' ? {
+            failureCode: 'PHONE_DIAL_NOT_STARTED',
+            failureMessage: 'The phone accepted the dial request but never reported an outgoing call. Check the phone SIM, default calling app and Bluetooth calling permissions.',
+          } : {}),
+        } });
       }
       const result = await ai.default.applyWebhookEvent({
         provider: 'paired_phone', providerCallId: call.providerCallId, internalCallId, eventType, occurredAt,
@@ -668,7 +674,8 @@ class PairedPhoneService {
         break;
       case 'dial_refused': {
         // Startup checks or firmware refused DIAL: nothing reached the phone.
-        const detail = {
+        const phoneRejection = /^phone_rejected_(\d{1,3})$/.exec(String(data.code || ''));
+        const detail = phoneRejection ? `The phone rejected the outgoing call (Bluetooth response ${phoneRejection[1]}). Check the phone SIM, default calling app and Bluetooth calling permissions.` : {
           no_session: 'The ESP32 USB control session expired before dialing. The gateway must reconnect; no phone call was placed.',
           session_changed: 'The USB bridge reconnected while preparing the call. No phone call was placed; start a new call after the gateway is ready.',
           agent_not_ready: 'The voice agent did not finish startup. Check the voice worker and its CRM connection. No phone call was placed.',

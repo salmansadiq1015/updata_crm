@@ -78,6 +78,21 @@ export const userService = {
     return res.data;
   },
 
+  async deleteUser(id) {
+    const res = await apiClient.delete(ENDPOINTS.USERS.BY_ID(id));
+    return res.data;
+  },
+
+  async bulkDeactivate(ids) {
+    const res = await apiClient.post(ENDPOINTS.USERS.BULK_DEACTIVATE, { ids });
+    return res.data;
+  },
+
+  async resendInvitation(id) {
+    const res = await apiClient.post(ENDPOINTS.USERS.RESEND_INVITATION(id));
+    return res.data;
+  },
+
   // Avatar
   async uploadAvatar(userId, file) {
     const formData = new FormData();

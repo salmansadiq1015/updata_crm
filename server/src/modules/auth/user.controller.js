@@ -57,6 +57,27 @@ class UserController {
     }
   }
 
+  async delete(req, res, next) {
+    try {
+      const result = await userService.deleteUser(req.params.id, req.user._id, { ipAddress: req.ip, userAgent: req.get('user-agent') });
+      return res.success({ data: result, message: 'User deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async bulkDelete(req, res, next) {
+    try {
+      const result = await userService.bulkDeleteUsers(req.body.ids, req.user._id, { ipAddress: req.ip, userAgent: req.get('user-agent') });
+      return res.success({ data: result, message: `${result.deletedCount} user(s) deleted successfully` });
+    } catch (err) { next(err); }
+  }
+
+  async resendInvitation(req, res, next) {
+    try {
+      const result = await userService.resendInvitation(req.params.id, req.user._id, { ipAddress: req.ip, userAgent: req.get('user-agent') });
+      return res.success({ data: result, message: 'Invitation sent successfully' });
+    } catch (err) { next(err); }
+  }
+
   async activate(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
@@ -294,7 +315,7 @@ class UserController {
   }
 
   /**
-   * Admin: bulk deactivate (soft delete) multiple users.
+   * Admin: bulk deactivate multiple users.
    */
   async bulkDeactivate(req, res, next) {
     try {

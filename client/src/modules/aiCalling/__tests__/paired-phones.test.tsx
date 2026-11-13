@@ -30,6 +30,7 @@ const api = {
   startAudioTest: vi.fn(async () => ({ id: 'audio1', state: 'ringing', answeredAt: null, endedAt: null, durationSeconds: 0, answers: [], audio: null, failureMessage: null })),
   audioTestResult: vi.fn(async () => ({ id: 'audio1', state: 'ringing', answeredAt: null, endedAt: null, durationSeconds: 0, answers: [], audio: null, failureMessage: null })),
   downloadGateway: vi.fn(async () => new Blob(['package'])),
+  downloadFirmware: vi.fn(async () => new Blob(['firmware'])),
   devices: vi.fn(async () => [device()]),
   pairingCode: vi.fn(async () => ({ code: 'ABCD-EF23', expiresAt: new Date(Date.now() + 600_000).toISOString(), deviceId: 'd1' })),
   verifyAudio: vi.fn(async () => device({ audioVerified: true })),
@@ -454,5 +455,56 @@ describe('deviceWaitSentence', () => {
     const { deviceWaitSentence } = await import('../ui/paired-call-health');
     const result = deviceWaitSentence(['cooldown', 'hourly_cap']);
     expect(result).toEqual({ blocking: false, text: 'Waiting: cooling down between calls · the hourly call limit is reached. Calls continue on their own once this clears.' });
+  });
+});
+
+describe('Complete bridge setup guide', () => {
+  it('uses the selected computer for USB and firmware commands without changing any device', async () => {
+    wrap(<PairedPhonesPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Setup guide' }));
+    const guide = within(screen.getByRole('region', { name: 'Phone bridge setup guide' }));
+    expect(guide.getByRole('link', { name: 'Download complete ESP32 setup PDF' }).getAttribute('href')).toBe('/guides/updata-esp32-complete-setup.pdf');
+    fireEvent.change(guide.getByRole('combobox', { name: 'Your computer' }), { target: { value: 'windows' } });
+    expect(guide.getAllByText('node bin/esp32-probe.mjs info --port COM5').length).toBeGreaterThan(0);
+    expect(guide.getByText('py -3.12 -m venv "%USERPROFILE%\\.updata\\flash-tools"')).toBeTruthy();
+    expect(guide.getByRole('button', { name: 'Download ESP32 firmware', hidden: true })).toBeTruthy();
+    expect(guide.queryByText('npm run build:esp32')).toBeNull();
+    expect(guide.queryByText(/info --port \/dev\/cu\./)).toBeNull();
+    fireEvent.change(guide.getByRole('combobox', { name: 'Your computer' }), { target: { value: 'linux' } });
+    expect(guide.getAllByText('node bin/esp32-probe.mjs info --port /dev/ttyUSB0').length).toBeGreaterThan(0);
+    expect(guide.getByText('python3.12 -m venv "$HOME/.updata/flash-tools"')).toBeTruthy();
+    expect(api.setupAction).not.toHaveBeenCalled();
+    expect(api.rotateKey).not.toHaveBeenCalled();
+    expect(api.startAudioTest).not.toHaveBeenCalled();
+  });
+
+  it('explains the firmware prerequisite, backup gate and full Bluetooth/audio acceptance flow', async () => {
+    wrap(<PairedPhonesPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Setup guide' }));
+    const guide = within(screen.getByRole('region', { name: 'Phone bridge setup guide' }));
+    expect(guide.getByText(/npm ci --omit=dev installs the computer program only/)).toBeTruthy();
+    expect(guide.getByText(/Stop unless this is an unsecured original ESP32 with 4 MB flash/)).toBeTruthy();
+    expect(guide.getByText(/Immediately verify without resetting/)).toBeTruthy();
+    expect(guide.getByRole('heading', { name: '5. Pair Android Bluetooth' })).toBeTruthy();
+    expect(guide.getByText(/enable Phone calls/)).toBeTruthy();
+    expect(guide.getByText(/Repeat the sound test after firmware or host changes/)).toBeTruthy();
+    expect(guide.getByText(/all five checks pass/)).toBeTruthy();
+  });
+
+  it('offers USB recovery beside an unreachable bridge and copies its actual port without executing anything', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const d = device({ gateway: { version: '0.5.0', platform: 'darwin', hostname: 'mac' } });
+    api.devices.mockResolvedValue([{ ...d, board: { ...d.board, connected: false, port: '/dev/cu.usbserial-SECOND' } }]);
+    wrap(<PairedPhonesPanel />);
+    const help = await screen.findByText('ESP32 USB not reachable? Check the cable and firmware');
+    fireEvent.click(help);
+    const instructions = within(help.closest('details')!);
+    expect(instructions.getByText('node bin/updata-gateway.mjs service uninstall --profile d1')).toBeTruthy();
+    fireEvent.click(instructions.getByRole('button', { name: 'Copy check ESP32 firmware' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('node bin/esp32-probe.mjs info --port /dev/cu.usbserial-SECOND'));
+    expect(await instructions.findByRole('status')).toHaveTextContent('Command copied.');
+    expect(api.setupAction).not.toHaveBeenCalled();
+    expect(api.rotateKey).not.toHaveBeenCalled();
   });
 });

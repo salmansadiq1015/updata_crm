@@ -10,9 +10,10 @@ import { HeroStat } from '@/shared/components/hero-art';
 import { HeroPill, PageHero, heroButton } from '@/shared/components/page-hero';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useWorkflowAnalytics, useWorkflowCampaigns, useWorkflowRuns, useWorkflowTemplates, useWorkflows } from '../../hooks/use-workflows';
+import { useWorkflowAnalytics, useWorkflowCampaigns, useWorkflowRuns, useWorkflowTemplates } from '../../hooks/use-workflows';
 import { formatNumber, formatPercent, formatRelative, leadName, refName } from '../../lib/format';
-import { CampaignStatusBadge, RunStatusBadge, WorkflowStatusBadge } from '../shared/status-badge';
+import { CampaignStatusBadge, RunStatusBadge } from '../shared/status-badge';
+import { WorkflowsListPage } from './workflows-list-page';
 import { EmptyBlock, ErrorBlock, Panel, RUN_SEGMENT_CLASSES, SegmentBar, useNodeLabel } from './page-kit';
 
 export function OverviewPage() {
@@ -20,7 +21,6 @@ export function OverviewPage() {
   const { hasPermission } = usePermissions();
   const nodeLabel = useNodeLabel();
   const analytics = useWorkflowAnalytics({ days: 30 });
-  const workflows = useWorkflows({ limit: 5, sortBy: 'updatedAt', sortOrder: 'desc' });
   const runs = useWorkflowRuns({ limit: 8 });
   const campaigns = useWorkflowCampaigns({ status: 'running', limit: 5 });
   const templates = useWorkflowTemplates();
@@ -57,6 +57,8 @@ export function OverviewPage() {
           <HeroStat icon={Users} tone="text-amber-300" label={t('workflowPages.kpi.qualified', 'Qualified leads')} value={a ? formatNumber(a.qualified, locale) : '—'} hint={a ? t('workflowPages.kpi.conversion', 'Conversion {rate}', { rate: formatPercent(a.conversionRate, locale) }) : undefined} loading={!a} />
         </>}
       />
+
+      <WorkflowsListPage />
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel className="xl:col-span-2" icon={Activity} title={t('workflowPages.overview.activity', 'Execution activity')} description={t('workflowPages.overview.activityHint', 'Contacts entering workflows per day, last 30 days')}
@@ -101,32 +103,7 @@ export function OverviewPage() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel icon={GitBranch} title={t('workflowPages.overview.recentWorkflows', 'Recent workflows')} bodyClassName="p-0"
-          action={<Button variant="ghost" size="sm" asChild><Link href="/automation/workflows" className="gap-1">{t('workflowPages.common.viewAll', 'View all')}<ArrowRight className="size-3.5 rtl:rotate-180" /></Link></Button>}>
-          {workflows.isLoading ? <div className="space-y-2 p-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-            : workflows.isError ? <div className="p-4"><ErrorBlock onRetry={() => workflows.refetch()} /></div>
-            : !workflows.data?.data.length ? (
-              <div className="p-4"><EmptyBlock icon={WorkflowIcon} title={t('workflowPages.list.emptyTitle', 'No workflows yet')} description={t('workflowPages.list.emptyHint', 'Start from a template or build your own automation on a blank canvas.')}
-                action={canWrite ? <Button size="sm" asChild><Link href="/automation/new">{t('workflow.nav.create', 'Create workflow')}</Link></Button> : undefined} /></div>
-            ) : (
-              <ul className="divide-y dark:divide-white/10">
-                {workflows.data.data.map((w) => (
-                  <li key={w._id}>
-                    <Link href={`/automation/workflows/${w._id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-5">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{w.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{nodeLabel(w.triggerType)} · {formatRelative(w.updatedAt, locale)}</span>
-                      </span>
-                      <span className="hidden text-xs tabular-nums text-muted-foreground sm:block">{t('workflowPages.list.runsCount', '{count} runs', { count: w.stats?.total || 0 })}</span>
-                      <WorkflowStatusBadge status={w.status} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-        </Panel>
-
+      <div>
         <Panel icon={Activity} title={t('workflowPages.overview.recentExecutions', 'Recent executions')} bodyClassName="p-0"
           action={<Button variant="ghost" size="sm" asChild><Link href="/automation/executions" className="gap-1">{t('workflowPages.common.viewAll', 'View all')}<ArrowRight className="size-3.5 rtl:rotate-180" /></Link></Button>}>
           {runs.isLoading ? <div className="space-y-2 p-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>

@@ -122,6 +122,32 @@ describe('Agent test entry point', () => {
     expect(document.body).toHaveClass('agent-test-studio-open');
   });
 
+  it('starts an agent test with no leads through the built-in test contact', async () => {
+    const { AgentTestStudio } = await import('../ui/agent-test-studio');
+    renderWithQuery(
+      <AgentTestStudio
+        campaigns={[campaign({ isTest: true, testContext: 'test_contact', summary: { ...summary, total: 1 } })]}
+        telephony={{ configured: false, livekitReady: true, reachable: true, eligible: false, reason: 'no_sip_trunk' }}
+        onClose={vi.fn()}
+        onCreateCampaign={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/No lead needed: the agent talks to a built-in test contact/)).toBeTruthy();
+    expect(screen.queryByText(/no leads yet/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start test session' })).toBeEnabled();
+  });
+
+  it('never blocks an agent test snapshot for having no leads, but explains it for a real campaign', async () => {
+    const { AgentTestStudio } = await import('../ui/agent-test-studio');
+    const telephony = { configured: false, livekitReady: true, reachable: true, eligible: false, reason: 'no_sip_trunk' } as const;
+    const { unmount } = renderWithQuery(<AgentTestStudio campaigns={[campaign({ isTest: true, summary: { ...summary, total: 0 } })]} telephony={telephony} onClose={vi.fn()} onCreateCampaign={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Start test session' })).toBeEnabled();
+    unmount();
+    renderWithQuery(<AgentTestStudio campaigns={[campaign({ summary: { ...summary, total: 0 } })]} telephony={telephony} onClose={vi.fn()} onCreateCampaign={vi.fn()} />);
+    expect(screen.getAllByText(/no leads yet.*Test agent/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Start test session' })).toBeDisabled();
+  });
+
   it('guides an empty account to create its first calling campaign', async () => {
     const create = vi.fn();
     const close = vi.fn();

@@ -405,20 +405,45 @@ describe('saved agent browser test snapshots', () => {
     const snapshot = await service.prepareTest(agent._id, actor);
     expect(snapshot.isTest).toBe(true);
     expect(snapshot.selection.leadIds.map(String)).toEqual([String(shared._id)]);
+    expect(snapshot.testContext).toBe('lead');
     expect(await Lead.findById(shared._id).lean()).toEqual(before);
     expect(dial).not.toHaveBeenCalled();
     await expect(service.prepareTest(agent._id, outsider)).rejects.toThrow();
   });
 
-  it('refuses unavailable or out-of-scope assignments before creating a browser snapshot', async () => {
-    const { agent, selected } = await ready();
-    await expect(runWithAccessContext({ scope: { filter: { _id: new mongoose.Types.ObjectId() } } },
-      () => service.prepareTest(agent._id, actor))).rejects.toThrow('Assign a lead');
-    expect(await Campaign.countDocuments({ isTest: true })).toBe(0);
-    await Lead.updateOne({ _id: selected._id }, { $set: { isDeleted: true } });
-    await expect(service.prepareTest(agent._id, actor)).rejects.toThrow('Assign a lead');
-    expect(await Campaign.countDocuments({ isTest: true })).toBe(0);
+  it('tests an agent with no leads at all through the built-in test contact', async () => {
+    const agent = await service.create(fullInput(), actor);
+    expect(agent.assignedLeadIds).toHaveLength(0);
+    const snapshot = await service.prepareTest(agent._id, actor);
+    expect(snapshot).toMatchObject({ isTest: true, status: 'draft', testContext: 'test_contact', summary: { total: 1 } });
+    expect(snapshot.selection.leadIds).toEqual([]);
+    const recipients = await Recipients.find({ campaignId: snapshot._id }).lean();
+    expect(recipients).toHaveLength(1);
+    expect(recipients[0]).toMatchObject({ leadId: null, testContact: true, state: 'draft', eligibility: { eligible: false } });
+    // Idempotent: a second test of the same version reuses the snapshot and its test contact.
+    const again = await service.prepareTest(agent._id, actor);
+    expect(String(again._id)).toBe(String(snapshot._id));
+    expect(await Recipients.countDocuments({ campaignId: snapshot._id })).toBe(1);
+    await expect(calling.startCampaign(snapshot._id, actor)).rejects.toThrow('cannot place phone calls');
     expect(dial).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the test contact when assigned leads are deleted or out of scope', async () => {
+    const { agent, selected } = await ready();
+    const scoped = await runWithAccessContext({ scope: { filter: { _id: new mongoose.Types.ObjectId() } } },
+      () => service.prepareTest(agent._id, actor));
+    expect(scoped.testContext).toBe('test_contact');
+    expect(scoped.selection.leadIds).toEqual([]);
+    await Lead.updateOne({ _id: selected._id }, { $set: { isDeleted: true } });
+    const deleted = await service.prepareTest(agent._id, actor);
+    expect(deleted.testContext).toBe('test_contact');
+    expect(await Recipients.countDocuments({ campaignId: deleted._id, leadId: selected._id })).toBe(0);
+    expect(dial).not.toHaveBeenCalled();
+  });
+
+  it('explains a missing questionnaire instead of failing generically', async () => {
+    const agent = await service.create({ ...fullInput(), availability: 'draft', questionnaire: { questions: [] } }, actor);
+    await expect(service.prepareTest(agent._id, actor)).rejects.toThrow('Add at least one question');
   });
 
   it('creates one isolated current-version snapshot, preserves the source lead and refuses telephone launch', async () => {

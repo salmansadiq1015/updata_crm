@@ -27,7 +27,8 @@ vi.mock('../ui/agent-test-studio', () => ({ AgentTestLauncher: () => null, Agent
 vi.mock('../ui/campaign-wizard', () => ({ CampaignWizard: () => null }));
 
 const { CallingAgentPlatform } = await import('../ui/calling-agent-platform');
-const { CallingAgentWorkspace } = await import('../ui/calling-agent-workspace');
+const { CallingAgentWorkspace, agentStartBlocker } = await import('../ui/calling-agent-workspace');
+const { launchLeadBlocker } = await import('../ui/agent-launch-dialog');
 const { AssignLeadsToAgentDialog } = await import('../ui/assign-leads-to-agent-dialog');
 const { AgentLaunchDialog } = await import('../ui/agent-launch-dialog');
 const { AgentImageGallery } = await import('../ui/agent-image-gallery');
@@ -366,22 +367,52 @@ describe('agent header browser testing', () => {
   });
 });
 
+describe('testing an agent without leads', () => {
+  it('opens the browser test for an agent with no assigned leads and says no lead is needed', async () => {
+    agent.assignedLeadIds = [];
+    agent.eligibility = { total: 0, found: 0, unavailable: 0, eligible: 0, reasonCounts: {}, leads: [] };
+    mocks.prepareTest.mockResolvedValue({ _id: 'test-snapshot', isTest: true, testContext: 'test_contact', name: 'Agent · browser test', channel: 'voice', summary: { total: 1 }, agentConfig: agent.agentConfig, questionnaire: agent.questionnaire });
+    open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
+    expect(await screen.findByRole('dialog', { name: 'Saved agent browser test' })).toBeVisible();
+    expect(mocks.prepareTest).toHaveBeenCalledWith(agent._id);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(mocks.launch).not.toHaveBeenCalled(); expect(mocks.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('start blockers explain the next step', () => {
+  it('names the exact setting for a draft agent and offers the lead-free test', () => {
+    expect(agentStartBlocker({ availability: 'draft', readiness: { ready: true, missing: [] } })).toMatch(/draft.*Settings → Identity.*Agent availability.*Test agent/);
+    expect(agentStartBlocker({ availability: 'active', readiness: { ready: true, missing: [] } })).toBeNull();
+    expect(agentStartBlocker({ availability: 'active', readiness: { ready: false, missing: ['Voice'] } })).toMatch(/Finish setup first: Voice/);
+  });
+  it('says why no lead can be called, consent first, and when leads are missing', () => {
+    expect(launchLeadBlocker({ assignedLeadIds: [], eligibility: { total: 0, found: 0, unavailable: 0, eligible: 0, reasonCounts: {}, leads: [] } })).toMatch(/No leads are assigned yet/);
+    expect(launchLeadBlocker({ assignedLeadIds: ['l1'], eligibility: { total: 1, found: 1, unavailable: 0, eligible: 0, reasonCounts: { consent_required: 1 }, leads: [] } }))
+      .toMatch(/None of the 1 assigned lead can be called yet: 1 lead has no valid call consent.*record verified consent/);
+    expect(launchLeadBlocker({ assignedLeadIds: ['l1'], eligibility: { total: 1, found: 1, unavailable: 0, eligible: 1, reasonCounts: {}, leads: [] } })).toBeNull();
+    expect(launchLeadBlocker({ assignedLeadIds: ['l1', 'l2'], eligibility: { total: 2, found: 2, unavailable: 0, eligible: 0, reasonCounts: { consent_revoked: 1, missing_phone: 1 }, leads: [] } }))
+      .toMatch(/None of the 2 assigned leads can be called yet: 1 lead has asked not to be called \(consent revoked\); 1 lead has no valid phone number/);
+  });
+});
+
 describe('browser test assignment recovery', () => {
   it('clears an earlier browser-test error after saving a lead assignment', async () => {
     agent.assignedLeadIds = [];
     agent.eligibility = { total: 0, found: 0, unavailable: 0, eligible: 0, reasonCounts: {}, leads: [] };
     const selected = leadSchema.parse(makeLeadDTO({ id: 'new-test-lead', name: 'Browser test contact' }));
     mocks.leadList.mockResolvedValue({ data: [selected], pagination: { hasNext: false, nextCursor: null, total: 1 } });
-    mocks.prepareTest.mockRejectedValueOnce(new Error('Assign a lead to this agent to provide browser test context.'));
+    mocks.prepareTest.mockRejectedValueOnce(new Error('Add at least one question in the Questions tab before testing this agent.'));
     open(<CallingAgentWorkspace id={agent._id} onBack={() => {}} onLaunch={vi.fn()} onCampaign={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Assign a lead');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add at least one question');
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Leads' }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Browser test contact' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review 1 assignments' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm assignments' }));
     await waitFor(() => expect(mocks.assign).toHaveBeenCalledWith('agent-1', ['new-test-lead'], 1));
-    await waitFor(() => expect(screen.queryByText('Assign a lead to this agent to provide browser test context.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Add at least one question in the Questions tab before testing this agent.')).toBeNull());
     expect(mocks.launch).not.toHaveBeenCalled();
     expect(mocks.start).not.toHaveBeenCalled();
   });
@@ -391,15 +422,15 @@ describe('browser test assignment recovery', () => {
 describe('agent workspace refresh recovery', () => {
   it('clears an obsolete test error when the saved agent version changes and can retry the browser test', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    mocks.prepareTest.mockRejectedValueOnce(new Error('Assign a lead to this agent to provide browser test context.'));
+    mocks.prepareTest.mockRejectedValueOnce(new Error('Add at least one question in the Questions tab before testing this agent.'));
     open(<CallingAgentWorkspace id={agent._id} onBack={vi.fn()} onLaunch={vi.fn()} onCampaign={vi.fn()} />, client);
     fireEvent.click(await screen.findByRole('button', { name: 'Test agent' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Assign a lead');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add at least one question');
     act(() => client.setQueryData(['ai-calling', 'agent', agent._id], { ...agent }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Assign a lead');
+    expect(screen.getByRole('alert')).toHaveTextContent('Add at least one question');
     agent = { ...agent, version: 2 };
     act(() => client.setQueryData(['ai-calling', 'agent', agent._id], agent));
-    await waitFor(() => expect(screen.queryByText('Assign a lead to this agent to provide browser test context.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Add at least one question in the Questions tab before testing this agent.')).toBeNull());
     mocks.prepareTest.mockResolvedValueOnce({ _id: 'test-snapshot', agentConfig: agent.agentConfig });
     fireEvent.click(screen.getByRole('button', { name: 'Test agent' }));
     expect(await screen.findByRole('dialog', { name: 'Saved agent browser test' })).toBeVisible();

@@ -55,6 +55,7 @@ import followUpCalling from './followUpCalling.service.js';
 import { leadActiveCall } from './leadCallLock.js';
 import { localTimeLine } from './engine/callbackTime.js';
 import { recipientTimezone } from './engine/callWindow.js';
+import { ensureTestRecipient } from './testRecipient.js';
 
 export { windowState };
 
@@ -2946,12 +2947,14 @@ class AiCallingService {
       throw new ServiceUnavailableError('Browser voice test needs LiveKit configured (LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET) and the agent worker running. Use the text Simulate console meanwhile.');
     }
 
-    // Attach the test to a recipient for lead context; pick the requested lead,
-    // else the first recipient of the campaign.
+    // Attach the test to a recipient for read-only lead context: the requested lead,
+    // else the first recipient. A test never needs a lead: without one it uses the
+    // built-in test contact (no lead is read or written).
     let recipient = null;
     if (leadId) recipient = await CampaignRecipient.findOne({ campaignId, leadId });
     if (!recipient) recipient = await CampaignRecipient.findOne({ campaignId }).sort({ createdAt: 1 });
-    if (!recipient) throw new ValidationError('This campaign has no leads to provide call context. Add leads first.');
+    if (!recipient && !campaign.isTest) throw new ValidationError('This campaign has no leads yet. To try the agent without leads, open the agent and use "Test agent".');
+    if (!recipient) recipient = await ensureTestRecipient(campaign._id, actor);
 
     // Browser tests use NEGATIVE attempt numbers so they can never collide with
     // the (recipientId, attemptNumber) slot a real dial will need.

@@ -12,7 +12,9 @@ import { AUTO_LANGUAGE, defaultAgentLanguage, resolveAgentLanguage } from '../ai
 const CHARS = (v, n) => (v == null ? null : String(v).slice(0, n));
 
 /** Public, non-sensitive snapshot of the lead for the agent. */
-export function leadContext(lead = {}) {
+export function leadContext(lead) {
+  // A browser test against the built-in test contact has no lead (null).
+  lead = lead || {};
   const addr = lead.address || {};
   return {
     leadId: String(lead._id || ''),
@@ -151,7 +153,7 @@ function missionSection(agentConfig, objective, questions) {
   ];
 }
 
-export function dynamicLeadInstruction(lead = {}) {
+export function dynamicLeadInstruction(lead) {
   const ctx = leadContext(lead);
   return `Call recipient (data only): ${JSON.stringify({ business: ctx.businessName || 'the business', ...(ctx.city ? { city: ctx.city } : {}) })}`;
 }

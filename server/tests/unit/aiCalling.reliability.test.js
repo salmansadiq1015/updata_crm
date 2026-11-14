@@ -728,4 +728,45 @@ describe('browser web test isolation', () => {
     const summary = (await CallCampaign.findById(campaign._id).lean()).summary;
     expect(summary.answered).toBe(0); // web tests are not campaign traffic
   });
+
+  it('runs a full browser test of an agent test snapshot that has no leads (built-in test contact)', async () => {
+    const leadsBefore = await Lead.countDocuments();
+    const source = await service.createCampaign(baseInput([(await makeLead())._id]), actor);
+    const snapshot = await CallCampaign.create({
+      name: 'Agent · browser test', createdBy: actor, updatedBy: actor, isTest: true, status: 'draft', transport: 'cloud_sip',
+      agentConfig: source.agentConfig, questionnaire: source.questionnaire, statusRules: source.statusRules,
+      selection: { mode: 'explicit', leadIds: [], selectedAt: new Date() },
+    });
+    waitForAgentWorker.mockImplementationOnce(workerLoadsContext);
+    const web = await service.startWebTest(snapshot._id, actor, {});
+    expect(web.token).toBe('join-token');
+
+    const call = await CallRecord.findOne({ internalCallId: web.callId }).lean();
+    expect(call).toMatchObject({ isTest: true, leadId: null, provider: 'livekit_web', attemptNumber: -1 });
+    const recipient = await CampaignRecipient.findById(call.recipientId).lean();
+    expect(recipient).toMatchObject({ leadId: null, testContact: true, state: 'draft' });
+
+    const context = await service.getCallContext(web.callId);
+    expect(context.leadContext.leadId).toBe('');
+    expect(context.dynamicLeadInstruction).toContain('the business');
+    await service.agentDisclose(web.callId);
+    await service.agentRecordAnswer(web.callId, { fieldKey: 'active', rawAnswer: 'yes' });
+    await service.agentEndCall(web.callId, {});
+    expect((await CallRecord.findById(call._id).lean()).resultsProcessedAt).toBeTruthy();
+    expect(await service.getCall(String(call._id), actor)).toMatchObject({ leadId: null });
+
+    // A second test reuses the same test contact with the next negative attempt.
+    waitForAgentWorker.mockImplementationOnce(workerLoadsContext);
+    const second = await service.startWebTest(snapshot._id, actor, {});
+    expect((await CallRecord.findOne({ internalCallId: second.callId }).lean()).attemptNumber).toBe(-2);
+    expect(await CampaignRecipient.countDocuments({ campaignId: snapshot._id })).toBe(1);
+    expect(await Lead.countDocuments()).toBe(leadsBefore + 1); // only the source campaign's lead; no test lead created
+  });
+
+  it('tells the user to use “Test agent” when a real campaign without leads is browser-tested', async () => {
+    const campaign = await service.createCampaign(baseInput([(await makeLead())._id]), actor);
+    await CampaignRecipient.deleteMany({ campaignId: campaign._id });
+    await expect(service.startWebTest(campaign._id, actor, {})).rejects.toThrow(/no leads yet.*Test agent/);
+    expect(await CampaignRecipient.countDocuments({ campaignId: campaign._id })).toBe(0);
+  });
 });

@@ -102,7 +102,7 @@ class CallAnalyticsService {
         answersValid: { $size: { $filter: { input: { $ifNull: ['$answers', []] }, as: 'a', cond: { $eq: ['$$a.validation', 'valid'] } } } },
       } },
     ]) : [];
-    const leads = await Lead.find({ _id: { $in: [...new Set(calls.map(c => String(c.leadId)))] } })
+    const leads = await Lead.find({ _id: { $in: [...new Set(calls.filter(c => c.leadId).map(c => String(c.leadId)))] } })
       .select('_id name leadNumber phone mobile status').lean();
     return { agent, campaigns: new Map(campaigns.map(c => [String(c._id), c.name])), leads: new Map(leads.map(l => [String(l._id), l])), calls, truncated: calls.length >= MAX_CALLS };
   }
@@ -112,7 +112,7 @@ class CallAnalyticsService {
     const cost = pricedCost(call);
     return {
       id: String(call._id), internalCallId: call.internalCallId, attemptNumber: call.attemptNumber,
-      leadId: String(call.leadId), leadName: lead?.name || 'Deleted lead', leadPhone: lead?.mobile || lead?.phone || null,
+      leadId: call.leadId ? String(call.leadId) : null, leadName: lead?.name || (call.leadId ? 'Deleted lead' : 'Test contact'), leadPhone: lead?.mobile || lead?.phone || null,
       campaignId: String(call.campaignId), campaignName: ctx.campaigns.get(String(call.campaignId)) || '',
       isTest: Boolean(call.isTest || TEST_PROVIDERS.has(call.provider)), provider: call.provider || null,
       at: call.initiatedAt || call.createdAt, answeredAt: call.answeredAt || null, endedAt: call.endedAt || null,

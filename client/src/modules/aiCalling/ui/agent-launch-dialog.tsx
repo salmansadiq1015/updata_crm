@@ -75,6 +75,7 @@ export function AgentLaunchDialog({ agent, onClose, onLaunched, onConnections }:
   };
   const missing = agent.readiness.missing.filter(item => item !== 'Paired phone');
   const blocked = missing.length > 0 || agent.availability !== 'active' || !agent.eligibility.eligible || agent.metrics.activeCampaigns > 0 || Boolean(routeError) || connectionLoading;
+  const leadBlocker = launchLeadBlocker(agent);
   return <AgentDialog title="Start Campaign" description="Launch this agent with its saved questions, settings and assigned leads." onClose={() => { if (!launch.isPending) onClose(); }}>
     <div className="space-y-5">
       <div className="flex items-center gap-3"><AgentAvatar name={agent.name} url={agent.avatarUrl} /><div><p className="font-semibold">{agent.name}</p><p className="text-xs text-muted-foreground">{agent.title}</p></div></div>
@@ -108,6 +109,7 @@ export function AgentLaunchDialog({ agent, onClose, onLaunched, onConnections }:
       {mode === 'scheduled' && <CallingWindowFields value={schedule} onChange={setSchedule} />}
       {mode === 'scheduled' && <div className="space-y-3"><label className="flex items-start gap-2 text-xs text-muted-foreground"><input className="mt-0.5" type="checkbox" checked={continueAcrossDays} onChange={e => setContinue(e.target.checked)} /><span>Continue unfinished leads on future permitted days<span className="mt-1 block text-muted-foreground">When off, this campaign ends after its first permitted calling window. Active calls can finish.</span></span></label>{continueAcrossDays && <AgentField label="Last calling date (optional)"><input type="date" className={inputClass} value={endDate} onChange={e => setEndDate(e.target.value)} /></AgentField>}</div>}
       <div className="space-y-2 rounded-xl border border-border p-3 text-xs"><p className="flex items-center gap-2 font-medium"><ShieldCheck className="h-4 w-4 text-emerald-400" />Campaign readiness</p><p className="text-muted-foreground">{missing.length === 0 ? `${agent.questionnaire.questions.length} saved questions · configuration complete` : `Complete: ${missing.join(', ')}`}</p>{agent.availability !== 'active' && <p className="text-amber-300">Activate this agent in Settings before launching.</p>}{agent.metrics.activeCampaigns > 0 && <p className="text-amber-300">This agent already has an active campaign. Open it to manage its queue.</p>}
+        {leadBlocker && <p role="status" className="leading-relaxed text-amber-300">{leadBlocker}</p>}
         {agent.eligibility.leads.filter(l => !l.eligible).slice(0, 5).map(l => <div key={l.leadId}><span className="text-muted-foreground">{l.name}</span><RecipientReasons leadId={l.leadId} reasons={l.reasons} /></div>)}
       </div>
       <p className="rounded-lg border border-blue-400/15 bg-blue-400/5 p-3 text-xs leading-relaxed text-primary/80">{mode === 'now' ? 'Start Now begins calling immediately without waiting for saved calling hours. Connection checks, consent, retry delays and call limits still apply.' : 'Scheduled campaigns follow the selected calling days and hours, recipient quiet hours, consent and call limits.'}</p>
@@ -115,6 +117,25 @@ export function AgentLaunchDialog({ agent, onClose, onLaunched, onConnections }:
       <button type="button" className={`${primaryClass} w-full`} disabled={blocked || launch.isPending} onClick={() => void start()}>{launch.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'now' ? <PhoneCall className="h-4 w-4" /> : <CalendarClock className="h-4 w-4" />}{launch.isPending ? 'Preparing campaign…' : mode === 'now' ? 'Start Now' : 'Schedule Campaign'}</button>
     </div>
   </AgentDialog>;
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Why no assigned lead can be called yet, in plain language with the next step. Null when some can. */
+export function launchLeadBlocker(agent: Pick<CallingAgent, 'assignedLeadIds' | 'eligibility'>): string | null {
+  if (!agent.assignedLeadIds.length) return 'No leads are assigned yet. Assign leads in the Leads tab to start a campaign. To try the agent without calling anyone, use “Test agent” — no leads needed.';
+  if (agent.eligibility.eligible > 0) return null;
+  const rc = agent.eligibility.reasonCounts || {};
+  const consent = (rc.consent_required || 0) + (rc.consent_expired || 0);
+  const parts = [
+    rc.consent_revoked ? `${count(rc.consent_revoked, 'lead has', 'leads have')} asked not to be called (consent revoked)` : null,
+    consent ? `${count(consent, 'lead has', 'leads have')} no valid call consent — open the lead (link below) and record verified consent` : null,
+    rc.missing_phone ? `${count(rc.missing_phone, 'lead has', 'leads have')} no valid phone number` : null,
+    rc.suppressed ? `${count(rc.suppressed, 'lead is', 'leads are')} on the do-not-call list` : null,
+    rc.duplicate_phone ? `${count(rc.duplicate_phone, 'lead shares', 'leads share')} a phone number with another lead` : null,
+  ].filter(Boolean);
+  const total = agent.assignedLeadIds.length;
+  return `None of the ${count(total, 'assigned lead', 'assigned leads')} can be called yet${parts.length ? `: ${parts.join('; ')}` : '. Check each lead’s phone number, consent and do-not-call status'}. “Test agent” lets you try the agent without calling anyone.`;
 }
 
 type ConnectionState = 'connected' | 'disconnected' | 'connecting' | 'checking' | 'unknown' | 'unselected';

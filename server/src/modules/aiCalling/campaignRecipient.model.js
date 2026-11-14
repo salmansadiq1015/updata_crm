@@ -9,7 +9,10 @@ import { RECIPIENT_STATES } from './aiCalling.constants.js';
  */
 const recipientSchema = new mongoose.Schema({
   campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallCampaign', required: true, index: true },
-  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', required: true, index: true },
+  // Null only for the built-in browser-test contact (`testContact`): an agent can be
+  // tested before any lead exists. Real campaign recipients always reference a lead.
+  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null, required() { return !this.testContact; }, index: true },
+  testContact: { type: Boolean, default: false },
   // Phone snapshotted at enrolment (E.164) so later lead edits don't change who we dialled.
   phoneSnapshot: { type: String, maxlength: 32, default: null },
   phoneHash: { type: String, index: true, default: null },

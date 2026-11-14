@@ -56,7 +56,8 @@ const transcriptTurnSchema = new mongoose.Schema({
 const callRecordSchema = new mongoose.Schema({
   campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallCampaign', required: true, index: true },
   recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'CampaignRecipient', required: true, index: true },
-  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', required: true, index: true },
+  // Null only for a browser test against the built-in test contact (no lead involved).
+  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null, required() { return !this.isTest; }, index: true },
   // Follow-up call (campaign kind 'follow_up'): the follow-up it executes and the call it continues.
   followUpId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadFollowUp', default: null },
   previousCallId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallRecord', default: null },

@@ -139,6 +139,8 @@ export interface Campaign {
   /** Paired phone: why the campaign is waiting for its device (readiness reason codes). */
   deviceWait?: { reasons: string[]; at: string | null };
   isTest?: boolean;
+  /** Agent browser test only: whether the test uses an assigned lead or the built-in test contact. */
+  testContext?: 'lead' | 'test_contact';
   scheduledAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -624,7 +626,7 @@ export interface AnalyzedCallCost {
 }
 export interface AnalyzedCall {
   aiVoice?: VoiceProviderSession | null;
-  id: string; internalCallId: string; attemptNumber: number; leadId: string; leadName: string; leadPhone: string | null;
+  id: string; internalCallId: string; attemptNumber: number; leadId: string | null; leadName: string; leadPhone: string | null;
   campaignId: string; campaignName: string; isTest: boolean; provider: string | null;
   at: string; answeredAt: string | null; endedAt: string | null; durationSeconds: number; state: string;
   disposition: string | null; qualification: string | null; reviewRequired: boolean;

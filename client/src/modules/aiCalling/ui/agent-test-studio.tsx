@@ -102,11 +102,12 @@ export function AgentTestStudio({
   const [webStatus, setWebStatus] = useState<WebCallStatus>(INITIAL_STATUS);
   const selected = testableCampaigns.find((campaign) => campaign._id === campaignId) ?? testableCampaigns[0] ?? null;
   const livekitReady = Boolean(telephony?.livekitReady || telephony?.configured);
-  const noLeadContext = selected ? selected.summary.total < 1 : false;
+  // Agent tests (isTest) never need leads: the server supplies a built-in test contact.
+  const noLeadContext = selected ? !selected.isTest && selected.summary.total < 1 : false;
   const disabledReason = !livekitReady
     ? 'Browser voice testing needs LiveKit, an AI voice provider and the voice-agent worker to be configured.'
     : noLeadContext
-      ? 'This campaign has no leads. Add at least one lead so the test agent has realistic call context.'
+      ? 'This campaign has no leads yet. To try the agent without leads, open the agent and use “Test agent”.'
       : undefined;
   const sessionActive = ['starting', 'connecting', 'live', 'reconnecting'].includes(webStatus.phase);
   const { data: activeCalls } = useActiveCalls(selected?._id ?? null, Boolean(selected && webStatus.callId && sessionActive));
@@ -197,7 +198,9 @@ export function AgentTestStudio({
                     </select>
                     <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
                       <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                      Uses the first campaign lead only as read-only context. The test record cannot update that lead.
+                      {selected.testContext === 'test_contact'
+                        ? 'No lead needed: the agent talks to a built-in test contact. Nothing in your CRM is read or changed.'
+                        : 'Uses the first assigned lead only as read-only context. The test can never update that lead.'}
                     </p>
                   </section>
 

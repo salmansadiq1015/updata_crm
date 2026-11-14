@@ -123,7 +123,7 @@ function ReviewForm({ callId, call, onClose }: { callId: string; call: CallRecor
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {(call.transcript?.length ?? 0) > 0 && <details className="mb-4 rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">Conversation transcript ({call.transcript?.length} turns)</summary><div className="mt-3"><CallTranscript turns={call.transcript || []} agentName={call.callContext?.agentName} leadName={typeof call.leadId === 'object' ? call.leadId.name : undefined} /></div></details>}
+              {(call.transcript?.length ?? 0) > 0 && <details className="mb-4 rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">Conversation transcript ({call.transcript?.length} turns)</summary><div className="mt-3"><CallTranscript turns={call.transcript || []} agentName={call.callContext?.agentName} leadName={call.leadId && typeof call.leadId === 'object' ? call.leadId.name : undefined} /></div></details>}
               <div className="mb-4"><CallNotes call={call} /></div><div className="mb-4"><CallBehaviorTimeline call={call} /></div>
               {!call.answers?.length ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">This call captured no answers.</p>

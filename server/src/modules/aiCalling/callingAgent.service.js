@@ -1,4 +1,3 @@
-import CampaignRecipient from './campaignRecipient.model.js';
 import { currentLeadAccessFilter } from '../../shared/security/requestAccessContext.js';
 import Lead from '../crm/lead.model.js';
 import crypto from 'node:crypto';
@@ -12,6 +11,7 @@ import fileService from '../files/file.service.js';
 import storage from '../../shared/storage/StorageService.js';
 import audit from '../auth/audit.service.js';
 import calling, { assertQuestionnaire } from './aiCalling.service.js';
+import { ensureTestRecipient } from './testRecipient.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import { nextWindowClose } from './engine/callWindow.js';
 import { applyAgentTemplate } from './engine/agentTypes.js';
@@ -262,17 +262,21 @@ class CallingAgentService {
     return { deleted: true };
   }
 
-  /** Snapshot the saved agent for browser tests. No dial job or lead write occurs. */
+  /**
+   * Snapshot the saved agent for browser tests. No dial job or lead write occurs.
+   * A test never needs leads: when the agent has an accessible assigned lead it is
+   * used as read-only context, otherwise the built-in test contact (no lead) is used.
+   */
   async prepareTest(id, actor) {
     const agent = await this.owned(id, actor);
+    if (!agent.questionnaire?.questions?.length) throw new ValidationError('Add at least one question in the Questions tab before testing this agent.');
     assertQuestionnaire(agent.questionnaire);
-    // Creation records provenance; shared CRM leads are valid test context too.
-    // Keep the current governance scope and the saved assignment authoritative.
-    const lead = await Lead.findOne({ $and: [
-      { _id: { $in: agent.assignedLeadIds || [] }, isDeleted: { $ne: true } },
+    // Shared CRM leads are valid read-only context; keep the current governance
+    // scope and the saved assignment authoritative.
+    const lead = agent.assignedLeadIds?.length ? await Lead.findOne({ $and: [
+      { _id: { $in: agent.assignedLeadIds }, isDeleted: { $ne: true } },
       currentLeadAccessFilter(),
-    ] }).sort({ _id: 1 }).select('_id').lean();
-    if (!lead) throw new ValidationError('Assign a lead to this agent to provide browser test context. The test never changes the lead.');
+    ] }).sort({ _id: 1 }).select('_id').lean() : null;
     const launchKey = `browser-test-${id}-${agent.version}`;
     let campaign;
     try {
@@ -281,14 +285,14 @@ class CallingAgentService {
         agentSnapshot: { name: agent.name, title: agent.title, version: agent.version },
         agentConfig: agent.agentConfig, questionnaire: agent.questionnaire, statusRules: agent.statusRules,
         isTest: true, status: 'draft', transport: 'cloud_sip',
-        selection: { mode: 'explicit', leadIds: [lead._id], selectedAt: new Date() },
+        selection: { mode: 'explicit', leadIds: lead ? [lead._id] : [], selectedAt: new Date() },
       } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true });
     } catch (error) {
       if (error.code !== 11000) throw error;
       campaign = await CallCampaign.findOne({ createdBy: actor, launchKey });
     }
-    await CampaignRecipient.updateOne({ campaignId: campaign._id, leadId: lead._id }, { $setOnInsert: { createdBy: actor, state: 'draft', eligibility: { eligible: false, reasons: ['browser_test_only'] } } }, { upsert: true });
-    return { ...campaign.toObject(), summary: { ...campaign.toObject().summary, total: 1 } };
+    await ensureTestRecipient(campaign._id, actor, lead?._id || null);
+    return { ...campaign.toObject(), summary: { ...campaign.toObject().summary, total: 1 }, testContext: lead ? 'lead' : 'test_contact' };
   }
 
   async launch(id, input, actor, meta) {

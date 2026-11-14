@@ -154,7 +154,7 @@ function AgentWorkspaceStart({ agent, canManage, dirty, onLaunch, onCampaign, on
   const historyOnly = !existing && agent.metrics.activeCampaigns > 0;
   const setupIncomplete = !existing && !historyOnly && (agent.availability !== 'active' || !agent.readiness.ready);
   const disabledReason = !canManage ? 'You need calling write permission.' : dirty ? 'Save or discard your changes before starting.'
-    : setupIncomplete ? 'Activate this agent and complete its settings before starting.' : null;
+    : setupIncomplete ? agentStartBlocker(agent) : null;
   const label = start.isPending ? 'Starting…' : alreadyCalling ? 'Calling now' : existing?.status === 'queued' || historyOnly ? 'Open active campaign' : 'Start Now';
 
   const startNow = async () => {
@@ -175,6 +175,15 @@ function AgentWorkspaceStart({ agent, canManage, dirty, onLaunch, onCampaign, on
     <p className="text-xs text-muted-foreground sm:text-end">{disabledReason || (alreadyCalling ? 'Open your current queue and live call status.' : historyOnly || existing?.status === 'queued' ? 'Manage the campaign already assigned to this agent.' : 'Start immediately, at any time.')}</p>
     {error && <p role="alert" className="text-xs text-rose-300 sm:text-end">{error}</p>}
   </div>;
+}
+
+/** Plain-language reason a campaign cannot start yet, naming exactly what to do. */
+export function agentStartBlocker(agent: Pick<CallingAgent, 'availability' | 'readiness'>): string | null {
+  const missing = agent.readiness.missing;
+  if (missing.length) return `Finish setup first: ${missing.join(', ')}. “Test agent” works now — no leads needed.`;
+  if (agent.availability === 'active') return null;
+  const state = agent.availability === 'archived' ? 'archived' : agent.availability === 'paused' ? 'paused' : 'a draft';
+  return `This agent is ${state}. To start campaigns, open Settings → Identity and set “Agent availability” to active. “Test agent” works now — no leads needed.`;
 }
 
 function AgentConfiguration({ agent, section, canManage, onDirty }: { agent: CallingAgent; section: 'questions' | 'settings'; canManage: boolean; onDirty: (dirty: boolean) => void }) {
